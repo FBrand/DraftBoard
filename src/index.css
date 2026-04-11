@@ -60,7 +60,7 @@ body {
   align-items: center;
   z-index: 50;
   box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
-  height: 52px;
+  height: 70px;
 }
 
 .pick-info {
@@ -70,14 +70,14 @@ body {
 }
 
 .pick-label {
-  font-size: 0.7rem;
+  font-size: 0.8rem;
   color: var(--text-dim);
   letter-spacing: 0.05em;
   font-weight: 700;
 }
 
 .pick-number {
-  font-size: 1.3rem;
+  font-size: 2.6rem;
   font-weight: 800;
   font-family: 'Outfit', sans-serif;
   color: var(--accent-color);
@@ -87,7 +87,7 @@ body {
 .our-pick-badge {
   background: var(--gold-color);
   color: #000;
-  font-size: 0.65rem;
+  font-size: 1.0rem;
   padding: 2px 6px;
   border-radius: 4px;
   font-weight: 800;
@@ -217,7 +217,7 @@ body {
   border: 1px solid var(--border-color);
   padding: 2px 10px;
   border-radius: 4px;
-  font-size: 0.75rem;
+  font-size: 1rem;
   font-weight: 700;
   color: var(--text-dim);
   transition: all 0.2s;
@@ -244,7 +244,7 @@ body {
   background: rgba(255, 255, 255, 0.05);
   padding: 6px 14px;
   border-radius: 20px;
-  font-size: 0.8rem;
+  font-size: 0.88rem;
   font-weight: 600;
   color: var(--text-dim);
   cursor: pointer;
