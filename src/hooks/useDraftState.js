@@ -106,28 +106,12 @@ const useDraftState = () => {
         setOurPicksLeft([...newList].sort((a, b) => a - b));
     }, [ourPicksLeft]);
 
-    const resetDraft = useCallback(async () => {
+    const resetDraft = useCallback(() => {
         if (!window.confirm("Are you sure you want to reset the entire draft? This cannot be undone.")) return;
 
         localStorage.removeItem(DRAFT_STORAGE_KEY);
-
-        // Reload settings from files
-        setLoading(true);
-        const base = import.meta.env.BASE_URL;
-        const [rankingsRes, picksRes] = await Promise.all([
-            fetch(`${base}rankings.csv`),
-            fetch(`${base}picks.txt`)
-        ]);
-        const rankingsText = await rankingsRes.text();
-        const picksText = await picksRes.text();
-
-        setPlayers(parseRankings(rankingsText));
-        setOurPicksLeft(parsePicks(picksText));
-        setDraftedPlayers([]);
-        setYourPicks([]);
-        setCurrentPick(1);
-        setHistory(null);
-        setLoading(false);
+        // Force reload to ensure fresh state from files
+        window.location.reload();
     }, []);
 
     const undoAction = useCallback(() => {
