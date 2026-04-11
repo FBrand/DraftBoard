@@ -452,12 +452,12 @@ body {
 }
 
 .player-card.drafted {
-  opacity: 0.8;
+  opacity: 0.6;
   filter: grayscale(1);
   background: transparent;
-  /*text-decoration: line-through;*/
+  text-decoration: line-through;
   cursor: default;
-  /*border-color: transparent;*/
+  border-color: transparent;
 }
 
 .player-card.no-strike {
