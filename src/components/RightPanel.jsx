@@ -35,16 +35,22 @@ const RightPanel = ({ remotePicks, draftedPlayers, currentPick }) => {
         );
     };
 
+    const displayPicks = remotePicks.length > 0 ? remotePicks : Array.from({ length: 259 }, (_, i) => {
+        const overall = i + 1;
+        const player = draftedPlayers.find(dp => dp.pickNumber === overall);
+        return {
+            overall,
+            team: player?.draftedByUs ? "KC" : "-",
+            player
+        };
+    });
+
     return (
         <div className="side-panel right-panel">
             <h3 className="panel-title">Picks</h3>
             <div className="panel-content scroll-container" ref={scrollRef}>
                 <div className="tracker-list">
-                    {remotePicks.length > 0 ? (
-                        remotePicks.map(renderPickCard)
-                    ) : (
-                        <div className="empty-state">No feed data available. Enable Live Sync.</div>
-                    )}
+                    {displayPicks.map(renderPickCard)}
                 </div>
             </div>
         </div>

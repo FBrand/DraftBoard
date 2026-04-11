@@ -17,6 +17,18 @@ export const useDraftState = () => {
     const [isLiveSync, setIsLiveSync] = useState(() => {
         return localStorage.getItem(IS_LIVE_SYNC_KEY) === 'true';
     });
+    const [canLiveSync, setCanLiveSync] = useState(false);
+
+    // Check if live sync module is available
+    useEffect(() => {
+        const modules = import.meta.glob('../services/ESPNProvider.js');
+        if (Object.keys(modules).length > 0) {
+            setCanLiveSync(true);
+        } else {
+            setCanLiveSync(false);
+            setIsLiveSync(false); // Disable if not available
+        }
+    }, []);
 
     const saveHistory = useCallback(() => {
         setHistory(prev => ({ players, ourPicksLeft, currentPick, draftedPlayers, yourPicks }));
@@ -131,12 +143,20 @@ export const useDraftState = () => {
 
         let provider = null;
         const poll = async () => {
-            // Dynamically load live sync provider — app works without it
+            // Safe discovery via import.meta.glob — prevents Vite analysis errors if folder missing
             if (!provider) {
-                try {
-                    const mod = await import('../services/ESPNProvider');
-                    provider = new mod.ESPNProvider();
-                } catch {
+                const modules = import.meta.glob('../services/ESPNProvider.js');
+                const modulePath = '../services/ESPNProvider.js';
+
+                if (modules[modulePath]) {
+                    try {
+                        const mod = await modules[modulePath]();
+                        provider = new mod.ESPNProvider();
+                    } catch (err) {
+                        console.warn('Live sync unavailable: discovery failed', err);
+                        return;
+                    }
+                } else {
                     console.warn('Live sync unavailable: provider module not found');
                     return;
                 }
@@ -216,6 +236,7 @@ export const useDraftState = () => {
         remotePicks: remotePicks || [],
         loading,
         isLiveSync,
+        canLiveSync,
         toggleLiveSync: () => setIsLiveSync(prev => !prev),
         draftPlayer,
         undoAction,

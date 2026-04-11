@@ -1,6 +1,6 @@
 import React from 'react';
 
-const TopPanel = ({ currentPick, ourPicksLeft, onUndo, onUpdatePicks, onReset, isLiveSync, toggleLiveSync }) => {
+const TopPanel = ({ currentPick, ourPicksLeft, onUndo, onUpdatePicks, onReset, isLiveSync, canLiveSync, toggleLiveSync }) => {
     return (
         <div className="top-panel">
             <div className="pick-info">
@@ -21,14 +21,16 @@ const TopPanel = ({ currentPick, ourPicksLeft, onUndo, onUpdatePicks, onReset, i
             </div>
 
             <div className="top-actions">
-                <label className="sync-toggle">
-                    <input
-                        type="checkbox"
-                        checked={isLiveSync}
-                        onChange={toggleLiveSync}
-                    />
-                    Live Sync
-                </label>
+                {canLiveSync && (
+                    <label className="sync-toggle">
+                        <input
+                            type="checkbox"
+                            checked={isLiveSync}
+                            onChange={toggleLiveSync}
+                        />
+                        Live Sync
+                    </label>
+                )}
                 <button className="action-pill undo-pill" onClick={onUndo}>Undo</button>
                 <button className="action-pill trade-pill" onClick={onUpdatePicks}>Update Picks</button>
                 <button className="action-pill reset-pill" onClick={onReset}>Reset All</button>

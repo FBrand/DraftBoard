@@ -17,6 +17,7 @@ function App() {
     remotePicks,
     loading,
     isLiveSync,
+    canLiveSync,
     toggleLiveSync,
     draftPlayer,
     updateOurPicks,
@@ -37,6 +38,7 @@ function App() {
         onUpdatePicks={() => setIsModalOpen(true)}
         onReset={resetDraft}
         isLiveSync={isLiveSync}
+        canLiveSync={canLiveSync}
         toggleLiveSync={toggleLiveSync}
       />
 
