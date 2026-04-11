@@ -1,8 +1,14 @@
 import React from 'react';
 import PlayerCard from './PlayerCard';
 
-const CenterBoard = ({ players, onDraft }) => {
-    const positions = [...new Set(players.map(p => p.position))];
+const CenterBoard = ({ players, onDraft, columnOrder = [] }) => {
+    const rawPositions = [...new Set(players.map(p => p.position))];
+
+    // Sort positions: defined order first, then any extras found in data
+    const positions = [
+        ...columnOrder.filter(cp => rawPositions.includes(cp)),
+        ...rawPositions.filter(rp => !columnOrder.includes(rp))
+    ];
 
     // Extract all unique groups in the order they appear
     const allGroups = [];

@@ -18,6 +18,7 @@ export const useDraftState = () => {
         return localStorage.getItem(IS_LIVE_SYNC_KEY) === 'true';
     });
     const [canLiveSync, setCanLiveSync] = useState(false);
+    const [columnOrder, setColumnOrder] = useState([]);
 
     // Check if live sync module is available
     useEffect(() => {
@@ -39,13 +40,17 @@ export const useDraftState = () => {
         const loadInitialData = async () => {
             try {
                 const base = import.meta.env.BASE_URL;
-                const [rankingsRes, picksRes] = await Promise.all([
+                const [rankingsRes, picksRes, columnsRes] = await Promise.all([
                     fetch(`${base}rankings.csv`),
-                    fetch(`${base}picks.txt`)
+                    fetch(`${base}picks.txt`),
+                    fetch(`${base}columns.txt`)
                 ]);
 
                 const rankingsText = await rankingsRes.text();
                 const picksText = await picksRes.text();
+                const columnsText = await columnsRes.text().catch(() => "");
+                const parsedPositions = columnsText.split(',').map(p => p.trim()).filter(p => p);
+                setColumnOrder(parsedPositions);
 
                 const parsedPlayers = parseRankings(rankingsText) || [];
                 const parsedOurPicks = parsePicks(picksText) || [];
@@ -237,6 +242,7 @@ export const useDraftState = () => {
         loading,
         isLiveSync,
         canLiveSync,
+        columnOrder,
         toggleLiveSync: () => setIsLiveSync(prev => !prev),
         draftPlayer,
         undoAction,

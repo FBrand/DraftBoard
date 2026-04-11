@@ -22,7 +22,8 @@ function App() {
     draftPlayer,
     updateOurPicks,
     resetDraft,
-    undoAction
+    undoAction,
+    columnOrder
   } = useDraftState();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -44,7 +45,11 @@ function App() {
 
       <div className="main-layout">
         <LeftPanel players={players} onDraft={draftPlayer} />
-        <CenterBoard players={players} onDraft={draftPlayer} />
+        <CenterBoard
+          players={players}
+          onDraft={draftPlayer}
+          columnOrder={columnOrder}
+        />
         <RightPanel
           remotePicks={remotePicks}
           draftedPlayers={draftedPlayers}
