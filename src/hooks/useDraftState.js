@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
 import { parseRankings, parsePicks } from '../utils/dataParser';
-import { ESPNProvider } from '../services/ESPNProvider';
 import { TEAM_CONFIG } from '../constants';
 
 const DRAFT_STORAGE_KEY = 'nfl_draft_board_state';
@@ -130,8 +129,18 @@ export const useDraftState = () => {
     useEffect(() => {
         if (!isLiveSync || loading) return;
 
-        const provider = new ESPNProvider();
+        let provider = null;
         const poll = async () => {
+            // Dynamically load live sync provider — app works without it
+            if (!provider) {
+                try {
+                    const mod = await import('../services/ESPNProvider');
+                    provider = new mod.ESPNProvider();
+                } catch {
+                    console.warn('Live sync unavailable: provider module not found');
+                    return;
+                }
+            }
             const picks = await provider.fetchDraftData();
             if (!picks || picks.length === 0) return;
 
