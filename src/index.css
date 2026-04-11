@@ -452,12 +452,37 @@ body {
 }
 
 .player-card.drafted {
-  opacity: 0.6;
+  opacity: 0.5;
   filter: grayscale(1);
-  background: transparent;
-  text-decoration: line-through;
+  background: rgba(255, 255, 255, 0.03);
   cursor: default;
-  border-color: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  position: relative;
+}
+
+/* Robust strikethrough for exports */
+.player-card.drafted .player-name {
+  position: relative;
+  display: inline-block;
+}
+
+.player-card.drafted .player-name::after {
+  content: "";
+  position: absolute;
+  left: -2px;
+  right: -2px;
+  top: 55%;
+  height: 1.5px;
+  background: rgba(255, 255, 255, 0.6);
+  pointer-events: none;
+}
+
+.slim-team-name {
+  font-size: 0.75rem;
+  opacity: 0.8;
+  font-weight: 500;
+  color: var(--text-dim);
+  font-style: italic;
 }
 
 .player-card.no-strike {
@@ -620,6 +645,24 @@ body {
   background-color: rgba(255, 255, 255, 0.05);
 }
 
+.export-pill {
+  background-color: #059669;
+  /* Emeral Green */
+  border: 1px solid #10b981;
+  color: white;
+}
+
+.export-pill:hover:not(:disabled) {
+  background-color: #10b981;
+  transform: translateY(-1px);
+}
+
+.export-pill:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  filter: grayscale(0.5);
+}
+
 .reset-pill {
   background-color: transparent;
   border: 1px solid #ef4444;
@@ -629,4 +672,132 @@ body {
 .reset-pill:hover {
   background-color: #ef4444;
   color: white;
+}
+
+/* Print Mode Styles */
+@media print {
+
+  /* Hide sidebars and panels */
+  .left-panel,
+  .right-panel,
+  .bottom-panel,
+  .modal-overlay,
+  .top-actions {
+    display: none !important;
+  }
+
+  /* Reset layout for natural document flow */
+  body,
+  #root,
+  .app-container {
+    background: white !important;
+    color: black !important;
+    height: auto !important;
+    overflow: visible !important;
+    width: 100% !important;
+  }
+
+  .main-layout {
+    display: block !important;
+    height: auto !important;
+    overflow: visible !important;
+    padding: 0 !important;
+  }
+
+  /* Central Board full width */
+  .center-board-container {
+    width: 100% !important;
+    overflow: visible !important;
+    height: auto !important;
+    padding: 20px 0 !important;
+  }
+
+  .board-grid {
+    overflow: visible !important;
+    height: auto !important;
+  }
+
+  /* Suppress Best Available Highlighting */
+  .player-card.best {
+    border-width: 1px !important;
+    border-color: var(--border-color) !important;
+    box-shadow: none !important;
+  }
+
+  .card-glow {
+    display: none !important;
+  }
+
+  /* Suppress Current Pick Highlighting in Print */
+  .player-card.current {
+    box-shadow: none !important;
+    transform: none !important;
+    border-width: 1px !important;
+  }
+
+  /* Ensure text is dark and background is clear to save ink */
+  .player-card {
+    background: #f8fafc !important;
+    color: black !important;
+    border: 1px solid #cbd5e1 !important;
+    page-break-inside: avoid;
+  }
+
+  .player-name {
+    color: black !important;
+  }
+
+  /* Round Sidebar Labels */
+  .round-sidebar-label {
+    color: #475569 !important;
+    border-right: 1px solid #cbd5e1 !important;
+  }
+
+  .header-cell {
+    background: #f1f5f9 !important;
+    color: black !important;
+  }
+
+  /* Page orientation hint */
+  @page {
+    size: landscape;
+    margin: 1cm;
+  }
+}
+
+/* Export Mode (for html2canvas) */
+body.export-mode .left-panel,
+body.export-mode .right-panel,
+body.export-mode .bottom-panel,
+body.export-mode .modal-overlay,
+body.export-mode .top-actions {
+  display: none !important;
+}
+
+body.export-mode .app-container {
+  height: auto !important;
+  width: fit-content !important;
+  overflow: visible !important;
+}
+
+body.export-mode .main-layout {
+  display: block !important;
+  height: auto !important;
+  width: fit-content !important;
+}
+
+body.export-mode .center-board-container {
+  width: fit-content !important;
+  height: auto !important;
+  padding: 40px !important;
+}
+
+body.export-mode .player-card.best {
+  border-width: 1px !important;
+  border-color: var(--border-color) !important;
+  box-shadow: none !important;
+}
+
+body.export-mode .card-glow {
+  display: none !important;
 }

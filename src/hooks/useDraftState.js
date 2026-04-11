@@ -68,6 +68,7 @@ export const useDraftState = () => {
                         setCurrentPick(typeof s.currentPick === 'number' ? s.currentPick : 1);
                         setDraftedPlayers(Array.isArray(s.draftedPlayers) ? s.draftedPlayers : []);
                         setYourPicks(Array.isArray(s.yourPicks) ? s.yourPicks : []);
+                        setRemotePicks(Array.isArray(s.remotePicks) ? s.remotePicks : []);
                     } catch (e) {
                         console.warn("Corrupted localStorage, using fresh data");
                         setPlayers(parsedPlayers);
@@ -90,10 +91,10 @@ export const useDraftState = () => {
     // Persist State
     useEffect(() => {
         if (!loading) {
-            const state = { players, ourPicksLeft, currentPick, draftedPlayers, yourPicks };
+            const state = { players, ourPicksLeft, currentPick, draftedPlayers, yourPicks, remotePicks };
             localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(state));
         }
-    }, [players, ourPicksLeft, currentPick, draftedPlayers, yourPicks, loading]);
+    }, [players, ourPicksLeft, currentPick, draftedPlayers, yourPicks, remotePicks, loading]);
 
     // Persist Live Sync setting
     useEffect(() => {
@@ -107,13 +108,22 @@ export const useDraftState = () => {
         const pickNumber = currentPick;
         const isOurPick = ourPicksLeft.includes(pickNumber);
 
+        // Infer team from remotePicks (if we have the draft order loaded)
+        // Use robust Number conversion to avoid type mismatch (string vs number)
+        const remoteMatch = remotePicks.find(rp =>
+            (rp.overall !== undefined && Number(rp.overall) === Number(pickNumber)) ||
+            (rp.number !== undefined && Number(rp.number) === Number(pickNumber))
+        );
+
+        const team = isOurPick ? TEAM_CONFIG.abbreviation : (remoteMatch?.team || '-');
+
         setPlayers(prev => prev.map(p =>
             p.name === player.name
-                ? { ...p, drafted: true, pickNumber, draftedByUs: isOurPick }
+                ? { ...p, drafted: true, pickNumber, draftedByUs: isOurPick, team }
                 : p
         ));
 
-        const draftedPlayer = { ...player, drafted: true, pickNumber, draftedByUs: isOurPick };
+        const draftedPlayer = { ...player, drafted: true, pickNumber, draftedByUs: isOurPick, team };
         setDraftedPlayers(prev => [...prev, draftedPlayer]);
 
         if (isOurPick) {
@@ -123,7 +133,7 @@ export const useDraftState = () => {
         }
 
         setCurrentPick(prev => prev + 1);
-    }, [currentPick, ourPicksLeft, saveHistory]);
+    }, [currentPick, ourPicksLeft, remotePicks, saveHistory]);
 
     const undoAction = useCallback(() => {
         if (!history) return;

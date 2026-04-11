@@ -1,6 +1,15 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { exportBoardToImage } from '../utils/exportBoard';
 
 const TopPanel = ({ currentPick, ourPicksLeft, onUndo, onUpdatePicks, onReset, isLiveSync, canLiveSync, toggleLiveSync }) => {
+    const [isExporting, setIsExporting] = useState(false);
+
+    const handleExport = async () => {
+        setIsExporting(true);
+        await exportBoardToImage();
+        setIsExporting(false);
+    };
+
     return (
         <div className="top-panel">
             <div className="pick-info">
@@ -33,6 +42,13 @@ const TopPanel = ({ currentPick, ourPicksLeft, onUndo, onUpdatePicks, onReset, i
                 )}
                 <button className="action-pill undo-pill" onClick={onUndo}>Undo</button>
                 <button className="action-pill trade-pill" onClick={onUpdatePicks}>Update Picks</button>
+                <button
+                    className="action-pill export-pill"
+                    onClick={handleExport}
+                    disabled={isExporting}
+                >
+                    {isExporting ? 'Generating...' : 'Export JPEG'}
+                </button>
                 <button className="action-pill reset-pill" onClick={onReset}>Reset All</button>
             </div>
         </div>

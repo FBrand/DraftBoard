@@ -1,13 +1,13 @@
 import React from 'react';
 
 const PlayerCard = ({ player, isBest, onClick, slim, team, displayPick, noStrikethrough, isCurrent }) => {
-    const { name, position, overallRank, drafted, draftedByUs } = player;
+    const { name, position, overallRank, drafted, draftedByUs, team: draftedTeam } = player;
 
     const classes = [
         'player-card',
         'anim-fade-in',
         drafted ? 'drafted' : 'available',
-        draftedByUs || (team === 'KC') ? 'ours' : '',
+        draftedByUs || (team === 'KC') || (draftedTeam === 'KC') ? 'ours' : '',
         isBest ? 'best' : '',
         slim ? 'slim' : '',
         noStrikethrough ? 'no-strike' : '',
@@ -15,7 +15,7 @@ const PlayerCard = ({ player, isBest, onClick, slim, team, displayPick, noStrike
     ].join(' ');
 
     const pickNo = displayPick || player.pickNumber;
-    const teamAbbr = team || (draftedByUs ? 'KC' : null);
+    const teamAbbr = team || draftedTeam || (draftedByUs ? 'KC' : null);
     const rankDisplay = overallRank && overallRank !== '-' ? `#${overallRank}` : '';
 
     return (
@@ -28,7 +28,10 @@ const PlayerCard = ({ player, isBest, onClick, slim, team, displayPick, noStrike
                 </div>
             </div>
             <div className="card-bottom">
-                <div className="player-name">{name}</div>
+                <div className="player-name">
+                    {name}
+                    {slim && drafted && teamAbbr && <span className="slim-team-name"> ({teamAbbr})</span>}
+                </div>
                 {!slim && <div className="player-pos">{position}</div>}
             </div>
             {(draftedByUs || team === 'KC') && <div className="card-glow"></div>}
