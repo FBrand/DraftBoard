@@ -40,8 +40,11 @@ export const useDraftState = () => {
         const loadInitialData = async () => {
             try {
                 const base = import.meta.env.BASE_URL;
+                const params = new URLSearchParams(window.location.search);
+                const rankingsUrl = params.get('rankings') || `${base}rankings.csv`;
+
                 const [rankingsRes, picksRes, columnsRes] = await Promise.all([
-                    fetch(`${base}rankings.csv`),
+                    fetch(rankingsUrl),
                     fetch(`${base}picks.txt`),
                     fetch(`${base}columns.txt`)
                 ]);
