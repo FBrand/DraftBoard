@@ -14,7 +14,10 @@ function App() {
     draftedPlayers,
     yourPicks,
     currentPick,
+    remotePicks,
     loading,
+    isLiveSync,
+    toggleLiveSync,
     draftPlayer,
     updateOurPicks,
     resetDraft,
@@ -33,12 +36,18 @@ function App() {
         onUndo={undoAction}
         onUpdatePicks={() => setIsModalOpen(true)}
         onReset={resetDraft}
+        isLiveSync={isLiveSync}
+        toggleLiveSync={toggleLiveSync}
       />
 
       <div className="main-layout">
-        <LeftPanel players={players} />
+        <LeftPanel players={players} onDraft={draftPlayer} />
         <CenterBoard players={players} onDraft={draftPlayer} />
-        <RightPanel draftedPlayers={draftedPlayers} onUndo={undoAction} />
+        <RightPanel
+          remotePicks={remotePicks}
+          draftedPlayers={draftedPlayers}
+          currentPick={currentPick}
+        />
       </div>
 
       <BottomPanel yourPicks={yourPicks} />

@@ -1,37 +1,53 @@
 import React, { useEffect, useRef } from 'react';
+import PlayerCard from './PlayerCard';
 
-const RightPanel = ({ draftedPlayers }) => {
+const RightPanel = ({ remotePicks, draftedPlayers, currentPick }) => {
     const scrollRef = useRef(null);
+    const currentPickRef = useRef(null);
 
+    // Auto-scroll to current pick
     useEffect(() => {
-        if (scrollRef.current) {
-            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        if (currentPickRef.current) {
+            currentPickRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
-    }, [draftedPlayers]);
+    }, [currentPick, remotePicks.length]);
+
+    const renderPickCard = (p) => {
+        const isCurrent = p.overall === currentPick;
+        const player = p.player || draftedPlayers.find(dp => dp.pickNumber === p.overall) || {
+            name: "",
+            position: "",
+            overallRank: "",
+            drafted: false
+        };
+
+        return (
+            <div key={p.overall} ref={isCurrent ? currentPickRef : null}>
+                <PlayerCard
+                    player={player}
+                    team={p.team}
+                    displayPick={p.overall}
+                    isBest={false}
+                    noStrikethrough={true}
+                    isCurrent={isCurrent}
+                />
+            </div>
+        );
+    };
 
     return (
-        <div className="side-panel">
-            <h3 className="panel-title">Drafted Players</h3>
-            <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto' }}>
-                {draftedPlayers.map((player, index) => (
-                    <div
-                        key={`${player.name}-${index}`}
-                        style={{
-                            padding: '0.5rem',
-                            borderBottom: '1px solid var(--border-color)',
-                            fontSize: '0.875rem',
-                            display: 'flex',
-                            gap: '0.5rem',
-                            backgroundColor: player.draftedByUs ? 'rgba(34, 197, 94, 0.2)' : 'transparent'
-                        }}
-                    >
-                        <span style={{ color: 'var(--accent-color)', fontWeight: 'bold' }}>#{player.pickNumber}</span>
-                        <span>{player.name}</span>
-                        <span style={{ color: 'var(--text-dim)', marginLeft: 'auto' }}>{player.position}</span>
-                    </div>
-                ))}
+        <div className="side-panel right-panel">
+            <h3 className="panel-title">Picks</h3>
+            <div className="panel-content scroll-container" ref={scrollRef}>
+                <div className="tracker-list">
+                    {remotePicks.length > 0 ? (
+                        remotePicks.map(renderPickCard)
+                    ) : (
+                        <div className="empty-state">No feed data available. Enable Live Sync.</div>
+                    )}
+                </div>
             </div>
-        </div >
+        </div>
     );
 };
 

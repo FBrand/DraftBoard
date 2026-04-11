@@ -30,9 +30,15 @@ const LeftPanel = ({ players, onDraft }) => {
                                 <span>ROUND {round}</span>
                                 <span>{expandedRounds[round] ? '−' : '+'}</span>
                             </div>
-                            {expandedRounds[round] && roundPlayers.map(player => (
-                                <PlayerCard key={player.name} player={player} onClick={onDraft} />
-                            ))}
+                            {expandedRounds[round] && (
+                                <div className="rankings-list">
+                                    {roundPlayers.map(player => (
+                                        <div key={player.name} onClick={() => onDraft(player)} style={{ cursor: 'pointer' }} title="Click to draft">
+                                            <PlayerCard player={player} />
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     );
                 })}

@@ -1,148 +1,217 @@
 import { useState, useEffect, useCallback } from 'react';
 import { parseRankings, parsePicks } from '../utils/dataParser';
+import { ESPNProvider } from '../services/ESPNProvider';
+import { TEAM_CONFIG } from '../constants';
 
 const DRAFT_STORAGE_KEY = 'nfl_draft_board_state';
+const IS_LIVE_SYNC_KEY = 'nfl_draft_live_sync';
 
-const useDraftState = () => {
+export const useDraftState = () => {
     const [players, setPlayers] = useState([]);
     const [ourPicksLeft, setOurPicksLeft] = useState([]);
     const [draftedPlayers, setDraftedPlayers] = useState([]);
     const [yourPicks, setYourPicks] = useState([]);
     const [currentPick, setCurrentPick] = useState(1);
+    const [remotePicks, setRemotePicks] = useState([]);
     const [history, setHistory] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [isLiveSync, setIsLiveSync] = useState(() => {
+        return localStorage.getItem(IS_LIVE_SYNC_KEY) === 'true';
+    });
+
+    const saveHistory = useCallback(() => {
+        setHistory(prev => ({ players, ourPicksLeft, currentPick, draftedPlayers, yourPicks }));
+    }, [players, ourPicksLeft, currentPick, draftedPlayers, yourPicks]);
 
     // Initial load
     useEffect(() => {
-        const loadDraftData = async () => {
+        const loadInitialData = async () => {
             try {
-                // 1. Fetch static data
                 const base = import.meta.env.BASE_URL;
                 const [rankingsRes, picksRes] = await Promise.all([
                     fetch(`${base}rankings.csv`),
                     fetch(`${base}picks.txt`)
                 ]);
+
                 const rankingsText = await rankingsRes.text();
                 const picksText = await picksRes.text();
 
-                const initialPlayers = parseRankings(rankingsText);
-                const initialPicks = parsePicks(picksText);
+                const parsedPlayers = parseRankings(rankingsText) || [];
+                const parsedOurPicks = parsePicks(picksText) || [];
 
-                // 2. Check LocalStorage for saved state
-                const saved = localStorage.getItem(DRAFT_STORAGE_KEY);
-                if (saved) {
-                    const parsed = JSON.parse(saved);
-
-                    // Re-sync player drafted status
-                    const syncedPlayers = initialPlayers.map(p => {
-                        const drafted = parsed.draftedPlayers.find(dp => dp.name === p.name && dp.position === p.position);
-                        return drafted ? { ...p, ...drafted } : p;
-                    });
-
-                    setPlayers(syncedPlayers);
-                    setOurPicksLeft(parsed.ourPicksLeft);
-                    setDraftedPlayers(parsed.draftedPlayers);
-                    setYourPicks(parsed.yourPicks);
-                    setCurrentPick(parsed.currentPick);
+                // Check localStorage
+                const savedState = localStorage.getItem(DRAFT_STORAGE_KEY);
+                if (savedState) {
+                    try {
+                        const s = JSON.parse(savedState);
+                        setPlayers(Array.isArray(s.players) ? s.players : parsedPlayers);
+                        setOurPicksLeft(Array.isArray(s.ourPicksLeft) ? s.ourPicksLeft : parsedOurPicks);
+                        setCurrentPick(typeof s.currentPick === 'number' ? s.currentPick : 1);
+                        setDraftedPlayers(Array.isArray(s.draftedPlayers) ? s.draftedPlayers : []);
+                        setYourPicks(Array.isArray(s.yourPicks) ? s.yourPicks : []);
+                    } catch (e) {
+                        console.warn("Corrupted localStorage, using fresh data");
+                        setPlayers(parsedPlayers);
+                        setOurPicksLeft(parsedOurPicks);
+                    }
                 } else {
-                    setPlayers(initialPlayers);
-                    setOurPicksLeft(initialPicks);
+                    setPlayers(parsedPlayers);
+                    setOurPicksLeft(parsedOurPicks);
                 }
-
-                setLoading(false);
             } catch (error) {
-                console.error('Error loading draft data:', error);
+                console.error("Error loading data:", error);
+            } finally {
                 setLoading(false);
             }
         };
-        loadDraftData();
+
+        loadInitialData();
     }, []);
 
-    // Save to LocalStorage whenever state changes
+    // Persist State
     useEffect(() => {
         if (!loading) {
-            const stateToSave = {
-                ourPicksLeft,
-                draftedPlayers,
-                yourPicks,
-                currentPick
-            };
-            localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(stateToSave));
+            const state = { players, ourPicksLeft, currentPick, draftedPlayers, yourPicks };
+            localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(state));
         }
-    }, [ourPicksLeft, draftedPlayers, yourPicks, currentPick, loading]);
+    }, [players, ourPicksLeft, currentPick, draftedPlayers, yourPicks, loading]);
+
+    // Persist Live Sync setting
+    useEffect(() => {
+        localStorage.setItem(IS_LIVE_SYNC_KEY, isLiveSync);
+    }, [isLiveSync]);
 
     const draftPlayer = useCallback((player) => {
         if (player.drafted) return;
+        saveHistory();
 
-        setHistory({
-            type: 'DRAFT',
-            state: { players, ourPicksLeft, draftedPlayers, yourPicks, currentPick }
-        });
+        const pickNumber = currentPick;
+        const isOurPick = ourPicksLeft.includes(pickNumber);
 
-        const isOurPick = ourPicksLeft.includes(currentPick);
-        const draftedPlayer = {
-            ...player,
-            drafted: true,
-            draftedByUs: isOurPick,
-            pickNumber: currentPick
-        };
+        setPlayers(prev => prev.map(p =>
+            p.name === player.name
+                ? { ...p, drafted: true, pickNumber, draftedByUs: isOurPick }
+                : p
+        ));
 
-        setPlayers(prev => prev.map(p => (p.name === player.name && p.position === player.position) ? draftedPlayer : p));
+        const draftedPlayer = { ...player, drafted: true, pickNumber, draftedByUs: isOurPick };
         setDraftedPlayers(prev => [...prev, draftedPlayer]);
 
         if (isOurPick) {
             setYourPicks(prev => [...prev, draftedPlayer]);
-            setOurPicksLeft(prev => prev.filter(p => p !== currentPick));
+            // Remove this pick from ourPicksLeft since it's been used
+            setOurPicksLeft(prev => prev.filter(pk => pk !== pickNumber));
         }
 
         setCurrentPick(prev => prev + 1);
-    }, [players, ourPicksLeft, draftedPlayers, yourPicks, currentPick]);
-
-    const updateOurPicks = useCallback((newList) => {
-        setHistory({
-            type: 'TRADE',
-            state: { ourPicksLeft }
-        });
-        setOurPicksLeft([...newList].sort((a, b) => a - b));
-    }, [ourPicksLeft]);
-
-    const resetDraft = useCallback(() => {
-        if (!window.confirm("Are you sure you want to reset the entire draft? This cannot be undone.")) return;
-
-        localStorage.removeItem(DRAFT_STORAGE_KEY);
-        // Force reload to ensure fresh state from files
-        window.location.reload();
-    }, []);
+    }, [currentPick, ourPicksLeft, saveHistory]);
 
     const undoAction = useCallback(() => {
         if (!history) return;
-
-        if (history.type === 'DRAFT') {
-            const { players, ourPicksLeft, draftedPlayers, yourPicks, currentPick } = history.state;
-            setPlayers(players);
-            setOurPicksLeft(ourPicksLeft);
-            setDraftedPlayers(draftedPlayers);
-            setYourPicks(yourPicks);
-            setCurrentPick(currentPick);
-        } else if (history.type === 'TRADE') {
-            setOurPicksLeft(history.state.ourPicksLeft);
-        }
-
+        setPlayers(history.players);
+        setOurPicksLeft(history.ourPicksLeft);
+        setCurrentPick(history.currentPick);
+        setDraftedPlayers(history.draftedPlayers);
+        setYourPicks(history.yourPicks);
         setHistory(null);
     }, [history]);
 
+    const updateOurPicks = useCallback((newPicks) => {
+        saveHistory();
+        setOurPicksLeft(newPicks);
+    }, [saveHistory]);
+
+    const resetDraft = useCallback(() => {
+        localStorage.removeItem(DRAFT_STORAGE_KEY);
+        window.location.reload();
+    }, []);
+
+    // Live Sync Polling
+    useEffect(() => {
+        if (!isLiveSync || loading) return;
+
+        const provider = new ESPNProvider();
+        const poll = async () => {
+            const picks = await provider.fetchDraftData();
+            if (!picks || picks.length === 0) return;
+
+            setRemotePicks(picks);
+
+            setPlayers(prevPlayers => {
+                if (!Array.isArray(prevPlayers)) return [];
+                let updatedPlayers = [...prevPlayers];
+                let updatedDrafted = [...draftedPlayers];
+                let updatedYourPicks = [...yourPicks];
+                let updatedKCLeft = [...ourPicksLeft];
+                let maxOverall = currentPick;
+                let changed = false;
+
+                // 1. Update pick assignments (Trades)
+                const chiefsPicks = picks
+                    .filter(p => p.team === TEAM_CONFIG.abbreviation && !p.player)
+                    .map(p => p.overall);
+
+                if (JSON.stringify(chiefsPicks.sort()) !== JSON.stringify(updatedKCLeft.sort())) {
+                    setOurPicksLeft(chiefsPicks);
+                    changed = true;
+                }
+
+                // 2. Process picks with players
+                picks.forEach(rp => {
+                    if (rp.player) {
+                        const playerIndex = updatedPlayers.findIndex(p =>
+                            p.name.toLowerCase() === rp.player.name.toLowerCase() ||
+                            p.name.toLowerCase().includes(rp.player.name.toLowerCase())
+                        );
+
+                        if (playerIndex !== -1 && !updatedPlayers[playerIndex].drafted) {
+                            const player = { ...updatedPlayers[playerIndex] };
+                            player.drafted = true;
+                            player.pickNumber = rp.overall;
+                            player.draftedByUs = (rp.team === TEAM_CONFIG.abbreviation);
+
+                            updatedPlayers[playerIndex] = player;
+                            updatedDrafted.push(player);
+                            if (player.draftedByUs) {
+                                updatedYourPicks.push(player);
+                            }
+                            changed = true;
+                        }
+                        if (rp.overall >= maxOverall) {
+                            maxOverall = rp.overall + 1;
+                        }
+                    }
+                });
+
+                if (changed) {
+                    setDraftedPlayers(updatedDrafted);
+                    setYourPicks(updatedYourPicks);
+                    setCurrentPick(maxOverall);
+                    return updatedPlayers;
+                }
+                return prevPlayers;
+            });
+        };
+
+        poll();
+        const interval = setInterval(poll, 30000);
+        return () => clearInterval(interval);
+    }, [isLiveSync, loading, draftedPlayers, yourPicks, ourPicksLeft, currentPick]);
+
     return {
-        players,
-        ourPicksLeft,
-        draftedPlayers,
-        yourPicks,
+        players: players || [],
+        ourPicksLeft: ourPicksLeft || [],
+        draftedPlayers: draftedPlayers || [],
+        yourPicks: yourPicks || [],
         currentPick,
-        history,
+        remotePicks: remotePicks || [],
         loading,
+        isLiveSync,
+        toggleLiveSync: () => setIsLiveSync(prev => !prev),
         draftPlayer,
+        undoAction,
         updateOurPicks,
-        resetDraft,
-        undoAction
+        resetDraft
     };
 };
 
