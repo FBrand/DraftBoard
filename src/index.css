@@ -282,7 +282,7 @@ body {
 
 .main-layout {
   display: grid;
-  grid-template-columns: 320px 1fr 320px;
+  grid-template-columns: 272px 1fr 272px;
   gap: 1px;
   background: var(--border-color);
   overflow: hidden;
