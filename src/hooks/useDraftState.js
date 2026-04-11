@@ -17,9 +17,10 @@ const useDraftState = () => {
         const loadDraftData = async () => {
             try {
                 // 1. Fetch static data
+                const base = import.meta.env.BASE_URL;
                 const [rankingsRes, picksRes] = await Promise.all([
-                    fetch('/rankings.csv'),
-                    fetch('/picks.txt')
+                    fetch(`${base}rankings.csv`),
+                    fetch(`${base}picks.txt`)
                 ]);
                 const rankingsText = await rankingsRes.text();
                 const picksText = await picksRes.text();
@@ -112,9 +113,10 @@ const useDraftState = () => {
 
         // Reload settings from files
         setLoading(true);
+        const base = import.meta.env.BASE_URL;
         const [rankingsRes, picksRes] = await Promise.all([
-            fetch('/rankings.csv'),
-            fetch('/picks.txt')
+            fetch(`${base}rankings.csv`),
+            fetch(`${base}picks.txt`)
         ]);
         const rankingsText = await rankingsRes.text();
         const picksText = await picksRes.text();
