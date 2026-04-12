@@ -23,7 +23,8 @@ function App() {
     updateOurPicks,
     resetDraft,
     undoAction,
-    columnOrder
+    columnOrder,
+    importDraftState
   } = useDraftState();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -54,6 +55,8 @@ function App() {
           remotePicks={remotePicks}
           draftedPlayers={draftedPlayers}
           currentPick={currentPick}
+          ourPicksLeft={ourPicksLeft}
+          onImport={importDraftState}
         />
       </div>
 

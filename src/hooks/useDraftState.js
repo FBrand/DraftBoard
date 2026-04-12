@@ -155,6 +155,40 @@ export const useDraftState = () => {
         window.location.reload();
     }, []);
 
+    const importDraftState = useCallback((importedState) => {
+        saveHistory();
+        const { draftedPlayers: importedDrafted, ourPicksLeft: importedKCLeft } = importedState;
+
+        if (Array.isArray(importedKCLeft)) {
+            setOurPicksLeft(importedKCLeft);
+        }
+
+        setDraftedPlayers(importedDrafted);
+
+        // Update players availability
+        setPlayers(prev => prev.map(p => {
+            const match = importedDrafted.find(dp => dp.name === p.name);
+            if (match) {
+                return {
+                    ...p,
+                    drafted: true,
+                    pickNumber: match.pickNumber,
+                    team: match.team,
+                    draftedByUs: importedKCLeft.includes(match.pickNumber)
+                };
+            }
+            return { ...p, drafted: false, pickNumber: null, team: null, draftedByUs: false };
+        }));
+
+        // Reconcile 'yourPicks' (KC history)
+        const newYourPicks = importedDrafted.filter(dp => importedKCLeft.includes(dp.pickNumber));
+        setYourPicks(newYourPicks);
+
+        // Update current pick
+        const lastPick = importedDrafted.reduce((max, p) => Math.max(max, p.pickNumber), 0);
+        setCurrentPick(lastPick + 1);
+    }, [saveHistory]);
+
     // Live Sync Polling
     useEffect(() => {
         if (!isLiveSync || loading) return;
@@ -260,7 +294,8 @@ export const useDraftState = () => {
         draftPlayer,
         undoAction,
         updateOurPicks,
-        resetDraft
+        resetDraft,
+        importDraftState
     };
 };
 
