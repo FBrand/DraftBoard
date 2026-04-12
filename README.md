@@ -32,6 +32,7 @@ The application is prepared to support real-time synchronization by polling live
 ## Disclaimers & Legal Information
 
 ### URL Parameters
+- **Live Sync Activation**: Add `?sync=true` to the URL to enable the Live Sync toggle in the Top Panel.
 - **Rankings Override**: Load a custom CSV by adding `?rankings=https://your-url.com/rankings.csv` to the URL.
   - *Note: External URLs must support CORS.*
 

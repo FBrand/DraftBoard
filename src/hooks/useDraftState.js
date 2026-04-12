@@ -20,15 +20,24 @@ export const useDraftState = () => {
     const [canLiveSync, setCanLiveSync] = useState(false);
     const [columnOrder, setColumnOrder] = useState([]);
 
-    // Check if live sync module is available
+    // Check if live sync module is available AND enabled via query param
     useEffect(() => {
-        const modules = import.meta.glob('../services/ESPNProvider.js');
-        if (Object.keys(modules).length > 0) {
-            setCanLiveSync(true);
-        } else {
-            setCanLiveSync(false);
-            setIsLiveSync(false); // Disable if not available
-        }
+        const params = new URLSearchParams(window.location.search);
+        const syncEnabled = params.get('sync') === 'true';
+
+        const checkAvailability = async () => {
+            const modules = import.meta.glob('../services/ESPNProvider.js');
+            const hasModule = Object.keys(modules).length > 0;
+
+            if (hasModule && syncEnabled) {
+                setCanLiveSync(true);
+            } else {
+                setCanLiveSync(false);
+                setIsLiveSync(false); // Force off if not enabled/available
+            }
+        };
+
+        checkAvailability();
     }, []);
 
     const saveHistory = useCallback(() => {
