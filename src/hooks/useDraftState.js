@@ -67,15 +67,33 @@ export const useDraftState = () => {
                 const parsedPlayers = parseRankings(rankingsText) || [];
                 const parsedOurPicks = parsePicks(picksText) || [];
 
-                // Check localStorage
+                // Check localStorage and reconcile instead of blind overwrite
                 const savedState = localStorage.getItem(DRAFT_STORAGE_KEY);
                 if (savedState) {
                     try {
                         const s = JSON.parse(savedState);
-                        setPlayers(Array.isArray(s.players) ? s.players : parsedPlayers);
-                        setOurPicksLeft(Array.isArray(s.ourPicksLeft) ? s.ourPicksLeft : parsedOurPicks);
+                        const savedDrafted = Array.isArray(s.draftedPlayers) ? s.draftedPlayers : [];
+                        const savedKCLeft = Array.isArray(s.ourPicksLeft) ? s.ourPicksLeft : parsedOurPicks;
+
+                        // Reconcile fresh parsedPlayers with saved history
+                        const reconciledPlayers = parsedPlayers.map(p => {
+                            const match = savedDrafted.find(dp => dp.name === p.name);
+                            if (match) {
+                                return {
+                                    ...p,
+                                    drafted: true,
+                                    pickNumber: match.pickNumber,
+                                    team: match.team,
+                                    draftedByUs: savedKCLeft.includes(match.pickNumber)
+                                };
+                            }
+                            return p;
+                        });
+
+                        setPlayers(reconciledPlayers);
+                        setOurPicksLeft(savedKCLeft);
                         setCurrentPick(typeof s.currentPick === 'number' ? s.currentPick : 1);
-                        setDraftedPlayers(Array.isArray(s.draftedPlayers) ? s.draftedPlayers : []);
+                        setDraftedPlayers(savedDrafted);
                         setYourPicks(Array.isArray(s.yourPicks) ? s.yourPicks : []);
                         setRemotePicks(Array.isArray(s.remotePicks) ? s.remotePicks : []);
                     } catch (e) {
