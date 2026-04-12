@@ -163,11 +163,26 @@ export const useDraftState = () => {
             setOurPicksLeft(importedKCLeft);
         }
 
-        setDraftedPlayers(importedDrafted);
+        // Enrich imported player objects with ranking metadata if available
+        const enrichedDrafted = importedDrafted.map(id => {
+            const playerFromRankings = players.find(p => p.name === id.name);
+            if (playerFromRankings) {
+                return {
+                    ...playerFromRankings,
+                    pickNumber: id.pickNumber,
+                    team: id.team,
+                    drafted: true,
+                    draftedByUs: importedKCLeft.includes(id.pickNumber)
+                };
+            }
+            return id; // Keep as is if unranked
+        });
+
+        setDraftedPlayers(enrichedDrafted);
 
         // Update players availability
         setPlayers(prev => prev.map(p => {
-            const match = importedDrafted.find(dp => dp.name === p.name);
+            const match = enrichedDrafted.find(dp => dp.name === p.name);
             if (match) {
                 return {
                     ...p,
@@ -181,13 +196,13 @@ export const useDraftState = () => {
         }));
 
         // Reconcile 'yourPicks' (KC history)
-        const newYourPicks = importedDrafted.filter(dp => importedKCLeft.includes(dp.pickNumber));
+        const newYourPicks = enrichedDrafted.filter(dp => importedKCLeft.includes(dp.pickNumber));
         setYourPicks(newYourPicks);
 
         // Update current pick
-        const lastPick = importedDrafted.reduce((max, p) => Math.max(max, p.pickNumber), 0);
+        const lastPick = enrichedDrafted.reduce((max, p) => Math.max(max, p.pickNumber), 0);
         setCurrentPick(lastPick + 1);
-    }, [saveHistory]);
+    }, [saveHistory, players]); // Added players to dependency
 
     // Live Sync Polling
     useEffect(() => {
