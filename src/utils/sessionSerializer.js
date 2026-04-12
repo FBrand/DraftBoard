@@ -91,5 +91,5 @@ export const getExportFilename = () => {
     const date = now.toISOString().split("T")[0];
     const time = now.getHours().toString().padStart(2, "0") + "-" +
         now.getMinutes().toString().padStart(2, "0");
-    return `Chiefs_Draft_${date}_${time}.csv`;
+    return `DraftBoard_Session_${date}_${time}.csv`;
 };

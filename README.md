@@ -7,20 +7,29 @@ A high-performance, professional-grade visual board designed for tracking the 20
 ## Key Features
 
 - **Dynamic Positional Board**: Visual 2D grid of players organized by positional columns and draft round horizontal slices.
-- **Configurable Layout**: Fully customizable column order (QB, RB, WR...) via a simple text file.
-- **Quick Draft Sidebar**: Rapidly mark players as drafted from the ranked list.
-- **Live Sync (In Development)**: Support for real-time polling to automatically update the board as the live draft progresses.
-- **Persistence**: All draft actions are saved to `localStorage`, ensuring your board stays consistent across refreshes.
-- **Data Modularity**: Supports loading external big boards via URL parameters.
+- **Configurable Layout**: Fully customizable column order (QB, RB, WR...) via `public/columns.txt`.
+- **Intelligent Search**: Real-time filtering by **Player Name** or **Position** in the Left Panel.
+- **Draft Unranked Players**: Manually draft players missing from the big board using the "Draft Unranked" modal.
+- **Session Persistence (CSV)**: Save and restore your full draft state (including trades and pick history) using human-readable CSV files.
+- **High-Quality Export**: Generate professional 15.6MP JPEG snapshots of your board for sharing and analysis.
+### Live Sync
+The application is prepared to support real-time synchronization by polling live draft data to automatically update the board as selections are made.
+
+⚠️ **Disclaimer**: The current implementation is provided strictly for experimental and educational purposes. It may rely on publicly accessible, unofficial data sources and is not guaranteed to be accurate, stable, or compliant with third-party terms.
+
+**Use at your own risk.** Users are responsible for ensuring compliance with applicable laws and terms. The authors assume no liability for any misuse or resulting damages.
 
 ## Usage
 
 ### Browser Operations
-1. **Draft a Player**: Click on any player card on the board or sidebars.
-2. **Current Pick**: The active pick is highlighted with a gold border and glow.
-3. **Picks Tracking**: The "OUR PICKS LEFT" tracker at the top shows remaining selections for your team.
-4. **Undo**: Mistakenly drafted someone? Use the "Undo" button to revert the last action.
-5. **Update Picks**: Modify your team's owned picks via the "Update Picks" modal.
+1. **Search & Draft**: Use the search bar in the Left Panel to find players by name/position. **Click any player card in the rankings or on the board to draft.**
+2. **Custom Draft**: Click "Draft Unranked Player" at the bottom of the Left Panel to enter players manually.
+3. **Session Management**: Use the **Save Session** and **Load Session** buttons at the bottom of the Right Panel to persist mock drafts as CSV files.
+4. **Export Board**: Click **Export JPEG** in the Top Panel to download a high-resolution image of the central board.
+5. **Update Picks**: Modify your team's owned picks via the "Update Picks" modal (Gold highlights).
+6. **Undo**: Use the "Undo" button to revert the last drafting action.
+
+## Disclaimers & Legal Information
 
 ### URL Parameters
 - **Rankings Override**: Load a custom CSV by adding `?rankings=https://your-url.com/rankings.csv` to the URL.

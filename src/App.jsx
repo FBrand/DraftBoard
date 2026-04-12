@@ -6,6 +6,7 @@ import CenterBoard from './components/CenterBoard';
 import RightPanel from './components/RightPanel';
 import BottomPanel from './components/BottomPanel';
 import PicksModal from './components/PicksModal';
+import UnrankedModal from './components/UnrankedModal';
 
 function App() {
   const {
@@ -28,6 +29,7 @@ function App() {
   } = useDraftState();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isUnrankedModalOpen, setIsUnrankedModalOpen] = useState(false);
 
   if (loading) return <div className="loading">Loading Chiefs Draft Board...</div>;
 
@@ -45,7 +47,11 @@ function App() {
       />
 
       <div className="main-layout">
-        <LeftPanel players={players} onDraft={draftPlayer} />
+        <LeftPanel
+          players={players}
+          onDraft={draftPlayer}
+          onDraftUnranked={() => setIsUnrankedModalOpen(true)}
+        />
         <CenterBoard
           players={players}
           onDraft={draftPlayer}
@@ -67,6 +73,12 @@ function App() {
         onClose={() => setIsModalOpen(false)}
         initialPicks={ourPicksLeft}
         onSave={updateOurPicks}
+      />
+
+      <UnrankedModal
+        isOpen={isUnrankedModalOpen}
+        onClose={() => setIsUnrankedModalOpen(false)}
+        onDraft={draftPlayer}
       />
     </div>
   );
