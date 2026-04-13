@@ -91,18 +91,21 @@ export const useDraftState = () => {
                         });
 
                         // 2. Re-enrich saved draft history (Right Panel View) with fresh metadata
+                        // NOTE: use sd.draftedByUs (persisted value) — savedKCLeft only has *remaining* picks,
+                        // so re-computing from it would always yield false for already-drafted players.
                         const enrichedDrafted = savedDrafted.map(sd => {
                             const updatedMetadata = parsedPlayers.find(p => p.name === sd.name);
+                            const draftedByUs = sd.draftedByUs === true; // trust persisted value
                             if (updatedMetadata) {
                                 return {
                                     ...updatedMetadata,
                                     pickNumber: sd.pickNumber,
                                     team: sd.team,
                                     drafted: true,
-                                    draftedByUs: savedKCLeft.includes(sd.pickNumber)
+                                    draftedByUs
                                 };
                             }
-                            return sd;
+                            return { ...sd, draftedByUs };
                         });
 
                         setPlayers(reconciledPlayers);
@@ -110,7 +113,7 @@ export const useDraftState = () => {
                         setCurrentPick(typeof s.currentPick === 'number' ? s.currentPick : 1);
                         setDraftedPlayers(enrichedDrafted);
 
-                        // Re-enrich yourPicks as well
+                        // yourPicks = all enriched entries where draftedByUs is persisted as true
                         const enrichedYourPicks = enrichedDrafted.filter(p => p.draftedByUs);
                         setYourPicks(enrichedYourPicks);
 
@@ -209,19 +212,22 @@ export const useDraftState = () => {
             setOurPicksLeft(importedKCLeft);
         }
 
-        // Enrich imported player objects with ranking metadata if available
+        // Enrich imported player objects with ranking metadata if available.
+        // draftedByUs: trust the imported flag (importedKCLeft is *remaining* picks, not historical).
+        // The CSV import sets draftedByUs on each entry; fall back to checking if team === KC.
         const enrichedDrafted = importedDrafted.map(id => {
             const playerFromRankings = players.find(p => p.name === id.name);
+            const draftedByUs = id.draftedByUs === true || id.team === TEAM_CONFIG.abbreviation;
             if (playerFromRankings) {
                 return {
                     ...playerFromRankings,
                     pickNumber: id.pickNumber,
                     team: id.team,
                     drafted: true,
-                    draftedByUs: importedKCLeft.includes(id.pickNumber)
+                    draftedByUs
                 };
             }
-            return id; // Keep as is if unranked
+            return { ...id, draftedByUs };
         });
 
         setDraftedPlayers(enrichedDrafted);
@@ -235,14 +241,14 @@ export const useDraftState = () => {
                     drafted: true,
                     pickNumber: match.pickNumber,
                     team: match.team,
-                    draftedByUs: importedKCLeft.includes(match.pickNumber)
+                    draftedByUs: match.draftedByUs
                 };
             }
             return { ...p, drafted: false, pickNumber: null, team: null, draftedByUs: false };
         }));
 
-        // Reconcile 'yourPicks' (KC history)
-        const newYourPicks = enrichedDrafted.filter(dp => importedKCLeft.includes(dp.pickNumber));
+        // yourPicks: all that were drafted by us
+        const newYourPicks = enrichedDrafted.filter(dp => dp.draftedByUs);
         setYourPicks(newYourPicks);
 
         // Update current pick

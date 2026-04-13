@@ -5,15 +5,18 @@
   --panel-bg: #1a1a1a;
   --text-main: #f8fafc;
   --text-dim: #94a3b8;
-  --accent-color: #E31837;
   /* Chiefs Red */
-  --gold-color: #FFB81C;
+  --chiefs-red: #E31837;
+  --accent-color: #E31837;
   /* Chiefs Gold */
+  --chiefs-gold: #FFB81C;
+  --gold-color: #FFB81C;
   --our-color: #FFB81C;
-  /* Our team picks in Gold */
+  /* Chiefs White */
+  --chiefs-white: #dddddd;
   --drafted-color: #475569;
-  --best-color: #FFB81C;
   /* Best available in Gold */
+  --best-color: #FFB81C;
   --border-color: #334155;
 
   font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif;
@@ -226,7 +229,7 @@ body {
 }
 
 .ours .card-team {
-  color: var(--gold-color);
+  color: var(--chiefs-red);
   background: rgba(255, 184, 28, 0.1);
 }
 
@@ -252,14 +255,9 @@ body {
   color: var(--accent-color);
 }
 
+/* card-glow is hidden; re-enable below to restore the effect */
 .card-glow {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 4px;
-  height: 100%;
-  background: var(--gold-color);
-  box-shadow: 0 0 8px var(--gold-color);
+  display: none;
 }
 
 /* Top Panel PIIls */
@@ -608,7 +606,7 @@ body {
   filter: grayscale(1);
   background: rgba(255, 255, 255, 0.03);
   cursor: default;
-  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  /*border: 1px solid rgba(255, 255, 255, 0.15) !important;*/
   position: relative;
 }
 
@@ -623,9 +621,9 @@ body {
   position: absolute;
   left: -2px;
   right: -2px;
-  top: 55%;
-  height: 1.5px;
-  background: rgba(255, 255, 255, 0.6);
+  top: 50%;
+  height: 1.0px;
+  background: var(--bg-color);
   pointer-events: none;
 }
 
@@ -642,10 +640,27 @@ body {
 }
 
 .player-card.ours {
-  background: rgba(34, 197, 94, 0.2);
-  /*border-color: var(--our-color);*/
-  opacity: 1;
+  background: var(--chiefs-white);
+  border: 4px solid var(--chiefs-gold);
+  opacity: 0.8;
   filter: none;
+}
+
+.player-card.ours .player-name {
+  color: var(--chiefs-red);
+}
+
+.player-card.ours .player-pos {
+  color: var(--chiefs-red);
+}
+
+.player-card.ours .player-rank {
+  color: var(--chiefs-red);
+}
+
+.player-card.ours .card-team-info {
+  color: var(--chiefs-red);
+  /*background-color: var(--chiefs-white);*/
 }
 
 .player-card.best {
