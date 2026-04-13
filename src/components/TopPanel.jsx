@@ -10,6 +10,12 @@ const TopPanel = ({ currentPick, ourPicksLeft, onUndo, onUpdatePicks, onReset, i
         setIsExporting(false);
     };
 
+    const updateRankingsParam = (newPath) => {
+        const params = new URLSearchParams(window.location.search);
+        params.set('rankings', newPath);
+        window.location.href = `?${params.toString()}`;
+    };
+
     return (
         <div className="top-panel">
             <div className="pick-info">
@@ -22,20 +28,20 @@ const TopPanel = ({ currentPick, ourPicksLeft, onUndo, onUpdatePicks, onReset, i
                 <span className="switcher-label">BOARD</span>
                 <div className="switcher-buttons">
                     <button
-                        className={`switcher-btn ${!new URLSearchParams(window.location.search).get('rankings') ? 'active' : ''}`}
-                        onClick={() => window.location.href = `?rankings=/DraftBoard/rankings.csv`}
+                        className={`switcher-btn ${!new URLSearchParams(window.location.search).get('rankings') || new URLSearchParams(window.location.search).get('rankings')?.includes('rankings.csv') ? 'active' : ''}`}
+                        onClick={() => updateRankingsParam('/DraftBoard/rankings.csv')}
                     >
                         Consensus
                     </button>
                     <button
                         className={`switcher-btn ${new URLSearchParams(window.location.search).get('rankings')?.includes('rankings_dan.csv') ? 'active' : ''}`}
-                        onClick={() => window.location.href = `?rankings=/DraftBoard/rankings_dan.csv`}
+                        onClick={() => updateRankingsParam('/DraftBoard/rankings_dan.csv')}
                     >
                         Dan
                     </button>
                     <button
                         className={`switcher-btn ${new URLSearchParams(window.location.search).get('rankings')?.includes('rankings_ryan.csv') ? 'active' : ''}`}
-                        onClick={() => window.location.href = `?rankings=/DraftBoard/rankings_ryan.csv`}
+                        onClick={() => updateRankingsParam('/DraftBoard/rankings_ryan.csv')}
                     >
                         Ryan
                     </button>
