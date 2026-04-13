@@ -18,6 +18,30 @@ const TopPanel = ({ currentPick, ourPicksLeft, onUndo, onUpdatePicks, onReset, i
                 {ourPicksLeft.includes(currentPick) && <span className="our-pick-badge">OURS</span>}
             </div>
 
+            <div className="board-switcher">
+                <span className="switcher-label">BOARD</span>
+                <div className="switcher-buttons">
+                    <button
+                        className={`switcher-btn ${!new URLSearchParams(window.location.search).get('rankings') ? 'active' : ''}`}
+                        onClick={() => window.location.href = `?rankings=/DraftBoard/rankings.csv`}
+                    >
+                        Consensus
+                    </button>
+                    <button
+                        className={`switcher-btn ${new URLSearchParams(window.location.search).get('rankings')?.includes('rankings_dan.csv') ? 'active' : ''}`}
+                        onClick={() => window.location.href = `?rankings=/DraftBoard/rankings_dan.csv`}
+                    >
+                        Dan
+                    </button>
+                    <button
+                        className={`switcher-btn ${new URLSearchParams(window.location.search).get('rankings')?.includes('rankings_ryan.csv') ? 'active' : ''}`}
+                        onClick={() => window.location.href = `?rankings=/DraftBoard/rankings_ryan.csv`}
+                    >
+                        Ryan
+                    </button>
+                </div>
+            </div>
+
             <div className="our-picks-tracker">
                 <span className="tracker-label">OUR PICKS LEFT</span>
                 <div className="picks-list">

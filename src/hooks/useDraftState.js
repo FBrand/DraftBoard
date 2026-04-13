@@ -75,7 +75,7 @@ export const useDraftState = () => {
                         const savedDrafted = Array.isArray(s.draftedPlayers) ? s.draftedPlayers : [];
                         const savedKCLeft = Array.isArray(s.ourPicksLeft) ? s.ourPicksLeft : parsedOurPicks;
 
-                        // Reconcile fresh parsedPlayers with saved history
+                        // 1. Reconcile fresh parsedPlayers with saved history (Board View)
                         const reconciledPlayers = parsedPlayers.map(p => {
                             const match = savedDrafted.find(dp => dp.name === p.name);
                             if (match) {
@@ -90,11 +90,30 @@ export const useDraftState = () => {
                             return p;
                         });
 
+                        // 2. Re-enrich saved draft history (Right Panel View) with fresh metadata
+                        const enrichedDrafted = savedDrafted.map(sd => {
+                            const updatedMetadata = parsedPlayers.find(p => p.name === sd.name);
+                            if (updatedMetadata) {
+                                return {
+                                    ...updatedMetadata,
+                                    pickNumber: sd.pickNumber,
+                                    team: sd.team,
+                                    drafted: true,
+                                    draftedByUs: savedKCLeft.includes(sd.pickNumber)
+                                };
+                            }
+                            return sd;
+                        });
+
                         setPlayers(reconciledPlayers);
                         setOurPicksLeft(savedKCLeft);
                         setCurrentPick(typeof s.currentPick === 'number' ? s.currentPick : 1);
-                        setDraftedPlayers(savedDrafted);
-                        setYourPicks(Array.isArray(s.yourPicks) ? s.yourPicks : []);
+                        setDraftedPlayers(enrichedDrafted);
+
+                        // Re-enrich yourPicks as well
+                        const enrichedYourPicks = enrichedDrafted.filter(p => p.draftedByUs);
+                        setYourPicks(enrichedYourPicks);
+
                         setRemotePicks(Array.isArray(s.remotePicks) ? s.remotePicks : []);
                     } catch (e) {
                         console.warn("Corrupted localStorage, using fresh data");
