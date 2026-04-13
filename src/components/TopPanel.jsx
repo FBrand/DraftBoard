@@ -18,10 +18,14 @@ const TopPanel = ({ currentPick, ourPicksLeft, onUndo, onUpdatePicks, onReset, i
 
     return (
         <div className="top-panel">
-            <div className="pick-info">
-                <span className="pick-label">NOW DRAFTING</span>
-                <span className="pick-number">#{currentPick}</span>
-                {ourPicksLeft.includes(currentPick) && <span className="our-pick-badge">OURS</span>}
+            <div className="top-panel">
+                <div className="pick-info">
+                    <span className="pick-label">NOW DRAFTING</span>
+                    <span className="pick-number">#{currentPick}</span>
+                </div>
+                <div className="top-panel">
+                    {ourPicksLeft.includes(currentPick) && <span className="our-pick-badge">OURS</span>}
+                </div>
             </div>
 
             <div className="board-switcher">

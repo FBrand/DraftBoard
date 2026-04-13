@@ -10,8 +10,8 @@ const BottomPanel = ({ yourPicks }) => {
                         key={player.name}
                         className="player-card ours"
                         style={{
-                            minWidth: '180px',
-                            marginBottom: 0,
+                            minWidth: '150px',
+                            marginBottom: '0.5rem',
                             padding: '0.5rem 1rem',
                             display: 'flex',
                             flexDirection: 'row',
