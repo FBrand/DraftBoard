@@ -65,17 +65,100 @@ Defines the order of positional columns from left to right.
 
 ## Setup & Development
 
+### Prerequisites
+
+The application requires **Node.js (LTS recommended)** and **npm**.
+
+
+
+### Windows
+
+1. Download Node.js: https://nodejs.org  
+2. Use **PowerShell** or **Command Prompt**  
+3. Verify installation:
+
+    node -v  
+    npm -v  
+
+
+
+### macOS
+
+1. Install Node.js from https://nodejs.org  
+   or via Homebrew:
+
+    brew install node  
+
+2. Open **Terminal**  
+3. Verify installation:
+
+    node -v  
+    npm -v  
+
+
+
+### Linux (Ubuntu/Debian)
+
+1. Install Node.js:
+
+    sudo apt update  
+    sudo apt install nodejs npm  
+
+2. Open terminal  
+3. Verify installation:
+
+    node -v  
+    npm -v  
+
+
+
 ### Local Installation
-```bash
-# Install dependencies
-npm install
 
-# Run development server
-npm run dev
+    git clone https://github.com/FBrand/DraftBoard.git  
+    cd DraftBoard  
+    npm install  
 
-# Build for production
-npm run build
-```
+Alternatively: download ZIP from GitHub and extract it.
+
+
+
+### Development Server
+
+    npm run dev  
+
+Open:
+
+    http://localhost:5173  
+
+
+
+### Production Build
+
+    npm run build  
+
+Creates a `dist/` folder with production files.
+
+
+
+### Preview Production Build
+
+    npm run preview  
+
+
+
+### Deployment
+
+The application is fully static and can be hosted on any web server or hosting platform.
+
+1. Build the project:
+
+    npm run build  
+
+2. Upload the contents of the `dist/` folder to your hosting provider.
+
+3. Ensure your server is configured for SPA routing (fallback to `index.html`).
+
+The app runs entirely in the browser and requires no backend.
 
 ### Live Sync Modularity
 The application features a robust discovery system. If the `src/services/` directory (containing synchronization logic) is missing, the "Live Sync" functionality will gracefully disable itself in the UI without affecting the core board experience.
