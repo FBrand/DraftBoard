@@ -27,7 +27,7 @@ const CenterBoard = ({ players, onDraft, columnOrder = [] }) => {
     // Group our rows (groups) into rounds for the sidebar labels
     const roundConfig = [];
     let currentRow = 2; // Row 1 is header
-    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].forEach(r => {
+    [1, 2, 3, 4, 5, 6, 7, 8].forEach(r => {
         const groupsInRound = allGroups.filter(g => getRoundFromGroup(g) === r);
         if (groupsInRound.length > 0) {
             roundConfig.push({
@@ -66,7 +66,7 @@ const CenterBoard = ({ players, onDraft, columnOrder = [] }) => {
                             gridColumn: 1
                         }}
                     >
-                        {rc.round}
+                        {rc.round < 8 ? rc.round : ''}
                     </div>
                 ))}
 
