@@ -30,11 +30,12 @@ function App() {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isUnrankedModalOpen, setIsUnrankedModalOpen] = useState(false);
+  const [isFocusMode, setIsFocusMode] = useState(false);
 
   if (loading) return <div className="loading">Loading Chiefs Draft Board...</div>;
 
   return (
-    <div className="app-container">
+    <div className={`app-container${isFocusMode ? ' focus-mode' : ''}`}>
       <TopPanel
         currentPick={currentPick}
         ourPicksLeft={ourPicksLeft}
@@ -44,29 +45,35 @@ function App() {
         isLiveSync={isLiveSync}
         canLiveSync={canLiveSync}
         toggleLiveSync={toggleLiveSync}
+        isFocusMode={isFocusMode}
+        onToggleFocus={() => setIsFocusMode(f => !f)}
       />
 
       <div className="main-layout">
-        <LeftPanel
-          players={players}
-          onDraft={draftPlayer}
-          onDraftUnranked={() => setIsUnrankedModalOpen(true)}
-        />
+        {!isFocusMode && (
+          <LeftPanel
+            players={players}
+            onDraft={draftPlayer}
+            onDraftUnranked={() => setIsUnrankedModalOpen(true)}
+          />
+        )}
         <CenterBoard
           players={players}
           onDraft={draftPlayer}
           columnOrder={columnOrder}
         />
-        <RightPanel
-          remotePicks={remotePicks}
-          draftedPlayers={draftedPlayers}
-          currentPick={currentPick}
-          ourPicksLeft={ourPicksLeft}
-          onImport={importDraftState}
-        />
+        {!isFocusMode && (
+          <RightPanel
+            remotePicks={remotePicks}
+            draftedPlayers={draftedPlayers}
+            currentPick={currentPick}
+            ourPicksLeft={ourPicksLeft}
+            onImport={importDraftState}
+          />
+        )}
       </div>
 
-      <BottomPanel yourPicks={yourPicks} />
+      {!isFocusMode && <BottomPanel yourPicks={yourPicks} />}
 
       <PicksModal
         isOpen={isModalOpen}

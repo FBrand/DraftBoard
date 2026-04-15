@@ -30,7 +30,6 @@ const PlayerCard = ({ player, isBest, onClick, slim, team, displayPick, noStrike
             <div className="card-bottom">
                 <div className="player-name">
                     {name}
-                    {slim && drafted && teamAbbr && <span className="slim-team-name"> ({teamAbbr})</span>}
                 </div>
                 {!slim && <div className="player-pos">{position}</div>}
             </div>

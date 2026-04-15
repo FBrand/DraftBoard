@@ -593,12 +593,12 @@ body {
 }
 
 .player-card.current {
-  border: 2px solid var(--gold-color) !important;
-  box-shadow: 0 0 20px rgba(255, 184, 28, 0.4) !important;
+  border: 2px solid var(--chiefs-white) !important;
+  /*box-shadow: 0 0 20px rgba(255, 184, 28, 0.4) !important;*/
   transform: scale(1.02);
   z-index: 10;
   position: relative;
-  background: rgba(255, 184, 28, 0.08) !important;
+  /*background: rgba(255, 184, 28, 0.08) !important;*/
 }
 
 .player-card.drafted {
@@ -622,7 +622,7 @@ body {
   left: -2px;
   right: -2px;
   top: 50%;
-  height: 1.0px;
+  height: 0.0px;
   background: var(--bg-color);
   pointer-events: none;
 }
@@ -640,14 +640,14 @@ body {
 }
 
 .player-card.ours {
-  background: var(--chiefs-white);
-  border: 4px solid var(--chiefs-gold);
-  opacity: 0.8;
+  /*background: var(--chiefs-white);*/
+  border: 3px solid var(--chiefs-gold);
+  opacity: 1.0;
   filter: none;
 }
 
 .player-card.ours .player-name {
-  color: var(--chiefs-red);
+  color: var(--chiefs-white);
 }
 
 .player-card.ours .player-pos {
@@ -664,7 +664,7 @@ body {
 }
 
 .player-card.best {
-  border: 2px solid var(--best-color);
+  border: 2px solid var(--chiefs-white);
 }
 
 /* Side Panels */
@@ -1022,4 +1022,42 @@ body.export-mode .player-card.best {
 
 body.export-mode .card-glow {
   display: none !important;
+}
+
+/* ── Focus Mode ─────────────────────────────────────────────────────────── */
+
+/* Slimmed top bar */
+.top-panel--focus {
+  height: 70px !important;
+  padding: 0 1.5rem !important;
+  gap: 2rem;
+}
+
+/* Center board fills full width — no side columns */
+.focus-mode .main-layout {
+  grid-template-columns: 1fr !important;
+}
+
+/* Focus / Exit Focus button */
+.focus-pill {
+  background-color: transparent;
+  border: 1px solid #64748b;
+  color: #94a3b8;
+}
+
+.focus-pill:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+  border-color: #94a3b8;
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+.focus-board-name {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--gold);
+  letter-spacing: 0.08rem;
+  text-transform: uppercase;
+  opacity: 0.8;
+  white-space: nowrap;
 }
