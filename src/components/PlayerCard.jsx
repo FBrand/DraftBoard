@@ -24,6 +24,7 @@ const PlayerCard = ({ player, isBest, onClick, slim, team, displayPick, noStrike
                 <span className="player-rank">{rankDisplay}</span>
                 <div className="card-team-info">
                     {pickNo && <span className="card-pick-num">PK {pickNo}</span>}
+                    {slim && !pickNo && <div className="player-pos">{position.split('.')[1]}</div>}
                     {teamAbbr && <span className="card-team">{teamAbbr}</span>}
                 </div>
             </div>

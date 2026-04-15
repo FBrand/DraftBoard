@@ -2,7 +2,7 @@ import React from 'react';
 import PlayerCard from './PlayerCard';
 
 const CenterBoard = ({ players, onDraft, columnOrder = [] }) => {
-    const rawPositions = [...new Set(players.map(p => p.position))];
+    const rawPositions = [...new Set(players.map(p => p.position.split('.', 1)[0]))];
 
     // Sort positions: defined order first, then any extras found in data
     const positions = [
@@ -27,7 +27,7 @@ const CenterBoard = ({ players, onDraft, columnOrder = [] }) => {
     // Group our rows (groups) into rounds for the sidebar labels
     const roundConfig = [];
     let currentRow = 2; // Row 1 is header
-    [1, 2, 3, 4, 5, 6, 7].forEach(r => {
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].forEach(r => {
         const groupsInRound = allGroups.filter(g => getRoundFromGroup(g) === r);
         if (groupsInRound.length > 0) {
             roundConfig.push({
@@ -42,7 +42,7 @@ const CenterBoard = ({ players, onDraft, columnOrder = [] }) => {
     // For each position, find the best available player
     const bestAvailable = {};
     positions.forEach(pos => {
-        bestAvailable[pos] = players.find(p => p.position === pos && !p.drafted);
+        bestAvailable[pos] = players.find(p => p.position.split('.', 1)[0] === pos && !p.drafted);
     });
 
     return (
@@ -78,7 +78,7 @@ const CenterBoard = ({ players, onDraft, columnOrder = [] }) => {
                     return (
                         <div key={group} className={`board-row ${isLastInRound ? 'round-row-end' : 'subgroup-row-end'}`}>
                             {positions.map(pos => {
-                                const roundPlayers = players.filter(p => p.position === pos && p.group === group);
+                                const roundPlayers = players.filter(p => p.position.split('.', 1)[0] === pos && p.group === group);
 
                                 return (
                                     <div key={pos} className="slot-cell">

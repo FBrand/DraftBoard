@@ -24,16 +24,20 @@ const TopPanel = ({ currentPick, ourPicksLeft, onUndo, onUpdatePicks, onReset, i
     if (isFocusMode) {
         const boardName = currentRankings.includes('rankings_chris.csv') ? 'Chris'
             : currentRankings.includes('rankings_dan.csv') ? 'Dan'
-            : currentRankings.includes('rankings_ryan.csv') ? 'Ryan'
-            : currentRankings.includes('rankings_seth.csv') ? 'Seth'
-            : 'Consensus';
+                : currentRankings.includes('rankings_ryan.csv') ? 'Ryan'
+                    : currentRankings.includes('rankings_seth.csv') ? 'Seth'
+                        : 'Consensus';
 
         return (
             <div className="top-panel top-panel--focus">
-                <div className="pick-info">
-                    <span className="pick-label">NOW DRAFTING</span>
-                    <span className="pick-number">#{currentPick}</span>
-                    {ourPicksLeft.includes(currentPick) && <span className="our-pick-badge">OURS</span>}
+                <div className="top-panel">
+                    <div className="pick-info">
+                        <span className="pick-label">NOW DRAFTING</span>
+                        <span className="pick-number">#{currentPick}</span>
+                    </div>
+                    <div className="pick-info">
+                        {ourPicksLeft.includes(currentPick) && <span className="our-pick-badge">OURS</span>}
+                    </div>
                 </div>
                 <div className="our-picks-tracker">
                     <span className="tracker-label">OUR PICKS LEFT</span>
@@ -47,9 +51,9 @@ const TopPanel = ({ currentPick, ourPicksLeft, onUndo, onUpdatePicks, onReset, i
                 </div>
                 <div className="focus-board-name">BOARD: {boardName}</div>
                 <div className="top-actions">
-                    <button className="action-pill undo-pill" onClick={onUndo}>Undo</button>
                     <button className="action-pill trade-pill" onClick={onUpdatePicks}>Update Picks</button>
                     <button className="action-pill focus-pill" onClick={onToggleFocus}>⛶ Exit Focus</button>
+                    <button className="action-pill undo-pill" onClick={onUndo}>Undo</button>
                 </div>
             </div>
         );
@@ -58,10 +62,14 @@ const TopPanel = ({ currentPick, ourPicksLeft, onUndo, onUpdatePicks, onReset, i
     // ── Normal Mode ───────────────────────────────────────────────────────────
     return (
         <div className="top-panel">
-            <div className="pick-info">
-                <span className="pick-label">NOW DRAFTING</span>
-                <span className="pick-number">#{currentPick}</span>
-                {ourPicksLeft.includes(currentPick) && <span className="our-pick-badge">OURS</span>}
+            <div className="top-panel">
+                <div className="pick-info">
+                    <span className="pick-label">NOW DRAFTING</span>
+                    <span className="pick-number">#{currentPick}</span>
+                </div>
+                <div className="pick-info">
+                    {ourPicksLeft.includes(currentPick) && <span className="our-pick-badge">OURS</span>}
+                </div>
             </div>
 
             <div className="our-picks-tracker">
@@ -80,17 +88,17 @@ const TopPanel = ({ currentPick, ourPicksLeft, onUndo, onUpdatePicks, onReset, i
                     <span className="switcher-label">BOARD</span>
                     <div className="switcher-buttons">
                         <button
-                            className={`switcher-btn ${!currentRankings || currentRankings.includes('rankings.csv') ? 'active' : ''}`}
-                            onClick={() => updateRankingsParam('/DraftBoard/rankings.csv')}
+                            className={`switcher-btn ${!currentRankings || currentRankings.includes('rankings_consensus.csv') ? 'active' : ''}`}
+                            onClick={() => updateRankingsParam('/DraftBoard/rankings_consensus.csv')}
                         >
                             Consensus
                         </button>
-                        <button
+                        {/* <button
                             className={`switcher-btn ${currentRankings.includes('rankings_chris.csv') ? 'active' : ''}`}
                             onClick={() => updateRankingsParam('/DraftBoard/rankings_chris.csv')}
                         >
                             Chris
-                        </button>
+                        </button> */}
                         <button
                             className={`switcher-btn ${currentRankings.includes('rankings_dan.csv') ? 'active' : ''}`}
                             onClick={() => updateRankingsParam('/DraftBoard/rankings_dan.csv')}
@@ -103,12 +111,12 @@ const TopPanel = ({ currentPick, ourPicksLeft, onUndo, onUpdatePicks, onReset, i
                         >
                             Ryan
                         </button>
-                        <button
+                        {/* <button
                             className={`switcher-btn ${currentRankings.includes('rankings_seth.csv') ? 'active' : ''}`}
                             onClick={() => updateRankingsParam('/DraftBoard/rankings_seth.csv')}
                         >
                             Seth
-                        </button>
+                        </button> */}
                     </div>
                 </div>
                 {canLiveSync && (

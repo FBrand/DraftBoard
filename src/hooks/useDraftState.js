@@ -50,7 +50,7 @@ export const useDraftState = () => {
             try {
                 const base = import.meta.env.BASE_URL;
                 const params = new URLSearchParams(window.location.search);
-                const rankingsUrl = params.get('rankings') || `${base}rankings.csv`;
+                const rankingsUrl = params.get('rankings') || `${base}rankings_consensus.csv`;
 
                 const [rankingsRes, picksRes, columnsRes] = await Promise.all([
                     fetch(rankingsUrl),
