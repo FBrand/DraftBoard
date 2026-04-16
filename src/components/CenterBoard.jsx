@@ -49,9 +49,18 @@ const CenterBoard = ({ players, onDraft, columnOrder = [] }) => {
         <div className="center-board-container" style={{ '--pos-count': positions.length }}>
             <div className="board-grid">
                 {/* Header Row */}
-                <div className="header-cell round-header-label">RD</div>
-                {positions.map(pos => (
-                    <div key={pos} className="header-cell">
+                <div 
+                    className="header-cell round-header-label" 
+                    style={{ position: 'sticky', top: 0, left: 0, zIndex: 100 }}
+                >
+                    RD
+                </div>
+                {positions.map((pos, idx) => (
+                    <div 
+                        key={pos} 
+                        className="header-cell"
+                        style={{ position: 'sticky', top: 0, zIndex: 90 }}
+                    >
                         <h3>{pos}</h3>
                     </div>
                 ))}
@@ -63,7 +72,10 @@ const CenterBoard = ({ players, onDraft, columnOrder = [] }) => {
                         className={`round-sidebar-label round-${rc.round}`}
                         style={{
                             gridRow: `${rc.start} / span ${rc.span}`,
-                            gridColumn: 1
+                            gridColumn: 1,
+                            position: 'sticky',
+                            left: 0,
+                            zIndex: 80
                         }}
                     >
                         {rc.round < 8 ? rc.round : ''}

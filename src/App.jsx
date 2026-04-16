@@ -31,6 +31,8 @@ function App() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isUnrankedModalOpen, setIsUnrankedModalOpen] = useState(false);
   const [isFocusMode, setIsFocusMode] = useState(false);
+  const [showLeftSidebar, setShowLeftSidebar] = useState(false);
+  const [showRightSidebar, setShowRightSidebar] = useState(false);
 
   if (loading) return <div className="loading">Loading Chiefs Draft Board...</div>;
 
@@ -50,27 +52,49 @@ function App() {
       />
 
       <div className="main-layout">
-        {!isFocusMode && (
-          <LeftPanel
-            players={players}
-            onDraft={draftPlayer}
-            onDraftUnranked={() => setIsUnrankedModalOpen(true)}
-          />
-        )}
+        <button
+          className={`sidebar-toggle toggle-left ${showLeftSidebar ? 'active' : ''}`}
+          onClick={() => setShowLeftSidebar(!showLeftSidebar)}
+          aria-label="Toggle Rankings"
+        >
+          {showLeftSidebar ? '✕' : '📊'}
+        </button>
+
+        <div className={`left-sidebar-wrapper ${showLeftSidebar ? 'mobile-open' : ''}`}>
+          {!isFocusMode && (
+            <LeftPanel
+              players={players}
+              onDraft={draftPlayer}
+              onDraftUnranked={() => setIsUnrankedModalOpen(true)}
+            />
+          )}
+        </div>
+
         <CenterBoard
           players={players}
           onDraft={draftPlayer}
           columnOrder={columnOrder}
         />
-        {!isFocusMode && (
-          <RightPanel
-            remotePicks={remotePicks}
-            draftedPlayers={draftedPlayers}
-            currentPick={currentPick}
-            ourPicksLeft={ourPicksLeft}
-            onImport={importDraftState}
-          />
-        )}
+
+        <div className={`right-sidebar-wrapper ${showRightSidebar ? 'mobile-open' : ''}`}>
+          {!isFocusMode && (
+            <RightPanel
+              remotePicks={remotePicks}
+              draftedPlayers={draftedPlayers}
+              currentPick={currentPick}
+              ourPicksLeft={ourPicksLeft}
+              onImport={importDraftState}
+            />
+          )}
+        </div>
+
+        <button
+          className={`sidebar-toggle toggle-right ${showRightSidebar ? 'active' : ''}`}
+          onClick={() => setShowRightSidebar(!showRightSidebar)}
+          aria-label="Toggle Picks"
+        >
+          {showRightSidebar ? '✕' : '🕒'}
+        </button>
       </div>
 
       {!isFocusMode && <BottomPanel yourPicks={yourPicks} />}

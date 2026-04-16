@@ -34,6 +34,7 @@ const PlayerCard = ({ player, isBest, onClick, slim, team, displayPick, noStrike
                 </div>
                 {!slim && <div className="player-pos">{position}</div>}
             </div>
+            {player.isFavorite && <span className="fav-star">★</span>}
             {(draftedByUs || team === 'KC') && <div className="card-glow"></div>}
         </div>
     );
