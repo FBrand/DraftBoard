@@ -1,11 +1,11 @@
-group,name,position
+group,name,position,favourite
 1,Fernando Mendoza,QB
 ,Arvell Reese,EDGE
 ,Jeremiyah Love,RB
 ,Caleb Downs,S
 ,Sonny Styles,LB.O
 ,David Bailey,EDGE
-,Rueben Bain Jr,DL.3T
+,Rueben Bain Jr,DL.3T,*
 ,Mansoor Delane,CB
 ,Carnell Tate,WR
 ,Francis Mauigoa,OT
@@ -13,11 +13,11 @@ group,name,position
 ,Makai Lemon,WR
 ,Olaivavega Ioane,IOL.G
 ,Jermod McCoy,CB
-,Jordyn Tyson,WR
-,Kenyon Sadiq,TE
+,Jordyn Tyson,WR,*
+,Kenyon Sadiq,TE,*
 ,Keldric Faulk,EDGE
-,Kevin Concepcion,WR
-,Dillon Thieneman,S
+,Kevin Concepcion,WR,*
+,Dillon Thieneman,S,*
 ,Omar Cooper Jr,WR
 ,Kadyn Proctor,OT
 ,Akheem Mesidor,EDGE
@@ -25,7 +25,7 @@ group,name,position
 ,Monroe Freeling,OT
 ,Emmanuel McNeil-Warren,S
 ,Peter Woods,DL.3T
-,TJ Parker,EDGE
+,TJ Parker,EDGE,*
 ,Denzel Boston,WR
 ,Ty Simpson,QB
 ,Kayden McDonald,DL.1T
@@ -36,8 +36,8 @@ group,name,position
 ,CJ Allen,LB.O
 ,Colton Hood,CB
 ,Zion Young,EDGE
-,D'angelo Ponds,CB.N
-,Malachi Lawrence,EDGE
+,D'angelo Ponds,CB.N,*
+,Malachi Lawrence,EDGE,*
 ,Lee Hunter,DL.1T
 ,Max Iheanachor,OT
 ,R Mason Thomas,EDGE
@@ -64,14 +64,14 @@ group,name,position
 ,Antonio Williams,WR
 ,Davison Igbinosun,CB
 3,Garrett Nussmeier,QB
-,Malik Muhammad,CB
+,Malik Muhammad,CB,*
 ,Treydan Stukes,S
 ,Keith Abney II,CB.N
 ,Dani Dennis-Sutton,EDGE
 ,Elijah Sarratt,WR
 ,Caleb Tiernan,OT
-,Ted Hurst,WR
-,Domonique Orange,DL.1T
+,Ted Hurst,WR,*
+,Domonique Orange,DL.1T,*
 ,Romello Height,EDGE
 ,Mike Washington Jr,RB
 ,Gennings Dunker,IOL.G
@@ -84,11 +84,11 @@ group,name,position
 ,Julian Neal,CB
 ,Skyler Bell,WR
 ,Deion Burks,WR.S
-,Bud Clark,S
+,Bud Clark,S,*
 ,Connor Lew,IOL.C
 ,Genesis Smith,S
 ,Darrell Jackson Jr,DL.3T
-,Jalon Kilgore,S
+,Jalon Kilgore,S,*
 ,Jaishawn Barham,EDGE
 ,Keyron Crawford,EDGE
 ,De'Zhaun Stribling,WR
@@ -112,7 +112,7 @@ group,name,position
 ,Kyle Louis,LB.O
 ,Jalen Farmer,IOL.G
 ,Brian Parker II,IOL.C
-,Sam Roush,TE
+,Sam Roush,TE,*
 ,Billy Schrauth,IOL.G
 ,Justin Joly,TE
 ,Jude Bowry,OT
@@ -132,7 +132,7 @@ group,name,position
 ,Parker Brailsford,IOL.C
 ,Tacario Davis,CB
 ,Taylen Green,QB
-,Zane Durant,DL.3T
+,Zane Durant,DL.3T,*
 ,Dontay Corleone,DL.1T
 ,Cade Klubnik,QB
 ,Taurean York,LB.I
@@ -141,12 +141,12 @@ group,name,position
 ,Jack Endries,TE
 ,DeMonte Capehart,DL.3T
 ,Hezekiah Masses,CB
-,Isaiah World,OT
+,Isaiah World,OT,*
 ,Drew Shelton,OT
 ,Keyshaun Elliott,LB.I
 ,Tim Keenan III,DL.1T
 ,Harold Perkins Jr,LB.O
-,Ephesians Prysock,CB
+,Ephesians Prysock,CB,*
 ,Diego Pounds,OT
 ,Devon Marshall,CB
 ,Tyreak Sapp,EDGE
@@ -181,16 +181,16 @@ group,name,position
 ,Sawyer Robertson,QB
 ,Albert Regis,DL.3T
 ,Michael Taaffe,S
-,Lander Barton,LB.I
+,Lander Barton,LB.I,*
 ,Eric McAlister,WR
 ,Kaleb Elarms-Orr,LB.O
 ,Louis Moore,S
 ,Josh Cuevas,TE
 ,John Michael Gyllenborg,TE
-,CJ Daniels,WR
+,CJ Daniels,WR,*
 ,Logan Taylor,IOL.G
 ,Thaddeus Dixon,CB
-,Mikail Kamara,EDGE
+,Mikail Kamara,EDGE,*
 7,Aiden Fisher,LB.I
 ,Will Kacmarek,TE
 ,Dae'Quan Wright,TE
@@ -221,7 +221,7 @@ group,name,position
 ,DJ Campbell,IOL.G
 ,Logan Fano,EDGE
 ,Jalen Huskey,S
-,Skyler Gill-Howard,DL.5T
+,Skyler Gill-Howard,DL.5T,*
 ,Bishop Fitzgerald,S
 8,Quintayvious Hutchins,EDGE
 ,Garrett DiGiorgio,OT
@@ -234,13 +234,13 @@ group,name,position
 ,J'Mari Taylor,RB
 ,Trey Moore,EDGE
 ,Jack Pyburn,EDGE
-,Owen Heinecke,LB.I
+,Owen Heinecke,LB.I,*
 ,Nolan Rucci,OT
 ,Jaydn Ott,RB
 ,Diego Pavia,QB
 ,Andre Fuller,CB
 ,Cole Wisniewski,S
-,Nick Singleton,RB
+,Nick Singleton,RB,*
 ,Bryson Eason,DL.1T
 ,Chase Roberts,WR
 ,Vinny Anthony II,WR
@@ -251,7 +251,7 @@ group,name,position
 ,Jimmy Rolder,LB.I
 ,Mason Reiger,EDGE
 ,Cameron Ball,DL.3T
-,Riley Nowakowski,TE
+,Riley Nowakowski,TE,*
 ,Xavier Nwankpa,S
 ,Eli Heidenreich,RB
 ,Seth McGowan,RB
