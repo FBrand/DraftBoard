@@ -52,15 +52,17 @@ function App() {
       />
 
       <div className="main-layout">
-        <button
-          className={`sidebar-toggle toggle-left ${showLeftSidebar ? 'active' : ''}`}
-          onClick={() => setShowLeftSidebar(!showLeftSidebar)}
-          aria-label="Toggle Rankings"
-        >
-          {showLeftSidebar ? '✕' : '📊'}
-        </button>
+        {!isFocusMode && (
+          <button
+            className={`sidebar-toggle toggle-left ${showLeftSidebar ? 'active' : ''}`}
+            onClick={() => setShowLeftSidebar(!showLeftSidebar)}
+            aria-label="Toggle Rankings"
+          >
+            {showLeftSidebar ? '✕' : '📊'}
+          </button>
+        )}
 
-        <div className={`left-sidebar-wrapper ${showLeftSidebar ? 'mobile-open' : ''}`}>
+        <div className={`left-sidebar-wrapper ${showLeftSidebar && !isFocusMode ? 'mobile-open' : ''}`}>
           {!isFocusMode && (
             <LeftPanel
               players={players}
@@ -76,7 +78,7 @@ function App() {
           columnOrder={columnOrder}
         />
 
-        <div className={`right-sidebar-wrapper ${showRightSidebar ? 'mobile-open' : ''}`}>
+        <div className={`right-sidebar-wrapper ${showRightSidebar && !isFocusMode ? 'mobile-open' : ''}`}>
           {!isFocusMode && (
             <RightPanel
               remotePicks={remotePicks}
@@ -88,13 +90,15 @@ function App() {
           )}
         </div>
 
-        <button
-          className={`sidebar-toggle toggle-right ${showRightSidebar ? 'active' : ''}`}
-          onClick={() => setShowRightSidebar(!showRightSidebar)}
-          aria-label="Toggle Picks"
-        >
-          {showRightSidebar ? '✕' : '🕒'}
-        </button>
+        {!isFocusMode && (
+          <button
+            className={`sidebar-toggle toggle-right ${showRightSidebar ? 'active' : ''}`}
+            onClick={() => setShowRightSidebar(!showRightSidebar)}
+            aria-label="Toggle Picks"
+          >
+            {showRightSidebar ? '✕' : '🕒'}
+          </button>
+        )}
       </div>
 
       {!isFocusMode && <BottomPanel yourPicks={yourPicks} />}

@@ -475,10 +475,16 @@ body {
   top: 0;
   background: var(--bg-color);
   z-index: 40;
-  padding: 0.35rem 0;
+  padding: 0.2rem 0;
   border-bottom: 3px solid var(--accent-color);
   text-align: center;
   border-right: 1px solid var(--border-color);
+}
+
+.header-cell h3 {
+  margin: 0.2rem;
+  /*font-size: 0.85rem;
+  line-height: 1.4;*/
 }
 
 .header-cell.round-header-label {
@@ -584,7 +590,8 @@ body {
   flex-direction: column;
   gap: 0.25rem;
   position: relative;
-  overflow: visible !important; /* Ensure the star sitting on the border isn't clipped */
+  overflow: visible !important;
+  /* Ensure the star sitting on the border isn't clipped */
 }
 
 .player-card.slim {
@@ -645,16 +652,19 @@ body {
   position: absolute;
   top: -8px;
   right: -8px;
-  color: #FFB81C; /* Chiefs Gold */
-  font-size: 1.3rem; /* Slightly larger */
+  color: #FFB81C;
+  /* Chiefs Gold */
+  font-size: 1.3rem;
+  /* Slightly larger */
   line-height: 1;
   /* Stronger multi-layer shadow to ensure visibility on gold borders */
-  text-shadow: 
-    0 0 4px rgba(0,0,0,1), 
-    0 0 2px rgba(0,0,0,1),
+  text-shadow:
+    0 0 4px rgba(0, 0, 0, 1),
+    0 0 2px rgba(0, 0, 0, 1),
     0 0 8px rgba(255, 184, 28, 0.4);
   pointer-events: none;
-  z-index: 500; /* High enough to beat borders and glows */
+  z-index: 500;
+  /* High enough to beat borders and glows */
   opacity: 1 !important;
   filter: none !important;
 }
@@ -1105,8 +1115,10 @@ body.export-mode .card-glow {
   .left-sidebar-wrapper,
   .right-sidebar-wrapper {
     position: fixed;
-    top: 70px; /* Below top panel */
-    bottom: 110px; /* Above bottom panel */
+    top: 70px;
+    /* Below top panel */
+    bottom: 110px;
+    /* Above bottom panel */
     width: 280px;
     background: var(--bg-color);
     z-index: 2000;
@@ -1139,7 +1151,8 @@ body.export-mode .card-glow {
   .sidebar-toggle {
     display: flex !important;
     position: fixed;
-    bottom: 110px; /* Floating just above the bottom panel */
+    bottom: 110px;
+    /* Floating just above the bottom panel */
     width: 44px;
     height: 50px;
     background: var(--panel-bg);
@@ -1165,7 +1178,8 @@ body.export-mode .card-glow {
     border-right: none;
   }
 
-  .sidebar-toggle:hover, .sidebar-toggle.active {
+  .sidebar-toggle:hover,
+  .sidebar-toggle.active {
     color: var(--chiefs-gold);
     background: var(--bg-color);
     width: 44px;
@@ -1179,7 +1193,8 @@ body.export-mode .card-glow {
   }
 
   .board-grid {
-    min-width: 1200px; /* Force enough width for swiping across positions */
+    min-width: 1200px;
+    /* Force enough width for swiping across positions */
   }
 
   /* UI Compaction */
@@ -1234,13 +1249,14 @@ body.export-mode .card-glow {
   }
 
   .our-picks-tracker {
-    display: flex !important; /* Re-enable tracker, user can swipe to see it */
+    display: flex !important;
+    /* Re-enable tracker, user can swipe to see it */
   }
 
   /* Don't shrink these blocks */
-  .pick-info, 
-  .our-picks-tracker, 
-  .top-actions, 
+  .pick-info,
+  .our-picks-tracker,
+  .top-actions,
   .board-switcher {
     flex-shrink: 0 !important;
   }
