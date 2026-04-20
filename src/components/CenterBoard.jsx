@@ -117,4 +117,4 @@ const CenterBoard = ({ players, onDraft, columnOrder = [] }) => {
     );
 };
 
-export default CenterBoard;
+export default React.memo(CenterBoard);

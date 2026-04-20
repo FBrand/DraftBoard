@@ -40,4 +40,4 @@ const PlayerCard = ({ player, isBest, onClick, slim, team, displayPick, noStrike
     );
 };
 
-export default PlayerCard;
+export default React.memo(PlayerCard);

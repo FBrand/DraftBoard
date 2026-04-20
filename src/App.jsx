@@ -51,17 +51,26 @@ function App() {
         onToggleFocus={() => setIsFocusMode(f => !f)}
       />
 
-      <div className="main-layout">
-        {!isFocusMode && (
+      {!isFocusMode && (
+        <>
           <button
-            className={`sidebar-toggle toggle-left ${showLeftSidebar ? 'active' : ''}`}
+            className={`sidebar-toggle toggle-left ${showLeftSidebar && !isFocusMode ? 'active' : ''}`}
             onClick={() => setShowLeftSidebar(!showLeftSidebar)}
             aria-label="Toggle Rankings"
           >
             {showLeftSidebar ? '✕' : '📊'}
           </button>
-        )}
+          <button
+            className={`sidebar-toggle toggle-right ${showRightSidebar && !isFocusMode ? 'active' : ''}`}
+            onClick={() => setShowRightSidebar(!showRightSidebar)}
+            aria-label="Toggle Picks"
+          >
+            {showRightSidebar ? '✕' : '🕒'}
+          </button>
+        </>
+      )}
 
+      <div className="main-layout">
         <div className={`left-sidebar-wrapper ${showLeftSidebar && !isFocusMode ? 'mobile-open' : ''}`}>
           {!isFocusMode && (
             <LeftPanel
@@ -89,16 +98,6 @@ function App() {
             />
           )}
         </div>
-
-        {!isFocusMode && (
-          <button
-            className={`sidebar-toggle toggle-right ${showRightSidebar ? 'active' : ''}`}
-            onClick={() => setShowRightSidebar(!showRightSidebar)}
-            aria-label="Toggle Picks"
-          >
-            {showRightSidebar ? '✕' : '🕒'}
-          </button>
-        )}
       </div>
 
       {!isFocusMode && <BottomPanel yourPicks={yourPicks} />}

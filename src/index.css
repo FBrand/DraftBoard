@@ -337,12 +337,21 @@ body {
   overflow: hidden;
 }
 
+.left-sidebar-wrapper,
+.right-sidebar-wrapper {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 .side-panel {
   background: var(--bg-color);
   display: flex;
   flex-direction: column;
   padding: 0;
   overflow: hidden;
+  height: 100%;
 }
 
 .panel-title {
@@ -453,6 +462,8 @@ body {
   position: relative;
   display: flex;
   flex-direction: column;
+  height: 100%; /* Fill the main-layout grid row */
+  min-height: 0; /* Important grid child fix */
 }
 
 .board-grid {
@@ -1097,6 +1108,11 @@ body.export-mode .card-glow {
   white-space: nowrap;
 }
 
+/* Sidebar toggles are mobile-only */
+.sidebar-toggle {
+  display: none;
+}
+
 /* ── Mobile & Tablet Optimization (1024px Breakpoint) ───────────────────── */
 
 @media (max-width: 1024px) {
@@ -1122,7 +1138,8 @@ body.export-mode .card-glow {
     width: 280px;
     background: var(--bg-color);
     z-index: 2000;
-    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: transform 0.2s ease-out; /* Faster, simpler transition */
+    will-change: transform; /* Hardware acceleration hint */
     box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
     border: 1px solid var(--border-color);
     overflow: hidden;
