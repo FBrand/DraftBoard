@@ -1,19 +1,19 @@
 group,name,position
 1.1,Caleb Downs,S
-1.2,Rueben Bain Jr.,EDGE
+1.2,Rueben Bain Jr,EDGE
 1.2,Sonny Styles,LB
 1.2,Mansoor Delane,CB
 1.3,Jeremiyah Love,RB
 1.3,Jordyn Tyson,WR
 1.3,Jermod McCoy,CB
 1.4,David Bailey,EDGE
-1.4,KC Concepcion,WR
+1.4,Kevin Concepcion,WR
 1.5,Fernando Mendoza,QB
 1.5,Spencer Fano,OT
 1.5,Olaivavega Ioane,IOL
 1.6,Carnell Tate,WR
 1.6,Kenyon Sadiq,TE
-1.6,T.J. Parker,EDGE
+1.6,TJ Parker,EDGE
 1.7,Makai Lemon,WR
 1.7,Francis Mauigoa,IOL
 1.7,Emmanuel McNeil-Warren,S
@@ -30,8 +30,8 @@ group,name,position
 2.3,Kayden McDonald,DL
 2.3,Akheem Mesidor,EDGE
 2.3,Chris Johnson,CB
-2.3,Anthony Hill Jr.,LB
-2.4,Omar Cooper Jr.,WR
+2.3,Anthony Hill Jr,LB
+2.4,Omar Cooper Jr,WR
 2.4,Chandler Rivers,CB
 2.4,Zion Young,EDGE
 2.4,Jake Golday,LB
@@ -43,7 +43,7 @@ group,name,position
 2.5,Max Iheanachor,OT
 2.6,Malik Muhammad,CB
 2.6,Gabe Jacas,EDGE
-2.6,A.J. Haulcy,S
+2.6,AJ Haulcy,S
 2.6,Josiah Trotter,LB
 2.6,Domonique Orange,DL
 2.7,Chris Brazzell II,WR
@@ -57,7 +57,7 @@ group,name,position
 2.7,Derrick Moore,EDGE
 2.7,Josh Cameron,WR
 2.7,Gennings Dunker,IOL
-3.1,Mike Washington Jr.,RB
+3.1,Mike Washington Jr,RB
 3.1,Caleb Banks,DL
 3.1,Brandon Cisse,CB
 3.1,Bud Clark,S
@@ -72,7 +72,7 @@ group,name,position
 3.2,Kamari Ramsey,S
 3.2,Dani Dennis-Sutton,EDGE
 3.2,Eli Raridon,TE
-3.2,Darrell Jackson Jr.,DL
+3.2,Darrell Jackson Jr,DL
 3.2,Deontae Lawson,LB
 3.2,Billy Schrauth,IOL
 3.2,Jude Bowry,OT
@@ -134,7 +134,7 @@ group,name,position
 4.3,Jalen Farmer,IOL
 4.3,VJ Payne,S
 4.3,Bryce Lance,WR
-4.3,Harold Perkins Jr.,LB
+4.3,Harold Perkins Jr,LB
 4.3,Rayshaun Benny,DL
 4.3,Nadame Tucker,EDGE
 4.4,Reggie Virgil,WR
@@ -155,7 +155,7 @@ group,name,position
 4.5,Bryce Boettcher,LB
 4.5,Max Llewellyn,DL
 4.5,Kaleb Proctor,DL
-4.5,Demetrious Crownover,UNK
+4.5,Dametrious Crownover,OT
 4.6,Brenen Thompson,WR
 4.6,Parker Brailsford,IOL
 4.6,Hezekiah Masses,CB
@@ -170,13 +170,13 @@ group,name,position
 5.1,Michael Taaffe,S
 5.1,Chris McClellan,DL
 5.1,Caden Curry,EDGE
-5.1,Nicholas Singleton,RB
+5.1,Nick Singleton,RB
 5.1,Aiden Fisher,LB
 5.1,Drew Shelton,OT
-5.1,Kevin Coleman Jr.,WR
+5.1,Kevin Coleman Jr,WR
 5.1,DJ Campbell,IOL
 5.1,Sawyer Robertson,QB
-5.1,TJ Hall,UNK
+5.1,TJ Hall,CB
 5.2,Lewis Bond,WR
 5.2,DeMonte Capehart,DL
 5.2,Thaddeus Dixon,CB
@@ -184,10 +184,10 @@ group,name,position
 5.2,Nate Boerkircher,TE
 5.2,Roman Hemby,RB
 5.2,Isaiah World,OT
-5.2,Vincent Anthony Jr.,EDGE
+5.2,Vincent Anthony Jr,EDGE
 5.2,Luke Altmyer,QB
 5.3,Albert Regis,DL
-5.3,Jacob Thomas,S
+5.3,Jakobe Thomas,S
 5.3,Andre Fuller,CB
 5.3,Eric McAlister,WR
 5.3,Riley Nowakowski,TE
@@ -197,50 +197,50 @@ group,name,position
 5.3,Mikail Kamara,EDGE
 5.4,CJ Daniels,WR
 5.4,Nick Barrett,DL
-5.4,Toriano Pride,CB
-5.4,J.C. Davis,OT
+5.4,Toriano Pride Jr,CB
+5.4,JC Davis,OT
 5.4,J'Mari Taylor,RB
 5.4,Dalton Johnson,S
 5.4,Logan Fano,EDGE
-5.4,Scooby Williams,UNK
+5.4,Scooby Williams,LB
 5.5,Caleb Douglas,WR
 5.5,Cole Wisniewski,S
 5.5,Charles Demmings,CB
 5.5,Noah Whittington,RB
 5.5,Jack Kelly,LB
-5.5,Tyler Onyedim,UNK
+5.5,Tyler Onyedim,DL
 5.6,Skyler Gill-Howard,DL
 5.6,Jaydn Ott,RB
-6.1,Lorenzo Styles,S
+6.1,Lorenzo Styles Jr,S
 6.1,Eli Heidenreich,RB
 6.1,Tyren Montgomery,WR
 6.1,Avery Smith,CB
 6.1,Diego Pavia,QB
 6.1,Landon Robinson,DL
-6.1,Michael Gyllenborg,UNK
+6.1,John Michael Gyllenborg,TE
 6.2,Eric Rivers,WR
 6.2,Zxavian Harris,DL
 6.2,Dan Villari,TE
 6.2,Bishop Fitzgerald,S
 6.2,Haynes King,QB
 6.2,CJ Donaldson,RB
-6.2,Collin Wright,UNK
+6.2,Collin Wright,CB
 6.3,Dillon Bell,WR
-6.3,Latrell McCutchin Sr.,CB
-6.3,Jam Miller,UNK
-6.3,Matthew Hibner,UNK
-6.3,Isaiah Nwokobia,UNK
+6.3,Latrell McCutchin Sr,CB
+6.3,Jamarion Miller,RB
+6.3,Matthew Hibner,TE
+6.3,Isaiah Nwokobia,S
 6.4,Barion Brown,WR
-6.4,Jamal Haynes,UNK
-6.4,Marcus Allen,UNK
+6.4,Jamal Haynes,RB
+6.4,Marcus Allen,CB
 6.5,Kendrick Law,WR
 7.1,Khalil Dinkins,TE
 7.1,Aaron Anderson,WR
 7.1,Joey Aguilar,QB
 7.1,DeShon Singleton,S
-7.1,Rahsul Faison,UNK
+7.1,Rahsul Faison,RB
 7.2,Caullin Lacy,WR
 7.2,Jaren Kanak,TE
-7.2,Seth McGowan,UNK
+7.2,Seth McGowan,RB
 7.3,Harrison Wallace III,WR
 7.4,Chase Roberts,WR
