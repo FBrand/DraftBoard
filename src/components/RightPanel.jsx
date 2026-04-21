@@ -96,10 +96,12 @@ const RightPanel = ({ remotePicks, draftedPlayers, currentPick, ourPicksLeft, on
         <div className="side-panel right-panel">
             <h3 className="panel-title">Picks</h3>
 
-            {upcomingOurPicks.length > 0 && (
-                <div className="rp-picks-left">
-                    <div className="rp-picks-left-label">Our picks left</div>
-                    <div className="rp-picks-list">
+            {/*upcomingOurPicks.length > 0 && (
+                <div style={{ padding: '0.4rem 1rem 0.5rem', borderBottom: '1px solid var(--border-color)', flexShrink: 0 }}>
+                    <p style={{ margin: '0 0 0.3rem', fontSize: '0.62rem', fontWeight: 700, color: 'var(--text-dim)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                        Our picks left
+                    </p>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
                         {upcomingOurPicks.map(p => (
                             <span key={p} className={`pick-pill${p === currentPick ? ' active' : ''}`}>
                                 #{p}
@@ -107,7 +109,7 @@ const RightPanel = ({ remotePicks, draftedPlayers, currentPick, ourPicksLeft, on
                         ))}
                     </div>
                 </div>
-            )}
+            )*/}
 
             <div className="panel-content scroll-container" ref={scrollRef}>
                 <div className="tracker-list">
