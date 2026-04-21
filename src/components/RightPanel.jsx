@@ -90,9 +90,25 @@ const RightPanel = ({ remotePicks, draftedPlayers, currentPick, ourPicksLeft, on
         };
     });
 
+    const upcomingOurPicks = [...ourPicksLeft].filter(p => p >= currentPick).sort((a, b) => a - b);
+
     return (
         <div className="side-panel right-panel">
             <h3 className="panel-title">Picks</h3>
+
+            {upcomingOurPicks.length > 0 && (
+                <div className="rp-picks-left">
+                    <div className="rp-picks-left-label">Our picks left</div>
+                    <div className="rp-picks-list">
+                        {upcomingOurPicks.map(p => (
+                            <span key={p} className={`pick-pill${p === currentPick ? ' active' : ''}`}>
+                                #{p}
+                            </span>
+                        ))}
+                    </div>
+                </div>
+            )}
+
             <div className="panel-content scroll-container" ref={scrollRef}>
                 <div className="tracker-list">
                     {displayPicks.map(renderPickCard)}

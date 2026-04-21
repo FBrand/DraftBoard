@@ -462,8 +462,10 @@ body {
   position: relative;
   display: flex;
   flex-direction: column;
-  height: 100%; /* Fill the main-layout grid row */
-  min-height: 0; /* Important grid child fix */
+  height: 100%;
+  /* Fill the main-layout grid row */
+  min-height: 0;
+  /* Important grid child fix */
 }
 
 .board-grid {
@@ -1113,6 +1115,35 @@ body.export-mode .card-glow {
   display: none;
 }
 
+/* Pick section inside top bar (wraps NOW DRAFTING + OURS badge) */
+.pick-section {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+/* Our Picks Left — right panel header */
+.rp-picks-left {
+  padding: 0.5rem 1rem 0.25rem;
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.rp-picks-left-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--text-dim);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 0.3rem;
+}
+
+.rp-picks-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
 /* ── Mobile & Tablet Optimization (1024px Breakpoint) ───────────────────── */
 
 @media (max-width: 1024px) {
@@ -1135,11 +1166,13 @@ body.export-mode .card-glow {
     /* Below top panel */
     bottom: 110px;
     /* Above bottom panel */
-    width: 280px;
+    width: min(280px, 50vw);
     background: var(--bg-color);
     z-index: 2000;
-    transition: transform 0.2s ease-out; /* Faster, simpler transition */
-    will-change: transform; /* Hardware acceleration hint */
+    transition: transform 0.2s ease-out;
+    /* Faster, simpler transition */
+    will-change: transform;
+    /* Hardware acceleration hint */
     box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
     border: 1px solid var(--border-color);
     overflow: hidden;

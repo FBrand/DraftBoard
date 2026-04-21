@@ -30,7 +30,7 @@ const TopPanel = ({ currentPick, ourPicksLeft, onUndo, onUpdatePicks, onReset, i
 
         return (
             <div className="top-panel top-panel--focus">
-                <div className="top-panel">
+                <div className="pick-section">
                     <div className="pick-info">
                         <span className="pick-label">NOW DRAFTING</span>
                         <span className="pick-number">#{currentPick}</span>
@@ -62,14 +62,12 @@ const TopPanel = ({ currentPick, ourPicksLeft, onUndo, onUpdatePicks, onReset, i
     // ── Normal Mode ───────────────────────────────────────────────────────────
     return (
         <div className="top-panel">
-            <div className="top-panel">
+            <div className="pick-section">
                 <div className="pick-info">
                     <span className="pick-label">NOW DRAFTING</span>
                     <span className="pick-number">#{currentPick}</span>
                 </div>
-                <div className="pick-info">
-                    {ourPicksLeft.includes(currentPick) && <span className="our-pick-badge">OURS</span>}
-                </div>
+                {ourPicksLeft.includes(currentPick) && <span className="our-pick-badge">OURS</span>}
             </div>
 
             <div className="our-picks-tracker">
