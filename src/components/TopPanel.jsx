@@ -39,6 +39,7 @@ const TopPanel = ({ currentPick, ourPicksLeft, onUndo, onUpdatePicks, onReset, i
                         {ourPicksLeft.includes(currentPick) && <span className="our-pick-badge">OURS</span>}
                     </div>
                 </div>
+                <div style={{ width: '10px' }} />
                 <div className="our-picks-tracker">
                     <span className="tracker-label">OUR PICKS LEFT</span>
                     <div className="picks-list">
@@ -69,6 +70,7 @@ const TopPanel = ({ currentPick, ourPicksLeft, onUndo, onUpdatePicks, onReset, i
                 </div>
                 {ourPicksLeft.includes(currentPick) && <span className="our-pick-badge">OURS</span>}
             </div>
+            <div style={{ width: '5px' }} />
 
             <div className="our-picks-tracker">
                 <span className="tracker-label">OUR PICKS LEFT</span>
