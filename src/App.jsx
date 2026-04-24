@@ -36,10 +36,14 @@ function App() {
 
   if (loading) return <div className="loading">Loading Chiefs Draft Board...</div>;
 
+  const currentPickData = remotePicks.find(p => p.overall === currentPick);
+  const currentPickStatus = currentPickData?.status ? currentPickData.status.replace(/_/g, ' ') : 'NOW DRAFTING';
+
   return (
     <div className={`app-container${isFocusMode ? ' focus-mode' : ''}`}>
       <TopPanel
         currentPick={currentPick}
+        currentPickStatus={currentPickStatus}
         ourPicksLeft={ourPicksLeft}
         onUndo={undoAction}
         onUpdatePicks={() => setIsModalOpen(true)}

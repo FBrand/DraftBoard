@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { exportBoardToImage } from '../utils/exportBoard';
 
-const TopPanel = ({ currentPick, ourPicksLeft, onUndo, onUpdatePicks, onReset, isLiveSync, canLiveSync, toggleLiveSync, isFocusMode, onToggleFocus }) => {
+const TopPanel = ({ currentPick, currentPickStatus, ourPicksLeft, onUndo, onUpdatePicks, onReset, isLiveSync, canLiveSync, toggleLiveSync, isFocusMode, onToggleFocus }) => {
     const [isExporting, setIsExporting] = useState(false);
 
     const handleExport = async () => {
@@ -32,7 +32,7 @@ const TopPanel = ({ currentPick, ourPicksLeft, onUndo, onUpdatePicks, onReset, i
             <div className="top-panel top-panel--focus">
                 <div className="pick-section">
                     <div className="pick-info">
-                        <span className="pick-label">NOW DRAFTING</span>
+                        <span className="pick-label">{currentPickStatus || 'NOW DRAFTING'}</span>
                         <span className="pick-number">#{currentPick}</span>
                     </div>
                     <div className="pick-info">
@@ -65,7 +65,7 @@ const TopPanel = ({ currentPick, ourPicksLeft, onUndo, onUpdatePicks, onReset, i
         <div className="top-panel">
             <div className="pick-section">
                 <div className="pick-info">
-                    <span className="pick-label">NOW DRAFTING</span>
+                    <span className="pick-label">{currentPickStatus || 'NOW DRAFTING'}</span>
                     <span className="pick-number">#{currentPick}</span>
                 </div>
                 {ourPicksLeft.includes(currentPick) && <span className="our-pick-badge">OURS</span>}

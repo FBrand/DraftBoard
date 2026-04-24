@@ -75,6 +75,8 @@ const RightPanel = ({ remotePicks, draftedPlayers, currentPick, ourPicksLeft, on
                     isBest={false}
                     noStrikethrough={true}
                     isCurrent={isCurrent}
+                    traded={p.traded}
+                    tradeNote={p.tradeNote}
                 />
             </div>
         );
@@ -86,7 +88,9 @@ const RightPanel = ({ remotePicks, draftedPlayers, currentPick, ourPicksLeft, on
         return {
             overall,
             team: player?.draftedByUs ? "KC" : "-",
-            player
+            player,
+            traded: false,
+            tradeNote: ""
         };
     });
 

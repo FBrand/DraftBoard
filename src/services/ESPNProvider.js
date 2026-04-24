@@ -17,7 +17,8 @@ export class ESPNProvider extends DraftServiceProvider {
                     name: pick.athlete.displayName
                 } : null,
                 traded: pick.traded,
-                tradeNote: pick.tradeNote
+                tradeNote: pick.tradeNote,
+                status: pick.status
             }));
         } catch (error) {
             console.error("ESPNProvider error:", error);
