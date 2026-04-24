@@ -59,12 +59,12 @@ const RightPanel = ({ remotePicks, draftedPlayers, currentPick, ourPicksLeft, on
 
     const renderPickCard = (p) => {
         const isCurrent = p.overall === currentPick;
-        const player = p.player || draftedPlayers.find(dp => dp.pickNumber === p.overall) || {
-            name: "",
-            position: "",
-            overallRank: "",
-            drafted: false
-        };
+        let player = draftedPlayers.find(dp => dp.pickNumber === p.overall);
+        if (!player && p.player) {
+            player = { ...p.player, drafted: true };
+        } else if (!player) {
+            player = { name: "", position: "", overallRank: "", drafted: false };
+        }
 
         return (
             <div key={p.overall} ref={isCurrent ? currentPickRef : null}>

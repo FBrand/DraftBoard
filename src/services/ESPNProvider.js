@@ -13,10 +13,8 @@ export class ESPNProvider extends DraftServiceProvider {
                 pick: pick.pick,
                 overall: pick.overall,
                 team: TEAM_ID_MAP[pick.teamId] || pick.teamId,
-                player: pick.player ? {
-                    name: pick.player.displayName,
-                    position: pick.player.position?.abbreviation,
-                    college: pick.player.team?.name
+                player: pick.athlete ? {
+                    name: pick.athlete.displayName
                 } : null,
                 traded: pick.traded,
                 tradeNote: pick.tradeNote

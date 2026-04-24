@@ -215,7 +215,13 @@ body {
 }
 
 .pick-card.drafted {
+  opacity: 0.5;
+}
+
+/* Explicitly target drafted cards in the right panel that are not 'ours' */
+.right-panel .player-card.drafted:not(.ours) {
   opacity: 0.8;
+  filter: none;
 }
 
 .pick-card.available {

@@ -1,9 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import { parseRankings, parsePicks } from '../utils/dataParser';
 import { TEAM_CONFIG } from '../constants';
+import { findMatchingPlayerIndex } from '../utils/nameMatcher';
 
 const DRAFT_STORAGE_KEY = 'nfl_draft_board_state';
 const IS_LIVE_SYNC_KEY = 'nfl_draft_live_sync';
+
+const chimeAudio = new Audio(`${import.meta.env.BASE_URL}nfl-draft-chime.mp3`);
+chimeAudio.volume = 0.5;
 
 export const useDraftState = () => {
     const [players, setPlayers] = useState([]);
@@ -20,20 +24,33 @@ export const useDraftState = () => {
     const [canLiveSync, setCanLiveSync] = useState(false);
     const [columnOrder, setColumnOrder] = useState([]);
 
+    const triggerChime = useCallback(() => {
+        const params = new URLSearchParams(window.location.search);
+        if (params.has('chime') && params.get('chime') !== 'false') {
+            chimeAudio.currentTime = 0; // Rewind in case it's currently sweeping
+            chimeAudio.play().catch(e => console.warn("Chime auto-play blocked by browser.", e));
+        }
+    }, []);
+
     // Check if live sync module is available AND enabled via query param
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
         const syncEnabled = params.get('sync') === 'true';
 
         const checkAvailability = async () => {
-            const modules = import.meta.glob('../services/ESPNProvider.js');
-            const hasModule = Object.keys(modules).length > 0;
+            if (import.meta.env.VITE_ENABLE_SYNC) {
+                const modules = import.meta.glob('../services/ESPNProvider.js');
+                const hasModule = Object.keys(modules).length > 0;
 
-            if (hasModule && syncEnabled) {
-                setCanLiveSync(true);
+                if (hasModule && syncEnabled) {
+                    setCanLiveSync(true);
+                } else {
+                    setCanLiveSync(false);
+                    setIsLiveSync(false);
+                }
             } else {
                 setCanLiveSync(false);
-                setIsLiveSync(false); // Force off if not enabled/available
+                setIsLiveSync(false);
             }
         };
 
@@ -181,8 +198,9 @@ export const useDraftState = () => {
             setOurPicksLeft(prev => prev.filter(pk => pk !== pickNumber));
         }
 
+        triggerChime();
         setCurrentPick(prev => prev + 1);
-    }, [currentPick, ourPicksLeft, remotePicks, saveHistory]);
+    }, [currentPick, ourPicksLeft, remotePicks, saveHistory, triggerChime]);
 
     const undoAction = useCallback(() => {
         if (!history) return;
@@ -262,6 +280,8 @@ export const useDraftState = () => {
 
         let provider = null;
         const poll = async () => {
+            if (!import.meta.env.VITE_ENABLE_SYNC) return;
+            
             // Safe discovery via import.meta.glob — prevents Vite analysis errors if folder missing
             if (!provider) {
                 const modules = import.meta.glob('../services/ESPNProvider.js');
@@ -299,7 +319,7 @@ export const useDraftState = () => {
                     .filter(p => p.team === TEAM_CONFIG.abbreviation && !p.player)
                     .map(p => p.overall);
 
-                if (JSON.stringify(chiefsPicks.sort()) !== JSON.stringify(updatedKCLeft.sort())) {
+                if (JSON.stringify([...chiefsPicks].sort((a, b) => a - b)) !== JSON.stringify([...updatedKCLeft].sort((a, b) => a - b))) {
                     setOurPicksLeft(chiefsPicks);
                     changed = true;
                 }
@@ -307,29 +327,95 @@ export const useDraftState = () => {
                 // 2. Process picks with players
                 picks.forEach(rp => {
                     if (rp.player) {
-                        const playerIndex = updatedPlayers.findIndex(p =>
-                            p.name.toLowerCase() === rp.player.name.toLowerCase() ||
-                            p.name.toLowerCase().includes(rp.player.name.toLowerCase())
-                        );
+                        const isOurPick = (rp.team === TEAM_CONFIG.abbreviation);
+                        
+                        const playerIndex = findMatchingPlayerIndex(rp.player.name, updatedPlayers);
 
-                        if (playerIndex !== -1 && !updatedPlayers[playerIndex].drafted) {
-                            const player = { ...updatedPlayers[playerIndex] };
-                            player.drafted = true;
-                            player.pickNumber = rp.overall;
-                            player.draftedByUs = (rp.team === TEAM_CONFIG.abbreviation);
+                        if (playerIndex !== -1) {
+                            const existingPlayer = updatedPlayers[playerIndex];
+                            
+                            if (!existingPlayer.drafted) {
+                                // Newly drafted ranked player
+                                const player = { ...existingPlayer };
+                                player.drafted = true;
+                                player.pickNumber = rp.overall;
+                                player.draftedByUs = isOurPick;
+                                player.team = rp.team;
 
-                            updatedPlayers[playerIndex] = player;
-                            updatedDrafted.push(player);
-                            if (player.draftedByUs) {
-                                updatedYourPicks.push(player);
+                                updatedPlayers[playerIndex] = player;
+                                updatedDrafted.push(player);
+                                if (player.draftedByUs) {
+                                    updatedYourPicks.push(player);
+                                }
+                                changed = true;
+                            } else {
+                                // Already drafted. Check for trade updates
+                                if (existingPlayer.team !== rp.team || existingPlayer.pickNumber !== rp.overall) {
+                                    const updatedP = { ...existingPlayer, team: rp.team, pickNumber: rp.overall, draftedByUs: isOurPick };
+                                    updatedPlayers[playerIndex] = updatedP;
+                                    
+                                    const draftIdx = updatedDrafted.findIndex(dp => dp.name === existingPlayer.name);
+                                    if (draftIdx !== -1) updatedDrafted[draftIdx] = updatedP;
+
+                                    const yourIdx = updatedYourPicks.findIndex(dp => dp.name === existingPlayer.name);
+                                    if (isOurPick && yourIdx === -1) {
+                                        updatedYourPicks.push(updatedP);
+                                    } else if (!isOurPick && yourIdx !== -1) {
+                                        updatedYourPicks.splice(yourIdx, 1);
+                                    }
+                                    changed = true;
+                                }
                             }
-                            changed = true;
+                        } else {
+                            // Player NOT found on rankings board (Unranked)
+                            const unrankedIdx = findMatchingPlayerIndex(rp.player.name, updatedDrafted);
+
+                            if (unrankedIdx === -1) {
+                                // New unranked player via live sync
+                                const newUnranked = {
+                                    name: rp.player.name,
+                                    position: "URA", // Unranked Placeholder
+                                    drafted: true,
+                                    pickNumber: rp.overall,
+                                    draftedByUs: isOurPick,
+                                    team: rp.team
+                                };
+                                updatedDrafted.push(newUnranked);
+                                if (isOurPick) {
+                                    updatedYourPicks.push(newUnranked);
+                                }
+                                changed = true;
+                            } else {
+                                // Existing unranked player. Check for trade updates
+                                const existingUnranked = updatedDrafted[unrankedIdx];
+                                if (existingUnranked.team !== rp.team || existingUnranked.pickNumber !== rp.overall) {
+                                    const updatedUnranked = { ...existingUnranked, team: rp.team, pickNumber: rp.overall, draftedByUs: isOurPick };
+                                    updatedDrafted[unrankedIdx] = updatedUnranked;
+                                    
+                                    const yourIdx = updatedYourPicks.findIndex(dp => dp.name === existingUnranked.name);
+                                    if (isOurPick && yourIdx === -1) {
+                                        updatedYourPicks.push(updatedUnranked);
+                                    } else if (!isOurPick && yourIdx !== -1) {
+                                        updatedYourPicks.splice(yourIdx, 1);
+                                    }
+                                    changed = true;
+                                }
+                            }
                         }
+
                         if (rp.overall >= maxOverall) {
                             maxOverall = rp.overall + 1;
                         }
                     }
                 });
+
+                if (maxOverall > currentPick) {
+                    changed = true;
+                    // Note: setPlayers runs synchronously inside the interval, but since React 18 strict mode
+                    // could run it twice, we should technically keep side effects out. However, auto-play policies
+                    // will block silent duplicates anyway, and it's safe enough for a fast tick.
+                    triggerChime();
+                }
 
                 if (changed) {
                     setDraftedPlayers(updatedDrafted);

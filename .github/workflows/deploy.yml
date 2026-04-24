@@ -24,7 +24,7 @@ jobs:
         run: npm ci
 
       - name: Build
-        run: npm run build
+        run: VITE_ENABLE_SYNC=true npm run build
 
       - name: Deploy
         uses: JamesIves/github-pages-deploy-action@v4

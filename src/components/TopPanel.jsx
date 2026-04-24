@@ -89,31 +89,31 @@ const TopPanel = ({ currentPick, ourPicksLeft, onUndo, onUpdatePicks, onReset, i
                     <div className="switcher-buttons">
                         <button
                             className={`switcher-btn ${!currentRankings || currentRankings.includes('rankings_consensus.csv') ? 'active' : ''}`}
-                            onClick={() => updateRankingsParam('/DraftBoard/rankings_consensus.csv')}
+                            onClick={() => updateRankingsParam(`${import.meta.env.BASE_URL}rankings_consensus.csv`)}
                         >
                             Consensus
                         </button>
                         {/* <button
                             className={`switcher-btn ${currentRankings.includes('rankings_chris.csv') ? 'active' : ''}`}
-                            onClick={() => updateRankingsParam('/DraftBoard/rankings_chris.csv')}
+                            onClick={() => updateRankingsParam(`${import.meta.env.BASE_URL}rankings_chris.csv`)}
                         >
                             Chris
                         </button> */}
                         <button
                             className={`switcher-btn ${currentRankings.includes('rankings_dan.csv') ? 'active' : ''}`}
-                            onClick={() => updateRankingsParam('/DraftBoard/rankings_dan.csv')}
+                            onClick={() => updateRankingsParam(`${import.meta.env.BASE_URL}rankings_dan.csv`)}
                         >
                             Dan
                         </button>
                         <button
                             className={`switcher-btn ${currentRankings.includes('rankings_ryan.csv') ? 'active' : ''}`}
-                            onClick={() => updateRankingsParam('/DraftBoard/rankings_ryan.csv')}
+                            onClick={() => updateRankingsParam(`${import.meta.env.BASE_URL}rankings_ryan.csv`)}
                         >
                             Ryan
                         </button>
                         {/* <button
                             className={`switcher-btn ${currentRankings.includes('rankings_seth.csv') ? 'active' : ''}`}
-                            onClick={() => updateRankingsParam('/DraftBoard/rankings_seth.csv')}
+                            onClick={() => updateRankingsParam(`${import.meta.env.BASE_URL}rankings_seth.csv`)}
                         >
                             Seth
                         </button> */}
