@@ -7,7 +7,10 @@ const DRAFT_STORAGE_KEY = 'nfl_draft_board_state';
 const IS_LIVE_SYNC_KEY = 'nfl_draft_live_sync';
 
 const chimeAudio = new Audio(`${import.meta.env.BASE_URL}nfl-draft-chime.mp3`);
-chimeAudio.volume = 0.5;
+chimeAudio.volume = 0.4;
+
+const chopAudio = new Audio(`${import.meta.env.BASE_URL}chiefs_tomahawk_chop.mp3`);
+chopAudio.volume = 0.6;
 
 export const useDraftState = () => {
     const [players, setPlayers] = useState([]);
@@ -31,6 +34,24 @@ export const useDraftState = () => {
             chimeAudio.play().catch(e => console.warn("Chime auto-play blocked by browser.", e));
         }
     }, []);
+
+    const triggerChop = useCallback(() => {
+        const params = new URLSearchParams(window.location.search);
+        if (params.has('chime') && params.get('chime') !== 'false') {
+            chopAudio.currentTime = 0;
+            chopAudio.play().catch(e => console.warn("Chop auto-play blocked by browser.", e));
+        }
+    }, []);
+
+    // Play Chop when our turn comes up (with 5s delay)
+    useEffect(() => {
+        if (!loading && ourPicksLeft.includes(currentPick)) {
+            const timer = setTimeout(() => {
+                triggerChop();
+            }, 5000);
+            return () => clearTimeout(timer);
+        }
+    }, [currentPick, ourPicksLeft, loading, triggerChop]);
 
     // Check if live sync module is available AND enabled via query param
     useEffect(() => {

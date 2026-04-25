@@ -212,6 +212,7 @@ body {
 
 .pick-card.ours {
   border-color: var(--gold-color);
+  opacity: 0.3;
 }
 
 .pick-card.drafted {
@@ -720,7 +721,7 @@ body {
   /*background: var(--chiefs-white);*/
   /*background: rgba(255, 184, 28, 0.08) !important;*/
   border: 3px solid var(--chiefs-gold);
-  opacity: 1.0;
+  opacity: 0.8;
   filter: none;
 }
 
