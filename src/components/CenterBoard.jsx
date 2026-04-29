@@ -1,7 +1,9 @@
 import React from 'react';
 import PlayerCard from './PlayerCard';
 
-const CenterBoard = ({ players, onDraft, columnOrder = [] }) => {
+const CenterBoard = ({ players, onDraft, columnOrder = [], isFocusMode = false }) => {
+    const visiblePlayers = isFocusMode ? players : players.filter(p => !p.drafted);
+
     const rawPositions = [...new Set(players.map(p => p.position.split('.', 1)[0]))];
 
     // Sort positions: defined order first, then any extras found in data
@@ -10,13 +12,17 @@ const CenterBoard = ({ players, onDraft, columnOrder = [] }) => {
         ...rawPositions.filter(rp => !columnOrder.includes(rp))
     ];
 
-    // Extract all unique groups in the order they appear
-    const allGroups = [];
+    // Extract absolute group order from the unmodified players set to ensure rows never swap positions
+    const masterGroups = [];
     players.forEach(p => {
-        if (!allGroups.includes(p.group)) {
-            allGroups.push(p.group);
+        if (!masterGroups.includes(p.group)) {
+            masterGroups.push(p.group);
         }
     });
+
+    // Strip out active groups natively while inheriting the stable order
+    const activeGroupsSet = new Set(visiblePlayers.map(p => p.group));
+    const allGroups = masterGroups.filter(g => activeGroupsSet.has(g));
 
     const getRoundFromGroup = (group) => {
         if (!group) return 1;
@@ -90,7 +96,7 @@ const CenterBoard = ({ players, onDraft, columnOrder = [] }) => {
                     return (
                         <div key={group} className={`board-row ${isLastInRound ? 'round-row-end' : 'subgroup-row-end'}`}>
                             {positions.map(pos => {
-                                const roundPlayers = players.filter(p => p.position.split('.', 1)[0] === pos && p.group === group);
+                                const roundPlayers = visiblePlayers.filter(p => p.position.split('.', 1)[0] === pos && p.group === group);
 
                                 return (
                                     <div key={pos} className="slot-cell">

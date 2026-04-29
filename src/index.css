@@ -55,6 +55,7 @@ body {
 }
 
 .top-panel {
+  background-color: var(--panel-bg);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -749,13 +750,13 @@ body {
 /* Side Panels */
 .bottom-panel {
   background: var(--panel-bg);
-  padding: 1rem 2rem;
+  padding: 2rem 2rem;
   border-top: 1px solid var(--border-color);
   display: flex;
   gap: 1rem;
   overflow-x: auto;
   align-items: center;
-  height: 120px;
+  /*height: 120px;*/
 }
 
 /* Modal Styles */

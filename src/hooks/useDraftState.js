@@ -90,10 +90,11 @@ export const useDraftState = () => {
                 const params = new URLSearchParams(window.location.search);
                 const rankingsUrl = params.get('rankings') || `${base}rankings_consensus.csv`;
 
-                const [rankingsRes, picksRes, columnsRes] = await Promise.all([
+                const [rankingsRes, picksRes, columnsRes, preloadRes] = await Promise.all([
                     fetch(rankingsUrl),
                     fetch(`${base}picks.txt`),
-                    fetch(`${base}columns.txt`)
+                    fetch(`${base}columns.txt`),
+                    fetch(`${base}DraftBoard_Picks.csv`).catch(() => null)
                 ]);
 
                 const rankingsText = await rankingsRes.text();
@@ -105,13 +106,34 @@ export const useDraftState = () => {
                 const parsedPlayers = parseRankings(rankingsText) || [];
                 const parsedOurPicks = parsePicks(picksText) || [];
 
-                // Check localStorage and reconcile instead of blind overwrite
                 const savedState = localStorage.getItem(DRAFT_STORAGE_KEY);
-                if (savedState) {
+                
+                let seedDrafted = [];
+                let seedKCLeft = parsedOurPicks;
+
+                // If no saved localStorage state but CSV exists, use CSV as seed
+                if (!savedState && preloadRes && preloadRes.ok) {
+                    const csvText = await preloadRes.text();
                     try {
-                        const s = JSON.parse(savedState);
-                        const savedDrafted = Array.isArray(s.draftedPlayers) ? s.draftedPlayers : [];
-                        const savedKCLeft = Array.isArray(s.ourPicksLeft) ? s.ourPicksLeft : parsedOurPicks;
+                        const { deserializeDraftState } = await import('../utils/sessionSerializer');
+                        const importedState = deserializeDraftState(csvText);
+                        if (importedState.draftedPlayers.length > 0 || importedState.ourPicksLeft.length > 0) {
+                            seedDrafted = importedState.draftedPlayers;
+                            if (importedState.ourPicksLeft.length > 0) {
+                                seedKCLeft = importedState.ourPicksLeft;
+                            }
+                        }
+                    } catch (e) { console.warn("Failed to parse preloaded CSV:", e); }
+                }
+
+                if (savedState || seedDrafted.length > 0 || seedKCLeft !== parsedOurPicks) {
+                    try {
+                        let parsedState = {};
+                        if (savedState) {
+                            parsedState = JSON.parse(savedState);
+                        }
+                        const savedDrafted = Array.isArray(parsedState.draftedPlayers) ? parsedState.draftedPlayers : seedDrafted;
+                        const savedKCLeft = Array.isArray(parsedState.ourPicksLeft) ? parsedState.ourPicksLeft : seedKCLeft;
 
                         // 1. Reconcile fresh parsedPlayers with saved history (Board View)
                         const reconciledPlayers = parsedPlayers.map(p => {
@@ -133,7 +155,7 @@ export const useDraftState = () => {
                         // so re-computing from it would always yield false for already-drafted players.
                         const enrichedDrafted = savedDrafted.map(sd => {
                             const updatedMetadata = parsedPlayers.find(p => p.name === sd.name);
-                            const draftedByUs = sd.draftedByUs === true; // trust persisted value
+                            const draftedByUs = sd.draftedByUs === true || sd.team === TEAM_CONFIG.abbreviation; // Trust persisted or evaluate from CSV team string
                             if (updatedMetadata) {
                                 return {
                                     ...updatedMetadata,
@@ -148,14 +170,21 @@ export const useDraftState = () => {
 
                         setPlayers(reconciledPlayers);
                         setOurPicksLeft(savedKCLeft);
-                        setCurrentPick(typeof s.currentPick === 'number' ? s.currentPick : 1);
+                        const pickFallback = savedState ? parsedState.currentPick : undefined;
+                        setCurrentPick(typeof pickFallback === 'number' ? pickFallback : 1);
                         setDraftedPlayers(enrichedDrafted);
 
                         // yourPicks = all enriched entries where draftedByUs is persisted as true
                         const enrichedYourPicks = enrichedDrafted.filter(p => p.draftedByUs);
                         setYourPicks(enrichedYourPicks);
 
-                        setRemotePicks(Array.isArray(s.remotePicks) ? s.remotePicks : []);
+                        setRemotePicks(savedState && Array.isArray(parsedState.remotePicks) ? parsedState.remotePicks : []);
+                        
+                        // Seed current pick explicitly from highest historically recorded pick + 1 for Preloads
+                        if (!savedState && enrichedDrafted.length > 0) {
+                            const lastPick = enrichedDrafted.reduce((max, p) => Math.max(max, p.pickNumber), 0);
+                            setCurrentPick(lastPick + 1);
+                        }
                     } catch (e) {
                         console.warn("Corrupted localStorage, using fresh data");
                         setPlayers(parsedPlayers);

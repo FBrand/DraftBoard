@@ -132,6 +132,7 @@ function App() {
               players={players}
               onDraft={draftPlayer}
               columnOrder={columnOrder}
+              isFocusMode={isFocusMode}
             />
 
             <div className={`right-sidebar-wrapper ${showRightSidebar && !isFocusMode ? 'mobile-open' : ''}`}>
