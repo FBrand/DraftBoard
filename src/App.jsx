@@ -56,6 +56,7 @@ function App() {
           toggleLiveSync={toggleLiveSync}
           isFocusMode={isFocusMode}
           onToggleFocus={() => setIsFocusMode(f => !f)}
+          onSetFocus={setIsFocusMode}
         />
       )}
 

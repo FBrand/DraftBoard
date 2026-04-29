@@ -53,6 +53,13 @@ const TopPanel = ({ currentPick, currentPickStatus, ourPicksLeft, onUndo, onUpda
                 <div className="focus-board-name">BOARD: {boardName}</div>
                 <div className="top-actions">
                     <button className="action-pill trade-pill" onClick={onUpdatePicks}>Update Picks</button>
+                    <button
+                        className="action-pill export-pill"
+                        onClick={handleExport}
+                        disabled={isExporting}
+                    >
+                        {isExporting ? 'Generating...' : 'Export Board'}
+                    </button>
                     <button className="action-pill focus-pill" onClick={onToggleFocus}>⛶ Exit Focus</button>
                     <button className="action-pill undo-pill" onClick={onUndo}>Undo</button>
                 </div>
@@ -131,13 +138,6 @@ const TopPanel = ({ currentPick, currentPickStatus, ourPicksLeft, onUndo, onUpda
                 )}
                 <button className="action-pill undo-pill" onClick={onUndo}>Undo</button>
                 <button className="action-pill trade-pill" onClick={onUpdatePicks}>Update Picks</button>
-                <button
-                    className="action-pill export-pill"
-                    onClick={handleExport}
-                    disabled={isExporting}
-                >
-                    {isExporting ? 'Generating...' : 'Export Board'}
-                </button>
                 <button className="action-pill focus-pill" onClick={onToggleFocus}>⛶ Focus</button>
                 <button className="action-pill reset-pill" onClick={onReset}>Reset All</button>
             </div>

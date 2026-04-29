@@ -459,9 +459,9 @@ export default function RosterView() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px', borderBottom: '2px solid rgba(255,183,0,0.2)', background: 'rgba(255,255,255,0.02)' }}>
                 <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: '#FFD700', letterSpacing: '0.05em' }}>ROSTER</h2>
                 <div style={{ flex: 1, textAlign: 'right', fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-dim)', display: 'flex', justifyContent: 'flex-end', gap: 24, paddingRight: 16 }}>
-                    <span>Total: <strong style={{ color: 'var(--text-main)' }}>{total}</strong>/89</span>
-                    <span>PS: <strong style={{ color: 'var(--text-main)' }}>{psCount}</strong>/"16+1"</span>
-                    <span>53: <strong style={{ color: 'var(--text-main)' }}>{destined53}</strong>/53</span>
+                    <span>Total: <strong style={{ color: 'var(--text-main)' }}>{total}</strong> / 90</span>
+                    <span>Practice Squad: <strong style={{ color: 'var(--text-main)' }}>{psCount}</strong> / 16+1</span>
+                    <span>Roster: <strong style={{ color: 'var(--text-main)' }}>{destined53}</strong> / 53</span>
                 </div>
                 <button onClick={handleImport} style={btnStyle}>⬆ Import CSV</button>
                 <button onClick={handleExport} style={btnStyle}>⬇ Export CSV</button>
