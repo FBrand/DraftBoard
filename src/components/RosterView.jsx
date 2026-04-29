@@ -238,6 +238,7 @@ export default function RosterView() {
     // Auto-fetch /roster.csv if no localStorage state exists
     useEffect(() => {
         if (!bootstrapping) return;
+        const base = import.meta.env.BASE_URL;
         fetch(`${base}roster.csv`)
             .then(r => r.ok ? r.text() : Promise.reject(r.status))
             .then(text => { setState(parseCSV(text)); })
