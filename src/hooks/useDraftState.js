@@ -107,7 +107,7 @@ export const useDraftState = () => {
                 const parsedOurPicks = parsePicks(picksText) || [];
 
                 const savedState = localStorage.getItem(DRAFT_STORAGE_KEY);
-                
+
                 let seedDrafted = [];
                 let seedKCLeft = parsedOurPicks;
 
@@ -179,7 +179,7 @@ export const useDraftState = () => {
                         setYourPicks(enrichedYourPicks);
 
                         setRemotePicks(savedState && Array.isArray(parsedState.remotePicks) ? parsedState.remotePicks : []);
-                        
+
                         // Seed current pick explicitly from highest historically recorded pick + 1 for Preloads
                         if (!savedState && enrichedDrafted.length > 0) {
                             const lastPick = enrichedDrafted.reduce((max, p) => Math.max(max, p.pickNumber), 0);
@@ -269,6 +269,7 @@ export const useDraftState = () => {
 
     const resetDraft = useCallback(() => {
         localStorage.removeItem(DRAFT_STORAGE_KEY);
+        localStorage.setItem(DRAFT_STORAGE_KEY, 'empty')
         window.location.reload();
     }, []);
 
@@ -331,7 +332,7 @@ export const useDraftState = () => {
         let provider = null;
         const poll = async () => {
             if (!import.meta.env.VITE_ENABLE_SYNC) return;
-            
+
             // Safe discovery via import.meta.glob — prevents Vite analysis errors if folder missing
             if (!provider) {
                 const modules = import.meta.glob('../services/ESPNProvider.js');
@@ -378,12 +379,12 @@ export const useDraftState = () => {
                 picks.forEach(rp => {
                     if (rp.player) {
                         const isOurPick = (rp.team === TEAM_CONFIG.abbreviation);
-                        
+
                         const playerIndex = findMatchingPlayerIndex(rp.player.name, updatedPlayers);
 
                         if (playerIndex !== -1) {
                             const existingPlayer = updatedPlayers[playerIndex];
-                            
+
                             if (!existingPlayer.drafted) {
                                 // Newly drafted ranked player
                                 const player = { ...existingPlayer };
@@ -403,7 +404,7 @@ export const useDraftState = () => {
                                 if (existingPlayer.team !== rp.team || existingPlayer.pickNumber !== rp.overall) {
                                     const updatedP = { ...existingPlayer, team: rp.team, pickNumber: rp.overall, draftedByUs: isOurPick };
                                     updatedPlayers[playerIndex] = updatedP;
-                                    
+
                                     const draftIdx = updatedDrafted.findIndex(dp => dp.name === existingPlayer.name);
                                     if (draftIdx !== -1) updatedDrafted[draftIdx] = updatedP;
 
@@ -441,7 +442,7 @@ export const useDraftState = () => {
                                 if (existingUnranked.team !== rp.team || existingUnranked.pickNumber !== rp.overall) {
                                     const updatedUnranked = { ...existingUnranked, team: rp.team, pickNumber: rp.overall, draftedByUs: isOurPick };
                                     updatedDrafted[unrankedIdx] = updatedUnranked;
-                                    
+
                                     const yourIdx = updatedYourPicks.findIndex(dp => dp.name === existingUnranked.name);
                                     if (isOurPick && yourIdx === -1) {
                                         updatedYourPicks.push(updatedUnranked);

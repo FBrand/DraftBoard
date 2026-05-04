@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import PlayerCard from './PlayerCard';
 
 const LeftPanel = ({ players, onDraft, onDraftUnranked }) => {
-    const [expandedRounds, setExpandedRounds] = useState({ 1: true });
+    const [expandedRounds, setExpandedRounds] = useState({ 1: true, 2: true, 3: true, 4: true, 5: true, 6: true, 7: true });
     const [searchTerm, setSearchTerm] = useState('');
 
     const getRound = (rank) => Math.min(7, Math.ceil(rank / 32));
@@ -16,7 +16,7 @@ const LeftPanel = ({ players, onDraft, onDraftUnranked }) => {
         })
         .sort((a, b) => a.overallRank - b.overallRank);
 
-    const rounds = [1, 2, 3, 4, 5, 6, 7];
+    const rounds = [1, 2, 3, 4, 5, 6, 7, 8];
 
     const toggleRound = (round) => {
         setExpandedRounds(prev => ({ ...prev, [round]: !prev[round] }));
@@ -53,17 +53,18 @@ const LeftPanel = ({ players, onDraft, onDraftUnranked }) => {
                 ) : (
                     // Grouped by round view
                     rounds.map(round => {
-                        const roundPlayers = remaining.filter(p => getRound(p.overallRank) === round);
+                        // const roundPlayers = remaining.filter(p => getRound(p.overallRank) === round);
+                        const roundPlayers = remaining.filter(p => parseInt(p.group.substring(0, 1), 10) === round);
                         if (roundPlayers.length === 0) return null;
 
                         return (
                             <div key={round} style={{ marginBottom: '1.5rem' }}>
                                 <div
                                     className="round-header"
-                                    onClick={() => toggleRound(round)}
+                                // onClick={() => toggleRound(round)}
                                 >
                                     <span>ROUND {round}</span>
-                                    <span>{expandedRounds[round] ? '−' : '+'}</span>
+                                    <span>{expandedRounds[round] ? '' : ''}</span>
                                 </div>
                                 {expandedRounds[round] && (
                                     <div className="rankings-list">

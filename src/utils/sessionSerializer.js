@@ -57,8 +57,8 @@ export const deserializeDraftState = (csvText) => {
         const parts = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
         if (parts.length < 1) return;
 
-        const pickNumber = parseInt(parts[0], 10);
-        if (isNaN(pickNumber)) return;
+        var pickNumber = parseInt(parts[0], 10);
+        if (isNaN(pickNumber)) pickNumber = parts[0];
 
         const name = (parts[1] || "").replace(/^"|"$/g, "").replace(/""/g, '"');
         const position = (parts[2] || "").replace(/^"|"$/g, "").replace(/""/g, '"');

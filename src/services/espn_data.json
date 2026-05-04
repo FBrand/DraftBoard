@@ -1,0 +1,5435 @@
+{
+    "uid": "s:20~l:28~e:draft~y:2026",
+    "year": 2026,
+    "displayName": "2026 National Football League Draft",
+    "shortDisplayName": "2026 NFL Draft",
+    "positions": [
+        {
+            "id": "8",
+            "displayName": "Quarterback",
+            "abbreviation": "QB"
+        },
+        {
+            "id": "9",
+            "displayName": "Running Back",
+            "abbreviation": "RB"
+        },
+        {
+            "id": "1",
+            "displayName": "Wide Receiver",
+            "abbreviation": "WR"
+        },
+        {
+            "id": "7",
+            "displayName": "Tight End",
+            "abbreviation": "TE"
+        },
+        {
+            "id": "10",
+            "displayName": "Fullback",
+            "abbreviation": "FB"
+        },
+        {
+            "id": "46",
+            "displayName": "Offensive Tackle",
+            "abbreviation": "OT"
+        },
+        {
+            "id": "47",
+            "displayName": "Offensive Guard",
+            "abbreviation": "OG"
+        },
+        {
+            "id": "91",
+            "displayName": "Center",
+            "abbreviation": "C"
+        },
+        {
+            "id": "32",
+            "displayName": "Defensive Tackle",
+            "abbreviation": "DT"
+        },
+        {
+            "id": "30",
+            "displayName": "Linebacker",
+            "abbreviation": "LB"
+        },
+        {
+            "id": "264",
+            "displayName": "EDGE",
+            "abbreviation": "EDGE"
+        },
+        {
+            "id": "29",
+            "displayName": "Cornerback",
+            "abbreviation": "CB"
+        },
+        {
+            "id": "36",
+            "displayName": "Safety",
+            "abbreviation": "S"
+        },
+        {
+            "id": "96",
+            "displayName": "Long Snapper",
+            "abbreviation": "LS"
+        },
+        {
+            "id": "80",
+            "displayName": "Place Kicker",
+            "abbreviation": "PK"
+        },
+        {
+            "id": "94",
+            "displayName": "Punter",
+            "abbreviation": "P"
+        }
+    ],
+    "rounds": 7,
+    "status": {
+        "round": 1,
+        "state": "in",
+        "name": "IN_PROGRESS",
+        "description": "In Progress"
+    },
+    "broadcasts": [
+        {
+            "type": {
+                "id": "1",
+                "shortName": "TV",
+                "longName": "TV",
+                "slug": "tv"
+            },
+            "station": "ABC",
+            "slug": "abc",
+            "priority": 0,
+            "market": {
+                "id": "1",
+                "type": "National"
+            },
+            "media": {
+                "id": "2",
+                "callLetters": "ABC",
+                "name": "ABC",
+                "shortName": "ABC",
+                "slug": "abc"
+            },
+            "lang": "en",
+            "region": "us"
+        },
+        {
+            "type": {
+                "id": "1",
+                "shortName": "TV",
+                "longName": "TV",
+                "slug": "tv"
+            },
+            "station": "ESPN",
+            "slug": "espn",
+            "priority": 0,
+            "market": {
+                "id": "1",
+                "type": "National"
+            },
+            "media": {
+                "id": "126",
+                "callLetters": "ESPN",
+                "name": "ESPN",
+                "shortName": "ESPN",
+                "slug": "espn"
+            },
+            "lang": "en",
+            "region": "us"
+        },
+        {
+            "type": {
+                "id": "1",
+                "shortName": "TV",
+                "longName": "TV",
+                "slug": "tv"
+            },
+            "station": "NFL Network",
+            "slug": "nfl-network",
+            "priority": 0,
+            "market": {
+                "id": "1",
+                "type": "National"
+            },
+            "media": {
+                "id": "398",
+                "callLetters": "NFL Net",
+                "name": "NFL Network",
+                "shortName": "NFL Net",
+                "slug": "nfl-network"
+            },
+            "lang": "en",
+            "region": "us"
+        },
+        {
+            "slug": "watch",
+            "lang": "en",
+            "region": "",
+            "station": "ESPN",
+            "url": "http://www.espn.com/watch?id=4511252"
+        }
+    ],
+    "picks": [
+        {
+            "status": "SELECTION_MADE",
+            "pick": 1,
+            "overall": 1,
+            "round": 1,
+            "traded": false,
+            "tradeNote": "",
+            "athlete": {
+                "id": "110770",
+                "displayName": "Fernando Mendoza",
+                "displayWeight": "236 lbs",
+                "displayHeight": "6'4\"",
+                "position": {
+                    "id": "8"
+                },
+                "team": {
+                    "location": "Indiana",
+                    "name": "Hoosiers",
+                    "abbreviation": "IU",
+                    "shortDisplayName": "Indiana"
+                },
+                "attributes": [
+                    {
+                        "name": "rank",
+                        "displayName": "Rank",
+                        "abbreviation": "POS RK",
+                        "displayValue": "1"
+                    },
+                    {
+                        "name": "overall",
+                        "displayName": "Overall",
+                        "abbreviation": "OVR RK",
+                        "displayValue": "2"
+                    },
+                    {
+                        "name": "grade",
+                        "displayName": "Grade",
+                        "abbreviation": "GRADE",
+                        "displayValue": "92"
+                    }
+                ],
+                "guid": "2d69f2b3-fc07-332b-bd84-8793a3a1b74a",
+                "alternativeId": "4837248",
+                "headshot": {
+                    "href": "https://a.espncdn.com/i/headshots/college-football/players/full/4837248.png"
+                },
+                "link": "https://www.espn.com/nfl/player/_/id/4837248/fernando-mendoza",
+                "proLink": "https://www.espn.com/nfl/player/_/id/4837248/fernando-mendoza",
+                "uid": "s:20~l:28~a:4837248"
+            },
+            "teamId": "13"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 2,
+            "overall": 2,
+            "round": 1,
+            "traded": false,
+            "tradeNote": "",
+            "expires": "2026-04-24T00:20:38Z",
+            "teamId": "20"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 3,
+            "overall": 3,
+            "round": 1,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "22"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 4,
+            "overall": 4,
+            "round": 1,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "10"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 5,
+            "overall": 5,
+            "round": 1,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "19"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 6,
+            "overall": 6,
+            "round": 1,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "5"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 7,
+            "overall": 7,
+            "round": 1,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "28"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 8,
+            "overall": 8,
+            "round": 1,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "18"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 9,
+            "overall": 9,
+            "round": 1,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "12"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 10,
+            "overall": 10,
+            "round": 1,
+            "traded": true,
+            "tradeNote": "From CIN",
+            "teamId": "19"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 11,
+            "overall": 11,
+            "round": 1,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "15"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 12,
+            "overall": 12,
+            "round": 1,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "6"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 13,
+            "overall": 13,
+            "round": 1,
+            "traded": true,
+            "tradeNote": "From ATL",
+            "teamId": "14"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 14,
+            "overall": 14,
+            "round": 1,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "33"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 15,
+            "overall": 15,
+            "round": 1,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "27"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 16,
+            "overall": 16,
+            "round": 1,
+            "traded": true,
+            "tradeNote": "From IND",
+            "teamId": "20"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 17,
+            "overall": 17,
+            "round": 1,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "8"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 18,
+            "overall": 18,
+            "round": 1,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "16"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 19,
+            "overall": 19,
+            "round": 1,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "29"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 20,
+            "overall": 20,
+            "round": 1,
+            "traded": true,
+            "tradeNote": "From GB",
+            "teamId": "6"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 21,
+            "overall": 21,
+            "round": 1,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "23"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 22,
+            "overall": 22,
+            "round": 1,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "24"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 23,
+            "overall": 23,
+            "round": 1,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "21"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 24,
+            "overall": 24,
+            "round": 1,
+            "traded": true,
+            "tradeNote": "From JAX",
+            "teamId": "5"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 25,
+            "overall": 25,
+            "round": 1,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "3"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 26,
+            "overall": 26,
+            "round": 1,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "2"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 27,
+            "overall": 27,
+            "round": 1,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "25"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 28,
+            "overall": 28,
+            "round": 1,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "34"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 29,
+            "overall": 29,
+            "round": 1,
+            "traded": true,
+            "tradeNote": "From LAR",
+            "teamId": "12"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 30,
+            "overall": 30,
+            "round": 1,
+            "traded": true,
+            "tradeNote": "From DEN",
+            "teamId": "15"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 31,
+            "overall": 31,
+            "round": 1,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "17"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 32,
+            "overall": 32,
+            "round": 1,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "26"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 1,
+            "overall": 33,
+            "round": 2,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "20"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 2,
+            "overall": 34,
+            "round": 2,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "22"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 3,
+            "overall": 35,
+            "round": 2,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "10"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 4,
+            "overall": 36,
+            "round": 2,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "13"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 5,
+            "overall": 37,
+            "round": 2,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "19"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 6,
+            "overall": 38,
+            "round": 2,
+            "traded": true,
+            "tradeNote": "From WSH",
+            "teamId": "34"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 7,
+            "overall": 39,
+            "round": 2,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "5"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 8,
+            "overall": 40,
+            "round": 2,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "12"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 9,
+            "overall": 41,
+            "round": 2,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "4"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 10,
+            "overall": 42,
+            "round": 2,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "18"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 11,
+            "overall": 43,
+            "round": 2,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "15"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 12,
+            "overall": 44,
+            "round": 2,
+            "traded": true,
+            "tradeNote": "From DAL",
+            "teamId": "20"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 13,
+            "overall": 45,
+            "round": 2,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "33"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 14,
+            "overall": 46,
+            "round": 2,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "27"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 15,
+            "overall": 47,
+            "round": 2,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "11"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 16,
+            "overall": 48,
+            "round": 2,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "1"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 17,
+            "overall": 49,
+            "round": 2,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "16"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 18,
+            "overall": 50,
+            "round": 2,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "8"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 19,
+            "overall": 51,
+            "round": 2,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "29"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 20,
+            "overall": 52,
+            "round": 2,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "9"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 21,
+            "overall": 53,
+            "round": 2,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "23"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 22,
+            "overall": 54,
+            "round": 2,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "21"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 23,
+            "overall": 55,
+            "round": 2,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "24"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 24,
+            "overall": 56,
+            "round": 2,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "30"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 25,
+            "overall": 57,
+            "round": 2,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "3"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 26,
+            "overall": 58,
+            "round": 2,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "25"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 27,
+            "overall": 59,
+            "round": 2,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "34"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 28,
+            "overall": 60,
+            "round": 2,
+            "traded": true,
+            "tradeNote": "From BUF",
+            "teamId": "3"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 29,
+            "overall": 61,
+            "round": 2,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "14"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 30,
+            "overall": 62,
+            "round": 2,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "7"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 31,
+            "overall": 63,
+            "round": 2,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "17"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 32,
+            "overall": 64,
+            "round": 2,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "26"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 1,
+            "overall": 65,
+            "round": 3,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "22"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 2,
+            "overall": 66,
+            "round": 3,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "10"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 3,
+            "overall": 67,
+            "round": 3,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "13"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 4,
+            "overall": 68,
+            "round": 3,
+            "traded": true,
+            "tradeNote": "From NYJ",
+            "teamId": "21"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 5,
+            "overall": 69,
+            "round": 3,
+            "traded": true,
+            "tradeNote": "From NYG",
+            "teamId": "34"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 6,
+            "overall": 70,
+            "round": 3,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "5"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 7,
+            "overall": 71,
+            "round": 3,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "28"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 8,
+            "overall": 72,
+            "round": 3,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "4"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 9,
+            "overall": 73,
+            "round": 3,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "18"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 10,
+            "overall": 74,
+            "round": 3,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "12"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 11,
+            "overall": 75,
+            "round": 3,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "15"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 12,
+            "overall": 76,
+            "round": 3,
+            "traded": true,
+            "tradeNote": "From DAL",
+            "teamId": "23"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 13,
+            "overall": 77,
+            "round": 3,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "27"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 14,
+            "overall": 78,
+            "round": 3,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "11"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 15,
+            "overall": 79,
+            "round": 3,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "1"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 16,
+            "overall": 80,
+            "round": 3,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "33"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 17,
+            "overall": 81,
+            "round": 3,
+            "traded": true,
+            "tradeNote": "From DET",
+            "teamId": "30"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 18,
+            "overall": 82,
+            "round": 3,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "16"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 19,
+            "overall": 83,
+            "round": 3,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "29"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 20,
+            "overall": 84,
+            "round": 3,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "9"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 21,
+            "overall": 85,
+            "round": 3,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "23"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 22,
+            "overall": 86,
+            "round": 3,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "24"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 23,
+            "overall": 87,
+            "round": 3,
+            "traded": true,
+            "tradeNote": "From PHI",
+            "teamId": "15"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 24,
+            "overall": 88,
+            "round": 3,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "30"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 25,
+            "overall": 89,
+            "round": 3,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "3"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 26,
+            "overall": 90,
+            "round": 3,
+            "traded": true,
+            "tradeNote": "From HOU",
+            "teamId": "15"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 27,
+            "overall": 91,
+            "round": 3,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "2"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 28,
+            "overall": 92,
+            "round": 3,
+            "traded": true,
+            "tradeNote": "From SF",
+            "teamId": "6"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 29,
+            "overall": 93,
+            "round": 3,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "14"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 30,
+            "overall": 94,
+            "round": 3,
+            "traded": true,
+            "tradeNote": "From DEN",
+            "teamId": "15"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 31,
+            "overall": 95,
+            "round": 3,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "17"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 32,
+            "overall": 96,
+            "round": 3,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "26"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 33,
+            "overall": 97,
+            "round": 3,
+            "traded": false,
+            "tradeNote": "Compensatory Pick",
+            "teamId": "16"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 34,
+            "overall": 98,
+            "round": 3,
+            "traded": false,
+            "tradeNote": "Compensatory Pick",
+            "teamId": "21"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 35,
+            "overall": 99,
+            "round": 3,
+            "traded": false,
+            "tradeNote": "Compensatory Pick",
+            "teamId": "23"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 36,
+            "overall": 100,
+            "round": 3,
+            "traded": true,
+            "tradeNote": "Compensatory Pick (From DET)",
+            "teamId": "30"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 1,
+            "overall": 101,
+            "round": 4,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "10"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 2,
+            "overall": 102,
+            "round": 4,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "13"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 3,
+            "overall": 103,
+            "round": 4,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "20"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 4,
+            "overall": 104,
+            "round": 4,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "22"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 5,
+            "overall": 105,
+            "round": 4,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "19"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 6,
+            "overall": 106,
+            "round": 4,
+            "traded": true,
+            "tradeNote": "From WSH",
+            "teamId": "34"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 7,
+            "overall": 107,
+            "round": 4,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "5"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 8,
+            "overall": 108,
+            "round": 4,
+            "traded": true,
+            "tradeNote": "From NO",
+            "teamId": "7"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 9,
+            "overall": 109,
+            "round": 4,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "12"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 10,
+            "overall": 110,
+            "round": 4,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "4"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 11,
+            "overall": 111,
+            "round": 4,
+            "traded": true,
+            "tradeNote": "From MIA",
+            "teamId": "7"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 12,
+            "overall": 112,
+            "round": 4,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "6"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 13,
+            "overall": 113,
+            "round": 4,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "11"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 14,
+            "overall": 114,
+            "round": 4,
+            "traded": true,
+            "tradeNote": "From ATL",
+            "teamId": "21"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 15,
+            "overall": 115,
+            "round": 4,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "33"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 16,
+            "overall": 116,
+            "round": 4,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "27"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 17,
+            "overall": 117,
+            "round": 4,
+            "traded": true,
+            "tradeNote": "From MIN via JAX",
+            "teamId": "13"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 18,
+            "overall": 118,
+            "round": 4,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "8"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 19,
+            "overall": 119,
+            "round": 4,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "29"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 20,
+            "overall": 120,
+            "round": 4,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "9"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 21,
+            "overall": 121,
+            "round": 4,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "23"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 22,
+            "overall": 122,
+            "round": 4,
+            "traded": true,
+            "tradeNote": "From PHI",
+            "teamId": "1"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 23,
+            "overall": 123,
+            "round": 4,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "24"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 24,
+            "overall": 124,
+            "round": 4,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "30"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 25,
+            "overall": 125,
+            "round": 4,
+            "traded": true,
+            "tradeNote": "From CHI via KC",
+            "teamId": "17"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 26,
+            "overall": 126,
+            "round": 4,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "2"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 27,
+            "overall": 127,
+            "round": 4,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "25"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 28,
+            "overall": 128,
+            "round": 4,
+            "traded": true,
+            "tradeNote": "From HOU",
+            "teamId": "8"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 29,
+            "overall": 129,
+            "round": 4,
+            "traded": true,
+            "tradeNote": "From LAR",
+            "teamId": "3"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 30,
+            "overall": 130,
+            "round": 4,
+            "traded": true,
+            "tradeNote": "From DEN",
+            "teamId": "15"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 31,
+            "overall": 131,
+            "round": 4,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "17"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 32,
+            "overall": 132,
+            "round": 4,
+            "traded": true,
+            "tradeNote": "From SEA",
+            "teamId": "18"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 33,
+            "overall": 133,
+            "round": 4,
+            "traded": false,
+            "tradeNote": "Compensatory Pick",
+            "teamId": "25"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 34,
+            "overall": 134,
+            "round": 4,
+            "traded": false,
+            "tradeNote": "Compensatory Pick",
+            "teamId": "13"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 35,
+            "overall": 135,
+            "round": 4,
+            "traded": false,
+            "tradeNote": "Compensatory Pick",
+            "teamId": "23"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 36,
+            "overall": 136,
+            "round": 4,
+            "traded": false,
+            "tradeNote": "Compensatory Pick",
+            "teamId": "18"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 37,
+            "overall": 137,
+            "round": 4,
+            "traded": false,
+            "tradeNote": "Compensatory Pick",
+            "teamId": "21"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 38,
+            "overall": 138,
+            "round": 4,
+            "traded": false,
+            "tradeNote": "Compensatory Pick",
+            "teamId": "25"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 39,
+            "overall": 139,
+            "round": 4,
+            "traded": false,
+            "tradeNote": "Compensatory Pick",
+            "teamId": "25"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 40,
+            "overall": 140,
+            "round": 4,
+            "traded": false,
+            "tradeNote": "Compensatory Pick",
+            "teamId": "20"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 1,
+            "overall": 141,
+            "round": 5,
+            "traded": true,
+            "tradeNote": "From LV via CLE",
+            "teamId": "34"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 2,
+            "overall": 142,
+            "round": 5,
+            "traded": true,
+            "tradeNote": "From NYJ via BAL",
+            "teamId": "10"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 3,
+            "overall": 143,
+            "round": 5,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "22"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 4,
+            "overall": 144,
+            "round": 5,
+            "traded": true,
+            "tradeNote": "From TEN via LAR",
+            "teamId": "10"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 5,
+            "overall": 145,
+            "round": 5,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "19"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 6,
+            "overall": 146,
+            "round": 5,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "5"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 7,
+            "overall": 147,
+            "round": 5,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "28"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 8,
+            "overall": 148,
+            "round": 5,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "12"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 9,
+            "overall": 149,
+            "round": 5,
+            "traded": true,
+            "tradeNote": "From CIN",
+            "teamId": "5"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 10,
+            "overall": 150,
+            "round": 5,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "18"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 11,
+            "overall": 151,
+            "round": 5,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "15"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 12,
+            "overall": 152,
+            "round": 5,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "6"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 13,
+            "overall": 153,
+            "round": 5,
+            "traded": true,
+            "tradeNote": "From ATL via PHI",
+            "teamId": "9"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 14,
+            "overall": 154,
+            "round": 5,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "33"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 15,
+            "overall": 155,
+            "round": 5,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "27"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 16,
+            "overall": 156,
+            "round": 5,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "11"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 17,
+            "overall": 157,
+            "round": 5,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "8"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 18,
+            "overall": 158,
+            "round": 5,
+            "traded": true,
+            "tradeNote": "From MIN",
+            "teamId": "29"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 19,
+            "overall": 159,
+            "round": 5,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "29"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 20,
+            "overall": 160,
+            "round": 5,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "9"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 21,
+            "overall": 161,
+            "round": 5,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "23"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 22,
+            "overall": 162,
+            "round": 5,
+            "traded": true,
+            "tradeNote": "From LAC",
+            "teamId": "33"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 23,
+            "overall": 163,
+            "round": 5,
+            "traded": true,
+            "tradeNote": "From PHI",
+            "teamId": "16"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 24,
+            "overall": 164,
+            "round": 5,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "30"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 25,
+            "overall": 165,
+            "round": 5,
+            "traded": true,
+            "tradeNote": "From CHI",
+            "teamId": "2"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 26,
+            "overall": 166,
+            "round": 5,
+            "traded": true,
+            "tradeNote": "From SF via PHI",
+            "teamId": "30"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 27,
+            "overall": 167,
+            "round": 5,
+            "traded": true,
+            "tradeNote": "From HOU via PHI",
+            "teamId": "34"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 28,
+            "overall": 168,
+            "round": 5,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "2"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 29,
+            "overall": 169,
+            "round": 5,
+            "traded": true,
+            "tradeNote": "From LAR",
+            "teamId": "12"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 30,
+            "overall": 170,
+            "round": 5,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "7"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 31,
+            "overall": 171,
+            "round": 5,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "17"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 32,
+            "overall": 172,
+            "round": 5,
+            "traded": true,
+            "tradeNote": "From SEA",
+            "teamId": "18"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 33,
+            "overall": 173,
+            "round": 5,
+            "traded": false,
+            "tradeNote": "Compensatory Pick",
+            "teamId": "33"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 34,
+            "overall": 174,
+            "round": 5,
+            "traded": false,
+            "tradeNote": "Compensatory Pick",
+            "teamId": "33"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 35,
+            "overall": 175,
+            "round": 5,
+            "traded": false,
+            "tradeNote": "Compensatory Pick",
+            "teamId": "13"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 36,
+            "overall": 176,
+            "round": 5,
+            "traded": false,
+            "tradeNote": "Compensatory Pick",
+            "teamId": "12"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 37,
+            "overall": 177,
+            "round": 5,
+            "traded": false,
+            "tradeNote": "Compensatory Pick",
+            "teamId": "6"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 38,
+            "overall": 178,
+            "round": 5,
+            "traded": false,
+            "tradeNote": "Compensatory Pick",
+            "teamId": "21"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 39,
+            "overall": 179,
+            "round": 5,
+            "traded": false,
+            "tradeNote": "Compensatory Pick",
+            "teamId": "20"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 40,
+            "overall": 180,
+            "round": 5,
+            "traded": false,
+            "tradeNote": "Compensatory Pick",
+            "teamId": "6"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 41,
+            "overall": 181,
+            "round": 5,
+            "traded": false,
+            "tradeNote": "Compensatory Pick",
+            "teamId": "8"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 1,
+            "overall": 182,
+            "round": 6,
+            "traded": true,
+            "tradeNote": "From NYJ via CLE, JAX, and LV",
+            "teamId": "2"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 2,
+            "overall": 183,
+            "round": 6,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "22"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 3,
+            "overall": 184,
+            "round": 6,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "10"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 4,
+            "overall": 185,
+            "round": 6,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "13"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 5,
+            "overall": 186,
+            "round": 6,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "19"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 6,
+            "overall": 187,
+            "round": 6,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "28"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 7,
+            "overall": 188,
+            "round": 6,
+            "traded": true,
+            "tradeNote": "From CLE",
+            "teamId": "26"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 8,
+            "overall": 189,
+            "round": 6,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "4"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 9,
+            "overall": 190,
+            "round": 6,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "18"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 10,
+            "overall": 191,
+            "round": 6,
+            "traded": true,
+            "tradeNote": "From KC",
+            "teamId": "17"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 11,
+            "overall": 192,
+            "round": 6,
+            "traded": true,
+            "tradeNote": "From MIA",
+            "teamId": "19"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 12,
+            "overall": 193,
+            "round": 6,
+            "traded": true,
+            "tradeNote": "From DAL",
+            "teamId": "19"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 13,
+            "overall": 194,
+            "round": 6,
+            "traded": true,
+            "tradeNote": "From BAL via NYJ",
+            "teamId": "10"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 14,
+            "overall": 195,
+            "round": 6,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "27"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 15,
+            "overall": 196,
+            "round": 6,
+            "traded": true,
+            "tradeNote": "From IND",
+            "teamId": "16"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 16,
+            "overall": 197,
+            "round": 6,
+            "traded": true,
+            "tradeNote": "From ATL",
+            "teamId": "21"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 17,
+            "overall": 198,
+            "round": 6,
+            "traded": true,
+            "tradeNote": "From MIN via HOU, MIN, and SF",
+            "teamId": "17"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 18,
+            "overall": 199,
+            "round": 6,
+            "traded": true,
+            "tradeNote": "From DET via CLE",
+            "teamId": "4"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 19,
+            "overall": 200,
+            "round": 6,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "29"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 20,
+            "overall": 201,
+            "round": 6,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "9"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 21,
+            "overall": 202,
+            "round": 6,
+            "traded": true,
+            "tradeNote": "From PIT",
+            "teamId": "17"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 22,
+            "overall": 203,
+            "round": 6,
+            "traded": true,
+            "tradeNote": "From PHI via HOU",
+            "teamId": "30"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 23,
+            "overall": 204,
+            "round": 6,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "24"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 24,
+            "overall": 205,
+            "round": 6,
+            "traded": true,
+            "tradeNote": "From JAX",
+            "teamId": "8"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 25,
+            "overall": 206,
+            "round": 6,
+            "traded": true,
+            "tradeNote": "From CHI",
+            "teamId": "5"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 26,
+            "overall": 207,
+            "round": 6,
+            "traded": true,
+            "tradeNote": "From HOU via TEN",
+            "teamId": "14"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 27,
+            "overall": 208,
+            "round": 6,
+            "traded": true,
+            "tradeNote": "From BUF via NYJ",
+            "teamId": "13"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 28,
+            "overall": 209,
+            "round": 6,
+            "traded": true,
+            "tradeNote": "From SF",
+            "teamId": "28"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 29,
+            "overall": 210,
+            "round": 6,
+            "traded": true,
+            "tradeNote": "From LAR",
+            "teamId": "12"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 30,
+            "overall": 211,
+            "round": 6,
+            "traded": true,
+            "tradeNote": "From DEN via NYJ, MIN, and PHI",
+            "teamId": "33"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 31,
+            "overall": 212,
+            "round": 6,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "17"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 32,
+            "overall": 213,
+            "round": 6,
+            "traded": true,
+            "tradeNote": "From SEA via JAX",
+            "teamId": "8"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 33,
+            "overall": 214,
+            "round": 6,
+            "traded": true,
+            "tradeNote": "Compensatory Pick (From PIT)",
+            "teamId": "11"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 34,
+            "overall": 215,
+            "round": 6,
+            "traded": true,
+            "tradeNote": "Compensatory Pick (From PHI)",
+            "teamId": "1"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 35,
+            "overall": 216,
+            "round": 6,
+            "traded": false,
+            "tradeNote": "Compensatory Pick",
+            "teamId": "23"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 1,
+            "overall": 217,
+            "round": 7,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "22"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 2,
+            "overall": 218,
+            "round": 7,
+            "traded": true,
+            "tradeNote": "From TEN",
+            "teamId": "6"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 3,
+            "overall": 219,
+            "round": 7,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "13"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 4,
+            "overall": 220,
+            "round": 7,
+            "traded": true,
+            "tradeNote": "From NYJ",
+            "teamId": "2"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 5,
+            "overall": 221,
+            "round": 7,
+            "traded": true,
+            "tradeNote": "From NYG via DAL",
+            "teamId": "4"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 6,
+            "overall": 222,
+            "round": 7,
+            "traded": true,
+            "tradeNote": "From CLE",
+            "teamId": "8"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 7,
+            "overall": 223,
+            "round": 7,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "28"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 8,
+            "overall": 224,
+            "round": 7,
+            "traded": true,
+            "tradeNote": "From NO via NE",
+            "teamId": "23"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 9,
+            "overall": 225,
+            "round": 7,
+            "traded": true,
+            "tradeNote": "From KC via DAL",
+            "teamId": "10"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 10,
+            "overall": 226,
+            "round": 7,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "4"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 11,
+            "overall": 227,
+            "round": 7,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "15"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 12,
+            "overall": 228,
+            "round": 7,
+            "traded": true,
+            "tradeNote": "From DAL via BUF and LV",
+            "teamId": "20"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 13,
+            "overall": 229,
+            "round": 7,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "27"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 14,
+            "overall": 230,
+            "round": 7,
+            "traded": true,
+            "tradeNote": "From IND",
+            "teamId": "23"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 15,
+            "overall": 231,
+            "round": 7,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "1"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 16,
+            "overall": 232,
+            "round": 7,
+            "traded": true,
+            "tradeNote": "From BAL",
+            "teamId": "14"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 17,
+            "overall": 233,
+            "round": 7,
+            "traded": true,
+            "tradeNote": "From DET",
+            "teamId": "30"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 18,
+            "overall": 234,
+            "round": 7,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "16"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 19,
+            "overall": 235,
+            "round": 7,
+            "traded": true,
+            "tradeNote": "From CAR",
+            "teamId": "16"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 20,
+            "overall": 236,
+            "round": 7,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "9"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 21,
+            "overall": 237,
+            "round": 7,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "23"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 22,
+            "overall": 238,
+            "round": 7,
+            "traded": true,
+            "tradeNote": "From LAC via TEN and NYJ",
+            "teamId": "15"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 23,
+            "overall": 239,
+            "round": 7,
+            "traded": true,
+            "tradeNote": "From PHI via JAX and CLE",
+            "teamId": "3"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 24,
+            "overall": 240,
+            "round": 7,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "30"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 25,
+            "overall": 241,
+            "round": 7,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "3"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 26,
+            "overall": 242,
+            "round": 7,
+            "traded": true,
+            "tradeNote": "From BUF via CLE",
+            "teamId": "20"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 27,
+            "overall": 243,
+            "round": 7,
+            "traded": true,
+            "tradeNote": "From SF",
+            "teamId": "34"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 28,
+            "overall": 244,
+            "round": 7,
+            "traded": true,
+            "tradeNote": "From HOU",
+            "teamId": "16"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 29,
+            "overall": 245,
+            "round": 7,
+            "traded": true,
+            "tradeNote": "From LAR via HOU",
+            "teamId": "30"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 30,
+            "overall": 246,
+            "round": 7,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "7"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 31,
+            "overall": 247,
+            "round": 7,
+            "traded": false,
+            "tradeNote": "",
+            "teamId": "17"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 32,
+            "overall": 248,
+            "round": 7,
+            "traded": true,
+            "tradeNote": "From SEA",
+            "teamId": "5"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 33,
+            "overall": 249,
+            "round": 7,
+            "traded": false,
+            "tradeNote": "Compensatory Pick",
+            "teamId": "11"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 34,
+            "overall": 250,
+            "round": 7,
+            "traded": false,
+            "tradeNote": "Compensatory Pick",
+            "teamId": "33"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 35,
+            "overall": 251,
+            "round": 7,
+            "traded": false,
+            "tradeNote": "Compensatory Pick",
+            "teamId": "14"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 36,
+            "overall": 252,
+            "round": 7,
+            "traded": false,
+            "tradeNote": "Compensatory Pick",
+            "teamId": "14"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 37,
+            "overall": 253,
+            "round": 7,
+            "traded": false,
+            "tradeNote": "Compensatory Pick",
+            "teamId": "33"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 38,
+            "overall": 254,
+            "round": 7,
+            "traded": false,
+            "tradeNote": "Compensatory Pick",
+            "teamId": "11"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 39,
+            "overall": 255,
+            "round": 7,
+            "traded": false,
+            "tradeNote": "Compensatory Pick",
+            "teamId": "9"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 40,
+            "overall": 256,
+            "round": 7,
+            "traded": false,
+            "tradeNote": "Compensatory Pick",
+            "teamId": "7"
+        },
+        {
+            "status": "ON_THE_CLOCK",
+            "pick": 41,
+            "overall": 257,
+            "round": 7,
+            "traded": false,
+            "tradeNote": "Compensatory Pick",
+            "teamId": "7"
+        }
+    ],
+    "teams": [
+        {
+            "id": "22",
+            "uid": "s:20~l:28~t:22",
+            "location": "Arizona",
+            "name": "Cardinals",
+            "nickname": "Cardinals",
+            "abbreviation": "ARI",
+            "displayName": "Arizona Cardinals",
+            "shortDisplayName": "Cardinals",
+            "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/scoreboard/ari.png",
+            "darkLogo": "https://a.espncdn.com/i/teamlogos/nfl/500-dark/scoreboard/ari.png",
+            "needs": [
+                {
+                    "positionId": "8",
+                    "met": false
+                },
+                {
+                    "positionId": "46",
+                    "met": false
+                },
+                {
+                    "positionId": "264",
+                    "met": false
+                },
+                {
+                    "positionId": "36",
+                    "met": false
+                },
+                {
+                    "positionId": "32",
+                    "met": false
+                }
+            ],
+            "nextpick": 3,
+            "link": "https://www.espn.com/nfl/draft/teams/_/name/ari/arizona-cardinals",
+            "record": {
+                "season": 2025,
+                "summary": "3-14",
+                "standing": "4th in NFC West"
+            }
+        },
+        {
+            "id": "1",
+            "uid": "s:20~l:28~t:1",
+            "location": "Atlanta",
+            "name": "Falcons",
+            "nickname": "Falcons",
+            "abbreviation": "ATL",
+            "displayName": "Atlanta Falcons",
+            "shortDisplayName": "Falcons",
+            "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/scoreboard/atl.png",
+            "darkLogo": "https://a.espncdn.com/i/teamlogos/nfl/500-dark/scoreboard/atl.png",
+            "needs": [
+                {
+                    "positionId": "32",
+                    "met": false
+                },
+                {
+                    "positionId": "1",
+                    "met": false
+                },
+                {
+                    "positionId": "30",
+                    "met": false
+                },
+                {
+                    "positionId": "29",
+                    "met": false
+                },
+                {
+                    "positionId": "46",
+                    "met": false
+                }
+            ],
+            "nextpick": 48,
+            "link": "https://www.espn.com/nfl/draft/teams/_/name/atl/atlanta-falcons",
+            "record": {
+                "season": 2025,
+                "summary": "8-9",
+                "standing": "3rd in NFC South"
+            }
+        },
+        {
+            "id": "33",
+            "uid": "s:20~l:28~t:33",
+            "location": "Baltimore",
+            "name": "Ravens",
+            "nickname": "Ravens",
+            "abbreviation": "BAL",
+            "displayName": "Baltimore Ravens",
+            "shortDisplayName": "Ravens",
+            "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/scoreboard/bal.png",
+            "darkLogo": "https://a.espncdn.com/i/teamlogos/nfl/500-dark/scoreboard/bal.png",
+            "needs": [
+                {
+                    "positionId": "29",
+                    "met": false
+                },
+                {
+                    "positionId": "36",
+                    "met": false
+                },
+                {
+                    "positionId": "32",
+                    "met": false
+                },
+                {
+                    "positionId": "47",
+                    "met": false
+                },
+                {
+                    "positionId": "1",
+                    "met": false
+                }
+            ],
+            "nextpick": 14,
+            "link": "https://www.espn.com/nfl/draft/teams/_/name/bal/baltimore-ravens",
+            "record": {
+                "season": 2025,
+                "summary": "8-9",
+                "standing": "2nd in AFC North"
+            }
+        },
+        {
+            "id": "2",
+            "uid": "s:20~l:28~t:2",
+            "location": "Buffalo",
+            "name": "Bills",
+            "nickname": "Bills",
+            "abbreviation": "BUF",
+            "displayName": "Buffalo Bills",
+            "shortDisplayName": "Bills",
+            "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/scoreboard/buf.png",
+            "darkLogo": "https://a.espncdn.com/i/teamlogos/nfl/500-dark/scoreboard/buf.png",
+            "needs": [
+                {
+                    "positionId": "1",
+                    "met": false
+                },
+                {
+                    "positionId": "264",
+                    "met": false
+                },
+                {
+                    "positionId": "30",
+                    "met": false
+                },
+                {
+                    "positionId": "47",
+                    "met": false
+                },
+                {
+                    "positionId": "29",
+                    "met": false
+                }
+            ],
+            "nextpick": 26,
+            "link": "https://www.espn.com/nfl/draft/teams/_/name/buf/buffalo-bills",
+            "record": {
+                "season": 2025,
+                "summary": "12-5",
+                "standing": "2nd in AFC East"
+            }
+        },
+        {
+            "id": "29",
+            "uid": "s:20~l:28~t:29",
+            "location": "Carolina",
+            "name": "Panthers",
+            "nickname": "Panthers",
+            "abbreviation": "CAR",
+            "displayName": "Carolina Panthers",
+            "shortDisplayName": "Panthers",
+            "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/scoreboard/car.png",
+            "darkLogo": "https://a.espncdn.com/i/teamlogos/nfl/500-dark/scoreboard/car.png",
+            "needs": [
+                {
+                    "positionId": "36",
+                    "met": false
+                },
+                {
+                    "positionId": "1",
+                    "met": false
+                },
+                {
+                    "positionId": "264",
+                    "met": false
+                },
+                {
+                    "positionId": "29",
+                    "met": false
+                },
+                {
+                    "positionId": "9",
+                    "met": false
+                }
+            ],
+            "nextpick": 19,
+            "link": "https://www.espn.com/nfl/draft/teams/_/name/car/carolina-panthers",
+            "record": {
+                "season": 2025,
+                "summary": "8-9",
+                "standing": "1st in NFC South"
+            }
+        },
+        {
+            "id": "3",
+            "uid": "s:20~l:28~t:3",
+            "location": "Chicago",
+            "name": "Bears",
+            "nickname": "Bears",
+            "abbreviation": "CHI",
+            "displayName": "Chicago Bears",
+            "shortDisplayName": "Bears",
+            "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/scoreboard/chi.png",
+            "darkLogo": "https://a.espncdn.com/i/teamlogos/nfl/500-dark/scoreboard/chi.png",
+            "needs": [
+                {
+                    "positionId": "36",
+                    "met": false
+                },
+                {
+                    "positionId": "32",
+                    "met": false
+                },
+                {
+                    "positionId": "264",
+                    "met": false
+                },
+                {
+                    "positionId": "91",
+                    "met": false
+                },
+                {
+                    "positionId": "1",
+                    "met": false
+                }
+            ],
+            "nextpick": 25,
+            "link": "https://www.espn.com/nfl/draft/teams/_/name/chi/chicago-bears",
+            "record": {
+                "season": 2025,
+                "summary": "11-6",
+                "standing": "1st in NFC North"
+            }
+        },
+        {
+            "id": "4",
+            "uid": "s:20~l:28~t:4",
+            "location": "Cincinnati",
+            "name": "Bengals",
+            "nickname": "Bengals",
+            "abbreviation": "CIN",
+            "displayName": "Cincinnati Bengals",
+            "shortDisplayName": "Bengals",
+            "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/scoreboard/cin.png",
+            "darkLogo": "https://a.espncdn.com/i/teamlogos/nfl/500-dark/scoreboard/cin.png",
+            "needs": [
+                {
+                    "positionId": "29",
+                    "met": false
+                },
+                {
+                    "positionId": "46",
+                    "met": false
+                },
+                {
+                    "positionId": "1",
+                    "met": false
+                },
+                {
+                    "positionId": "30",
+                    "met": false
+                },
+                {
+                    "positionId": "47",
+                    "met": false
+                }
+            ],
+            "nextpick": 41,
+            "link": "https://www.espn.com/nfl/draft/teams/_/name/cin/cincinnati-bengals",
+            "record": {
+                "season": 2025,
+                "summary": "6-11",
+                "standing": "3rd in AFC North"
+            }
+        },
+        {
+            "id": "5",
+            "uid": "s:20~l:28~t:5",
+            "location": "Cleveland",
+            "name": "Browns",
+            "nickname": "Browns",
+            "abbreviation": "CLE",
+            "displayName": "Cleveland Browns",
+            "shortDisplayName": "Browns",
+            "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/scoreboard/cle.png",
+            "darkLogo": "https://a.espncdn.com/i/teamlogos/nfl/500-dark/scoreboard/cle.png",
+            "needs": [
+                {
+                    "positionId": "8",
+                    "met": false
+                },
+                {
+                    "positionId": "1",
+                    "met": false
+                },
+                {
+                    "positionId": "46",
+                    "met": false
+                },
+                {
+                    "positionId": "47",
+                    "met": false
+                },
+                {
+                    "positionId": "29",
+                    "met": false
+                }
+            ],
+            "nextpick": 6,
+            "link": "https://www.espn.com/nfl/draft/teams/_/name/cle/cleveland-browns",
+            "record": {
+                "season": 2025,
+                "summary": "5-12",
+                "standing": "4th in AFC North"
+            }
+        },
+        {
+            "id": "6",
+            "uid": "s:20~l:28~t:6",
+            "location": "Dallas",
+            "name": "Cowboys",
+            "nickname": "Cowboys",
+            "abbreviation": "DAL",
+            "displayName": "Dallas Cowboys",
+            "shortDisplayName": "Cowboys",
+            "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/scoreboard/dal.png",
+            "darkLogo": "https://a.espncdn.com/i/teamlogos/nfl/500-dark/scoreboard/dal.png",
+            "needs": [
+                {
+                    "positionId": "29",
+                    "met": false
+                },
+                {
+                    "positionId": "36",
+                    "met": false
+                },
+                {
+                    "positionId": "30",
+                    "met": false
+                },
+                {
+                    "positionId": "264",
+                    "met": false
+                },
+                {
+                    "positionId": "7",
+                    "met": false
+                }
+            ],
+            "nextpick": 12,
+            "link": "https://www.espn.com/nfl/draft/teams/_/name/dal/dallas-cowboys",
+            "record": {
+                "season": 2025,
+                "summary": "7-9-1",
+                "standing": "2nd in NFC East"
+            }
+        },
+        {
+            "id": "7",
+            "uid": "s:20~l:28~t:7",
+            "location": "Denver",
+            "name": "Broncos",
+            "nickname": "Broncos",
+            "abbreviation": "DEN",
+            "displayName": "Denver Broncos",
+            "shortDisplayName": "Broncos",
+            "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/scoreboard/den.png",
+            "darkLogo": "https://a.espncdn.com/i/teamlogos/nfl/500-dark/scoreboard/den.png",
+            "needs": [
+                {
+                    "positionId": "32",
+                    "met": false
+                },
+                {
+                    "positionId": "30",
+                    "met": false
+                },
+                {
+                    "positionId": "7",
+                    "met": false
+                },
+                {
+                    "positionId": "46",
+                    "met": false
+                },
+                {
+                    "positionId": "47",
+                    "met": false
+                }
+            ],
+            "nextpick": 62,
+            "link": "https://www.espn.com/nfl/draft/teams/_/name/den/denver-broncos",
+            "record": {
+                "season": 2025,
+                "summary": "14-3",
+                "standing": "1st in AFC West"
+            }
+        },
+        {
+            "id": "8",
+            "uid": "s:20~l:28~t:8",
+            "location": "Detroit",
+            "name": "Lions",
+            "nickname": "Lions",
+            "abbreviation": "DET",
+            "displayName": "Detroit Lions",
+            "shortDisplayName": "Lions",
+            "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/scoreboard/det.png",
+            "darkLogo": "https://a.espncdn.com/i/teamlogos/nfl/500-dark/scoreboard/det.png",
+            "needs": [
+                {
+                    "positionId": "264",
+                    "met": false
+                },
+                {
+                    "positionId": "32",
+                    "met": false
+                },
+                {
+                    "positionId": "46",
+                    "met": false
+                },
+                {
+                    "positionId": "29",
+                    "met": false
+                },
+                {
+                    "positionId": "9",
+                    "met": false
+                }
+            ],
+            "nextpick": 17,
+            "link": "https://www.espn.com/nfl/draft/teams/_/name/det/detroit-lions",
+            "record": {
+                "season": 2025,
+                "summary": "9-8",
+                "standing": "4th in NFC North"
+            }
+        },
+        {
+            "id": "9",
+            "uid": "s:20~l:28~t:9",
+            "location": "Green Bay",
+            "name": "Packers",
+            "nickname": "Packers",
+            "abbreviation": "GB",
+            "displayName": "Green Bay Packers",
+            "shortDisplayName": "Packers",
+            "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/scoreboard/gb.png",
+            "darkLogo": "https://a.espncdn.com/i/teamlogos/nfl/500-dark/scoreboard/gb.png",
+            "needs": [
+                {
+                    "positionId": "29",
+                    "met": false
+                },
+                {
+                    "positionId": "46",
+                    "met": false
+                },
+                {
+                    "positionId": "264",
+                    "met": false
+                },
+                {
+                    "positionId": "30",
+                    "met": false
+                },
+                {
+                    "positionId": "47",
+                    "met": false
+                }
+            ],
+            "nextpick": 52,
+            "link": "https://www.espn.com/nfl/draft/teams/_/name/gb/green-bay-packers",
+            "record": {
+                "season": 2025,
+                "summary": "9-7-1",
+                "standing": "2nd in NFC North"
+            }
+        },
+        {
+            "id": "34",
+            "uid": "s:20~l:28~t:34",
+            "location": "Houston",
+            "name": "Texans",
+            "nickname": "Texans",
+            "abbreviation": "HOU",
+            "displayName": "Houston Texans",
+            "shortDisplayName": "Texans",
+            "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/scoreboard/hou.png",
+            "darkLogo": "https://a.espncdn.com/i/teamlogos/nfl/500-dark/scoreboard/hou.png",
+            "needs": [
+                {
+                    "positionId": "47",
+                    "met": false
+                },
+                {
+                    "positionId": "91",
+                    "met": false
+                },
+                {
+                    "positionId": "32",
+                    "met": false
+                },
+                {
+                    "positionId": "29",
+                    "met": false
+                },
+                {
+                    "positionId": "264",
+                    "met": false
+                }
+            ],
+            "nextpick": 28,
+            "link": "https://www.espn.com/nfl/draft/teams/_/name/hou/houston-texans",
+            "record": {
+                "season": 2025,
+                "summary": "12-5",
+                "standing": "2nd in AFC South"
+            }
+        },
+        {
+            "id": "11",
+            "uid": "s:20~l:28~t:11",
+            "location": "Indianapolis",
+            "name": "Colts",
+            "nickname": "Colts",
+            "abbreviation": "IND",
+            "displayName": "Indianapolis Colts",
+            "shortDisplayName": "Colts",
+            "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/scoreboard/ind.png",
+            "darkLogo": "https://a.espncdn.com/i/teamlogos/nfl/500-dark/scoreboard/ind.png",
+            "needs": [
+                {
+                    "positionId": "264",
+                    "met": false
+                },
+                {
+                    "positionId": "1",
+                    "met": false
+                },
+                {
+                    "positionId": "30",
+                    "met": false
+                },
+                {
+                    "positionId": "36",
+                    "met": false
+                },
+                {
+                    "positionId": "91",
+                    "met": false
+                }
+            ],
+            "nextpick": 47,
+            "link": "https://www.espn.com/nfl/draft/teams/_/name/ind/indianapolis-colts",
+            "record": {
+                "season": 2025,
+                "summary": "8-9",
+                "standing": "3rd in AFC South"
+            }
+        },
+        {
+            "id": "30",
+            "uid": "s:20~l:28~t:30",
+            "location": "Jacksonville",
+            "name": "Jaguars",
+            "nickname": "Jaguars",
+            "abbreviation": "JAX",
+            "displayName": "Jacksonville Jaguars",
+            "shortDisplayName": "Jaguars",
+            "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/scoreboard/jax.png",
+            "darkLogo": "https://a.espncdn.com/i/teamlogos/nfl/500-dark/scoreboard/jax.png",
+            "needs": [
+                {
+                    "positionId": "32",
+                    "met": false
+                },
+                {
+                    "positionId": "264",
+                    "met": false
+                },
+                {
+                    "positionId": "30",
+                    "met": false
+                },
+                {
+                    "positionId": "29",
+                    "met": false
+                },
+                {
+                    "positionId": "9",
+                    "met": false
+                }
+            ],
+            "nextpick": 56,
+            "link": "https://www.espn.com/nfl/draft/teams/_/name/jax/jacksonville-jaguars",
+            "record": {
+                "season": 2025,
+                "summary": "13-4",
+                "standing": "1st in AFC South"
+            }
+        },
+        {
+            "id": "12",
+            "uid": "s:20~l:28~t:12",
+            "location": "Kansas City",
+            "name": "Chiefs",
+            "nickname": "Chiefs",
+            "abbreviation": "KC",
+            "displayName": "Kansas City Chiefs",
+            "shortDisplayName": "Chiefs",
+            "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/scoreboard/kc.png",
+            "darkLogo": "https://a.espncdn.com/i/teamlogos/nfl/500-dark/scoreboard/kc.png",
+            "needs": [
+                {
+                    "positionId": "1",
+                    "met": false
+                },
+                {
+                    "positionId": "264",
+                    "met": false
+                },
+                {
+                    "positionId": "32",
+                    "met": false
+                },
+                {
+                    "positionId": "7",
+                    "met": false
+                },
+                {
+                    "positionId": "29",
+                    "met": false
+                }
+            ],
+            "nextpick": 9,
+            "link": "https://www.espn.com/nfl/draft/teams/_/name/kc/kansas-city-chiefs",
+            "record": {
+                "season": 2025,
+                "summary": "6-11",
+                "standing": "3rd in AFC West"
+            }
+        },
+        {
+            "id": "24",
+            "uid": "s:20~l:28~t:24",
+            "location": "Los Angeles",
+            "name": "Chargers",
+            "nickname": "Chargers",
+            "abbreviation": "LAC",
+            "displayName": "Los Angeles Chargers",
+            "shortDisplayName": "Chargers",
+            "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/scoreboard/lac.png",
+            "darkLogo": "https://a.espncdn.com/i/teamlogos/nfl/500-dark/scoreboard/lac.png",
+            "needs": [
+                {
+                    "positionId": "47",
+                    "met": false
+                },
+                {
+                    "positionId": "32",
+                    "met": false
+                },
+                {
+                    "positionId": "264",
+                    "met": false
+                },
+                {
+                    "positionId": "1",
+                    "met": false
+                },
+                {
+                    "positionId": "7",
+                    "met": false
+                }
+            ],
+            "nextpick": 22,
+            "link": "https://www.espn.com/nfl/draft/teams/_/name/lac/los-angeles-chargers",
+            "record": {
+                "season": 2025,
+                "summary": "11-6",
+                "standing": "2nd in AFC West"
+            }
+        },
+        {
+            "id": "14",
+            "uid": "s:20~l:28~t:14",
+            "location": "Los Angeles",
+            "name": "Rams",
+            "nickname": "Rams",
+            "abbreviation": "LAR",
+            "displayName": "Los Angeles Rams",
+            "shortDisplayName": "Rams",
+            "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/scoreboard/lar.png",
+            "darkLogo": "https://a.espncdn.com/i/teamlogos/nfl/500-dark/scoreboard/lar.png",
+            "needs": [
+                {
+                    "positionId": "1",
+                    "met": false
+                },
+                {
+                    "positionId": "46",
+                    "met": false
+                },
+                {
+                    "positionId": "29",
+                    "met": false
+                },
+                {
+                    "positionId": "8",
+                    "met": false
+                },
+                {
+                    "positionId": "7",
+                    "met": false
+                }
+            ],
+            "nextpick": 13,
+            "link": "https://www.espn.com/nfl/draft/teams/_/name/lar/los-angeles-rams",
+            "record": {
+                "season": 2025,
+                "summary": "12-5",
+                "standing": "2nd in NFC West"
+            }
+        },
+        {
+            "id": "13",
+            "uid": "s:20~l:28~t:13",
+            "location": "Las Vegas",
+            "name": "Raiders",
+            "nickname": "Raiders",
+            "abbreviation": "LV",
+            "displayName": "Las Vegas Raiders",
+            "shortDisplayName": "Raiders",
+            "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/scoreboard/lv.png",
+            "darkLogo": "https://a.espncdn.com/i/teamlogos/nfl/500-dark/scoreboard/lv.png",
+            "needs": [
+                {
+                    "positionId": "8",
+                    "met": true
+                },
+                {
+                    "positionId": "1",
+                    "met": false
+                },
+                {
+                    "positionId": "32",
+                    "met": false
+                },
+                {
+                    "positionId": "29",
+                    "met": false
+                },
+                {
+                    "positionId": "47",
+                    "met": false
+                }
+            ],
+            "nextpick": 36,
+            "link": "https://www.espn.com/nfl/draft/teams/_/name/lv/las-vegas-raiders",
+            "record": {
+                "season": 2025,
+                "summary": "3-14",
+                "standing": "4th in AFC West"
+            }
+        },
+        {
+            "id": "15",
+            "uid": "s:20~l:28~t:15",
+            "location": "Miami",
+            "name": "Dolphins",
+            "nickname": "Dolphins",
+            "abbreviation": "MIA",
+            "displayName": "Miami Dolphins",
+            "shortDisplayName": "Dolphins",
+            "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/scoreboard/mia.png",
+            "darkLogo": "https://a.espncdn.com/i/teamlogos/nfl/500-dark/scoreboard/mia.png",
+            "needs": [
+                {
+                    "positionId": "1",
+                    "met": false
+                },
+                {
+                    "positionId": "29",
+                    "met": false
+                },
+                {
+                    "positionId": "264",
+                    "met": false
+                },
+                {
+                    "positionId": "7",
+                    "met": false
+                },
+                {
+                    "positionId": "36",
+                    "met": false
+                }
+            ],
+            "nextpick": 11,
+            "link": "https://www.espn.com/nfl/draft/teams/_/name/mia/miami-dolphins",
+            "record": {
+                "season": 2025,
+                "summary": "7-10",
+                "standing": "3rd in AFC East"
+            }
+        },
+        {
+            "id": "16",
+            "uid": "s:20~l:28~t:16",
+            "location": "Minnesota",
+            "name": "Vikings",
+            "nickname": "Vikings",
+            "abbreviation": "MIN",
+            "displayName": "Minnesota Vikings",
+            "shortDisplayName": "Vikings",
+            "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/scoreboard/min.png",
+            "darkLogo": "https://a.espncdn.com/i/teamlogos/nfl/500-dark/scoreboard/min.png",
+            "needs": [
+                {
+                    "positionId": "36",
+                    "met": false
+                },
+                {
+                    "positionId": "91",
+                    "met": false
+                },
+                {
+                    "positionId": "1",
+                    "met": false
+                },
+                {
+                    "positionId": "47",
+                    "met": false
+                },
+                {
+                    "positionId": "30",
+                    "met": false
+                }
+            ],
+            "nextpick": 18,
+            "link": "https://www.espn.com/nfl/draft/teams/_/name/min/minnesota-vikings",
+            "record": {
+                "season": 2025,
+                "summary": "9-8",
+                "standing": "3rd in NFC North"
+            }
+        },
+        {
+            "id": "17",
+            "uid": "s:20~l:28~t:17",
+            "location": "New England",
+            "name": "Patriots",
+            "nickname": "Patriots",
+            "abbreviation": "NE",
+            "displayName": "New England Patriots",
+            "shortDisplayName": "Patriots",
+            "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/scoreboard/ne.png",
+            "darkLogo": "https://a.espncdn.com/i/teamlogos/nfl/500-dark/scoreboard/ne.png",
+            "needs": [
+                {
+                    "positionId": "46",
+                    "met": false
+                },
+                {
+                    "positionId": "32",
+                    "met": false
+                },
+                {
+                    "positionId": "7",
+                    "met": false
+                },
+                {
+                    "positionId": "36",
+                    "met": false
+                },
+                {
+                    "positionId": "264",
+                    "met": false
+                }
+            ],
+            "nextpick": 31,
+            "link": "https://www.espn.com/nfl/draft/teams/_/name/ne/new-england-patriots",
+            "record": {
+                "season": 2025,
+                "summary": "14-3",
+                "standing": "1st in AFC East"
+            }
+        },
+        {
+            "id": "18",
+            "uid": "s:20~l:28~t:18",
+            "location": "New Orleans",
+            "name": "Saints",
+            "nickname": "Saints",
+            "abbreviation": "NO",
+            "displayName": "New Orleans Saints",
+            "shortDisplayName": "Saints",
+            "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/scoreboard/no.png",
+            "darkLogo": "https://a.espncdn.com/i/teamlogos/nfl/500-dark/scoreboard/no.png",
+            "needs": [
+                {
+                    "positionId": "264",
+                    "met": false
+                },
+                {
+                    "positionId": "1",
+                    "met": false
+                },
+                {
+                    "positionId": "29",
+                    "met": false
+                },
+                {
+                    "positionId": "47",
+                    "met": false
+                },
+                {
+                    "positionId": "30",
+                    "met": false
+                }
+            ],
+            "nextpick": 8,
+            "link": "https://www.espn.com/nfl/draft/teams/_/name/no/new-orleans-saints",
+            "record": {
+                "season": 2025,
+                "summary": "6-11",
+                "standing": "4th in NFC South"
+            }
+        },
+        {
+            "id": "19",
+            "uid": "s:20~l:28~t:19",
+            "location": "New York",
+            "name": "Giants",
+            "nickname": "Giants",
+            "abbreviation": "NYG",
+            "displayName": "New York Giants",
+            "shortDisplayName": "Giants",
+            "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/scoreboard/nyg.png",
+            "darkLogo": "https://a.espncdn.com/i/teamlogos/nfl/500-dark/scoreboard/nyg.png",
+            "needs": [
+                {
+                    "positionId": "1",
+                    "met": false
+                },
+                {
+                    "positionId": "47",
+                    "met": false
+                },
+                {
+                    "positionId": "29",
+                    "met": false
+                },
+                {
+                    "positionId": "32",
+                    "met": false
+                },
+                {
+                    "positionId": "46",
+                    "met": false
+                }
+            ],
+            "nextpick": 5,
+            "link": "https://www.espn.com/nfl/draft/teams/_/name/nyg/new-york-giants",
+            "record": {
+                "season": 2025,
+                "summary": "4-13",
+                "standing": "4th in NFC East"
+            }
+        },
+        {
+            "id": "20",
+            "uid": "s:20~l:28~t:20",
+            "location": "New York",
+            "name": "Jets",
+            "nickname": "Jets",
+            "abbreviation": "NYJ",
+            "displayName": "New York Jets",
+            "shortDisplayName": "Jets",
+            "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/scoreboard/nyj.png",
+            "darkLogo": "https://a.espncdn.com/i/teamlogos/nfl/500-dark/scoreboard/nyj.png",
+            "needs": [
+                {
+                    "positionId": "8",
+                    "met": false
+                },
+                {
+                    "positionId": "1",
+                    "met": false
+                },
+                {
+                    "positionId": "264",
+                    "met": false
+                },
+                {
+                    "positionId": "47",
+                    "met": false
+                },
+                {
+                    "positionId": "29",
+                    "met": false
+                }
+            ],
+            "nextpick": 16,
+            "link": "https://www.espn.com/nfl/draft/teams/_/name/nyj/new-york-jets",
+            "record": {
+                "season": 2025,
+                "summary": "3-14",
+                "standing": "4th in AFC East"
+            }
+        },
+        {
+            "id": "21",
+            "uid": "s:20~l:28~t:21",
+            "location": "Philadelphia",
+            "name": "Eagles",
+            "nickname": "Eagles",
+            "abbreviation": "PHI",
+            "displayName": "Philadelphia Eagles",
+            "shortDisplayName": "Eagles",
+            "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/scoreboard/phi.png",
+            "darkLogo": "https://a.espncdn.com/i/teamlogos/nfl/500-dark/scoreboard/phi.png",
+            "needs": [
+                {
+                    "positionId": "264",
+                    "met": false
+                },
+                {
+                    "positionId": "7",
+                    "met": false
+                },
+                {
+                    "positionId": "46",
+                    "met": false
+                },
+                {
+                    "positionId": "30",
+                    "met": false
+                },
+                {
+                    "positionId": "36",
+                    "met": false
+                }
+            ],
+            "nextpick": 23,
+            "link": "https://www.espn.com/nfl/draft/teams/_/name/phi/philadelphia-eagles",
+            "record": {
+                "season": 2025,
+                "summary": "11-6",
+                "standing": "1st in NFC East"
+            }
+        },
+        {
+            "id": "23",
+            "uid": "s:20~l:28~t:23",
+            "location": "Pittsburgh",
+            "name": "Steelers",
+            "nickname": "Steelers",
+            "abbreviation": "PIT",
+            "displayName": "Pittsburgh Steelers",
+            "shortDisplayName": "Steelers",
+            "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/scoreboard/pit.png",
+            "darkLogo": "https://a.espncdn.com/i/teamlogos/nfl/500-dark/scoreboard/pit.png",
+            "needs": [
+                {
+                    "positionId": "8",
+                    "met": false
+                },
+                {
+                    "positionId": "47",
+                    "met": false
+                },
+                {
+                    "positionId": "46",
+                    "met": false
+                },
+                {
+                    "positionId": "36",
+                    "met": false
+                },
+                {
+                    "positionId": "32",
+                    "met": false
+                }
+            ],
+            "nextpick": 21,
+            "link": "https://www.espn.com/nfl/draft/teams/_/name/pit/pittsburgh-steelers",
+            "record": {
+                "season": 2025,
+                "summary": "10-7",
+                "standing": "1st in AFC North"
+            }
+        },
+        {
+            "id": "26",
+            "uid": "s:20~l:28~t:26",
+            "location": "Seattle",
+            "name": "Seahawks",
+            "nickname": "Seahawks",
+            "abbreviation": "SEA",
+            "displayName": "Seattle Seahawks",
+            "shortDisplayName": "Seahawks",
+            "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/scoreboard/sea.png",
+            "darkLogo": "https://a.espncdn.com/i/teamlogos/nfl/500-dark/scoreboard/sea.png",
+            "needs": [
+                {
+                    "positionId": "9",
+                    "met": false
+                },
+                {
+                    "positionId": "264",
+                    "met": false
+                },
+                {
+                    "positionId": "29",
+                    "met": false
+                },
+                {
+                    "positionId": "46",
+                    "met": false
+                },
+                {
+                    "positionId": "1",
+                    "met": false
+                }
+            ],
+            "nextpick": 32,
+            "link": "https://www.espn.com/nfl/draft/teams/_/name/sea/seattle-seahawks",
+            "record": {
+                "season": 2025,
+                "summary": "14-3",
+                "standing": "1st in NFC West"
+            }
+        },
+        {
+            "id": "25",
+            "uid": "s:20~l:28~t:25",
+            "location": "San Francisco",
+            "name": "49ers",
+            "nickname": "49ers",
+            "abbreviation": "SF",
+            "displayName": "San Francisco 49ers",
+            "shortDisplayName": "49ers",
+            "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/scoreboard/sf.png",
+            "darkLogo": "https://a.espncdn.com/i/teamlogos/nfl/500-dark/scoreboard/sf.png",
+            "needs": [
+                {
+                    "positionId": "46",
+                    "met": false
+                },
+                {
+                    "positionId": "264",
+                    "met": false
+                },
+                {
+                    "positionId": "1",
+                    "met": false
+                },
+                {
+                    "positionId": "91",
+                    "met": false
+                },
+                {
+                    "positionId": "36",
+                    "met": false
+                }
+            ],
+            "nextpick": 27,
+            "link": "https://www.espn.com/nfl/draft/teams/_/name/sf/san-francisco-49ers",
+            "record": {
+                "season": 2025,
+                "summary": "12-5",
+                "standing": "3rd in NFC West"
+            }
+        },
+        {
+            "id": "27",
+            "uid": "s:20~l:28~t:27",
+            "location": "Tampa Bay",
+            "name": "Buccaneers",
+            "nickname": "Buccaneers",
+            "abbreviation": "TB",
+            "displayName": "Tampa Bay Buccaneers",
+            "shortDisplayName": "Buccaneers",
+            "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/scoreboard/tb.png",
+            "darkLogo": "https://a.espncdn.com/i/teamlogos/nfl/500-dark/scoreboard/tb.png",
+            "needs": [
+                {
+                    "positionId": "264",
+                    "met": false
+                },
+                {
+                    "positionId": "29",
+                    "met": false
+                },
+                {
+                    "positionId": "32",
+                    "met": false
+                },
+                {
+                    "positionId": "30",
+                    "met": false
+                },
+                {
+                    "positionId": "7",
+                    "met": false
+                }
+            ],
+            "nextpick": 15,
+            "link": "https://www.espn.com/nfl/draft/teams/_/name/tb/tampa-bay-buccaneers",
+            "record": {
+                "season": 2025,
+                "summary": "8-9",
+                "standing": "2nd in NFC South"
+            }
+        },
+        {
+            "id": "10",
+            "uid": "s:20~l:28~t:10",
+            "location": "Tennessee",
+            "name": "Titans",
+            "nickname": "Titans",
+            "abbreviation": "TEN",
+            "displayName": "Tennessee Titans",
+            "shortDisplayName": "Titans",
+            "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/scoreboard/ten.png",
+            "darkLogo": "https://a.espncdn.com/i/teamlogos/nfl/500-dark/scoreboard/ten.png",
+            "needs": [
+                {
+                    "positionId": "264",
+                    "met": false
+                },
+                {
+                    "positionId": "1",
+                    "met": false
+                },
+                {
+                    "positionId": "47",
+                    "met": false
+                },
+                {
+                    "positionId": "9",
+                    "met": false
+                },
+                {
+                    "positionId": "30",
+                    "met": false
+                }
+            ],
+            "nextpick": 4,
+            "link": "https://www.espn.com/nfl/draft/teams/_/name/ten/tennessee-titans",
+            "record": {
+                "season": 2025,
+                "summary": "3-14",
+                "standing": "4th in AFC South"
+            }
+        },
+        {
+            "id": "28",
+            "uid": "s:20~l:28~t:28",
+            "location": "Washington",
+            "name": "Commanders",
+            "nickname": "Commanders",
+            "abbreviation": "WSH",
+            "displayName": "Washington Commanders",
+            "shortDisplayName": "Commanders",
+            "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/scoreboard/wsh.png",
+            "darkLogo": "https://a.espncdn.com/i/teamlogos/nfl/500-dark/scoreboard/wsh.png",
+            "needs": [
+                {
+                    "positionId": "1",
+                    "met": false
+                },
+                {
+                    "positionId": "29",
+                    "met": false
+                },
+                {
+                    "positionId": "91",
+                    "met": false
+                },
+                {
+                    "positionId": "9",
+                    "met": false
+                },
+                {
+                    "positionId": "36",
+                    "met": false
+                }
+            ],
+            "nextpick": 7,
+            "link": "https://www.espn.com/nfl/draft/teams/_/name/wsh/washington-commanders",
+            "record": {
+                "season": 2025,
+                "summary": "5-12",
+                "standing": "3rd in NFC East"
+            }
+        }
+    ],
+    "current": {
+        "pickId": 2,
+        "bestAvailablePicks": [
+            {
+                "id": "110756",
+                "displayName": "Arvell Reese",
+                "displayWeight": "241 lbs",
+                "displayHeight": "6'4\"",
+                "position": {
+                    "id": "30"
+                },
+                "team": {
+                    "location": "Ohio State",
+                    "name": "Buckeyes",
+                    "abbreviation": "OSU",
+                    "shortDisplayName": "Ohio State"
+                },
+                "attributes": [
+                    {
+                        "name": "rank",
+                        "displayName": "Rank",
+                        "abbreviation": "POS RK",
+                        "displayValue": "1"
+                    },
+                    {
+                        "name": "overall",
+                        "displayName": "Overall",
+                        "abbreviation": "OVR RK",
+                        "displayValue": "1"
+                    },
+                    {
+                        "name": "grade",
+                        "displayName": "Grade",
+                        "abbreviation": "GRADE",
+                        "displayValue": "92"
+                    }
+                ],
+                "guid": "1fee5fb1-9510-305d-abe2-a522d3ba5ccb",
+                "alternativeId": "4950400",
+                "headshot": {
+                    "href": "https://a.espncdn.com/i/headshots/college-football/players/full/4950400.png"
+                },
+                "link": "https://www.espn.com/college-football/player/_/id/4950400/arvell-reese"
+            },
+            {
+                "id": "109531",
+                "displayName": "David Bailey",
+                "displayWeight": "251 lbs",
+                "displayHeight": "6'4\"",
+                "position": {
+                    "id": "264"
+                },
+                "team": {
+                    "location": "Texas Tech",
+                    "name": "Red Raiders",
+                    "abbreviation": "TTU",
+                    "shortDisplayName": "Texas Tech"
+                },
+                "attributes": [
+                    {
+                        "name": "rank",
+                        "displayName": "Rank",
+                        "abbreviation": "POS RK",
+                        "displayValue": "1"
+                    },
+                    {
+                        "name": "overall",
+                        "displayName": "Overall",
+                        "abbreviation": "OVR RK",
+                        "displayValue": "3"
+                    },
+                    {
+                        "name": "grade",
+                        "displayName": "Grade",
+                        "abbreviation": "GRADE",
+                        "displayValue": "92"
+                    }
+                ],
+                "guid": "e2c3077d-b7fd-3f28-b734-c46f5c97855f",
+                "alternativeId": "4685248",
+                "headshot": {
+                    "href": "https://a.espncdn.com/i/headshots/college-football/players/full/4685248.png"
+                },
+                "link": "https://www.espn.com/college-football/player/_/id/4685248/david-bailey"
+            },
+            {
+                "id": "110732",
+                "displayName": "Jeremiyah Love",
+                "displayWeight": "212 lbs",
+                "displayHeight": "6'0\"",
+                "position": {
+                    "id": "9"
+                },
+                "team": {
+                    "location": "Notre Dame",
+                    "name": "Fighting Irish",
+                    "abbreviation": "ND",
+                    "shortDisplayName": "Notre Dame"
+                },
+                "attributes": [
+                    {
+                        "name": "rank",
+                        "displayName": "Rank",
+                        "abbreviation": "POS RK",
+                        "displayValue": "1"
+                    },
+                    {
+                        "name": "overall",
+                        "displayName": "Overall",
+                        "abbreviation": "OVR RK",
+                        "displayValue": "4"
+                    },
+                    {
+                        "name": "grade",
+                        "displayName": "Grade",
+                        "abbreviation": "GRADE",
+                        "displayValue": "91"
+                    }
+                ],
+                "guid": "56491a70-2fa6-3f66-9731-4167ecbeb252",
+                "alternativeId": "4870808",
+                "headshot": {
+                    "href": "https://a.espncdn.com/i/headshots/college-football/players/full/4870808.png"
+                },
+                "link": "https://www.espn.com/college-football/player/_/id/4870808/jeremiyah-love"
+            },
+            {
+                "id": "110734",
+                "displayName": "Francis Mauigoa",
+                "displayWeight": "329 lbs",
+                "displayHeight": "6'6\"",
+                "position": {
+                    "id": "46"
+                },
+                "team": {
+                    "location": "Miami",
+                    "name": "Hurricanes",
+                    "abbreviation": "MIA",
+                    "shortDisplayName": "Miami"
+                },
+                "attributes": [
+                    {
+                        "name": "rank",
+                        "displayName": "Rank",
+                        "abbreviation": "POS RK",
+                        "displayValue": "1"
+                    },
+                    {
+                        "name": "overall",
+                        "displayName": "Overall",
+                        "abbreviation": "OVR RK",
+                        "displayValue": "5"
+                    },
+                    {
+                        "name": "grade",
+                        "displayName": "Grade",
+                        "abbreviation": "GRADE",
+                        "displayValue": "91"
+                    }
+                ],
+                "guid": "da8b73dd-ac91-3476-871e-69f1e9a97a0b",
+                "alternativeId": "4870914",
+                "headshot": {
+                    "href": "https://a.espncdn.com/i/headshots/college-football/players/full/4870914.png"
+                },
+                "link": "https://www.espn.com/college-football/player/_/id/4870914/francis-mauigoa"
+            },
+            {
+                "id": "110717",
+                "displayName": "Caleb Downs",
+                "displayWeight": "206 lbs",
+                "displayHeight": "6'0\"",
+                "position": {
+                    "id": "36"
+                },
+                "team": {
+                    "location": "Ohio State",
+                    "name": "Buckeyes",
+                    "abbreviation": "OSU",
+                    "shortDisplayName": "Ohio State"
+                },
+                "attributes": [
+                    {
+                        "name": "rank",
+                        "displayName": "Rank",
+                        "abbreviation": "POS RK",
+                        "displayValue": "1"
+                    },
+                    {
+                        "name": "overall",
+                        "displayName": "Overall",
+                        "abbreviation": "OVR RK",
+                        "displayValue": "6"
+                    },
+                    {
+                        "name": "grade",
+                        "displayName": "Grade",
+                        "abbreviation": "GRADE",
+                        "displayValue": "91"
+                    }
+                ],
+                "guid": "12c8597c-e9ff-36ba-a51a-61c91d87abf7",
+                "alternativeId": "4870706",
+                "headshot": {
+                    "href": "https://a.espncdn.com/i/headshots/college-football/players/full/4870706.png"
+                },
+                "link": "https://www.espn.com/college-football/player/_/id/4870706/caleb-downs"
+            }
+        ],
+        "bestAvailable": {
+            "id": "110756",
+            "displayName": "Arvell Reese",
+            "displayWeight": "241 lbs",
+            "displayHeight": "6'4\"",
+            "position": {
+                "id": "30"
+            },
+            "team": {
+                "location": "Ohio State",
+                "name": "Buckeyes",
+                "abbreviation": "OSU",
+                "shortDisplayName": "Ohio State"
+            },
+            "attributes": [
+                {
+                    "name": "rank",
+                    "displayName": "Rank",
+                    "abbreviation": "POS RK",
+                    "displayValue": "1"
+                },
+                {
+                    "name": "overall",
+                    "displayName": "Overall",
+                    "abbreviation": "OVR RK",
+                    "displayValue": "1"
+                },
+                {
+                    "name": "grade",
+                    "displayName": "Grade",
+                    "abbreviation": "GRADE",
+                    "displayValue": "92"
+                }
+            ],
+            "guid": "1fee5fb1-9510-305d-abe2-a522d3ba5ccb",
+            "alternativeId": "4950400",
+            "headshot": {
+                "href": "https://a.espncdn.com/i/headshots/college-football/players/full/4950400.png"
+            },
+            "link": "https://www.espn.com/college-football/player/_/id/4950400/arvell-reese"
+        },
+        "bestFit": {
+            "id": "109531",
+            "displayName": "David Bailey",
+            "displayWeight": "251 lbs",
+            "displayHeight": "6'4\"",
+            "position": {
+                "id": "264"
+            },
+            "team": {
+                "location": "Texas Tech",
+                "name": "Red Raiders",
+                "abbreviation": "TTU",
+                "shortDisplayName": "Texas Tech"
+            },
+            "attributes": [
+                {
+                    "name": "rank",
+                    "displayName": "Rank",
+                    "abbreviation": "POS RK",
+                    "displayValue": "1"
+                },
+                {
+                    "name": "overall",
+                    "displayName": "Overall",
+                    "abbreviation": "OVR RK",
+                    "displayValue": "3"
+                },
+                {
+                    "name": "grade",
+                    "displayName": "Grade",
+                    "abbreviation": "GRADE",
+                    "displayValue": "92"
+                }
+            ],
+            "guid": "e2c3077d-b7fd-3f28-b734-c46f5c97855f",
+            "alternativeId": "4685248",
+            "headshot": {
+                "href": "https://a.espncdn.com/i/headshots/college-football/players/full/4685248.png"
+            },
+            "link": "https://www.espn.com/college-football/player/_/id/4685248/david-bailey"
+        }
+    },
+    "prev": 1,
+    "next": 3,
+    "breakingNews": [
+        {
+            "id": "a73a2561d82b5",
+            "type": "shortstop",
+            "ids": {
+                "now": "21-41131416"
+            },
+            "dates": {
+                "created": "2026-04-23T23:24:39.161Z",
+                "modified": "2026-04-23T23:24:39.161Z",
+                "processed": "2026-04-23T23:33:30.133Z"
+            },
+            "descriptions": {
+                "headline": "NFL commissioner Roger Goodell said on a pre-draft interview with ESPN that the Mike Vrabel situation did not fall under the league’s personal conduct policy, and that it was a team matter.",
+                "title": "NFL commissioner Roger Goodell said on a pre-draft interview with ESPN that the Mike Vrabel situation did not fall under the league’s personal conduct policy, and that it was a team matter."
+            },
+            "indicators": {
+                "amp": false,
+                "automated": false,
+                "breaking": false,
+                "comments": false,
+                "enhanced": false,
+                "inherit": false,
+                "premium": false,
+                "reactions": false,
+                "searchable": false,
+                "syndicatable": false
+            },
+            "payload": "NFL commissioner Roger Goodell said on a pre-draft interview with ESPN that the Mike Vrabel situation did not fall under the league’s personal conduct policy, and that it was a team matter.",
+            "images": [
+                {
+                    "href": "http://a.espncdn.com/i/columnists/full/schefter_adam.png",
+                    "rels": [
+                        "headshot",
+                        "small"
+                    ],
+                    "attributes": {
+                        "type": {
+                            "type": "string",
+                            "value": "small"
+                        }
+                    }
+                }
+            ],
+            "contributors": [
+                {
+                    "id": "9c544a238b5f4",
+                    "type": "contributor",
+                    "ids": {
+                        "now": "1-4351074",
+                        "cms": "4351074",
+                        "alias": "schefter_adam",
+                        "slug": "adam-schefter",
+                        "guid": "9d87b78b-7e77-379a-93b0-fabb318139f1"
+                    },
+                    "dates": {
+                        "created": "2009-07-23T18:26:30Z",
+                        "modified": "2026-02-17T20:06:32Z",
+                        "processed": "2026-02-17T20:06:33Z"
+                    },
+                    "descriptions": {
+                        "headline": "Adam Schefter",
+                        "description": "Adam Schefter",
+                        "title": "Adam Schefter",
+                        "displayName": "Adam Schefter"
+                    },
+                    "images": [
+                        {
+                            "href": "http://a.espncdn.com/i/columnists/full/schefter_adam.png",
+                            "rels": [
+                                "headshot",
+                                "small"
+                            ],
+                            "attributes": {
+                                "type": {
+                                    "type": "string",
+                                    "value": "small"
+                                }
+                            }
+                        },
+                        {
+                            "href": "https://a.espncdn.com/redesign/assets/img/Contributor%20Headers/NFL.png",
+                            "rels": [
+                                "background"
+                            ]
+                        }
+                    ],
+                    "contributors": [],
+                    "categories": [
+                        {
+                            "id": "9d87b78b-7e77-379a-93b0-fabb318139f1",
+                            "type": "contributor",
+                            "description": "Adam Schefter",
+                            "links": [
+                                {
+                                    "rels": [
+                                        "web"
+                                    ],
+                                    "href": "https://www.espn.com/contributor/adam-schefter"
+                                }
+                            ],
+                            "images": [
+                                {
+                                    "href": "http://a.espncdn.com/i/columnists/full/schefter_adam.png",
+                                    "rels": [
+                                        "headshot"
+                                    ]
+                                },
+                                {
+                                    "href": "https://a.espncdn.com/redesign/assets/img/Contributor%20Headers/NFL.png",
+                                    "rels": [
+                                        "background"
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "id": "ad4c3bd2-ddb6-3f8c-8abf-744855a08fa4",
+                            "type": "league",
+                            "description": "NFL",
+                            "links": [
+                                {
+                                    "rels": [
+                                        "index",
+                                        "desktop",
+                                        "league"
+                                    ],
+                                    "href": "https://www.espn.com/nfl/"
+                                }
+                            ],
+                            "images": [
+                                {
+                                    "href": "https://a.espncdn.com/i/teamlogos/leagues/500/nfl.png",
+                                    "width": 500,
+                                    "height": 500,
+                                    "rels": [
+                                        "full",
+                                        "default"
+                                    ]
+                                },
+                                {
+                                    "href": "https://a.espncdn.com/i/teamlogos/leagues/500-dark/nfl.png",
+                                    "width": 500,
+                                    "height": 500,
+                                    "rels": [
+                                        "full",
+                                        "dark"
+                                    ]
+                                }
+                            ]
+                        }
+                    ],
+                    "attributes": {
+                        "isFavoritable": {
+                            "type": "bool",
+                            "value": "true"
+                        },
+                        "seoSlug": {
+                            "type": "string",
+                            "value": "adam-schefter"
+                        },
+                        "shareImageUrl": {
+                            "type": "string",
+                            "value": "https://a.espncdn.com/combiner/i?img=/i/columnists/share/adam_schefter_share.png"
+                        },
+                        "twitterUserName": {
+                            "type": "string",
+                            "value": "adamschefter"
+                        },
+                        "root": {
+                            "type": "string",
+                            "value": "gen"
+                        },
+                        "allowSearch": {
+                            "type": "bool",
+                            "value": "false"
+                        },
+                        "section": {
+                            "type": "translated",
+                            "value": "ESPN"
+                        },
+                        "biography": {
+                            "type": "string",
+                            "value": "<li> ESPN NFL Insider</li>\n<li> Joined ESPN in 2009</li>\n<li> Former president of the Pro Football Writers of America and the author of four books</li>\n"
+                        },
+                        "ArchiveURL": {
+                            "type": "string",
+                            "value": "http://search.espn.com/adam-schefter/"
+                        },
+                        "allowContentReactions": {
+                            "type": "bool",
+                            "value": "false"
+                        },
+                        "slug": {
+                            "type": "string",
+                            "value": "adam-schefter"
+                        },
+                        "coverageArea": {
+                            "type": "string",
+                            "value": "Senior NFL Insider"
+                        }
+                    },
+                    "restrictions": [],
+                    "inlines": [
+                        {
+                            "id": "ba8c34a9b0905",
+                            "type": "navlink",
+                            "ids": {
+                                "now": "1-41947005",
+                                "cms": "41947005",
+                                "alias": "41947005"
+                            },
+                            "dates": {
+                                "created": "2024-10-22T20:36:41Z",
+                                "modified": "2024-12-03T19:09:27Z",
+                                "processed": "2025-12-05T03:12:18.517Z"
+                            },
+                            "descriptions": {
+                                "headline": "Podcast",
+                                "description": "Adam Schefter - Podcast"
+                            },
+                            "indicators": {
+                                "amp": false,
+                                "automated": false,
+                                "breaking": false,
+                                "comments": false,
+                                "enhanced": false,
+                                "inherit": false,
+                                "premium": false,
+                                "reactions": false,
+                                "searchable": false,
+                                "syndicatable": false
+                            },
+                            "payload": "Podcast",
+                            "images": [
+                                {
+                                    "id": "4bdd7153a5264",
+                                    "type": "image",
+                                    "ids": {
+                                        "cms": "41946982",
+                                        "alias": "41946982"
+                                    },
+                                    "descriptions": {
+                                        "description": "Contributor Link - Podcast"
+                                    },
+                                    "href": "https://a.espncdn.com/icons/contributors/icon_podcast.svg",
+                                    "rels": [
+                                        "leftnav"
+                                    ]
+                                }
+                            ],
+                            "contributors": [],
+                            "categories": [],
+                            "attributes": {
+                                "root": {
+                                    "type": "string",
+                                    "value": "gen"
+                                },
+                                "section": {
+                                    "type": "translated",
+                                    "value": "ESPN"
+                                }
+                            },
+                            "restrictions": [],
+                            "locales": [
+                                "en-US"
+                            ],
+                            "links": [
+                                {
+                                    "rels": [
+                                        "web"
+                                    ],
+                                    "href": "https://open.spotify.com/show/42oVKqEPuf4kFZrXCO7Oh9?si=O1I6pHOYRh2FwJ1R0WbMSQ&nd=1&dlsi=caa870d0300e444f"
+                                },
+                                {
+                                    "rels": [
+                                        "api",
+                                        "news",
+                                        "dsi"
+                                    ],
+                                    "href": "https://content.core.api.espn.com/v2/contents/ba8c34a9b0905"
+                                },
+                                {
+                                    "rels": [
+                                        "api",
+                                        "self",
+                                        "dsi"
+                                    ],
+                                    "href": "https://content.core.api.espn.com/v2/contents/ba8c34a9b0905"
+                                },
+                                {
+                                    "rels": [
+                                        "api",
+                                        "self"
+                                    ],
+                                    "href": "https://content.core.api.espn.com/v2/contents/ba8c34a9b0905"
+                                }
+                            ]
+                        }
+                    ],
+                    "locales": [
+                        "en-US"
+                    ],
+                    "links": [
+                        {
+                            "rels": [
+                                "web"
+                            ],
+                            "href": "https://www.espn.com/contributor/adam-schefter",
+                            "locale": "en-US"
+                        },
+                        {
+                            "rels": [
+                                "api",
+                                "news",
+                                "dsi"
+                            ],
+                            "href": "https://content.core.api.espn.com/v2/contents/9c544a238b5f4"
+                        },
+                        {
+                            "rels": [
+                                "api",
+                                "self",
+                                "dsi"
+                            ],
+                            "href": "https://content.core.api.espn.com/v2/contents/9c544a238b5f4"
+                        },
+                        {
+                            "rels": [
+                                "api",
+                                "self"
+                            ],
+                            "href": "https://content.core.api.espn.com/v2/contents/9c544a238b5f4"
+                        }
+                    ]
+                }
+            ],
+            "categories": [
+                {
+                    "id": "9d87b78b-7e77-379a-93b0-fabb318139f1",
+                    "type": "contributor",
+                    "description": "Adam Schefter",
+                    "links": [
+                        {
+                            "rels": [
+                                "web"
+                            ],
+                            "href": "https://www.espn.com/contributor/adam-schefter"
+                        }
+                    ],
+                    "images": [
+                        {
+                            "href": "http://a.espncdn.com/i/columnists/full/schefter_adam.png",
+                            "rels": [
+                                "headshot"
+                            ]
+                        },
+                        {
+                            "href": "https://a.espncdn.com/redesign/assets/img/Contributor%20Headers/NFL.png",
+                            "rels": [
+                                "background"
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "id": "ad4c3bd2-ddb6-3f8c-8abf-744855a08fa4",
+                    "type": "league",
+                    "description": "NFL",
+                    "links": [
+                        {
+                            "rels": [
+                                "index",
+                                "desktop",
+                                "league"
+                            ],
+                            "href": "https://www.espn.com/nfl/"
+                        }
+                    ],
+                    "images": [
+                        {
+                            "href": "https://a.espncdn.com/i/teamlogos/leagues/500/nfl.png",
+                            "width": 500,
+                            "height": 500,
+                            "rels": [
+                                "full",
+                                "default"
+                            ]
+                        },
+                        {
+                            "href": "https://a.espncdn.com/i/teamlogos/leagues/500-dark/nfl.png",
+                            "width": 500,
+                            "height": 500,
+                            "rels": [
+                                "full",
+                                "dark"
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "id": "ffd795dd-dc60-d4c3-f868-831dc2ec21b3",
+                    "type": "topic",
+                    "description": "News - NFL"
+                },
+                {
+                    "id": "c79c4258-c3c7-b1d5-9e1a-fec51e1c06ed",
+                    "type": "topic",
+                    "description": "Now - Front Page"
+                },
+                {
+                    "id": "cc170a5e-f418-8d76-09d2-036c5f0a3521",
+                    "type": "topic",
+                    "description": "Now - NFL Index"
+                },
+                {
+                    "id": "0078f353-fe3e-67ed-a42c-43cca0568e21",
+                    "type": "team",
+                    "description": "New England Patriots",
+                    "links": [
+                        {
+                            "rels": [
+                                "clubhouse",
+                                "desktop",
+                                "team"
+                            ],
+                            "href": "https://www.espn.com/nfl/team/_/name/ne/new-england-patriots"
+                        }
+                    ],
+                    "images": [
+                        {
+                            "href": "https://a.espncdn.com/i/teamlogos/nfl/500/ne.png",
+                            "width": 500,
+                            "height": 500,
+                            "rels": [
+                                "full",
+                                "default"
+                            ]
+                        },
+                        {
+                            "href": "https://a.espncdn.com/i/teamlogos/nfl/500-dark/ne.png",
+                            "width": 500,
+                            "height": 500,
+                            "rels": [
+                                "full",
+                                "dark"
+                            ]
+                        },
+                        {
+                            "href": "https://a.espncdn.com/i/teamlogos/nfl/500/scoreboard/ne.png",
+                            "width": 500,
+                            "height": 500,
+                            "rels": [
+                                "full",
+                                "scoreboard"
+                            ]
+                        },
+                        {
+                            "href": "https://a.espncdn.com/i/teamlogos/nfl/500-dark/scoreboard/ne.png",
+                            "width": 500,
+                            "height": 500,
+                            "rels": [
+                                "full",
+                                "scoreboard",
+                                "dark"
+                            ]
+                        },
+                        {
+                            "href": "https://a.espncdn.com/guid/0078f353-fe3e-67ed-a42c-43cca0568e21/logos/grayscale.png",
+                            "width": 500,
+                            "height": 500,
+                            "rels": [
+                                "full",
+                                "grayscale"
+                            ]
+                        },
+                        {
+                            "href": "https://a.espncdn.com/guid/0078f353-fe3e-67ed-a42c-43cca0568e21/logos/primary_logo_on_white_color.png",
+                            "width": 4096,
+                            "height": 4096,
+                            "rels": [
+                                "full",
+                                "primary_logo_on_white_color"
+                            ]
+                        },
+                        {
+                            "href": "https://a.espncdn.com/guid/0078f353-fe3e-67ed-a42c-43cca0568e21/logos/primary_logo_on_black_color.png",
+                            "width": 4096,
+                            "height": 4096,
+                            "rels": [
+                                "full",
+                                "primary_logo_on_black_color"
+                            ]
+                        },
+                        {
+                            "href": "https://a.espncdn.com/guid/0078f353-fe3e-67ed-a42c-43cca0568e21/logos/primary_logo_on_primary_color.png",
+                            "width": 4096,
+                            "height": 4096,
+                            "rels": [
+                                "full",
+                                "primary_logo_on_primary_color"
+                            ]
+                        },
+                        {
+                            "href": "https://a.espncdn.com/guid/0078f353-fe3e-67ed-a42c-43cca0568e21/logos/primary_logo_on_secondary_color.png",
+                            "width": 4096,
+                            "height": 4096,
+                            "rels": [
+                                "full",
+                                "primary_logo_on_secondary_color"
+                            ]
+                        },
+                        {
+                            "href": "https://a.espncdn.com/guid/0078f353-fe3e-67ed-a42c-43cca0568e21/logos/primary_logo_black.png",
+                            "width": 4096,
+                            "height": 4096,
+                            "rels": [
+                                "full",
+                                "primary_logo_black"
+                            ]
+                        },
+                        {
+                            "href": "https://a.espncdn.com/guid/0078f353-fe3e-67ed-a42c-43cca0568e21/logos/primary_logo_white.png",
+                            "width": 4096,
+                            "height": 4096,
+                            "rels": [
+                                "full",
+                                "primary_logo_white"
+                            ]
+                        },
+                        {
+                            "href": "https://a.espncdn.com/guid/0078f353-fe3e-67ed-a42c-43cca0568e21/logos/secondary_logo_on_white_color.png",
+                            "width": 4096,
+                            "height": 4096,
+                            "rels": [
+                                "full",
+                                "secondary_logo_on_white_color"
+                            ]
+                        },
+                        {
+                            "href": "https://a.espncdn.com/guid/0078f353-fe3e-67ed-a42c-43cca0568e21/logos/secondary_logo_on_black_color.png",
+                            "width": 4096,
+                            "height": 4096,
+                            "rels": [
+                                "full",
+                                "secondary_logo_on_black_color"
+                            ]
+                        },
+                        {
+                            "href": "https://a.espncdn.com/guid/0078f353-fe3e-67ed-a42c-43cca0568e21/logos/secondary_logo_on_primary_color.png",
+                            "width": 4096,
+                            "height": 4096,
+                            "rels": [
+                                "full",
+                                "secondary_logo_on_primary_color"
+                            ]
+                        },
+                        {
+                            "href": "https://a.espncdn.com/guid/0078f353-fe3e-67ed-a42c-43cca0568e21/logos/secondary_logo_on_secondary_color.png",
+                            "width": 4096,
+                            "height": 4096,
+                            "rels": [
+                                "full",
+                                "secondary_logo_on_secondary_color"
+                            ]
+                        },
+                        {
+                            "href": "https://a.espncdn.com/guid/0078f353-fe3e-67ed-a42c-43cca0568e21/logos/secondary_logo_black.png",
+                            "width": 4096,
+                            "height": 4096,
+                            "rels": [
+                                "full",
+                                "secondary_logo_black"
+                            ]
+                        },
+                        {
+                            "href": "https://a.espncdn.com/guid/0078f353-fe3e-67ed-a42c-43cca0568e21/logos/secondary_logo_white.png",
+                            "width": 4096,
+                            "height": 4096,
+                            "rels": [
+                                "full",
+                                "secondary_logo_white"
+                            ]
+                        }
+                    ]
+                }
+            ],
+            "attributes": {
+                "byline": {
+                    "type": "string",
+                    "value": "Adam Schefter"
+                }
+            },
+            "locales": [
+                "en-US"
+            ],
+            "links": [
+                {
+                    "rels": [
+                        "web"
+                    ],
+                    "href": "https://www.espn.com/contributor/adam-schefter/a73a2561d82b5",
+                    "locale": "en-US"
+                },
+                {
+                    "rels": [
+                        "mobile"
+                    ],
+                    "href": "https://www.espn.com/contributor/adam-schefter/a73a2561d82b5",
+                    "locale": "en-US"
+                },
+                {
+                    "rels": [
+                        "api",
+                        "news",
+                        "dsi"
+                    ],
+                    "href": "https://content.core.api.espn.com/v2/contents/a73a2561d82b5"
+                },
+                {
+                    "rels": [
+                        "api",
+                        "self",
+                        "dsi"
+                    ],
+                    "href": "https://content.core.api.espn.com/v2/contents/a73a2561d82b5"
+                },
+                {
+                    "rels": [
+                        "api",
+                        "self"
+                    ],
+                    "href": "https://content.core.api.espn.com/v2/contents/a73a2561d82b5"
+                }
+            ]
+        },
+        {
+            "id": "f0e21aee804a9",
+            "type": "shortstop",
+            "ids": {
+                "now": "21-41131414"
+            },
+            "dates": {
+                "created": "2026-04-23T21:56:31.525Z",
+                "modified": "2026-04-23T21:56:31.525Z",
+                "processed": "2026-04-23T21:57:42.745Z"
+            },
+            "descriptions": {
+                "headline": "George Pickens is signing his franchise tag.",
+                "title": "George Pickens is signing his franchise tag."
+            },
+            "indicators": {
+                "amp": false,
+                "automated": false,
+                "breaking": false,
+                "comments": false,
+                "enhanced": false,
+                "inherit": false,
+                "premium": false,
+                "reactions": true,
+                "searchable": false,
+                "syndicatable": false
+            },
+            "payload": "George Pickens is signing his franchise tag.",
+            "images": [
+                {
+                    "href": "http://a.espncdn.com/i/columnists/full/schefter_adam.png",
+                    "rels": [
+                        "headshot",
+                        "small"
+                    ],
+                    "attributes": {
+                        "type": {
+                            "type": "string",
+                            "value": "small"
+                        }
+                    }
+                }
+            ],
+            "contributors": [
+                {
+                    "id": "9c544a238b5f4",
+                    "type": "contributor",
+                    "ids": {
+                        "now": "1-4351074",
+                        "cms": "4351074",
+                        "alias": "schefter_adam",
+                        "slug": "adam-schefter",
+                        "guid": "9d87b78b-7e77-379a-93b0-fabb318139f1"
+                    },
+                    "dates": {
+                        "created": "2009-07-23T18:26:30Z",
+                        "modified": "2026-02-17T20:06:32Z",
+                        "processed": "2026-02-17T20:06:33Z"
+                    },
+                    "descriptions": {
+                        "headline": "Adam Schefter",
+                        "description": "Adam Schefter",
+                        "title": "Adam Schefter",
+                        "displayName": "Adam Schefter"
+                    },
+                    "images": [
+                        {
+                            "href": "http://a.espncdn.com/i/columnists/full/schefter_adam.png",
+                            "rels": [
+                                "headshot",
+                                "small"
+                            ],
+                            "attributes": {
+                                "type": {
+                                    "type": "string",
+                                    "value": "small"
+                                }
+                            }
+                        },
+                        {
+                            "href": "https://a.espncdn.com/redesign/assets/img/Contributor%20Headers/NFL.png",
+                            "rels": [
+                                "background"
+                            ]
+                        }
+                    ],
+                    "contributors": [],
+                    "categories": [
+                        {
+                            "id": "9d87b78b-7e77-379a-93b0-fabb318139f1",
+                            "type": "contributor",
+                            "description": "Adam Schefter",
+                            "links": [
+                                {
+                                    "rels": [
+                                        "web"
+                                    ],
+                                    "href": "https://www.espn.com/contributor/adam-schefter"
+                                }
+                            ],
+                            "images": [
+                                {
+                                    "href": "http://a.espncdn.com/i/columnists/full/schefter_adam.png",
+                                    "rels": [
+                                        "headshot"
+                                    ]
+                                },
+                                {
+                                    "href": "https://a.espncdn.com/redesign/assets/img/Contributor%20Headers/NFL.png",
+                                    "rels": [
+                                        "background"
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "id": "ad4c3bd2-ddb6-3f8c-8abf-744855a08fa4",
+                            "type": "league",
+                            "description": "NFL",
+                            "links": [
+                                {
+                                    "rels": [
+                                        "index",
+                                        "desktop",
+                                        "league"
+                                    ],
+                                    "href": "https://www.espn.com/nfl/"
+                                }
+                            ],
+                            "images": [
+                                {
+                                    "href": "https://a.espncdn.com/i/teamlogos/leagues/500/nfl.png",
+                                    "width": 500,
+                                    "height": 500,
+                                    "rels": [
+                                        "full",
+                                        "default"
+                                    ]
+                                },
+                                {
+                                    "href": "https://a.espncdn.com/i/teamlogos/leagues/500-dark/nfl.png",
+                                    "width": 500,
+                                    "height": 500,
+                                    "rels": [
+                                        "full",
+                                        "dark"
+                                    ]
+                                }
+                            ]
+                        }
+                    ],
+                    "attributes": {
+                        "isFavoritable": {
+                            "type": "bool",
+                            "value": "true"
+                        },
+                        "seoSlug": {
+                            "type": "string",
+                            "value": "adam-schefter"
+                        },
+                        "shareImageUrl": {
+                            "type": "string",
+                            "value": "https://a.espncdn.com/combiner/i?img=/i/columnists/share/adam_schefter_share.png"
+                        },
+                        "twitterUserName": {
+                            "type": "string",
+                            "value": "adamschefter"
+                        },
+                        "root": {
+                            "type": "string",
+                            "value": "gen"
+                        },
+                        "allowSearch": {
+                            "type": "bool",
+                            "value": "false"
+                        },
+                        "section": {
+                            "type": "translated",
+                            "value": "ESPN"
+                        },
+                        "biography": {
+                            "type": "string",
+                            "value": "<li> ESPN NFL Insider</li>\n<li> Joined ESPN in 2009</li>\n<li> Former president of the Pro Football Writers of America and the author of four books</li>\n"
+                        },
+                        "ArchiveURL": {
+                            "type": "string",
+                            "value": "http://search.espn.com/adam-schefter/"
+                        },
+                        "allowContentReactions": {
+                            "type": "bool",
+                            "value": "false"
+                        },
+                        "slug": {
+                            "type": "string",
+                            "value": "adam-schefter"
+                        },
+                        "coverageArea": {
+                            "type": "string",
+                            "value": "Senior NFL Insider"
+                        }
+                    },
+                    "restrictions": [],
+                    "inlines": [
+                        {
+                            "id": "ba8c34a9b0905",
+                            "type": "navlink",
+                            "ids": {
+                                "now": "1-41947005",
+                                "cms": "41947005",
+                                "alias": "41947005"
+                            },
+                            "dates": {
+                                "created": "2024-10-22T20:36:41Z",
+                                "modified": "2024-12-03T19:09:27Z",
+                                "processed": "2025-12-05T03:12:18.517Z"
+                            },
+                            "descriptions": {
+                                "headline": "Podcast",
+                                "description": "Adam Schefter - Podcast"
+                            },
+                            "indicators": {
+                                "amp": false,
+                                "automated": false,
+                                "breaking": false,
+                                "comments": false,
+                                "enhanced": false,
+                                "inherit": false,
+                                "premium": false,
+                                "reactions": false,
+                                "searchable": false,
+                                "syndicatable": false
+                            },
+                            "payload": "Podcast",
+                            "images": [
+                                {
+                                    "id": "4bdd7153a5264",
+                                    "type": "image",
+                                    "ids": {
+                                        "cms": "41946982",
+                                        "alias": "41946982"
+                                    },
+                                    "descriptions": {
+                                        "description": "Contributor Link - Podcast"
+                                    },
+                                    "href": "https://a.espncdn.com/icons/contributors/icon_podcast.svg",
+                                    "rels": [
+                                        "leftnav"
+                                    ]
+                                }
+                            ],
+                            "contributors": [],
+                            "categories": [],
+                            "attributes": {
+                                "root": {
+                                    "type": "string",
+                                    "value": "gen"
+                                },
+                                "section": {
+                                    "type": "translated",
+                                    "value": "ESPN"
+                                }
+                            },
+                            "restrictions": [],
+                            "locales": [
+                                "en-US"
+                            ],
+                            "links": [
+                                {
+                                    "rels": [
+                                        "web"
+                                    ],
+                                    "href": "https://open.spotify.com/show/42oVKqEPuf4kFZrXCO7Oh9?si=O1I6pHOYRh2FwJ1R0WbMSQ&nd=1&dlsi=caa870d0300e444f"
+                                },
+                                {
+                                    "rels": [
+                                        "api",
+                                        "news",
+                                        "dsi"
+                                    ],
+                                    "href": "https://content.core.api.espn.com/v2/contents/ba8c34a9b0905"
+                                },
+                                {
+                                    "rels": [
+                                        "api",
+                                        "self",
+                                        "dsi"
+                                    ],
+                                    "href": "https://content.core.api.espn.com/v2/contents/ba8c34a9b0905"
+                                },
+                                {
+                                    "rels": [
+                                        "api",
+                                        "self"
+                                    ],
+                                    "href": "https://content.core.api.espn.com/v2/contents/ba8c34a9b0905"
+                                }
+                            ]
+                        }
+                    ],
+                    "locales": [
+                        "en-US"
+                    ],
+                    "links": [
+                        {
+                            "rels": [
+                                "web"
+                            ],
+                            "href": "https://www.espn.com/contributor/adam-schefter",
+                            "locale": "en-US"
+                        },
+                        {
+                            "rels": [
+                                "api",
+                                "news",
+                                "dsi"
+                            ],
+                            "href": "https://content.core.api.espn.com/v2/contents/9c544a238b5f4"
+                        },
+                        {
+                            "rels": [
+                                "api",
+                                "self",
+                                "dsi"
+                            ],
+                            "href": "https://content.core.api.espn.com/v2/contents/9c544a238b5f4"
+                        },
+                        {
+                            "rels": [
+                                "api",
+                                "self"
+                            ],
+                            "href": "https://content.core.api.espn.com/v2/contents/9c544a238b5f4"
+                        }
+                    ]
+                }
+            ],
+            "categories": [
+                {
+                    "id": "9d87b78b-7e77-379a-93b0-fabb318139f1",
+                    "type": "contributor",
+                    "description": "Adam Schefter",
+                    "links": [
+                        {
+                            "rels": [
+                                "web"
+                            ],
+                            "href": "https://www.espn.com/contributor/adam-schefter"
+                        }
+                    ],
+                    "images": [
+                        {
+                            "href": "http://a.espncdn.com/i/columnists/full/schefter_adam.png",
+                            "rels": [
+                                "headshot"
+                            ]
+                        },
+                        {
+                            "href": "https://a.espncdn.com/redesign/assets/img/Contributor%20Headers/NFL.png",
+                            "rels": [
+                                "background"
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "id": "ad4c3bd2-ddb6-3f8c-8abf-744855a08fa4",
+                    "type": "league",
+                    "description": "NFL",
+                    "links": [
+                        {
+                            "rels": [
+                                "index",
+                                "desktop",
+                                "league"
+                            ],
+                            "href": "https://www.espn.com/nfl/"
+                        }
+                    ],
+                    "images": [
+                        {
+                            "href": "https://a.espncdn.com/i/teamlogos/leagues/500/nfl.png",
+                            "width": 500,
+                            "height": 500,
+                            "rels": [
+                                "full",
+                                "default"
+                            ]
+                        },
+                        {
+                            "href": "https://a.espncdn.com/i/teamlogos/leagues/500-dark/nfl.png",
+                            "width": 500,
+                            "height": 500,
+                            "rels": [
+                                "full",
+                                "dark"
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "id": "ffd795dd-dc60-d4c3-f868-831dc2ec21b3",
+                    "type": "topic",
+                    "description": "News - NFL"
+                },
+                {
+                    "id": "c79c4258-c3c7-b1d5-9e1a-fec51e1c06ed",
+                    "type": "topic",
+                    "description": "Now - Front Page"
+                },
+                {
+                    "id": "cc170a5e-f418-8d76-09d2-036c5f0a3521",
+                    "type": "topic",
+                    "description": "Now - NFL Index"
+                },
+                {
+                    "id": "ab0fe70b-0fb4-fc8e-55e1-8f5204851a9d",
+                    "type": "player",
+                    "description": "George Pickens",
+                    "links": [
+                        {
+                            "rels": [
+                                "playercard",
+                                "desktop",
+                                "athlete"
+                            ],
+                            "href": "https://www.espn.com/nfl/player/_/id/4426354/george-pickens"
+                        }
+                    ],
+                    "images": [
+                        {
+                            "href": "https://a.espncdn.com/i/headshots/nfl/players/full/4426354.png"
+                        }
+                    ]
+                },
+                {
+                    "id": "b0fc8fb7-9dbe-e574-9008-6f0ee7c6b234",
+                    "type": "team",
+                    "description": "Dallas Cowboys",
+                    "links": [
+                        {
+                            "rels": [
+                                "clubhouse",
+                                "desktop",
+                                "team"
+                            ],
+                            "href": "https://www.espn.com/nfl/team/_/name/dal/dallas-cowboys"
+                        }
+                    ],
+                    "images": [
+                        {
+                            "href": "https://a.espncdn.com/i/teamlogos/nfl/500/dal.png",
+                            "width": 500,
+                            "height": 500,
+                            "rels": [
+                                "full",
+                                "default"
+                            ]
+                        },
+                        {
+                            "href": "https://a.espncdn.com/i/teamlogos/nfl/500-dark/dal.png",
+                            "width": 500,
+                            "height": 500,
+                            "rels": [
+                                "full",
+                                "dark"
+                            ]
+                        },
+                        {
+                            "href": "https://a.espncdn.com/i/teamlogos/nfl/500/scoreboard/dal.png",
+                            "width": 500,
+                            "height": 500,
+                            "rels": [
+                                "full",
+                                "scoreboard"
+                            ]
+                        },
+                        {
+                            "href": "https://a.espncdn.com/i/teamlogos/nfl/500-dark/scoreboard/dal.png",
+                            "width": 500,
+                            "height": 500,
+                            "rels": [
+                                "full",
+                                "scoreboard",
+                                "dark"
+                            ]
+                        },
+                        {
+                            "href": "https://a.espncdn.com/guid/b0fc8fb7-9dbe-e574-9008-6f0ee7c6b234/logos/grayscale.png",
+                            "width": 500,
+                            "height": 500,
+                            "rels": [
+                                "full",
+                                "grayscale"
+                            ]
+                        },
+                        {
+                            "href": "https://a.espncdn.com/guid/b0fc8fb7-9dbe-e574-9008-6f0ee7c6b234/logos/primary_logo_on_white_color.png",
+                            "width": 4096,
+                            "height": 4096,
+                            "rels": [
+                                "full",
+                                "primary_logo_on_white_color"
+                            ]
+                        },
+                        {
+                            "href": "https://a.espncdn.com/guid/b0fc8fb7-9dbe-e574-9008-6f0ee7c6b234/logos/primary_logo_on_black_color.png",
+                            "width": 4096,
+                            "height": 4096,
+                            "rels": [
+                                "full",
+                                "primary_logo_on_black_color"
+                            ]
+                        },
+                        {
+                            "href": "https://a.espncdn.com/guid/b0fc8fb7-9dbe-e574-9008-6f0ee7c6b234/logos/primary_logo_on_primary_color.png",
+                            "width": 4096,
+                            "height": 4096,
+                            "rels": [
+                                "full",
+                                "primary_logo_on_primary_color"
+                            ]
+                        },
+                        {
+                            "href": "https://a.espncdn.com/guid/b0fc8fb7-9dbe-e574-9008-6f0ee7c6b234/logos/primary_logo_on_secondary_color.png",
+                            "width": 4096,
+                            "height": 4096,
+                            "rels": [
+                                "full",
+                                "primary_logo_on_secondary_color"
+                            ]
+                        },
+                        {
+                            "href": "https://a.espncdn.com/guid/b0fc8fb7-9dbe-e574-9008-6f0ee7c6b234/logos/primary_logo_black.png",
+                            "width": 4096,
+                            "height": 4096,
+                            "rels": [
+                                "full",
+                                "primary_logo_black"
+                            ]
+                        },
+                        {
+                            "href": "https://a.espncdn.com/guid/b0fc8fb7-9dbe-e574-9008-6f0ee7c6b234/logos/primary_logo_white.png",
+                            "width": 4096,
+                            "height": 4096,
+                            "rels": [
+                                "full",
+                                "primary_logo_white"
+                            ]
+                        },
+                        {
+                            "href": "https://a.espncdn.com/guid/b0fc8fb7-9dbe-e574-9008-6f0ee7c6b234/logos/secondary_logo_on_white_color.png",
+                            "width": 4096,
+                            "height": 4096,
+                            "rels": [
+                                "full",
+                                "secondary_logo_on_white_color"
+                            ]
+                        },
+                        {
+                            "href": "https://a.espncdn.com/guid/b0fc8fb7-9dbe-e574-9008-6f0ee7c6b234/logos/secondary_logo_on_black_color.png",
+                            "width": 4096,
+                            "height": 4096,
+                            "rels": [
+                                "full",
+                                "secondary_logo_on_black_color"
+                            ]
+                        },
+                        {
+                            "href": "https://a.espncdn.com/guid/b0fc8fb7-9dbe-e574-9008-6f0ee7c6b234/logos/secondary_logo_on_primary_color.png",
+                            "width": 4096,
+                            "height": 4096,
+                            "rels": [
+                                "full",
+                                "secondary_logo_on_primary_color"
+                            ]
+                        },
+                        {
+                            "href": "https://a.espncdn.com/guid/b0fc8fb7-9dbe-e574-9008-6f0ee7c6b234/logos/secondary_logo_on_secondary_color.png",
+                            "width": 4096,
+                            "height": 4096,
+                            "rels": [
+                                "full",
+                                "secondary_logo_on_secondary_color"
+                            ]
+                        },
+                        {
+                            "href": "https://a.espncdn.com/guid/b0fc8fb7-9dbe-e574-9008-6f0ee7c6b234/logos/secondary_logo_black.png",
+                            "width": 4096,
+                            "height": 4096,
+                            "rels": [
+                                "full",
+                                "secondary_logo_black"
+                            ]
+                        },
+                        {
+                            "href": "https://a.espncdn.com/guid/b0fc8fb7-9dbe-e574-9008-6f0ee7c6b234/logos/secondary_logo_white.png",
+                            "width": 4096,
+                            "height": 4096,
+                            "rels": [
+                                "full",
+                                "secondary_logo_white"
+                            ]
+                        }
+                    ]
+                }
+            ],
+            "attributes": {
+                "byline": {
+                    "type": "string",
+                    "value": "Adam Schefter"
+                }
+            },
+            "locales": [
+                "en-US"
+            ],
+            "links": [
+                {
+                    "rels": [
+                        "web"
+                    ],
+                    "href": "https://www.espn.com/contributor/adam-schefter/f0e21aee804a9",
+                    "locale": "en-US"
+                },
+                {
+                    "rels": [
+                        "mobile"
+                    ],
+                    "href": "https://www.espn.com/contributor/adam-schefter/f0e21aee804a9",
+                    "locale": "en-US"
+                },
+                {
+                    "rels": [
+                        "api",
+                        "news",
+                        "dsi"
+                    ],
+                    "href": "https://content.core.api.espn.com/v2/contents/f0e21aee804a9"
+                },
+                {
+                    "rels": [
+                        "api",
+                        "self",
+                        "dsi"
+                    ],
+                    "href": "https://content.core.api.espn.com/v2/contents/f0e21aee804a9"
+                },
+                {
+                    "rels": [
+                        "api",
+                        "self"
+                    ],
+                    "href": "https://content.core.api.espn.com/v2/contents/f0e21aee804a9"
+                }
+            ]
+        }
+    ]
+}

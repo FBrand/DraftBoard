@@ -1,24 +1,41 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
+
+// ── Zone colour tokens ────────────────────────────────────────────────────
+const ZONE_STYLE = {
+    '53': { color: 'var(--text-main)', border: '1px solid rgba(255,183,0,0.6)', bg: 'var(--panel-bg)' },
+    ps: { color: 'var(--text-main)', border: '1px solid rgba(59,130,246,0.6)', bg: 'var(--panel-bg)' },
+    ir: { color: 'var(--text-main)', border: '1px solid rgba(239,68,68,0.5)', bg: 'var(--panel-bg)' },
+    r: { color: 'var(--text-main)', border: '1px solid rgba(171, 171, 171, 0.5)', bg: 'var(--panel-bg)' },
+    need: { border: '1px dashed rgba(255,183,0,0.8)', bg: 'rgba(255,183,0,0.03)' },
+    empty: { border: '1px dashed rgba(255,255,255,0.1)', bg: 'transparent' },
+};
 import {
     loadState, saveState, defaultState,
     parseCSV, exportCSV, makeSlot, resolvePosition,
     SPECIALIST_IDS
 } from '../utils/rosterState';
 
-// ── Zone colour tokens ────────────────────────────────────────────────────
-const ZONE_STYLE = {
-    '53': { color: 'rgba(255, 204, 77, 1)', border: '1px solid rgba(255,183,0,0.6)', bg: 'rgba(255,183,0,0.06)' },
-    ps: { color: 'rgba(112, 167, 255, 1)', border: '1px solid rgba(59,130,246,0.6)', bg: 'rgba(59,130,246,0.06)' },
-    ir: { color: 'rgba(228, 93, 93, 1)', border: '1px solid rgba(239,68,68,0.5)', bg: 'rgba(239,68,68,0.06)' },
-    r: { color: 'rgba(171, 171, 171, 1)', border: '1px solid rgba(171, 171, 171, 0.5)', bg: 'rgba(239,68,68,0.06)' },
-    need: { border: '1px dashed rgba(255,183,0,0.8)', bg: 'rgba(255,183,0,0.03)' },
-    empty: { border: '1px dashed rgba(255,255,255,0.1)', bg: 'transparent' },
-};
+// ── Helper: Parse name suffixes ──────────────────────────────────────────
+function parseName(rawName, defaultColor = 'var(--text-main)') {
+    if (!rawName) return { displayName: '', suffix: '', nameColor: defaultColor };
+    const parts = rawName.split(':');
+    const displayName = parts[0].trim();
+    const suffix = parts[1]?.trim() || '';
+
+    let nameColor = defaultColor;
+    if (suffix) {
+        if (/^\d+$/.test(suffix)) nameColor = '#FFD700'; // Gold (Draft Pick)
+        else if (suffix === 'UDFA') nameColor = 'rgba(255, 215, 0, 0.6)'; // Dim Gold
+        else if (suffix === 'FA') nameColor = '#3b82f6'; // Blue (Free Agent)
+    }
+    return { displayName, suffix, nameColor };
+}
 
 // ── Slot cell ─────────────────────────────────────────────────────────────
 function SlotCell({ slot, zone, posId, slotIdx, targetZone, onDragStart, onDrop, onDragOver, onClick }) {
     const isNeed = !slot && zone === '53';
     const zStyle = slot ? ZONE_STYLE[slot.zone ?? zone] : (isNeed ? ZONE_STYLE.need : ZONE_STYLE.empty);
+    const { displayName, suffix, nameColor } = parseName(slot?.name, zStyle.color);
 
     return (
         <div
@@ -28,7 +45,7 @@ function SlotCell({ slot, zone, posId, slotIdx, targetZone, onDragStart, onDrop,
             onDrop={e => onDrop(e, { posId, slotIdx, targetZone: targetZone ?? zone })}
             onClick={() => slot && onClick && onClick(slot, posId, slotIdx)}
             style={{
-                width: 110, // Fixed width to ensure neat stacking
+                width: 150, // Fixed width to ensure neat stacking
                 height: 36,
                 borderRadius: 6,
                 border: zStyle.border,
@@ -43,9 +60,16 @@ function SlotCell({ slot, zone, posId, slotIdx, targetZone, onDragStart, onDrop,
             }}
         >
             {slot ? (
-                <span style={{ fontSize: '0.78rem', fontWeight: 600, color: zStyle.color || 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {slot.name}
-                </span>
+                <div style={{ display: 'flex', width: '100%', alignItems: 'center', justifyContent: 'space-between', overflow: 'hidden' }}>
+                    <span style={{ fontSize: '0.78rem', fontWeight: 600, color: nameColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {displayName}
+                    </span>
+                    {suffix && (
+                        <span style={{ fontSize: '0.65rem', color: '#ff0000', fontWeight: 800, marginLeft: 4 }}>
+                            {suffix}
+                        </span>
+                    )}
+                </div>
             ) : isNeed ? (
                 <span style={{ fontSize: '0.65rem', color: 'rgba(255,183,0,0.5)', fontStyle: 'italic' }}>NEED</span>
             ) : null}
@@ -89,19 +113,19 @@ function DepthRow({ posConfig, slots, onDragStart, onDrop, onDragOver, idx, phas
                 }}
             >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <span style={{ fontSize: '0.8rem', fontWeight: 800, color: '#FFD700' }}>{label}</span>
+                    <span style={{ fontSize: '0.8rem', fontWeight: 800, color: '#ffffffff' }}>{label}</span>
                     <button
                         onClick={onDeletePosition}
                         style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.35)', cursor: 'pointer', fontSize: '1.2rem', padding: 0, lineHeight: 1, marginBottom: '0.5rem', marginLeft: '0.3rem' }}
                     >×</button>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: '0.65rem', color: 'rgba(255,183,0,0.7)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: '0.65rem', color: 'rgba(255, 183, 0, 1)' }}>
                     <span>53:</span>
                     <input
                         type="number" min={0} max={10} value={slots53}
                         onChange={e => onConfigChange(Math.max(0, parseInt(e.target.value) || 0))}
                         onClick={e => e.stopPropagation()}
-                        style={{ width: 28, background: 'transparent', border: 'none', color: '#FFD700', fontWeight: 700, fontSize: '0.7rem', textAlign: 'center', padding: 0 }}
+                        style={{ width: 28, background: 'transparent', border: 'none', color: '#ff0000ff', fontWeight: 700, fontSize: '0.7rem', textAlign: 'center', padding: 0 }}
                     />
                 </div>
             </div>
@@ -164,23 +188,30 @@ function IRSection({ irPlayers, onDrop, onDragStart }) {
             style={{ padding: '8px 12px', borderTop: '2px solid rgba(255,255,255,0.08)', marginTop: 8 }}
         >
             <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'rgba(228, 93, 93, 0.8)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>
-                Injured Reserve — {irPlayers.length}
+                Injured/Reserve — {irPlayers.length}
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                {irPlayers.map((name, i) => (
-                    <div
-                        key={i}
-                        draggable
-                        onDragStart={e => onDragStart(e, { posId: '__ir__', slotIdx: i, slot: { name, zone: 'ir' } })}
-                        style={{
-                            padding: '3px 10px', borderRadius: 20,
-                            border: '1px solid rgba(239,68,68,0.5)',
-                            background: 'rgba(239,68,68,0.06)',
-                            fontSize: '0.75rem', color: 'rgba(228, 93, 93, 1)',
-                            cursor: 'grab', userSelect: 'none',
-                        }}
-                    >{name}</div>
-                ))}
+                {irPlayers.map((name, i) => {
+                    const { displayName, suffix, nameColor } = parseName(name, 'rgba(228, 93, 93, 1)');
+                    return (
+                        <div
+                            key={i}
+                            draggable
+                            onDragStart={e => onDragStart(e, { posId: '__ir__', slotIdx: i, slot: { name, zone: 'ir' } })}
+                            style={{
+                                padding: '3px 10px', borderRadius: 20,
+                                border: '1px solid rgba(239,68,68,0.5)',
+                                background: 'rgba(239,68,68,0.06)',
+                                fontSize: '0.75rem', color: nameColor,
+                                cursor: 'grab', userSelect: 'none',
+                                display: 'flex', alignItems: 'center', gap: 4
+                            }}
+                        >
+                            <span>{displayName}</span>
+                            {suffix && <span style={{ fontSize: '0.6rem', color: '#ff0000', fontWeight: 800 }}>{suffix}</span>}
+                        </div>
+                    );
+                })}
                 {irPlayers.length === 0 && (
                     <span style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.2)', fontStyle: 'italic' }}>Drop injured players here</span>
                 )}
@@ -205,13 +236,19 @@ function SpecialistCell({ id, slot, onDragStart, onDrop }) {
             }}
         >
             <div style={{ fontSize: '0.65rem', color: 'rgba(255,183,0,0.6)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{label}</div>
-            {slot ? (
-                <div
-                    draggable
-                    onDragStart={e => onDragStart(e, { posId: id, slotIdx: 0, slot })}
-                    style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-main)', cursor: 'grab' }}
-                >{slot.name}</div>
-            ) : (
+            {slot ? (() => {
+                const { displayName, suffix, nameColor } = parseName(slot.name);
+                return (
+                    <div
+                        draggable
+                        onDragStart={e => onDragStart(e, { posId: id, slotIdx: 0, slot })}
+                        style={{ fontSize: '0.8rem', fontWeight: 700, color: nameColor, cursor: 'grab', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                    >
+                        <span>{displayName}</span>
+                        {suffix && <span style={{ fontSize: '0.65rem', color: '#ff0000', fontWeight: 800 }}>{suffix}</span>}
+                    </div>
+                );
+            })() : (
                 <div style={{ fontSize: '0.7rem', color: 'rgba(255,183,0,0.4)', fontStyle: 'italic' }}>NEED</div>
             )}
         </div>
@@ -456,9 +493,9 @@ export default function RosterView() {
     return (
         <div style={{ background: 'var(--bg-color)', height: '100%', overflowY: 'auto', color: 'var(--text-main)', fontFamily: 'Inter, sans-serif' }}>
             {/* Toolbar */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px', borderBottom: '2px solid rgba(255,183,0,0.2)', background: 'rgba(255,255,255,0.02)' }}>
-                <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: '#FFD700', letterSpacing: '0.05em' }}>ROSTER</h2>
-                <div style={{ flex: 1, textAlign: 'right', fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-dim)', display: 'flex', justifyContent: 'flex-end', gap: 24, paddingRight: 16 }}>
+            <div className='top-panel' style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px', borderBottom: '2px solid rgba(255, 0, 0, 0.2)' }}>
+                <h2 style={{ margin: 0, fontSize: '2rem', fontWeight: 800, color: '#ffffffff', letterSpacing: '0.05em' }}>ROSTER</h2>
+                <div style={{ flex: 1, textAlign: 'right', fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-dim)', display: 'flex', justifyContent: 'flex-end', gap: 24, paddingRight: 16 }}>
                     <span>Total: <strong style={{ color: 'var(--text-main)' }}>{total}</strong> / 90</span>
                     <span>Practice Squad: <strong style={{ color: 'var(--text-main)' }}>{psCount}</strong> / 16+1</span>
                     <span>Roster: <strong style={{ color: 'var(--text-main)' }}>{destined53}</strong> / 53</span>
@@ -480,7 +517,7 @@ export default function RosterView() {
                     <div />
                     <div style={{ fontSize: '0.65rem', fontWeight: 800, color: 'rgba(255,255,255,0.4)', padding: '0 12px 4px', letterSpacing: '0.08em', textAlign: 'left', alignSelf: 'end' }}>53-MAN ROSTER</div>
                     <div style={{ fontSize: '0.65rem', fontWeight: 800, color: 'rgba(255,255,255,0.4)', padding: '0 12px 4px', letterSpacing: '0.08em', textAlign: 'left', alignSelf: 'end' }}>PRACTICE SQUAD</div>
-                    <div style={{ fontSize: '0.65rem', fontWeight: 800, color: 'rgba(255,255,255,0.4)', padding: '0 12px 4px', letterSpacing: '0.08em', textAlign: 'left', alignSelf: 'end' }}>CUT</div>
+                    <div style={{ fontSize: '0.65rem', fontWeight: 800, color: 'rgba(255,255,255,0.4)', padding: '0 12px 4px', letterSpacing: '0.08em', textAlign: 'left', alignSelf: 'end' }}>EXTENDED ROSTER</div>
 
                     {positionConfig.offense.map((p, idx) => (
                         <DepthRow
@@ -508,7 +545,7 @@ export default function RosterView() {
                     <div />
                     <div style={{ fontSize: '0.65rem', fontWeight: 800, color: 'rgba(255,255,255,0.4)', padding: '0 12px 4px', letterSpacing: '0.08em', textAlign: 'left', alignSelf: 'end' }}>53-MAN ROSTER</div>
                     <div style={{ fontSize: '0.65rem', fontWeight: 800, color: 'rgba(255,255,255,0.4)', padding: '0 12px 4px', letterSpacing: '0.08em', textAlign: 'left', alignSelf: 'end' }}>PRACTICE SQUAD</div>
-                    <div style={{ fontSize: '0.65rem', fontWeight: 800, color: 'rgba(255,255,255,0.4)', padding: '0 12px 4px', letterSpacing: '0.08em', textAlign: 'left', alignSelf: 'end' }}>CUT</div>
+                    <div style={{ fontSize: '0.65rem', fontWeight: 800, color: 'rgba(255,255,255,0.4)', padding: '0 12px 4px', letterSpacing: '0.08em', textAlign: 'left', alignSelf: 'end' }}>EXTENDED ROSTER</div>
 
                     {positionConfig.defense.map((p, idx) => (
                         <DepthRow
@@ -531,7 +568,7 @@ export default function RosterView() {
                 </div>
 
                 {/* SPECIALISTS + COUNTERS */}
-                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 16, marginTop: 16, flexWrap: 'wrap', borderTop: '2px solid rgba(255,183,0,0.2)', paddingTop: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 16, marginTop: 16, flexWrap: 'wrap', borderTop: '2px solid rgba(255, 0, 0, 0.2)', paddingTop: 12 }}>
                     <div style={{ display: 'flex', gap: 10 }}>
                         {SPECIALIST_IDS.map(id => (
                             <SpecialistCell
@@ -544,8 +581,6 @@ export default function RosterView() {
                     </div>
                     <div style={{ flex: 1 }} />
                     <div style={{ textAlign: 'right', lineHeight: 1.7 }}>
-                        <div style={{ fontSize: '0.8rem', color: '#FFD700', fontWeight: 800 }}>53-Man: {destined53} / 53</div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>Total on roster: {total}</div>
                         {needs > 0 && <div style={{ fontSize: '0.75rem', color: 'rgba(255,183,0,0.7)' }}>Needs: {needs}</div>}
                     </div>
                 </div>
@@ -563,8 +598,8 @@ export default function RosterView() {
 
 function SectionHeader({ label, count, onAdd, style }) {
     return (
-        <div style={{ display: 'flex', alignItems: 'flex-end', padding: '10px 0 6px', borderBottom: '2px solid rgba(255,183,0,0.25)', marginBottom: 8, ...style }}>
-            <div style={{ fontSize: '1.2rem', fontWeight: 800, letterSpacing: '0.08em', color: '#FFD700', textTransform: 'uppercase' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-end', padding: '10px 0 6px', borderBottom: '2px solid rgba(255, 0, 0, 0.25)', marginBottom: 8, ...style }}>
+            <div style={{ fontSize: '1.2rem', fontWeight: 800, letterSpacing: '0.08em', color: '#ffffffff', textTransform: 'uppercase' }}>
                 {label}
             </div>
             <div style={{ flex: 1 }} />

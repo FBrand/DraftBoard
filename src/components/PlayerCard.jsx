@@ -1,5 +1,23 @@
 import React from 'react';
 
+const isIntString = (val) => /^\d+$/.test(val);
+
+function parseName(rawName, defaultColor = 'inherit') {
+    if (!rawName) return { displayName: '', suffix: '', nameColor: defaultColor };
+    const parts = rawName.split(':');
+    const displayName = parts[0].trim();
+    const suffix = parts[1]?.trim() || '';
+
+    let nameColor = defaultColor;
+    if (suffix) {
+        if (/^\d+$/.test(suffix)) nameColor = '#FFD700'; // Gold (Draft Pick)
+        else if (suffix === 'UDFA') nameColor = 'rgba(255, 215, 0, 0.6)'; // Dim Gold
+        else if (suffix === 'FA') nameColor = '#3b82f6'; // Blue (Free Agent)
+    }
+    return { displayName, suffix, nameColor };
+}
+
+
 const PlayerCard = ({ player, isBest, onClick, slim, team, displayPick, noStrikethrough, isCurrent, traded, tradeNote }) => {
     const { name, position, overallRank, drafted, draftedByUs, team: draftedTeam } = player;
 
@@ -24,7 +42,7 @@ const PlayerCard = ({ player, isBest, onClick, slim, team, displayPick, noStrike
         let cleanedNote = tradeNote
             .replace(/Compensatory Pick \(From\s+([^)]+)\)/i, '$1')
             .replace(/^From\s+/i, '');
-            
+
         let isCommaCase = false;
         if (/via/i.test(cleanedNote)) {
             cleanedNote = cleanedNote.replace(/\s+and\s+/ig, ', ');
@@ -32,7 +50,7 @@ const PlayerCard = ({ player, isBest, onClick, slim, team, displayPick, noStrike
         } else {
             cleanedNote = cleanedNote.replace(/\s+and\s+/ig, ' via ');
         }
-            
+
         const maxLen = isCommaCase ? 16 : 14;
         if (cleanedNote.length > maxLen) {
             cleanedNote = '.. ' + cleanedNote.slice(-(maxLen - 3));
@@ -47,18 +65,25 @@ const PlayerCard = ({ player, isBest, onClick, slim, team, displayPick, noStrike
                 <div className="card-team-info">
                     {traded && tradeNote && (
                         <span className="card-trade-note" style={{ fontSize: '0.62rem', color: 'var(--text-dim)', marginRight: '4px', display: 'flex', alignItems: 'center', gap: '3px' }}>
-                            {displayTradeNote} 
+                            {displayTradeNote}
                             <span style={{ color: '#FFB612', fontWeight: 900, fontSize: '1.2rem', lineHeight: 0.8 }}>⇄</span>
                         </span>
                     )}
-                    {pickNo && <span className="card-pick-num">PK {pickNo}</span>}
+                    {pickNo && <span className="card-pick-num">{isIntString(pickNo) ? 'PK ' : ''}{pickNo}</span>}
                     {slim && !pickNo && <div className="player-pos">{position.split('.')[1]}</div>}
                     {teamAbbr && <span className="card-team">{teamAbbr}</span>}
                 </div>
             </div>
             <div className="card-bottom">
-                <div className="player-name">
-                    {name}
+                <div className="player-name" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', overflow: 'hidden' }}>
+                    <span style={{ color: parseName(name).nameColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {parseName(name).displayName}
+                    </span>
+                    {parseName(name).suffix && (
+                        <span style={{ fontSize: '0.65rem', color: '#ff0000', fontWeight: 800, marginLeft: 4 }}>
+                            {parseName(name).suffix}
+                        </span>
+                    )}
                 </div>
                 {!slim && <div className="player-pos">{position}</div>}
             </div>

@@ -50,7 +50,29 @@ const TopPanel = ({ currentPick, currentPickStatus, ourPicksLeft, onUndo, onUpda
                         ))}
                     </div>
                 </div>
-                <div className="focus-board-name">BOARD: {boardName}</div>
+                <div className="board-switcher">
+                    <span className="switcher-label">BOARD</span>
+                    <div className="switcher-buttons">
+                        <button
+                            className={`switcher-btn ${!currentRankings || currentRankings.includes('rankings_consensus.csv') ? 'active' : ''}`}
+                            onClick={() => updateRankingsParam(`${import.meta.env.BASE_URL}rankings_consensus.csv`)}
+                        >
+                            Consensus
+                        </button>
+                        <button
+                            className={`switcher-btn ${currentRankings.includes('rankings_dan.csv') ? 'active' : ''}`}
+                            onClick={() => updateRankingsParam(`${import.meta.env.BASE_URL}rankings_dan.csv`)}
+                        >
+                            Dan
+                        </button>
+                        <button
+                            className={`switcher-btn ${currentRankings.includes('rankings_ryan.csv') ? 'active' : ''}`}
+                            onClick={() => updateRankingsParam(`${import.meta.env.BASE_URL}rankings_ryan.csv`)}
+                        >
+                            Ryan
+                        </button>
+                    </div>
+                </div>
                 <div className="top-actions">
                     <button className="action-pill trade-pill" onClick={onUpdatePicks}>Update Picks</button>
                     <button
@@ -60,7 +82,7 @@ const TopPanel = ({ currentPick, currentPickStatus, ourPicksLeft, onUndo, onUpda
                     >
                         {isExporting ? 'Generating...' : 'Export Board'}
                     </button>
-                    <button className="action-pill focus-pill" onClick={onToggleFocus}>⛶ Exit Focus</button>
+                    <button className="action-pill focus-pill" onClick={onToggleFocus}>⛶ Exit Full Board</button>
                     <button className="action-pill undo-pill" onClick={onUndo}>Undo</button>
                 </div>
             </div>
@@ -100,12 +122,6 @@ const TopPanel = ({ currentPick, currentPickStatus, ourPicksLeft, onUndo, onUpda
                         >
                             Consensus
                         </button>
-                        {/* <button
-                            className={`switcher-btn ${currentRankings.includes('rankings_chris.csv') ? 'active' : ''}`}
-                            onClick={() => updateRankingsParam(`${import.meta.env.BASE_URL}rankings_chris.csv`)}
-                        >
-                            Chris
-                        </button> */}
                         <button
                             className={`switcher-btn ${currentRankings.includes('rankings_dan.csv') ? 'active' : ''}`}
                             onClick={() => updateRankingsParam(`${import.meta.env.BASE_URL}rankings_dan.csv`)}
@@ -118,12 +134,6 @@ const TopPanel = ({ currentPick, currentPickStatus, ourPicksLeft, onUndo, onUpda
                         >
                             Ryan
                         </button>
-                        {/* <button
-                            className={`switcher-btn ${currentRankings.includes('rankings_seth.csv') ? 'active' : ''}`}
-                            onClick={() => updateRankingsParam(`${import.meta.env.BASE_URL}rankings_seth.csv`)}
-                        >
-                            Seth
-                        </button> */}
                     </div>
                 </div>
                 {canLiveSync && (
@@ -138,7 +148,7 @@ const TopPanel = ({ currentPick, currentPickStatus, ourPicksLeft, onUndo, onUpda
                 )}
                 <button className="action-pill undo-pill" onClick={onUndo}>Undo</button>
                 <button className="action-pill trade-pill" onClick={onUpdatePicks}>Update Picks</button>
-                <button className="action-pill focus-pill" onClick={onToggleFocus}>⛶ Focus</button>
+                <button className="action-pill focus-pill" onClick={onToggleFocus}>⛶ Full Board</button>
                 <button className="action-pill reset-pill" onClick={onReset}>Reset All</button>
             </div>
         </div>

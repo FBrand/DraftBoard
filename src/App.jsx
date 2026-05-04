@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import useDraftState from './hooks/useDraftState';
-import TopPanel from './components/TopPanel';
+import TopPanelDraft from './components/TopPanel_Draft';
+import TopPanelRoster from './components/TopPanel_Roster';
 import LeftPanel from './components/LeftPanel';
 import CenterBoard from './components/CenterBoard';
 import RightPanel from './components/RightPanel';
@@ -31,10 +32,23 @@ function App() {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isUnrankedModalOpen, setIsUnrankedModalOpen] = useState(false);
-  const [isFocusMode, setIsFocusMode] = useState(false);
+  const [isFocusMode, setIsFocusMode] = useState(() => {
+    const saved = localStorage.getItem('draft_board_focus');
+    return saved === 'true';
+  });
   const [showLeftSidebar, setShowLeftSidebar] = useState(false);
   const [showRightSidebar, setShowRightSidebar] = useState(false);
-  const [view, setView] = useState('draft'); // 'draft' | 'roster'
+  const [view, setView] = useState(() => {
+    return localStorage.getItem('draft_board_view') || 'draft';
+  }); // 'draft' | 'roster'
+
+  React.useEffect(() => {
+    localStorage.setItem('draft_board_focus', isFocusMode);
+  }, [isFocusMode]);
+
+  React.useEffect(() => {
+    localStorage.setItem('draft_board_view', view);
+  }, [view]);
 
   if (loading) return <div className="loading">Loading Chiefs Draft Board...</div>;
 
@@ -44,7 +58,7 @@ function App() {
   return (
     <div className={`app-container${isFocusMode ? ' focus-mode' : ''}`}>
       {view === 'draft' && (
-        <TopPanel
+        <TopPanelDraft
           currentPick={currentPick}
           currentPickStatus={currentPickStatus}
           ourPicksLeft={ourPicksLeft}
@@ -69,7 +83,7 @@ function App() {
         paddingLeft: 16,
       }}>
         {[
-          { id: 'draft',  label: '📋 Draft Board' },
+          { id: 'draft', label: '📋 Draft Board' },
           { id: 'roster', label: '🏈 Roster' },
         ].map(({ id, label }) => (
           <button

@@ -377,6 +377,11 @@ body {
   overflow: hidden;
 }
 
+.round-header {
+  font-size: 0.1 rem;
+  color: var(--text-dim)
+}
+
 .side-panel {
   background: var(--bg-color);
   display: flex;
