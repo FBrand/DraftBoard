@@ -21,6 +21,35 @@ function slots53ForPos(posId) {
 
 export const SPECIALIST_IDS = ['P', 'K', 'LS'];
 
+export const POS_TRANSLATIONS = {
+    'WR.Z': 'Z-Reciever',
+    'WR.X': 'X-Reciever',
+    'WR.S': 'Slot',
+    'LT': 'Left Tackle',
+    'LG': 'Left Guard',
+    'C': 'Center',
+    'RG': 'Right Guard',
+    'RT': 'Right Tackle',
+    'TE': 'Tight End',
+    'QB': 'Quarterback',
+    'RB': 'Running Back',
+    'LDE': 'Left End',
+    'RDE': 'Right End',
+    'DT.3T': '3-Tech DT',
+    'DT.1T': '1-Tech DT',
+    'LB.W': 'Will LB',
+    'LB.M': 'Mike LB',
+    'LB.S': 'Sam LB',
+    'CB': 'Cornerback',
+    'CB.N': 'Nickel CB',
+    'S.F': 'Free Safety',
+    'S.S': 'Strong Safety',
+    'PT': 'Punter',
+    'PK': 'Kicker',
+    'LS': 'Long Snapper'
+};
+
+
 const STORAGE_KEY = 'rosterState';
 
 // ---------------------------------------------------------------------------
@@ -37,6 +66,7 @@ export function defaultState() {
         positionConfig: { offense: [], defense: [] },
         depthChart,
         reserve: [],
+        cuts: [],
     };
 }
 
@@ -107,23 +137,47 @@ export function parseCSV(csvText) {
         const rowId = `${countKey}-${idx}`;
 
         // Parse slot cells
-        const parsed = rawSlots.map(s => {
+        const parsed = [];
+        let rIndex = 0;
+        const limit53 = slots ? parseInt(slots) : slots53ForPos(pos);
+
+        rawSlots.forEach(s => {
             const v = s.trim();
-            if (!v) return null;
-            if (v.toUpperCase().startsWith('PS:')) return makeSlot(v.slice(3).trim(), 'ps');
-            if (v.toUpperCase().startsWith('IR:')) return makeSlot(v.slice(3).trim(), 'ir');
-            if (v.toUpperCase().startsWith('R:')) return makeSlot(v.slice(2).trim(), 'r');
-            return makeSlot(v, '53');
+            if (!v) return;
+            
+            let zone = '53';
+            if (v.toUpperCase().startsWith('PS:')) zone = 'ps';
+            else if (v.toUpperCase().startsWith('IR:')) zone = 'ir';
+            else if (v.toUpperCase().startsWith('R:')) zone = 'r';
+            else if (rIndex >= limit53) zone = 'r'; // Auto-overflow to reserve
+
+            const name = v.replace(/^(PS:|IR:|R:)/i, '').trim();
+            const slot = makeSlot(name, zone);
+
+            if (zone === 'ps') {
+                // Put in PS slots (indices limit53 to limit53 + 2)
+                const psIdx = limit53 + (parsed.filter(x => x?.zone === 'ps').length);
+                parsed[psIdx] = slot;
+            } else if (zone === 'r') {
+                // Put in Reserve slots (indices limit53 + 3 onwards)
+                const resIdx = limit53 + 3 + (parsed.filter(x => x?.zone === 'r').length);
+                parsed[resIdx] = slot;
+            } else if (zone === 'ir') {
+                reserve.push(name);
+            } else {
+                // 53-man
+                parsed[rIndex++] = slot;
+            }
         });
 
         depthChart[rowId] = parsed;
 
-        const chip = { id: rowId, label: pos, slots53: slots ? parseInt(slots) : slots53ForPos(pos) };
+        const chip = { id: rowId, label: pos, slots53: limit53 };
         if (phase === 'O') offense.push(chip);
         else if (phase === 'D') defense.push(chip);
     }
 
-    return { positionConfig: { offense, defense }, depthChart, reserve };
+    return { positionConfig: { offense, defense }, depthChart, reserve, cuts: [] };
 }
 
 // ---------------------------------------------------------------------------
@@ -192,4 +246,98 @@ export function resolvePosition(declaredPos, positionConfig, depthChart) {
     }
 
     return null; // → reserve
+}
+// ---------------------------------------------------------------------------
+// Ourlads Scraper (JS Conversion)
+// ---------------------------------------------------------------------------
+
+const POS_MAPPING = {
+    "LWR": "WR.Z", "RWR": "WR.X", "SWR": "WR.S",
+    "LDT": "DT.3T", "RDT": "DT.1T",
+    "MLB": "LB.M", "WLB": "LB.W", "SLB": "LB.S",
+    "LCB": "CB.L", "RCB": "CB.R", "NB": "CB.N",
+    "FS": "S.F", "SS": "S.S",
+    "PT": "P", "PK": "K",
+};
+
+function cleanPlayerName(raw) {
+    if (!raw) return null;
+    let tag = '';
+    if (raw.includes("CF26")) tag = "UDFA";
+    const roundMatch = raw.match(/26\/(\d)/);
+    if (roundMatch) tag = roundMatch[1];
+
+    let name = raw.replace(/\s+\S*\d{2,}.*$/, '').trim();
+    name = name.replace(/[PUT]\/[a-zA-Z]+$/, '').trim();
+
+    if (name.includes(",")) {
+        const [last, first] = name.split(",");
+        if (first) name = `${first.trim()} ${last.trim()}`;
+    }
+    return tag ? `${name}:${tag}` : name;
+}
+
+export async function fetchOurladsRoster() {
+    const url = "https://www.ourlads.com/nfldepthcharts/depthchart/KC";
+    const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+    
+    const res = await fetch(proxyUrl);
+    const html = await res.text();
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+
+    const tables = doc.querySelectorAll('table');
+    const data = {};
+
+    tables.forEach(table => {
+        const rows = Array.from(table.querySelectorAll('tr')).slice(1);
+        rows.forEach(row => {
+            const cols = Array.from(row.querySelectorAll('td')).map(td => td.textContent.trim());
+            if (cols.length < 3) return;
+
+            const pos = cols[0];
+            if (["Offense", "Defense", "Special Teams", "", "H", "KO", "PR", "KR"].includes(pos)) return;
+
+            const players = [];
+            for (let i = 2; i < cols.length; i += 2) {
+                const name = cleanPlayerName(cols[i]);
+                if (name) players.push(name);
+            }
+
+            if (players.length > 0) {
+                const basePos = POS_MAPPING[pos] || pos;
+                if (!data[basePos]) data[basePos] = [];
+                data[basePos].push(...players);
+            }
+        });
+    });
+
+    // Build the final roster state object
+    const offense = [];
+    const defense = [];
+    const depthChart = {};
+    const reserve = [];
+    const posCount = {};
+
+    Object.entries(data).forEach(([pos, players]) => {
+        const slots = { "TE": 4, "QB": 3, "RB": 4, "LB.M": 3, "K": 1, "P": 1, "LS": 1 }[pos] || 2;
+        
+        let phase = 'S';
+        if (/^(WR|LT|LG|C|RG|RT|TE|QB|RB)/.test(pos)) phase = 'O';
+        else if (/^(LD|DT|RD|LB|CB|S|S\.)/.test(pos)) phase = 'D';
+
+        const rowId = `${phase}-${pos}-${posCount[pos] || 0}`;
+        posCount[pos] = (posCount[pos] || 0) + 1;
+
+        const parsedSlots = players.map((name, i) => {
+            return makeSlot(name, i < slots ? '53' : 'r');
+        });
+
+        depthChart[rowId] = parsedSlots;
+        const chip = { id: rowId, label: pos, slots53: slots };
+        if (phase === 'O') offense.push(chip);
+        else if (phase === 'D') defense.push(chip);
+    });
+
+    return { positionConfig: { offense, defense }, depthChart, reserve, cuts: [] };
 }

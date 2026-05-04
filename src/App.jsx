@@ -108,7 +108,7 @@ function App() {
       </div>
 
       {/* ── Roster View ───────────────────────────────────────────────── */}
-      {view === 'roster' && <RosterView />}
+      {view === 'roster' && <RosterView masterPlayers={players} draftedPlayers={draftedPlayers} currentPick={currentPick} onDraft={draftPlayer} />}
 
       {/* ── Draft View ────────────────────────────────────────────────── */}
       {view === 'draft' && (

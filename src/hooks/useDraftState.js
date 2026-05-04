@@ -137,8 +137,9 @@ export const useDraftState = () => {
 
                         // 1. Reconcile fresh parsedPlayers with saved history (Board View)
                         const reconciledPlayers = parsedPlayers.map(p => {
-                            const match = savedDrafted.find(dp => dp.name === p.name);
-                            if (match) {
+                            const matchIdx = findMatchingPlayerIndex(p.name, savedDrafted);
+                            if (matchIdx !== -1) {
+                                const match = savedDrafted[matchIdx];
                                 return {
                                     ...p,
                                     drafted: true,
@@ -154,9 +155,10 @@ export const useDraftState = () => {
                         // NOTE: use sd.draftedByUs (persisted value) — savedKCLeft only has *remaining* picks,
                         // so re-computing from it would always yield false for already-drafted players.
                         const enrichedDrafted = savedDrafted.map(sd => {
-                            const updatedMetadata = parsedPlayers.find(p => p.name === sd.name);
+                            const matchIdx = findMatchingPlayerIndex(sd.name, parsedPlayers);
                             const draftedByUs = sd.draftedByUs === true || sd.team === TEAM_CONFIG.abbreviation; // Trust persisted or evaluate from CSV team string
-                            if (updatedMetadata) {
+                            if (matchIdx !== -1) {
+                                const updatedMetadata = parsedPlayers[matchIdx];
                                 return {
                                     ...updatedMetadata,
                                     pickNumber: sd.pickNumber,
@@ -233,8 +235,10 @@ export const useDraftState = () => {
 
         const team = isOurPick ? TEAM_CONFIG.abbreviation : (remoteMatch?.team || '-');
 
-        setPlayers(prev => prev.map(p =>
-            p.name === player.name
+        const matchIdx = findMatchingPlayerIndex(player.name, players);
+        
+        setPlayers(prev => prev.map((p, idx) =>
+            idx === matchIdx
                 ? { ...p, drafted: true, pickNumber, draftedByUs: isOurPick, team }
                 : p
         ));
@@ -285,9 +289,10 @@ export const useDraftState = () => {
         // draftedByUs: trust the imported flag (importedKCLeft is *remaining* picks, not historical).
         // The CSV import sets draftedByUs on each entry; fall back to checking if team === KC.
         const enrichedDrafted = importedDrafted.map(id => {
-            const playerFromRankings = players.find(p => p.name === id.name);
+            const matchIdx = findMatchingPlayerIndex(id.name, players);
             const draftedByUs = id.draftedByUs === true || id.team === TEAM_CONFIG.abbreviation;
-            if (playerFromRankings) {
+            if (matchIdx !== -1) {
+                const playerFromRankings = players[matchIdx];
                 return {
                     ...playerFromRankings,
                     pickNumber: id.pickNumber,
@@ -303,8 +308,9 @@ export const useDraftState = () => {
 
         // Update players availability
         setPlayers(prev => prev.map(p => {
-            const match = enrichedDrafted.find(dp => dp.name === p.name);
-            if (match) {
+            const matchIdx = findMatchingPlayerIndex(p.name, enrichedDrafted);
+            if (matchIdx !== -1) {
+                const match = enrichedDrafted[matchIdx];
                 return {
                     ...p,
                     drafted: true,

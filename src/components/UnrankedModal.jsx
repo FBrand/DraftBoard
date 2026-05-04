@@ -1,20 +1,23 @@
 import React, { useState } from 'react';
 
-const UnrankedModal = ({ isOpen, onClose, onDraft }) => {
+const UnrankedModal = ({ isOpen, onClose, onDraft, isUDFAVersion = false }) => {
     const [name, setName] = useState('');
     const [position, setPosition] = useState('');
 
     if (!isOpen) return null;
 
-    const handleSubmit = (e) => {
-        e.preventDefault();
+    const handleSubmit = (e, type = 'Draft') => {
+        if (e) e.preventDefault();
         if (!name || !position) return;
 
-        // Create a mock player object
+        let suffix = '';
+        if (type === 'UDFA') suffix = 'UDFA';
+        if (type === 'MCI') suffix = 'MCI';
+
         const customPlayer = {
-            name,
+            name: suffix ? `${name}:${suffix}` : name,
             position: position.toUpperCase(),
-            overallRank: 999, // Unranked
+            overallRank: 999,
             group: 'Custom',
             isUnranked: true
         };
@@ -29,11 +32,11 @@ const UnrankedModal = ({ isOpen, onClose, onDraft }) => {
         <div className="modal-overlay" onClick={onClose}>
             <div className="modal-content" onClick={e => e.stopPropagation()}>
                 <div className="modal-header">
-                    <h2>Draft Unranked Player</h2>
+                    <h2>{isUDFAVersion ? 'Sign Player' : 'Draft Unranked Player'}</h2>
                     <button className="close-button" onClick={onClose}>&times;</button>
                 </div>
 
-                <form onSubmit={handleSubmit} className="picks-form">
+                <form onSubmit={e => handleSubmit(e)} className="picks-form">
                     <div className="form-group">
                         <label>Player Name</label>
                         <input
@@ -57,13 +60,29 @@ const UnrankedModal = ({ isOpen, onClose, onDraft }) => {
                         />
                     </div>
 
-                    <div className="modal-actions">
-                        <button type="button" className="action-button secondary" onClick={onClose}>
-                            Cancel
-                        </button>
-                        <button type="submit" className="action-button primary" disabled={!name || !position}>
-                            Draft Player
-                        </button>
+                    <div className="modal-actions" style={{ flexDirection: 'column', gap: 10, marginTop: 20 }}>
+                        {!isUDFAVersion ? (
+                            <div style={{ display: 'flex', gap: 10, width: '100%' }}>
+                                <button type="button" className="action-button secondary" style={{ flex: 1 }} onClick={onClose}>
+                                    Cancel
+                                </button>
+                                <button type="submit" className="action-button primary" style={{ flex: 1 }} disabled={!name || !position}>
+                                    Draft Player
+                                </button>
+                            </div>
+                        ) : (
+                            <div style={{ display: 'flex', gap: 10, width: '100%' }}>
+                                <button type="button" className="action-button primary" style={{ flex: 1 }} onClick={() => handleSubmit(null, 'Sign')}>
+                                    SIGN
+                                </button>
+                                <button type="button" className="action-button primary" style={{ flex: 1, background: 'var(--chiefs-gold)', color: '#000' }} onClick={() => handleSubmit(null, 'UDFA')}>
+                                    UDFA
+                                </button>
+                                <button type="button" className="action-button secondary" style={{ flex: 1 }} onClick={() => handleSubmit(null, 'MCI')}>
+                                    MCI
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </form>
             </div>
