@@ -178,6 +178,7 @@ function App() {
         isOpen={isUnrankedModalOpen}
         onClose={() => setIsUnrankedModalOpen(false)}
         onDraft={draftPlayer}
+        mode={(currentPick || 1) > 257 ? 'postdraft' : 'draft'}
       />
     </div>
   );

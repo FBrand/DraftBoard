@@ -1,7 +1,7 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
     loadState, saveState, defaultState,
-    parseCSV, exportCSV, makeSlot, resolvePosition,
+    parseCSV, exportCSV, makeSlot,
     SPECIALIST_IDS, POS_TRANSLATIONS, fetchOurladsRoster, fetchLocalRoster, parseHTMLToRoster
 } from '../utils/rosterState';
 import { findMatchingPlayerIndex } from '../utils/nameMatcher';
@@ -49,7 +49,7 @@ function parseName(rawName, defaultColor = 'var(--text-main)') {
     return { displayName, suffix, nameColor };
 }
 
-const MAX_DISPLAY_SLOTS = 12;
+const PS_SLOTS = 3;
 
 // ── Slot cell ─────────────────────────────────────────────────────────────
 function SlotCell({ slot, zone, posId, slotIdx, targetZone, onDragStart, onDrop, onDragOver, onClick, masterPlayers, draftedPlayers }) {
@@ -125,74 +125,69 @@ function SlotCell({ slot, zone, posId, slotIdx, targetZone, onDragStart, onDrop,
     );
 }
 
-// ── Single row in depth chart ────────────────────────────────────────────────
+// ── Single row — 4 grid cells: [pos+ctrl | 53-man | PS | Reserve] ────────────
 function DepthRow({ posConfig, slots, onDragStart, onDrop, onDragOver, idx, phase, onConfigChange, onDeletePosition, onRowDragStart, onRowDrop, masterPlayers, draftedPlayers }) {
     const { id, label, slots53 } = posConfig;
+    const rowBg = idx % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent';
+    const cellStyle = { display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', background: rowBg, borderRight: '1px solid rgba(255,255,255,0.06)', minHeight: 52 };
 
-    // We build a flat list of slot indices for the master grid.
-    // slots53 defines the 53-man zone.
-    // PS is fixed at 3 slots after 53-man.
-    // Reserve is everything after that.
-    
+    // Build slot arrays for each zone
+    const s53 = Math.max(slots53, 1);
+    const slots53Items = Array.from({ length: s53 }, (_, i) => ({ slot: slots[i] || null, zone: '53', idx: i }));
+    // Always show one empty drop target at the end of each section
+    const psStart = s53;
+    const psItems = [];
+    for (let i = 0; i < PS_SLOTS; i++) { if (slots[psStart + i]) psItems.push({ slot: slots[psStart + i], zone: 'ps', idx: psStart + i }); }
+    psItems.push({ slot: null, zone: 'ps', idx: psStart + psItems.length });
+
+    const rStart = s53 + PS_SLOTS;
+    const rItems = [];
+    for (let i = 0; slots[rStart + i]; i++) rItems.push({ slot: slots[rStart + i], zone: 'r', idx: rStart + i });
+    rItems.push({ slot: null, zone: 'r', idx: rStart + rItems.length });
+
     return (
-        <div style={{ 
-            display: 'grid', 
-            gridTemplateColumns: `70px 60px repeat(${MAX_DISPLAY_SLOTS}, 175px)`, 
-            alignItems: 'center', 
-            background: idx % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent', 
-            borderRadius: 6,
-            position: 'relative',
-            zIndex: 100 - idx,
-            gap: 6,
-        }}>
-            {/* Pos Label */}
+        <React.Fragment>
+            {/* Col 1: Pos label + - N + controller */}
             <div
                 draggable
                 onDragStart={e => onRowDragStart(e, idx, phase)}
                 onDragOver={e => e.preventDefault()}
                 onDrop={e => onRowDrop(e, idx, phase)}
-                style={{ cursor: 'grab', display: 'flex', alignItems: 'center', justifyContent: 'center', height: 50 }}
+                style={{ ...cellStyle, flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2, cursor: 'grab', padding: '4px 6px' }}
             >
-                <div style={{ fontSize: '0.9rem', fontWeight: 900, color: 'var(--chiefs-gold)', fontFamily: "'Outfit', sans-serif" }}>{label}</div>
+                <div style={{ fontSize: '0.9rem', fontWeight: 900, color: 'var(--chiefs-gold)', fontFamily: "'Outfit', sans-serif", lineHeight: 1 }}>{label}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 3, marginTop: 2 }}>
+                    <button onClick={e => { e.stopPropagation(); onConfigChange(Math.max(0, slots53 - 1)); }} style={ctrlBtn}>-</button>
+                    <span style={{ fontSize: '0.72rem', fontWeight: 900, color: '#fff', minWidth: 10, textAlign: 'center' }}>{slots53}</span>
+                    <button onClick={e => { e.stopPropagation(); onConfigChange(Math.min(6, slots53 + 1)); }} style={ctrlBtn}>+</button>
+                </div>
             </div>
 
-            {/* Slots Config */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', borderRight: '1px solid rgba(255,255,255,0.1)', paddingRight: 10 }}>
-                <input
-                    type="number"
-                    min="0"
-                    max="5"
-                    value={slots53}
-                    onChange={e => onConfigChange(parseInt(e.target.value) || 0)}
-                    style={{ width: 38, background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', fontSize: '0.8rem', fontWeight: 700, textAlign: 'center', borderRadius: 4 }}
-                />
+            {/* Col 2: 53-Man */}
+            <div style={cellStyle}>
+                {slots53Items.map(item => (
+                    <SlotCell key={item.idx} slot={item.slot} zone={item.zone} posId={id} slotIdx={item.idx} targetZone="53" onDragStart={onDragStart} onDrop={onDrop} masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} />
+                ))}
             </div>
 
-            {/* Individual Slots (Unified Grid) */}
-            {Array.from({ length: MAX_DISPLAY_SLOTS }, (_, i) => {
-                let zone = '53';
-                if (i >= slots53 + 3) zone = 'r';
-                else if (i >= slots53) zone = 'ps';
+            {/* Col 3: Practice Squad */}
+            <div style={cellStyle}>
+                {psItems.map(item => (
+                    <SlotCell key={item.idx} slot={item.slot} zone={item.zone} posId={id} slotIdx={item.idx} targetZone="ps" onDragStart={onDragStart} onDrop={onDrop} masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} />
+                ))}
+            </div>
 
-                return (
-                    <SlotCell
-                        key={i}
-                        slot={slots[i] || null}
-                        zone={zone}
-                        posId={id}
-                        slotIdx={i}
-                        targetZone={zone}
-                        onDragStart={onDragStart}
-                        onDrop={onDrop}
-                        onDragOver={onDragOver}
-                        masterPlayers={masterPlayers}
-                        draftedPlayers={draftedPlayers}
-                    />
-                );
-            })}
-        </div>
+            {/* Col 4: Reserve */}
+            <div style={{ ...cellStyle, borderRight: 'none' }}>
+                {rItems.map(item => (
+                    <SlotCell key={item.idx} slot={item.slot} zone={item.zone} posId={id} slotIdx={item.idx} targetZone="r" onDragStart={onDragStart} onDrop={onDrop} masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} />
+                ))}
+            </div>
+        </React.Fragment>
     );
 }
+
+const ctrlBtn = { background: 'none', border: '1px solid rgba(255,255,255,0.2)', color: 'var(--chiefs-gold)', width: 16, height: 16, borderRadius: 3, cursor: 'pointer', fontSize: '0.75rem', fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1, padding: 0 };
 
 // ── Specialist cell ────────────────────────────────────────────────────────
 function SpecialistCell({ id, slot, onDragStart, onDrop, masterPlayers, draftedPlayers }) {
@@ -210,7 +205,6 @@ function SpecialistCell({ id, slot, onDragStart, onDrop, masterPlayers, draftedP
                 display: 'flex', flexDirection: 'column', gap: 6,
                 boxShadow: slot ? '0 4px 15px rgba(0,0,0,0.4)' : 'none',
                 transition: 'all 0.2s ease',
-                backdropFilter: 'blur(8px)',
                 position: 'relative',
                 zIndex: 2,
             }}
@@ -258,7 +252,7 @@ function SpecialistCell({ id, slot, onDragStart, onDrop, masterPlayers, draftedP
     );
 }
 
-// ── Roster Side Panel ──────────────────────────────────────────────────
+// ── Roster Side Panel ── Cut panel only (IR is at bottom of main content)
 function RosterSidebar({ cuts, onDrop, onDragStart, onSign, masterPlayers, draftedPlayers }) {
     return (
         <div style={{ width: 230, borderLeft: '2px solid rgba(255,255,255,0.15)', display: 'flex', flexDirection: 'column', background: 'rgba(0,0,0,0.3)', flexShrink: 0 }}>
@@ -270,10 +264,10 @@ function RosterSidebar({ cuts, onDrop, onDragStart, onSign, masterPlayers, draft
 
             <div
                 onDragOver={e => e.preventDefault()}
-                onDrop={e => onDrop(e, { posId: '__cut__', slotIdx: -1, targetZone: 'cut' })}
+                onDrop={e => onDrop(e, { posId: '__cut__', slotIdx: cuts.length, targetZone: 'cut' })}
                 style={{ flex: 1, padding: '0 15px', overflowY: 'auto' }}
             >
-                <div style={{ fontSize: '0.8rem', fontWeight: 900, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.15em', marginBottom: 15, borderBottom: '2px solid var(--chiefs-red)', paddingBottom: 6, fontFamily: "'Outfit', sans-serif" }}>
+                <div style={{ fontSize: '0.8rem', fontWeight: 900, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.15em', marginBottom: 10, borderBottom: '2px solid var(--chiefs-red)', paddingBottom: 6, fontFamily: "'Outfit', sans-serif" }}>
                     CUT PANEL — {cuts.length}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -290,8 +284,10 @@ function RosterSidebar({ cuts, onDrop, onDragStart, onSign, masterPlayers, draft
     );
 }
 
+
 // ── Main RosterView ────────────────────────────────────────────────────────
 export default function RosterView({ masterPlayers, draftedPlayers, currentPick, onDraft }) {
+    const isDraftComplete = (currentPick || 1) > 257;
     const [state, setStateRaw] = useState(() => {
         const loaded = loadState() ?? defaultState();
         if (!loaded.cuts) loaded.cuts = [];
@@ -302,8 +298,6 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
     const [isSignModalOpen, setIsSignModalOpen] = useState(false);
     const [isPasting, setIsPasting] = useState(false);
     const [pastedHtml, setPastedHtml] = useState('');
-
-    const isDraftComplete = (currentPick || 1) > 257;
 
     const setState = useCallback(next => {
         setStateRaw(prev => {
@@ -329,23 +323,36 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
             const next = { ...prev, depthChart: { ...prev.depthChart }, reserve: [...prev.reserve], cuts: [...prev.cuts] };
             const dc = next.depthChart;
 
-            if (src.posId === '__ir__') {
-                next.reserve.splice(src.slotIdx, 1);
-            } else if (src.posId === '__cut__') {
-                next.cuts.splice(src.slotIdx, 1);
-            } else {
+            // Capture displaced player for swap
+            const displaced = (dst.posId !== '__ir__' && dst.posId !== '__cut__')
+                ? (dc[dst.posId]?.[dst.slotIdx] ?? null)
+                : null;
+
+            // Remove from source
+            if (src.posId === '__ir__') next.reserve.splice(src.slotIdx, 1);
+            else if (src.posId === '__cut__') next.cuts.splice(src.slotIdx, 1);
+            else {
+                if (!dc[src.posId]) dc[src.posId] = [];
+                dc[src.posId] = [...dc[src.posId]];
                 dc[src.posId][src.slotIdx] = null;
-                // Don't auto-pop, keep indices stable
             }
 
-            if (dst.posId === '__ir__') {
-                next.reserve.push(src.slot.name);
-            } else if (dst.posId === '__cut__') {
-                next.cuts.push(src.slot.name);
-            } else {
+            // Place at destination
+            if (dst.posId === '__ir__') next.reserve.push(src.slot.name);
+            else if (dst.posId === '__cut__') next.cuts.push(src.slot.name);
+            else {
                 if (!dc[dst.posId]) dc[dst.posId] = [];
+                dc[dst.posId] = [...dc[dst.posId]];
                 dc[dst.posId][dst.slotIdx] = makeSlot(src.slot.name, dst.targetZone);
             }
+
+            // Swap displaced back to source
+            if (displaced) {
+                if (src.posId === '__ir__') next.reserve.push(displaced.name);
+                else if (src.posId === '__cut__') next.cuts.push(displaced.name);
+                else dc[src.posId][src.slotIdx] = makeSlot(displaced.name, src.slot?.zone ?? '53');
+            }
+
             return next;
         });
     }, [setState]);
@@ -413,7 +420,7 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
 
     const handleFetchOurlads = async () => {
         try {
-            setBootstrapping(true); 
+            setBootstrapping(true);
             setState(await fetchOurladsRoster());
             setBootstrapping(false);
         } catch (err) {
@@ -456,7 +463,7 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
         return (
             <div style={{ background: 'var(--bg-color)', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 25, backgroundImage: 'radial-gradient(circle at center, rgba(255,183,0,0.05) 0%, transparent 70%)' }}>
                 <div style={{ color: 'var(--chiefs-gold)', fontSize: '2rem', fontWeight: 900, fontFamily: "'Outfit', sans-serif", letterSpacing: '0.1em', textShadow: '0 0 20px rgba(255,183,0,0.3)' }}>INITIALIZE ROSTER</div>
-                
+
                 {!isPasting ? (
                     <>
                         <div style={{ display: 'flex', gap: 15, flexWrap: 'wrap', justifyContent: 'center' }}>
@@ -490,7 +497,7 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
                     </div>
                 )}
                 <div style={{ color: 'var(--text-dim)', fontSize: '0.9rem', textAlign: 'center', maxWidth: 500, lineHeight: 1.6, fontStyle: 'italic' }}>
-                    Automate your roster setup by fetching the latest depth chart directly,<br/>or use your manual baseline files.
+                    Automate your roster setup by fetching the latest depth chart directly,<br />or use your manual baseline files.
                 </div>
             </div>
         );
@@ -515,7 +522,7 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
     };
     calculateStats(positionConfig.offense);
     calculateStats(positionConfig.defense);
-    
+
     let destined53 = oCount + dCount;
     SPECIALIST_IDS.forEach(id => {
         const s = depthChart[id]?.[0];
@@ -538,8 +545,8 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
                 borderBottom: '3px solid var(--chiefs-gold)', gap: 30, flexShrink: 0
             }}>
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
-                    <div style={{ fontSize: '1.6rem', fontWeight: 900, letterSpacing: '0.08em', color: '#fff', fontFamily: "'Outfit', sans-serif", textShadow: '2px 2px 4px rgba(0,0,0,0.5)' }}>CHIEFS KINGDOM ROSTER</div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--chiefs-gold)', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.3em' }}>MANAGEMENT CONSOLE</div>
+                    <div style={{ fontSize: '1.6rem', fontWeight: 900, letterSpacing: '0.08em', color: '#fff', fontFamily: "'Outfit', sans-serif", textShadow: '2px 2px 4px rgba(0,0,0,0.5)' }}>CHIEFS</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--chiefs-gold)', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.3em' }}>DEPTH CHART</div>
                 </div>
 
                 <div style={{ flex: 1 }} />
@@ -559,7 +566,7 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
             <div style={{ display: 'flex', flex: 1, overflow: 'hidden', minHeight: 0 }}>
                 <div style={{ flex: 1, padding: '10px 24px 40px', overflowY: 'auto', minHeight: 0, minWidth: 0, background: 'radial-gradient(circle at top right, rgba(227,24,55,0.05) 0%, transparent 60%)' }}>
                     <SectionHeader label="OFFENSE" count={oCount} onAdd={() => handleAddPosition('offense')} />
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 40 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '85px 1fr 1fr 1fr', gap: 0, marginBottom: 40 }}>
                         <DepthHeader />
                         {positionConfig.offense.map((p, idx) => (
                             <DepthRow key={p.id} idx={idx} phase="offense" posConfig={p} slots={depthChart[p.id] ?? []} onDragStart={handleDragStart} onDrop={handleDrop} onConfigChange={val => handleSlotsChange(p.id, val)} onDeletePosition={() => updateOffenseConfig(positionConfig.offense.filter(x => x.id !== p.id))} onRowDragStart={handleRowDragStart} onRowDrop={handleRowDrop} masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} />
@@ -567,14 +574,14 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
                     </div>
 
                     <SectionHeader label="DEFENSE" count={dCount} onAdd={() => handleAddPosition('defense')} style={{ marginTop: 60 }} />
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 40 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '85px 1fr 1fr 1fr', gap: 0, marginBottom: 40 }}>
                         <DepthHeader />
                         {positionConfig.defense.map((p, idx) => (
                             <DepthRow key={p.id} idx={idx} phase="defense" posConfig={p} slots={depthChart[p.id] ?? []} onDragStart={handleDragStart} onDrop={handleDrop} onConfigChange={val => handleSlotsChange(p.id, val)} onDeletePosition={() => updateDefenseConfig(positionConfig.defense.filter(x => x.id !== p.id))} onRowDragStart={handleRowDragStart} onRowDrop={handleRowDrop} masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} />
                         ))}
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 24, marginTop: 60, padding: '24px', background: 'rgba(0,0,0,0.3)', borderRadius: 12, border: '2px solid var(--chiefs-red)', boxShadow: '0 8px 32px rgba(0,0,0,0.4)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 24, marginTop: 60, padding: '24px', background: 'rgba(0,0,0,0.3)', borderRadius: 12, border: '1px solid rgba(255,183,0,0.3)', boxShadow: '0 8px 32px rgba(0,0,0,0.4)' }}>
                         <div style={{ display: 'flex', gap: 12 }}>
                             {SPECIALIST_IDS.map(id => (
                                 <SpecialistCell key={id} id={id} slot={depthChart[id]?.[0] ?? null} onDragStart={handleDragStart} onDrop={handleDrop} masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} />
@@ -584,7 +591,12 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
                         {needs > 0 && <div style={{ fontSize: '1rem', color: 'var(--chiefs-gold)', fontWeight: 900, fontFamily: "'Outfit', sans-serif", letterSpacing: '0.1em' }}>REMAINING NEEDS: {needs}</div>}
                     </div>
 
-                    <div onDragOver={e => e.preventDefault()} onDrop={e => handleDrop(e, { posId: '__ir__', slotIdx: -1, targetZone: 'ir' })} style={{ padding: '20px 0', borderTop: '2px solid rgba(255,255,255,0.1)', marginTop: 30 }}>
+                    {/* IR — bottom */}
+                    <div
+                        onDragOver={e => e.preventDefault()}
+                        onDrop={e => handleDrop(e, { posId: '__ir__', slotIdx: reserve.length, targetZone: 'ir' })}
+                        style={{ padding: '20px 0', borderTop: '2px solid rgba(255,255,255,0.1)', marginTop: 30 }}
+                    >
                         <div style={{ fontSize: '0.9rem', fontWeight: 900, color: 'var(--chiefs-red)', textTransform: 'uppercase', letterSpacing: '0.2em', marginBottom: 15, fontFamily: "'Outfit', sans-serif" }}>INJURY RESERVE — {reserve.length}</div>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
                             {reserve.map((name, i) => (
@@ -597,20 +609,21 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
                 <RosterSidebar cuts={cuts} onDragStart={handleDragStart} onDrop={handleDrop} masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} onSign={() => setIsSignModalOpen(true)} />
             </div>
 
-            <UnrankedModal isOpen={isSignModalOpen} onClose={() => setIsSignModalOpen(false)} onDraft={handleSignPlayer} isUDFAVersion={isDraftComplete} />
+            <UnrankedModal isOpen={isSignModalOpen} onClose={() => setIsSignModalOpen(false)} onDraft={handleSignPlayer} mode={isDraftComplete ? 'postdraft' : 'roster'} />
         </div>
     );
 }
 
+// DepthHeader — 4 cells matching the row grid
 function DepthHeader() {
     return (
-        <div style={{ display: 'grid', gridTemplateColumns: `70px 60px repeat(${MAX_DISPLAY_SLOTS}, 175px)`, gap: 6, marginBottom: 5 }}>
-            <div className="depth-h">Pos</div><div className="depth-h">Slots</div>
-            {Array.from({ length: MAX_DISPLAY_SLOTS }, (_, i) => (
-                <div key={i} className="depth-h">Slot {i+1}</div>
-            ))}
-            <style>{`.depth-h { font-size: 0.65rem; font-weight: 900; color: rgba(255,255,255,0.3); text-transform: uppercase; letter-spacing: 0.1em; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 5px; }`}</style>
-        </div>
+        <React.Fragment>
+            <div className="depth-h">Pos</div>
+            <div className="depth-h" style={{ textAlign: 'left', paddingLeft: 10 }}>53-Man</div>
+            <div className="depth-h" style={{ textAlign: 'left', paddingLeft: 10 }}>Practice Squad</div>
+            <div className="depth-h" style={{ textAlign: 'left', paddingLeft: 10 }}>Reserve</div>
+            <style>{`.depth-h { font-size: 0.65rem; font-weight: 900; color: rgba(255,255,255,0.3); text-transform: uppercase; letter-spacing: 0.1em; border-bottom: 1px solid rgba(255,255,255,0.05); padding: 4px 0 5px; }`}</style>
+        </React.Fragment>
     );
 }
 

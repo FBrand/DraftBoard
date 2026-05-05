@@ -81,7 +81,7 @@ export function loadState() {
             if (parsed?.positionConfig?.offense?.length > 0) return parsed;
         }
     } catch { /* ignore */ }
-    return null; 
+    return null;
 }
 
 export function saveState(state) {
@@ -132,7 +132,7 @@ export function parseCSV(csvText) {
         rawSlots.forEach(s => {
             const v = s.trim();
             if (!v) return;
-            
+
             let zone = '53';
             if (v.toUpperCase().startsWith('PS:')) zone = 'ps';
             else if (v.toUpperCase().startsWith('IR:')) zone = 'ir';
@@ -250,7 +250,7 @@ function cleanPlayerNameWithStatus(el) {
     if (!tag) {
         if (raw.includes("CF26")) tag = "UDFA";
         const roundMatch = raw.match(/2\d\/(\d)/);
-        if (roundMatch) tag = roundMatch[1];
+        if (roundMatch) tag = roundMatch[0];
     }
 
     let name = raw.replace(/\s+\S*\d{2,}.*$/, '').trim();
@@ -268,10 +268,10 @@ function cleanPlayerNameWithStatus(el) {
 export function parseHTMLToRoster(html) {
     const parser = new DOMParser();
     const doc = parser.parseFromString(html, 'text/html');
-    
+
     const allTables = Array.from(doc.querySelectorAll('table.table-bordered'));
     const tables = allTables.filter(t => t.rows[0]?.cells.length >= 3).slice(0, 3);
-    
+
     // Use an accumulator to merge positions
     const mergedData = { O: {}, D: {}, S: {} };
 
@@ -282,7 +282,7 @@ export function parseHTMLToRoster(html) {
         rows.forEach(row => {
             const cells = Array.from(row.querySelectorAll('td'));
             if (cells.length < 3) return;
-            
+
             const rawPos = cells[0].textContent.trim();
             if (!rawPos || ["Offense", "Defense", "Special Teams", "H", "KO", "PR", "KR"].includes(rawPos)) return;
 
@@ -295,7 +295,7 @@ export function parseHTMLToRoster(html) {
             if (players.length === 0) return;
 
             const pos = POS_MAPPING[rawPos] || rawPos;
-            
+
             if (!mergedData[phaseLabel][pos]) mergedData[phaseLabel][pos] = [];
             mergedData[phaseLabel][pos].push(...players);
         });
@@ -336,12 +336,12 @@ export function parseHTMLToRoster(html) {
 export async function fetchOurladsRoster() {
     const url = "https://www.ourlads.com/nfldepthcharts/depthchart/KC";
     const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`;
-    
+
     const res = await fetch(proxyUrl);
     if (!res.ok) throw new Error("Network fetch failed");
     const html = await res.text();
     if (!html) throw new Error("Empty response from proxy");
-    
+
     return parseHTMLToRoster(html);
 }
 
