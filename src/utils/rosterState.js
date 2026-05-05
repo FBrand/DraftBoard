@@ -249,7 +249,7 @@ function cleanPlayerNameWithStatus(el) {
 
     if (!tag) {
         if (raw.includes("CF26")) tag = "UDFA";
-        const roundMatch = raw.match(/2\d\/(\d)/);
+        const roundMatch = raw.match(/\d{2}\/(\d)/);
         if (roundMatch) tag = roundMatch[0];
     }
 
