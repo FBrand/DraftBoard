@@ -27,7 +27,7 @@ export const POS_TRANSLATIONS = {
     'WR.S': 'Slot',
     //'LT': 'Left Tackle',
     //'LG': 'Left Guard',
-    //'//C': 'Center',
+    //'C': 'Center',
     //'RG': 'Right Guard',
     //'RT': 'Right Tackle',
     //'TE': 'Tight End',
@@ -78,11 +78,10 @@ export function loadState() {
         const raw = localStorage.getItem(STORAGE_KEY);
         if (raw) {
             const parsed = JSON.parse(raw);
-            // Only use saved state if it has actual position config
             if (parsed?.positionConfig?.offense?.length > 0) return parsed;
         }
     } catch { /* ignore */ }
-    return null; // null = needs CSV bootstrap
+    return null; 
 }
 
 export function saveState(state) {
@@ -90,18 +89,9 @@ export function saveState(state) {
 }
 
 // ---------------------------------------------------------------------------
-// CSV Import — builds positionConfig dynamically from rows
+// CSV Import
 // ---------------------------------------------------------------------------
 
-/**
- * Parse CSV into full roster state.
- * Format: Phase,pos,slot1,slot2,...
- * Phase: O | D | S
- * Slot prefix: PS: → ps zone, IR: → ir zone, else 53 zone
- *
- * The same pos label can appear multiple times (e.g. two DE rows).
- * Each row gets a unique stable id: "O-WR.L-0", "D-DE-0", "D-DE-1", etc.
- */
 export function parseCSV(csvText) {
     const lines = csvText
         .trim()
@@ -113,7 +103,7 @@ export function parseCSV(csvText) {
     const defense = [];
     const depthChart = {};
     const reserve = [];
-    const posCount = {}; // tracks occurrences per "Phase-pos"
+    const posCount = {};
 
     SPECIALIST_IDS.forEach(id => { depthChart[id] = []; });
 
@@ -130,13 +120,11 @@ export function parseCSV(csvText) {
             continue;
         }
 
-        // Assign unique row id
         const countKey = `${phase}-${pos}`;
         const idx = posCount[countKey] ?? 0;
         posCount[countKey] = idx + 1;
         const rowId = `${countKey}-${idx}`;
 
-        // Parse slot cells
         const parsed = [];
         let rIndex = 0;
         const limit53 = slots ? parseInt(slots) : slots53ForPos(pos);
@@ -144,34 +132,30 @@ export function parseCSV(csvText) {
         rawSlots.forEach(s => {
             const v = s.trim();
             if (!v) return;
-
+            
             let zone = '53';
             if (v.toUpperCase().startsWith('PS:')) zone = 'ps';
             else if (v.toUpperCase().startsWith('IR:')) zone = 'ir';
             else if (v.toUpperCase().startsWith('R:')) zone = 'r';
-            else if (rIndex >= limit53) zone = 'r'; // Auto-overflow to reserve
+            else if (rIndex >= limit53) zone = 'r';
 
             const name = v.replace(/^(PS:|IR:|R:)/i, '').trim();
             const slot = makeSlot(name, zone);
 
             if (zone === 'ps') {
-                // Put in PS slots (indices limit53 to limit53 + 2)
                 const psIdx = limit53 + (parsed.filter(x => x?.zone === 'ps').length);
                 parsed[psIdx] = slot;
             } else if (zone === 'r') {
-                // Put in Reserve slots (indices limit53 + 3 onwards)
                 const resIdx = limit53 + 3 + (parsed.filter(x => x?.zone === 'r').length);
                 parsed[resIdx] = slot;
             } else if (zone === 'ir') {
                 reserve.push(name);
             } else {
-                // 53-man
                 parsed[rIndex++] = slot;
             }
         });
 
         depthChart[rowId] = parsed;
-
         const chip = { id: rowId, label: pos, slots53: limit53 };
         if (phase === 'O') offense.push(chip);
         else if (phase === 'D') defense.push(chip);
@@ -180,14 +164,8 @@ export function parseCSV(csvText) {
     return { positionConfig: { offense, defense }, depthChart, reserve, cuts: [] };
 }
 
-// ---------------------------------------------------------------------------
-// CSV Export — emits `label` (not internal `id`) in the pos column
-// ---------------------------------------------------------------------------
 export function exportCSV(state) {
-    const maxSlots = Math.max(
-        ...Object.values(state.depthChart).map(arr => arr.length),
-        5
-    );
+    const maxSlots = Math.max(...Object.values(state.depthChart).map(arr => arr.length), 5);
     const headers = ['Phase', 'pos', ...Array.from({ length: maxSlots }, (_, i) => `slot${i + 1}`)];
     const rows = [headers.join(',')];
 
@@ -200,7 +178,6 @@ export function exportCSV(state) {
                 if (s.zone === 'ir') return `IR:${s.name}`;
                 return s.name;
             });
-            // use p.label (e.g. "DE") not p.id ("D-DE-0")
             rows.push([phase, p.label, ...cells].join(','));
         });
     };
@@ -211,20 +188,13 @@ export function exportCSV(state) {
         const s = state.depthChart[id]?.[0];
         rows.push(['S', id, s ? s.name : ''].join(','));
     });
-
     return rows.join('\n');
 }
 
-// ---------------------------------------------------------------------------
-// Auto-assign (for manual add, not CSV import)
-// ---------------------------------------------------------------------------
 export function resolvePosition(declaredPos, positionConfig, depthChart) {
     const allPositions = [...positionConfig.offense, ...positionConfig.defense];
-
-    // Exact label match
     const exactMatches = allPositions.filter(p => p.label === declaredPos);
     if (exactMatches.length > 0) {
-        // Pick the row with fewest players
         exactMatches.sort((a, b) => {
             const lenA = (depthChart[a.id] ?? []).filter(Boolean).length;
             const lenB = (depthChart[b.id] ?? []).filter(Boolean).length;
@@ -232,8 +202,6 @@ export function resolvePosition(declaredPos, positionConfig, depthChart) {
         });
         return exactMatches[0].id;
     }
-
-    // Major position match (WR.L → WR prefix)
     const major = declaredPos.split('.')[0];
     const majorMatches = allPositions.filter(p => p.label.split('.')[0] === major);
     if (majorMatches.length > 0) {
@@ -244,11 +212,11 @@ export function resolvePosition(declaredPos, positionConfig, depthChart) {
         });
         return majorMatches[0].id;
     }
-
-    return null; // → reserve
+    return null;
 }
+
 // ---------------------------------------------------------------------------
-// Ourlads Scraper (JS Conversion)
+// Scraper Helpers
 // ---------------------------------------------------------------------------
 
 const POS_MAPPING = {
@@ -260,84 +228,126 @@ const POS_MAPPING = {
     "PT": "P", "PK": "K",
 };
 
-function cleanPlayerName(raw) {
+/**
+ * Enhanced player cleaning with status metadata.
+ */
+function cleanPlayerNameWithStatus(el) {
+    if (!el) return null;
+    const raw = el.textContent.trim();
     if (!raw) return null;
+
     let tag = '';
-    if (raw.includes("CF26")) tag = "UDFA";
-    const roundMatch = raw.match(/26\/(\d)/);
-    if (roundMatch) tag = roundMatch[1];
+    const className = el.className || '';
+
+    if (className.includes('lc_aqua')) tag = "UDFA";
+    else if (className.includes('lc_gold')) tag = "FA";
+    else if (className.includes('lc_red')) tag = "IR";
+    else if (className.includes('lc_purple')) {
+        const roundMatch = raw.match(/2\d\/(\d)/);
+        tag = roundMatch ? roundMatch[1] : "RP";
+    }
+
+    if (!tag) {
+        if (raw.includes("CF26")) tag = "UDFA";
+        const roundMatch = raw.match(/2\d\/(\d)/);
+        if (roundMatch) tag = roundMatch[1];
+    }
 
     let name = raw.replace(/\s+\S*\d{2,}.*$/, '').trim();
     name = name.replace(/[PUT]\/[a-zA-Z]+$/, '').trim();
 
     if (name.includes(",")) {
-        const [last, first] = name.split(",");
-        if (first) name = `${first.trim()} ${last.trim()}`;
+        const parts = name.split(",");
+        const last = parts[0];
+        const first = parts.slice(1).join(",").trim();
+        if (first) name = `${first} ${last.trim()}`;
     }
     return tag ? `${name}:${tag}` : name;
 }
 
-export async function fetchOurladsRoster() {
-    const url = "https://www.ourlads.com/nfldepthcharts/depthchart/KC";
-    const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
-
-    const res = await fetch(proxyUrl);
-    const html = await res.text();
+export function parseHTMLToRoster(html) {
     const parser = new DOMParser();
     const doc = parser.parseFromString(html, 'text/html');
+    
+    const allTables = Array.from(doc.querySelectorAll('table.table-bordered'));
+    const tables = allTables.filter(t => t.rows[0]?.cells.length >= 3).slice(0, 3);
+    
+    // Use an accumulator to merge positions
+    const mergedData = { O: {}, D: {}, S: {} };
 
-    const tables = doc.querySelectorAll('table');
-    const data = {};
-
-    tables.forEach(table => {
+    tables.forEach((table, tableIdx) => {
+        const phaseLabel = tableIdx === 0 ? 'O' : (tableIdx === 1 ? 'D' : 'S');
         const rows = Array.from(table.querySelectorAll('tr')).slice(1);
-        rows.forEach(row => {
-            const cols = Array.from(row.querySelectorAll('td')).map(td => td.textContent.trim());
-            if (cols.length < 3) return;
 
-            const pos = cols[0];
-            if (["Offense", "Defense", "Special Teams", "", "H", "KO", "PR", "KR"].includes(pos)) return;
+        rows.forEach(row => {
+            const cells = Array.from(row.querySelectorAll('td'));
+            if (cells.length < 3) return;
+            
+            const rawPos = cells[0].textContent.trim();
+            if (!rawPos || ["Offense", "Defense", "Special Teams", "H", "KO", "PR", "KR"].includes(rawPos)) return;
 
             const players = [];
-            for (let i = 2; i < cols.length; i += 2) {
-                const name = cleanPlayerName(cols[i]);
-                if (name) players.push(name);
+            for (let i = 2; i < cells.length; i += 2) {
+                const playerLink = cells[i].querySelector('a');
+                const nameWithStatus = cleanPlayerNameWithStatus(playerLink || cells[i]);
+                if (nameWithStatus) players.push(nameWithStatus);
             }
+            if (players.length === 0) return;
 
-            if (players.length > 0) {
-                const basePos = POS_MAPPING[pos] || pos;
-                if (!data[basePos]) data[basePos] = [];
-                data[basePos].push(...players);
-            }
+            const pos = POS_MAPPING[rawPos] || rawPos;
+            
+            if (!mergedData[phaseLabel][pos]) mergedData[phaseLabel][pos] = [];
+            mergedData[phaseLabel][pos].push(...players);
         });
     });
 
-    // Build the final roster state object
-    const offense = [];
-    const defense = [];
-    const depthChart = {};
-    const reserve = [];
-    const posCount = {};
+    const offense = [], defense = [], depthChart = {};
 
-    Object.entries(data).forEach(([pos, players]) => {
-        const slots = { "TE": 4, "QB": 3, "RB": 4, "LB.M": 3, "K": 1, "P": 1, "LS": 1 }[pos] || 2;
+    ['O', 'D', 'S'].forEach(phase => {
+        Object.entries(mergedData[phase]).forEach(([pos, players]) => {
+            if (phase === 'S' && SPECIALIST_IDS.includes(pos)) {
+                depthChart[pos] = [makeSlot(players[0], '53')];
+                return;
+            }
 
-        let phase = 'S';
-        if (/^(WR|LT|LG|C|RG|RT|TE|QB|RB)/.test(pos)) phase = 'O';
-        else if (/^(LD|DT|RD|LB|CB|S|S\.)/.test(pos)) phase = 'D';
+            const slots = { "TE": 4, "QB": 3, "RB": 4, "LB.M": 3, "K": 1, "P": 1, "LS": 1 }[pos] || 2;
+            const rowId = `${phase}-${pos}-0`; // We only have one merged row now
 
-        const rowId = `${phase}-${pos}-${posCount[pos] || 0}`;
-        posCount[pos] = (posCount[pos] || 0) + 1;
+            const parsed = [];
+            players.forEach((name, i) => {
+                if (i < slots) {
+                    parsed[i] = makeSlot(name, '53');
+                } else {
+                    const resIdx = slots + 3 + (i - slots);
+                    parsed[resIdx] = makeSlot(name, 'r');
+                }
+            });
 
-        const parsedSlots = players.map((name, i) => {
-            return makeSlot(name, i < slots ? '53' : 'r');
+            depthChart[rowId] = parsed;
+            const chip = { id: rowId, label: pos, slots53: slots };
+            if (phase === 'O') offense.push(chip);
+            else if (phase === 'D') defense.push(chip);
         });
-
-        depthChart[rowId] = parsedSlots;
-        const chip = { id: rowId, label: pos, slots53: slots };
-        if (phase === 'O') offense.push(chip);
-        else if (phase === 'D') defense.push(chip);
     });
 
-    return { positionConfig: { offense, defense }, depthChart, reserve, cuts: [] };
+    return { positionConfig: { offense, defense }, depthChart, reserve: [], cuts: [] };
+}
+
+export async function fetchOurladsRoster() {
+    const url = "https://www.ourlads.com/nfldepthcharts/depthchart/KC";
+    const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`;
+    
+    const res = await fetch(proxyUrl);
+    if (!res.ok) throw new Error("Network fetch failed");
+    const html = await res.text();
+    if (!html) throw new Error("Empty response from proxy");
+    
+    return parseHTMLToRoster(html);
+}
+
+export async function fetchLocalRoster() {
+    const res = await fetch('/roster.csv');
+    if (!res.ok) throw new Error("Could not find local roster.csv");
+    const text = await res.text();
+    return parseCSV(text);
 }
