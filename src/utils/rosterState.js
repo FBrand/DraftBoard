@@ -25,28 +25,28 @@ export const POS_TRANSLATIONS = {
     'WR.Z': 'Z-Reciever',
     'WR.X': 'X-Reciever',
     'WR.S': 'Slot',
-    'LT': 'Left Tackle',
-    'LG': 'Left Guard',
-    'C': 'Center',
-    'RG': 'Right Guard',
-    'RT': 'Right Tackle',
-    'TE': 'Tight End',
-    'QB': 'Quarterback',
-    'RB': 'Running Back',
-    'LDE': 'Left End',
-    'RDE': 'Right End',
-    'DT.3T': '3-Tech DT',
-    'DT.1T': '1-Tech DT',
-    'LB.W': 'Will LB',
-    'LB.M': 'Mike LB',
-    'LB.S': 'Sam LB',
-    'CB': 'Cornerback',
-    'CB.N': 'Nickel CB',
-    'S.F': 'Free Safety',
-    'S.S': 'Strong Safety',
-    'PT': 'Punter',
-    'PK': 'Kicker',
-    'LS': 'Long Snapper'
+    //'LT': 'Left Tackle',
+    //'LG': 'Left Guard',
+    //'//C': 'Center',
+    //'RG': 'Right Guard',
+    //'RT': 'Right Tackle',
+    //'TE': 'Tight End',
+    //'QB': 'Quarterback',
+    //'RB': 'Running Back',
+    //'LDE': 'Left End',
+    //'RDE': 'Right End',
+    'DT.3T': '3-Tech',
+    'DT.1T': '1-Tech',
+    //'LB.W': 'Will LB',
+    //'LB.M': 'Mike LB',
+    //'LB.S': 'Sam LB',
+    //'CB': 'Cornerback',
+    'CB.N': 'Nickel',
+    //'S.F': 'Free Safety',
+    //'S.S': 'Strong Safety',
+    //'PT': 'Punter',
+    //'PK': 'Kicker',
+    //'LS': 'Long Snapper'
 };
 
 
@@ -144,7 +144,7 @@ export function parseCSV(csvText) {
         rawSlots.forEach(s => {
             const v = s.trim();
             if (!v) return;
-            
+
             let zone = '53';
             if (v.toUpperCase().startsWith('PS:')) zone = 'ps';
             else if (v.toUpperCase().startsWith('IR:')) zone = 'ir';
@@ -280,7 +280,7 @@ function cleanPlayerName(raw) {
 export async function fetchOurladsRoster() {
     const url = "https://www.ourlads.com/nfldepthcharts/depthchart/KC";
     const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
-    
+
     const res = await fetch(proxyUrl);
     const html = await res.text();
     const parser = new DOMParser();
@@ -321,7 +321,7 @@ export async function fetchOurladsRoster() {
 
     Object.entries(data).forEach(([pos, players]) => {
         const slots = { "TE": 4, "QB": 3, "RB": 4, "LB.M": 3, "K": 1, "P": 1, "LS": 1 }[pos] || 2;
-        
+
         let phase = 'S';
         if (/^(WR|LT|LG|C|RG|RT|TE|QB|RB)/.test(pos)) phase = 'O';
         else if (/^(LD|DT|RD|LB|CB|S|S\.)/.test(pos)) phase = 'D';
