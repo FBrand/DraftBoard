@@ -69,7 +69,7 @@ function SlotCell({ slot, zone, posId, slotIdx, targetZone, onDragStart, onDrop,
         const p = draftData.pickNumber;
         if (r && p) topLabel = `R${r}: ${p}`;
         else if (r) topLabel = `R${r}`;
-        else if (p) topLabel = `PICK ${p}`;
+        else if (p) topLabel = `${p}`;
     } else if (suffix && /^\d+$/.test(suffix)) {
         // Fallback: treat CSV numeric suffix as Round
         topLabel = `R${suffix}`;
@@ -106,7 +106,7 @@ function SlotCell({ slot, zone, posId, slotIdx, targetZone, onDragStart, onDrop,
                     <span style={{ flex: 1, fontSize: '0.78rem', fontWeight: 600, color: nameColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {displayName}
                     </span>
-                    <div style={{ display: 'flex', flexDirection: 'column', flexShrink: 0, borderLeft: '1px solid rgba(255,255,255,0.1)', paddingLeft: 4, textAlign: 'right' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', flexShrink: 0, borderLeft: '1px solid rgba(255,255,255,0.1)', paddingLeft: 4, textAlign: 'right', gap: 5 }}>
                         <span style={{ fontSize: '0.65rem', color: '#ff0000', fontWeight: 800, textTransform: 'uppercase', lineHeight: 1.1, whiteSpace: 'nowrap', overflow: 'hidden' }}>
                             {topLabel}
                         </span>
