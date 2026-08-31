@@ -103,6 +103,7 @@ export function parseCSV(csvText) {
     const defense = [];
     const depthChart = {};
     const reserve = [];
+    const cuts = [];
     const posCount = {};
 
     SPECIALIST_IDS.forEach(id => { depthChart[id] = []; });
@@ -110,9 +111,33 @@ export function parseCSV(csvText) {
     for (const line of lines) {
         const cols = line.split(',');
         const phase = cols[0].trim().toUpperCase();
-        const pos = cols[1].trim();
-        const slots = cols[2].trim();
-        const rawSlots = cols.slice(3);
+
+        if (phase === 'IR') {
+            const col2 = cols[2]?.trim() ?? '';
+            const parsedSlots = parseInt(col2);
+            const hasSlots53Col = !isNaN(parsedSlots);
+            const rawSlots = hasSlots53Col ? cols.slice(3) : cols.slice(2);
+            const names = rawSlots.map(s => s.trim()).filter(Boolean).map(n => n.replace(/^(PS:|IR:|R:)/i, '').trim());
+            reserve.push(...names);
+            continue;
+        }
+        if (phase === 'CUT' || phase === 'CUTS') {
+            const col2 = cols[2]?.trim() ?? '';
+            const parsedSlots = parseInt(col2);
+            const hasSlots53Col = !isNaN(parsedSlots);
+            const rawSlots = hasSlots53Col ? cols.slice(3) : cols.slice(2);
+            const names = rawSlots.map(s => s.trim()).filter(Boolean).map(n => n.replace(/^(PS:|IR:|R:)/i, '').trim());
+            cuts.push(...names);
+            continue;
+        }
+
+        const pos = cols[1]?.trim() ?? '';
+        const col2 = cols[2]?.trim() ?? '';
+        const parsedSlots = parseInt(col2);
+        // col2 is slots53 if it's a number (exported format), otherwise it's slot1 (legacy hand-edited format)
+        const hasSlots53Col = !isNaN(parsedSlots);
+        const rawSlots = hasSlots53Col ? cols.slice(3) : cols.slice(2);
+        const explicitSlots53 = hasSlots53Col ? parsedSlots : null;
 
         if (phase === 'S' && SPECIALIST_IDS.includes(pos)) {
             const name = rawSlots.find(s => s.trim())?.trim();
@@ -127,7 +152,7 @@ export function parseCSV(csvText) {
 
         const parsed = [];
         let rIndex = 0;
-        const limit53 = slots ? parseInt(slots) : slots53ForPos(pos);
+        const limit53 = explicitSlots53 ?? slots53ForPos(pos);
 
         rawSlots.forEach(s => {
             const v = s.trim();
@@ -161,12 +186,12 @@ export function parseCSV(csvText) {
         else if (phase === 'D') defense.push(chip);
     }
 
-    return { positionConfig: { offense, defense }, depthChart, reserve, cuts: [] };
+    return { positionConfig: { offense, defense }, depthChart, reserve, cuts };
 }
 
 export function exportCSV(state) {
     const maxSlots = Math.max(...Object.values(state.depthChart).map(arr => arr.length), 5);
-    const headers = ['Phase', 'pos', ...Array.from({ length: maxSlots }, (_, i) => `slot${i + 1}`)];
+    const headers = ['Phase', 'pos', 'slots53', ...Array.from({ length: maxSlots }, (_, i) => `slot${i + 1}`)];
     const rows = [headers.join(',')];
 
     const addRows = (phase, positions) => {
@@ -176,9 +201,10 @@ export function exportCSV(state) {
                 if (!s) return '';
                 if (s.zone === 'ps') return `PS:${s.name}`;
                 if (s.zone === 'ir') return `IR:${s.name}`;
+                if (s.zone === 'r') return `R:${s.name}`;
                 return s.name;
             });
-            rows.push([phase, p.label, ...cells].join(','));
+            rows.push([phase, p.label, p.slots53, ...cells].join(','));
         });
     };
 
@@ -188,6 +214,12 @@ export function exportCSV(state) {
         const s = state.depthChart[id]?.[0];
         rows.push(['S', id, s ? s.name : ''].join(','));
     });
+    if (state.reserve && state.reserve.length > 0) {
+        rows.push(['IR', 'IR', '', ...state.reserve].join(','));
+    }
+    if (state.cuts && state.cuts.length > 0) {
+        rows.push(['CUT', 'CUT', '', ...state.cuts].join(','));
+    }
     return rows.join('\n');
 }
 
@@ -346,7 +378,7 @@ export async function fetchOurladsRoster() {
 }
 
 export async function fetchLocalRoster() {
-    const res = await fetch('/roster.csv');
+    const res = await fetch(`${import.meta.env.BASE_URL}roster.csv`);
     if (!res.ok) throw new Error("Could not find local roster.csv");
     const text = await res.text();
     return parseCSV(text);

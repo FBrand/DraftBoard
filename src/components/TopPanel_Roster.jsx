@@ -40,7 +40,7 @@ const TopPanel = ({ currentPick, currentPickStatus, ourPicksLeft, onUndo, onUpda
                 <button onClick={handleImport} style={btnStyle}>⬆ Import CSV</button>
                 <button onClick={handleExport} style={btnStyle}>⬇ Export CSV</button>
                 <button onClick={() => {
-                    fetch('/roster.csv')
+                    fetch(`${import.meta.env.BASE_URL}roster.csv`)
                         .then(r => r.ok ? r.text() : Promise.reject(r.status))
                         .then(text => setState(parseCSV(text)))
                         .catch(() => setState(defaultState()));

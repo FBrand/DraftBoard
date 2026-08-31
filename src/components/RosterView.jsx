@@ -302,6 +302,39 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
     const setState = useCallback(next => {
         setStateRaw(prev => {
             const result = typeof next === 'function' ? next(prev) : next;
+            if (result && result.depthChart && result.positionConfig) {
+                const normalize = (slots, limit53) => {
+                    if (!slots) return [];
+                    const newSlots = [];
+                    // 1. Keep 53-man slots (indices 0 to limit53 - 1)
+                    for (let i = 0; i < limit53; i++) {
+                        newSlots[i] = slots[i] || null;
+                    }
+                    // 2. PS slots (limit53 to limit53 + 2)
+                    const psSlots = slots.slice(limit53, limit53 + 3).filter(Boolean);
+                    for (let i = 0; i < 3; i++) {
+                        newSlots[limit53 + i] = psSlots[i] || null;
+                    }
+                    // 3. Reserve slots (from limit53 + 3 onwards)
+                    const rSlots = slots.slice(limit53 + 3).filter(Boolean);
+                    rSlots.forEach((slot, idx) => {
+                        newSlots[limit53 + 3 + idx] = slot;
+                    });
+                    return newSlots;
+                };
+
+                const newDC = { ...result.depthChart };
+                const allPositions = [
+                    ...(result.positionConfig.offense || []),
+                    ...(result.positionConfig.defense || [])
+                ];
+                allPositions.forEach(p => {
+                    if (newDC[p.id]) {
+                        newDC[p.id] = normalize(newDC[p.id], Math.max(1, p.slots53));
+                    }
+                });
+                result.depthChart = newDC;
+            }
             saveState(result);
             return result;
         });
