@@ -136,6 +136,26 @@ Player {
 
 ---
 
+## Long-Term: Collaborative Expert & Public Sync
+
+### Overview
+Enable content creators/experts to log in, host public draft boards/rosters, and sync draft execution in real-time. Unauthenticated users can view boards or play locally.
+
+### Key Features
+- **Expert Authentication**: Simple login for up to 10 designated experts/content creators. No complex role hierarchy—only two states: authenticated (expert) vs anonymous (viewer).
+- **Public & Local Boards**:
+  - **Authenticated (Experts)**: Can create persistent boards/rosters and "run" the live draft.
+  - **Unauthenticated (Anonymous)**: Can see expert boards, click through draft simulation, and build their roster locally (stored in localStorage only), but cannot create public boards.
+- **Real-Time Draft Sync (Follow Function)**:
+  - One expert can "run" the draft live for all active viewers.
+  - Viewers can opt to "follow" an expert's draft state, syncing their local view in real-time.
+- **Player Report Cards**: Detailed player breakdown sheets/cards with grades, scouting highlights, and fit assessment.
+- **Architecture/Backend**:
+  - Requires a persistent database (e.g., Supabase, Firebase, or a light SQL backend).
+  - WebSockets or lightweight subscription channels for real-time draft pick dispatching.
+
+---
+
 ## Priority Order
 
 1. ✅ Fix current board stability (no more sticky changes)
@@ -146,3 +166,4 @@ Player {
 6. 🔲 Stage 1: FA tracker
 7. 🔲 Stage 4: UDFA
 8. 🔲 Stage 5: Roster builder
+9. 🔲 Long-Term: Expert Authentication & Real-Time Follow Sync (Database backed)
