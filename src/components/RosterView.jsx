@@ -1,9 +1,10 @@
 import React, { useState, useCallback } from 'react';
 import {
     loadState, saveState, defaultState,
-    parseCSV, exportCSV, makeSlot,
+    parseCSV, exportCSV, makeSlot, resolvePosition,
     SPECIALIST_IDS, hasRosterSourceAdapter, fetchAdapterRoster, fetchLocalRoster, parseHTMLToRoster
 } from '../utils/rosterState';
+import * as faState from '../utils/faState';
 import UnrankedModal from './UnrankedModal';
 import DepthChartGrid from './DepthChartGrid';
 
@@ -276,6 +277,50 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
         a.click();
     };
 
+    // Explicit, anytime-runnable, additive-only: pulls FA's candidates,
+    // the user's own real draft picks, and UDFA signings into empty 53-man
+    // slots. Never overwrites an occupied slot or removes anything — safe
+    // to run repeatedly as new picks/signings/candidates accumulate without
+    // losing hand-edits made in Roster between runs. Never writes to FA's
+    // own state (read-only via faState.loadState()).
+    const handleSyncFromStages = () => {
+        const fa = faState.loadState();
+        const ourPicks = (draftedPlayers || []).filter(p => p.draftedByUs && (p.pickNumber || 0) <= 257);
+        const udfaSignings = (draftedPlayers || []).filter(p => (p.pickNumber || 0) > 257);
+
+        setState(prev => {
+            const next = { ...prev, depthChart: { ...prev.depthChart } };
+            const dc = next.depthChart;
+            const allChips = [...prev.positionConfig.offense, ...prev.positionConfig.defense];
+
+            const placeInFirstEmpty53 = (name, declaredPos) => {
+                if (!name || !declaredPos) return;
+                const rowId = resolvePosition(declaredPos, prev.positionConfig, dc);
+                if (!rowId) return; // no matching row — leave for manual placement, don't guess a new one
+                const chip = allChips.find(p => p.id === rowId);
+                const limit53 = chip?.slots53 ?? 2;
+                const arr = dc[rowId] = [...(dc[rowId] ?? [])];
+                for (let i = 0; i < limit53; i++) {
+                    if (!arr[i]) { arr[i] = makeSlot(name, '53'); return; }
+                }
+                // Row's 53-man slots are all full — don't overflow into PS/reserve
+                // implicitly, don't overwrite; this player is simply skipped this run.
+            };
+
+            if (fa?.depthChart) {
+                const faChips = [...(fa.positionConfig?.offense ?? []), ...(fa.positionConfig?.defense ?? [])];
+                Object.entries(fa.depthChart).forEach(([faRowId, slots]) => {
+                    const label = faChips.find(p => p.id === faRowId)?.label ?? faRowId;
+                    (slots || []).forEach(s => { if (s) placeInFirstEmpty53(s.name, label); });
+                });
+            }
+            ourPicks.forEach(p => placeInFirstEmpty53(p.name, p.position));
+            udfaSignings.forEach(p => placeInFirstEmpty53(p.name, p.position));
+
+            return next;
+        });
+    };
+
     const handlePasteHtml = () => {
         if (!pastedHtml.trim()) return;
         try {
@@ -389,6 +434,7 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
                             title="Zoom in"
                         >+</button>
                     </div>
+                    <button onClick={handleSyncFromStages} className="action-pill" title="Fill empty slots from FA candidates, draft picks, and UDFA signings — never overwrites">Sync from FA/Draft/UDFA</button>
                     <button onClick={handleExport} className="action-pill">Export CSV</button>
                     <button onClick={() => setShowResetConfirm(true)} className="action-pill reset-pill">Reset</button>
                 </div>
