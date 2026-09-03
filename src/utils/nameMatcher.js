@@ -72,23 +72,33 @@ function getLevenshteinDistance(a, b) {
 }
 
 /**
- * Finds the index of a player in a list, using a cascade of matching strategies.
+ * Pre-computes name normalizations for a player list. Callers that look up
+ * many names against the same list in a loop (see useDraftState.js) should
+ * build this once and reuse it via findMatchingIndex, rather than calling
+ * findMatchingPlayerIndex per lookup — that rebuilds this list from scratch
+ * every time, which turns an O(N) loop into an accidental O(N*M) one.
  */
-export function findMatchingPlayerIndex(targetName, playersList) {
-    if (!targetName || !playersList || playersList.length === 0) return -1;
-
-    // Normalizations for the target
-    const targetNorm = normalizeString(targetName);
-    const targetNoSuffix = stripSuffix(targetNorm);
-    const targetNick = applyNickname(targetNoSuffix);
-
-    // Pre-compute normalizations for the list to save time
-    const mappedList = playersList.map((p, idx) => {
+export function buildNameIndex(playersList) {
+    if (!playersList) return [];
+    return playersList.map((p, idx) => {
         const norm = normalizeString(p.name);
         const noSuffix = stripSuffix(norm);
         const nick = applyNickname(noSuffix);
         return { index: idx, name: p.name, norm, noSuffix, nick };
     });
+}
+
+/**
+ * Finds the index of a player in a pre-built name index (see buildNameIndex),
+ * using a cascade of matching strategies.
+ */
+export function findMatchingIndex(targetName, mappedList) {
+    if (!targetName || !mappedList || mappedList.length === 0) return -1;
+
+    // Normalizations for the target
+    const targetNorm = normalizeString(targetName);
+    const targetNoSuffix = stripSuffix(targetNorm);
+    const targetNick = applyNickname(targetNoSuffix);
 
     // Strategy 1: Exact Match (Normalized Punctuation & Case)
     let match = mappedList.find(p => p.norm === targetNorm);
@@ -113,6 +123,10 @@ export function findMatchingPlayerIndex(targetName, playersList) {
 
     for (let i = 0; i < mappedList.length; i++) {
         const p = mappedList[i];
+        // Levenshtein distance is always >= the length difference between the
+        // two strings, and nothing past distance 2 is ever accepted below —
+        // so a bigger length gap can be rejected without the O(len*len) scan.
+        if (Math.abs(targetNick.length - p.nick.length) > 2) continue;
         const dist = getLevenshteinDistance(targetNick, p.nick);
         if (dist < bestDist) {
             bestDist = dist;
@@ -132,4 +146,14 @@ export function findMatchingPlayerIndex(targetName, playersList) {
     }
 
     return -1;
+}
+
+/**
+ * Convenience wrapper for one-off lookups against a list. Builds the name
+ * index on every call, so it's fine for a single lookup but should NOT be
+ * used inside a loop over many names — use buildNameIndex + findMatchingIndex
+ * instead in that case.
+ */
+export function findMatchingPlayerIndex(targetName, playersList) {
+    return findMatchingIndex(targetName, buildNameIndex(playersList));
 }
