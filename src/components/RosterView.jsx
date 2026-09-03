@@ -119,14 +119,14 @@ function SlotCell({ slot, zone, posId, slotIdx, targetZone, onClick, masterPlaye
             {...(slot ? listeners : {})}
             {...(slot ? attributes : {})}
             onClick={() => slot && onClick && onClick(slot, posId, slotIdx)}
-            className={`rv-slot ${slot ? 'filled' : ''} ${zoneClass(slot?.zone ?? zone, isNeed)} ${isOver ? 'drag-over' : ''} ${isDragging ? 'dragging-source' : ''}`}
+            className={`rv-slot ${slot ? 'filled' : 'empty-square'} ${zoneClass(slot?.zone ?? zone, isNeed)} ${isOver ? 'drag-over' : ''} ${isDragging ? 'dragging-source' : ''}`}
             style={slot ? { cursor: 'grab' } : undefined}
         >
             {slot ? (
                 <SlotCardContent {...meta} />
-            ) : isNeed ? (
-                <span className="rv-slot-need-label">NEED</span>
-            ) : null}
+            ) : (
+                <span className="rv-slot-add-icon">+</span>
+            )}
         </div>
     );
 }
@@ -349,6 +349,11 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
     const [pastedHtml, setPastedHtml] = useState('');
     const [addPositionPhase, setAddPositionPhase] = useState(null); // 'offense' | 'defense' | null
     const [showResetConfirm, setShowResetConfirm] = useState(false);
+    // The depth-chart grid is desktop-wide by design (many position columns);
+    // on a phone that means horizontal scrolling to reach most slots. `zoom`
+    // (not transform:scale, which wouldn't shrink the actual scrollable
+    // layout) lets a mobile user shrink the whole grid to fit more on screen.
+    const [zoomLevel, setZoomLevel] = useState(1);
 
     const setState = useCallback(next => {
         setStateRaw(prev => {
@@ -649,12 +654,25 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
                 </div>
 
                 <div className="top-actions">
+                    <div className="roster-zoom-ctrl">
+                        <button
+                            onClick={() => setZoomLevel(z => Math.max(0.5, +(z - 0.1).toFixed(2)))}
+                            className="rv-ctrl-btn"
+                            title="Zoom out"
+                        >−</button>
+                        <span className="rv-zoom-label">{Math.round(zoomLevel * 100)}%</span>
+                        <button
+                            onClick={() => setZoomLevel(z => Math.min(1, +(z + 0.1).toFixed(2)))}
+                            className="rv-ctrl-btn"
+                            title="Zoom in"
+                        >+</button>
+                    </div>
                     <button onClick={handleExport} className="action-pill">Export CSV</button>
                     <button onClick={() => setShowResetConfirm(true)} className="action-pill reset-pill">Reset</button>
                 </div>
             </div>
 
-            <div className="roster-body">
+            <div className="roster-body" style={{ zoom: zoomLevel }}>
                 <div className="roster-main">
                     <div className="roster-section-header">
                         <div className="roster-section-title">OFFENSE</div>
