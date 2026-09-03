@@ -365,15 +365,33 @@ export function parseHTMLToRoster(html) {
     return { positionConfig: { offense, defense }, depthChart, reserve: [], cuts: [] };
 }
 
-export async function fetchOurladsRoster() {
-    const url = "https://www.ourlads.com/nfldepthcharts/depthchart/KC";
-    const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`;
+// Roster auto-fetch is a pluggable adapter, same pattern as Draft's live sync
+// (see useDraftState.js's ESPNProvider discovery): the module is discovered
+// via import.meta.glob so the app builds and runs fine with it absent, same
+// as ESPNProvider.js — this one just doesn't exist yet. The previous
+// hardcoded fetch here pulled directly
+// from ourlads.com via a public CORS proxy — dropped because Ourlads' Terms
+// explicitly prohibit automated access/reproduction of their depth charts
+// (see project memory: project_ourlads_scraping_legal_risk). An adapter
+// backed by a licensed/authorized source can be dropped in at the path below
+// without touching this file again; must implement `fetchRosterHTML(): Promise<string>`
+// returning HTML in the same shape parseHTMLToRoster() already parses.
+const ROSTER_ADAPTER_PATH = '../services/RosterSourceAdapter.js';
 
-    const res = await fetch(proxyUrl);
-    if (!res.ok) throw new Error("Network fetch failed");
-    const html = await res.text();
-    if (!html) throw new Error("Empty response from proxy");
+export function hasRosterSourceAdapter() {
+    const modules = import.meta.glob(ROSTER_ADAPTER_PATH);
+    return Object.keys(modules).length > 0;
+}
 
+export async function fetchAdapterRoster() {
+    const modules = import.meta.glob(ROSTER_ADAPTER_PATH);
+    if (!modules[ROSTER_ADAPTER_PATH]) {
+        throw new Error('No roster source adapter configured');
+    }
+    const mod = await modules[ROSTER_ADAPTER_PATH]();
+    const adapter = new mod.RosterSourceAdapter();
+    const html = await adapter.fetchRosterHTML();
+    if (!html) throw new Error('Adapter returned no data');
     return parseHTMLToRoster(html);
 }
 

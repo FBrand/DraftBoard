@@ -6,7 +6,7 @@ import {
 import {
     loadState, saveState, defaultState,
     parseCSV, exportCSV, makeSlot,
-    SPECIALIST_IDS, POS_TRANSLATIONS, fetchOurladsRoster, fetchLocalRoster, parseHTMLToRoster
+    SPECIALIST_IDS, POS_TRANSLATIONS, hasRosterSourceAdapter, fetchAdapterRoster, fetchLocalRoster, parseHTMLToRoster
 } from '../utils/rosterState';
 import { buildNameIndex, findMatchingIndex } from '../utils/nameMatcher';
 import { parseName } from '../utils/formatName';
@@ -525,10 +525,10 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
         setBootstrapping(false);
     };
 
-    const handleFetchOurlads = async () => {
+    const handleFetchAdapter = async () => {
         try {
             setBootstrapping(true);
-            setState(await fetchOurladsRoster());
+            setState(await fetchAdapterRoster());
             setBootstrapping(false);
         } catch (err) {
             alert('Failed to fetch: ' + err.message);
@@ -573,7 +573,9 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
 
                 {!isPasting ? (
                     <div className="roster-bootstrap-actions">
-                        <button onClick={handleFetchOurlads} className="roster-btn primary">Auto-Fetch Depth Chart</button>
+                        {hasRosterSourceAdapter() && (
+                            <button onClick={handleFetchAdapter} className="roster-btn primary">Auto-Fetch Depth Chart</button>
+                        )}
                         <button onClick={handleFetchLocal} className="roster-btn">Load Default Roster</button>
                         <button onClick={() => setIsPasting(true)} className="roster-btn">Paste HTML source</button>
                         <label className="roster-btn" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
