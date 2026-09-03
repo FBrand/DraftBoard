@@ -33,7 +33,7 @@ export default function DraftView({
     const currentPickStatus = currentPickData?.status ? currentPickData.status.replace(/_/g, ' ') : 'NOW DRAFTING';
 
     return (
-        <div className={isFocusMode ? 'focus-mode' : ''}>
+        <div className={`draft-view-shell${isFocusMode ? ' focus-mode' : ''}`}>
             <TopPanelDraft
                 currentPick={currentPick}
                 currentPickStatus={currentPickStatus}

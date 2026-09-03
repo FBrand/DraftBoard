@@ -215,7 +215,7 @@ function DepthRow({ posConfig, slots, idx, phase, onConfigChange, onDeletePositi
 // No explicit targetZone here (matches prior behavior): makeSlot()'s default
 // zone param ('53') is what a moved player lands with, since specialists
 // aren't tracked as a distinct zone.
-function SpecialistCell({ id, slot, masterPlayers, draftedPlayers }) {
+function SpecialistCell({ id, slot, masterPlayers, draftedPlayers, showNeeds }) {
     const label = { P: 'Punter', K: 'Kicker', LS: 'Long Snapper' }[id] ?? id;
     const meta = slotMeta(slot, masterPlayers, draftedPlayers);
 
@@ -250,7 +250,7 @@ function SpecialistCell({ id, slot, masterPlayers, draftedPlayers }) {
                     </div>
                 </div>
             ) : (
-                <div className="rv-specialist-need">NEED</div>
+                showNeeds && <div className="rv-specialist-need">NEED</div>
             )}
         </div>
     );
@@ -328,7 +328,7 @@ export default function DepthChartGrid({
     masterPlayers, draftedPlayers,
     onMove, onRowMove, onDeletePosition, onSlotsChange, onAddPosition,
     onSignClick, signButtonLabel = '+ SIGN PLAYER',
-    zoomLevel = 1,
+    zoomLevel = 1, showNeeds = true,
 }) {
     const sensors = useSensors(
         useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
@@ -403,11 +403,11 @@ export default function DepthChartGrid({
                     <div className="roster-specialists">
                         <div style={{ display: 'flex', gap: 12 }}>
                             {SPECIALIST_IDS.map(id => (
-                                <SpecialistCell key={id} id={id} slot={depthChart[id]?.[0] ?? null} masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} />
+                                <SpecialistCell key={id} id={id} slot={depthChart[id]?.[0] ?? null} masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} showNeeds={showNeeds} />
                             ))}
                         </div>
                         <div style={{ flex: 1 }} />
-                        {needs > 0 && <div className="roster-needs-label">REMAINING NEEDS: {needs}</div>}
+                        {showNeeds && needs > 0 && <div className="roster-needs-label">REMAINING NEEDS: {needs}</div>}
                     </div>
 
                     {/* IR — bottom */}

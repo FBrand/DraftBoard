@@ -240,6 +240,7 @@ export default function FreeAgencyView({ masterPlayers, draftedPlayers }) {
                 onDeletePosition={handleDeletePosition}
                 onSlotsChange={handleSlotsChange}
                 onAddPosition={handleAddPosition}
+                showNeeds={false}
             />
 
             <AddCandidateModal isOpen={isAddOpen} onClose={() => setIsAddOpen(false)} onAdd={handleAddCandidate} />

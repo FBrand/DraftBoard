@@ -7,10 +7,22 @@ const RightPanel = ({ remotePicks, draftedPlayers, currentPick, ourPicksLeft, on
     const currentPickRef = useRef(null);
     const fileInputRef = useRef(null);
 
-    // Auto-scroll to current pick
+    // Auto-scroll to current pick — scoped to this panel's own scroll
+    // container. scrollIntoView() walks up and scrolls EVERY scrollable
+    // ancestor into view, which was force-scrolling the left panel and
+    // center board too; scrollTo() on scrollRef only touches this list.
     useEffect(() => {
-        if (currentPickRef.current) {
-            currentPickRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        const container = scrollRef.current;
+        const el = currentPickRef.current;
+        if (container && el) {
+            // getBoundingClientRect deltas, not offsetTop — offsetTop is
+            // relative to the nearest positioned ancestor, which may not be
+            // this container (there's an unpositioned .tracker-list wrapper
+            // in between), so it can't be trusted to compute a clean offset.
+            const containerRect = container.getBoundingClientRect();
+            const elRect = el.getBoundingClientRect();
+            const delta = (elRect.top + elRect.height / 2) - (containerRect.top + containerRect.height / 2);
+            container.scrollTo({ top: container.scrollTop + delta, behavior: 'smooth' });
         }
     }, [currentPick, remotePicks.length]);
 
