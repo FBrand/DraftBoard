@@ -1,7 +1,12 @@
 import React from 'react';
 import PlayerCard from './PlayerCard';
 
-const CenterBoard = ({ players, onDraft, columnOrder = [], isFocusMode = false }) => {
+// Generalized board-grid primitive: position columns x round/tier rows,
+// derived purely from `players`' own position/group/drafted fields. Reused
+// across Draft (onAction = draft the player), UDFA (onAction = sign them),
+// and Scouting (onAction = open tag/rank/notes controls) — see
+// /home/dev/.claude/plans/structured-growing-cat.md.
+const CenterBoard = ({ players, onAction, columnOrder = [], isFocusMode = false }) => {
     const visiblePlayers = isFocusMode ? players : players.filter(p => !p.drafted);
 
     const rawPositions = [...new Set(players.map(p => p.position.split('.', 1)[0]))];
@@ -107,7 +112,7 @@ const CenterBoard = ({ players, onDraft, columnOrder = [], isFocusMode = false }
                                                     key={`${player.name}-${player.position}`}
                                                     player={player}
                                                     isBest={isBest}
-                                                    onClick={onDraft}
+                                                    onClick={onAction}
                                                     slim={true}
                                                 />
                                             );

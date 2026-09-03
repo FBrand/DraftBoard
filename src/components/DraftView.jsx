@@ -81,7 +81,7 @@ export default function DraftView({
 
                 <CenterBoard
                     players={players}
-                    onDraft={draftPlayer}
+                    onAction={draftPlayer}
                     columnOrder={columnOrder}
                     isFocusMode={isFocusMode}
                 />

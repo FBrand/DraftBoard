@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import useDraftState from './hooks/useDraftState';
 import DraftView from './components/DraftView';
+import UdfaView from './components/UdfaView';
 import RosterView from './components/RosterView';
 
 // UDFA and Scouting/FA views land in later phases of the 5-stage build
@@ -88,7 +89,18 @@ function App() {
           )
       )}
 
-      {view === 'udfa' && <ComingSoon label="UDFA" />}
+      {view === 'udfa' && (
+        loading
+          ? <div className="loading">Loading Chiefs Draft Board...</div>
+          : (
+            <UdfaView
+              players={players}
+              draftedPlayers={draftedPlayers}
+              columnOrder={columnOrder}
+              draftPlayer={draftPlayer}
+            />
+          )
+      )}
 
       {view === 'roster' && (
         <RosterView masterPlayers={players} draftedPlayers={draftedPlayers} currentPick={currentPick} onDraft={draftPlayer} />
