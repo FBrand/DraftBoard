@@ -1684,6 +1684,26 @@ body.export-mode .card-glow {
   transform: scale(1.04);
 }
 
+/* dnd-kit: dim the origin card while its clone follows the pointer via DragOverlay */
+.rv-slot.dragging-source,
+.rv-slot-content.dragging-source,
+.rv-pos-label.dragging-source {
+  opacity: 0.35;
+}
+
+/* dnd-kit DragOverlay clone — same look as a filled slot/label, lifted higher */
+.rv-drag-overlay {
+  cursor: grabbing;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.5);
+  transform: scale(1.05);
+}
+
+.rv-pos-label.rv-drag-overlay {
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: rgba(30, 30, 30, 0.95);
+}
+
 .rv-slot-need-label {
   font-size: 0.7rem;
   color: rgba(255, 183, 0, 0.4);

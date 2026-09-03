@@ -1,10 +1,14 @@
 import React, { useState, useCallback } from 'react';
 import {
+    DndContext, DragOverlay, useDraggable, useDroppable,
+    useSensor, useSensors, MouseSensor, TouchSensor
+} from '@dnd-kit/core';
+import {
     loadState, saveState, defaultState,
     parseCSV, exportCSV, makeSlot,
     SPECIALIST_IDS, POS_TRANSLATIONS, fetchOurladsRoster, fetchLocalRoster, parseHTMLToRoster
 } from '../utils/rosterState';
-import { findMatchingPlayerIndex } from '../utils/nameMatcher';
+import { buildNameIndex, findMatchingIndex } from '../utils/nameMatcher';
 import { parseName } from '../utils/formatName';
 import UnrankedModal from './UnrankedModal';
 
@@ -28,12 +32,28 @@ function zoneClass(zone, isNeed) {
     return isNeed ? 'zone-need' : '';
 }
 
+// slotMeta runs once per rendered slot — dozens of times per render — and
+// each call name-matches against the full masterPlayers/draftedPlayers
+// lists. Caching each list's name index by reference (safe: both come from
+// useDraftState, which always replaces rather than mutates these arrays)
+// turns that from a per-cell rebuild into a one-time-per-render-pass cost.
+const nameIndexCache = new WeakMap();
+function getOrBuildIndex(list) {
+    if (!list) return [];
+    let idx = nameIndexCache.get(list);
+    if (!idx) {
+        idx = buildNameIndex(list);
+        nameIndexCache.set(list, idx);
+    }
+    return idx;
+}
+
 function slotMeta(slot, masterPlayers, draftedPlayers) {
     const { displayName, suffix, nameColor } = parseName(slot?.name);
 
     const findByRobustName = (list) => {
         if (!list) return null;
-        const idx = findMatchingPlayerIndex(displayName, list);
+        const idx = findMatchingIndex(displayName, getOrBuildIndex(list));
         return idx !== -1 ? list[idx] : null;
     };
     const draftData = findByRobustName(draftedPlayers) || findByRobustName(masterPlayers);
@@ -55,31 +75,55 @@ function slotMeta(slot, masterPlayers, draftedPlayers) {
     return { displayName, nameColor, topLabel, displayPos };
 }
 
+// ── Shared card content (also reused by the DragOverlay clone) ────────────
+function SlotCardContent({ displayName, nameColor, topLabel, displayPos, small, className }) {
+    return (
+        <div className={className ?? 'rv-slot-content'}>
+            <span
+                className="rv-slot-name"
+                style={small ? { color: nameColor, fontSize: '0.85rem', fontWeight: 800 } : { color: nameColor }}
+            >
+                {displayName}
+            </span>
+            <div className="rv-slot-meta">
+                <span className="rv-slot-tag">{topLabel}</span>
+                <span className="rv-slot-pos">{displayPos}</span>
+            </div>
+        </div>
+    );
+}
+
 // ── Slot cell ─────────────────────────────────────────────────────────────
-function SlotCell({ slot, zone, posId, slotIdx, targetZone, onDragStart, onDrop, onClick, masterPlayers, draftedPlayers }) {
-    const [isDragOver, setIsDragOver] = useState(false);
+// Draggable (when filled) and droppable (always) share the same logical id
+// but separate dnd-kit registries (useDraggable/useDroppable each track
+// their own id namespace), so reusing `posId::slotIdx` for both is safe.
+function SlotCell({ slot, zone, posId, slotIdx, targetZone, onClick, masterPlayers, draftedPlayers }) {
     const isNeed = !slot && zone === '53';
-    const { displayName, nameColor, topLabel, displayPos } = slotMeta(slot, masterPlayers, draftedPlayers);
+    const meta = slotMeta(slot, masterPlayers, draftedPlayers);
+    const resolvedZone = targetZone ?? zone;
+    const cellId = `${posId}::${slotIdx}`;
+
+    const { setNodeRef: setDropRef, isOver } = useDroppable({
+        id: `drop-${cellId}`,
+        data: { kind: 'item', posId, slotIdx, targetZone: resolvedZone },
+    });
+    const { attributes, listeners, setNodeRef: setDragRef, isDragging } = useDraggable({
+        id: `drag-${cellId}`,
+        disabled: !slot,
+        data: { kind: 'item', posId, slotIdx, slot },
+    });
 
     return (
         <div
-            draggable={!!slot}
-            onDragStart={e => slot && onDragStart(e, { posId, slotIdx, slot })}
-            onDragEnter={e => { e.preventDefault(); setIsDragOver(true); }}
-            onDragOver={e => e.preventDefault()}
-            onDragLeave={() => setIsDragOver(false)}
-            onDrop={e => { setIsDragOver(false); onDrop(e, { posId, slotIdx, targetZone: targetZone ?? zone }); }}
+            ref={node => { setDropRef(node); setDragRef(node); }}
+            {...(slot ? listeners : {})}
+            {...(slot ? attributes : {})}
             onClick={() => slot && onClick && onClick(slot, posId, slotIdx)}
-            className={`rv-slot ${slot ? 'filled' : ''} ${zoneClass(slot?.zone ?? zone, isNeed)} ${isDragOver ? 'drag-over' : ''}`}
+            className={`rv-slot ${slot ? 'filled' : ''} ${zoneClass(slot?.zone ?? zone, isNeed)} ${isOver ? 'drag-over' : ''} ${isDragging ? 'dragging-source' : ''}`}
+            style={slot ? { cursor: 'grab' } : undefined}
         >
             {slot ? (
-                <div className="rv-slot-content">
-                    <span className="rv-slot-name" style={{ color: nameColor }}>{displayName}</span>
-                    <div className="rv-slot-meta">
-                        <span className="rv-slot-tag">{topLabel}</span>
-                        <span className="rv-slot-pos">{displayPos}</span>
-                    </div>
-                </div>
+                <SlotCardContent {...meta} />
             ) : isNeed ? (
                 <span className="rv-slot-need-label">NEED</span>
             ) : null}
@@ -88,9 +132,23 @@ function SlotCell({ slot, zone, posId, slotIdx, targetZone, onDragStart, onDrop,
 }
 
 // ── Single row — 4 grid cells: [pos+ctrl | 53-man | PS | Reserve] ────────────
-function DepthRow({ posConfig, slots, onDragStart, onDrop, idx, phase, onConfigChange, onDeletePosition, onRowDragStart, onRowDrop, masterPlayers, draftedPlayers }) {
+// The row-header cell is a drop target for reordering, but only its position
+// label is a drag handle — keeping the delete/±count buttons outside the
+// drag listeners avoids any pointerdown conflict between "click a button"
+// and "start dragging the row".
+function DepthRow({ posConfig, slots, idx, phase, onConfigChange, onDeletePosition, masterPlayers, draftedPlayers }) {
     const { id, label, slots53 } = posConfig;
     const rowParity = idx % 2 === 0 ? 'odd' : '';
+    const rowId = `${phase}::${idx}`;
+
+    const { setNodeRef: setDropRef, isOver } = useDroppable({
+        id: `drop-row-${rowId}`,
+        data: { kind: 'row', idx, phase },
+    });
+    const { attributes, listeners, setNodeRef: setDragRef, isDragging } = useDraggable({
+        id: `drag-row-${rowId}`,
+        data: { kind: 'row', idx, phase, label },
+    });
 
     // Build slot arrays for each zone
     const s53 = Math.max(slots53, 1);
@@ -110,18 +168,23 @@ function DepthRow({ posConfig, slots, onDragStart, onDrop, idx, phase, onConfigC
         <React.Fragment>
             {/* Col 1: Pos label + - N + controller */}
             <div
-                draggable
-                onDragStart={e => onRowDragStart(e, idx, phase)}
-                onDragOver={e => e.preventDefault()}
-                onDrop={e => onRowDrop(e, idx, phase)}
-                className={`rv-row-cell rv-pos-cell ${rowParity}`}
+                ref={setDropRef}
+                className={`rv-row-cell rv-pos-cell ${rowParity} ${isOver ? 'drag-over' : ''}`}
             >
                 <button
                     className="rv-delete-pos"
                     title={`Remove ${label}`}
                     onClick={e => { e.stopPropagation(); onDeletePosition(); }}
                 >✕</button>
-                <div className="rv-pos-label">{label}</div>
+                <div
+                    ref={setDragRef}
+                    {...listeners}
+                    {...attributes}
+                    className={`rv-pos-label ${isDragging ? 'dragging-source' : ''}`}
+                    style={{ cursor: 'grab' }}
+                >
+                    {label}
+                </div>
                 <div className="rv-pos-ctrl">
                     <button onClick={e => { e.stopPropagation(); onConfigChange(Math.max(0, slots53 - 1)); }} className="rv-ctrl-btn">-</button>
                     <span className="rv-pos-count">{slots53}</span>
@@ -132,21 +195,21 @@ function DepthRow({ posConfig, slots, onDragStart, onDrop, idx, phase, onConfigC
             {/* Col 2: 53-Man */}
             <div className={`rv-row-cell ${rowParity}`}>
                 {slots53Items.map(item => (
-                    <SlotCell key={item.idx} slot={item.slot} zone={item.zone} posId={id} slotIdx={item.idx} targetZone="53" onDragStart={onDragStart} onDrop={onDrop} masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} />
+                    <SlotCell key={item.idx} slot={item.slot} zone={item.zone} posId={id} slotIdx={item.idx} targetZone="53" masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} />
                 ))}
             </div>
 
             {/* Col 3: Practice Squad */}
             <div className={`rv-row-cell ${rowParity}`}>
                 {psItems.map(item => (
-                    <SlotCell key={item.idx} slot={item.slot} zone={item.zone} posId={id} slotIdx={item.idx} targetZone="ps" onDragStart={onDragStart} onDrop={onDrop} masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} />
+                    <SlotCell key={item.idx} slot={item.slot} zone={item.zone} posId={id} slotIdx={item.idx} targetZone="ps" masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} />
                 ))}
             </div>
 
             {/* Col 4: Reserve */}
             <div className={`rv-row-cell last ${rowParity}`}>
                 {rItems.map(item => (
-                    <SlotCell key={item.idx} slot={item.slot} zone={item.zone} posId={id} slotIdx={item.idx} targetZone="r" onDragStart={onDragStart} onDrop={onDrop} masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} />
+                    <SlotCell key={item.idx} slot={item.slot} zone={item.zone} posId={id} slotIdx={item.idx} targetZone="r" masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} />
                 ))}
             </div>
         </React.Fragment>
@@ -154,31 +217,41 @@ function DepthRow({ posConfig, slots, onDragStart, onDrop, idx, phase, onConfigC
 }
 
 // ── Specialist cell ────────────────────────────────────────────────────────
-function SpecialistCell({ id, slot, onDragStart, onDrop, masterPlayers, draftedPlayers }) {
-    const [isDragOver, setIsDragOver] = useState(false);
+// No explicit targetZone here (matches prior behavior): makeSlot()'s default
+// zone param ('53') is what a moved player lands with, since specialists
+// aren't tracked as a distinct zone.
+function SpecialistCell({ id, slot, masterPlayers, draftedPlayers }) {
     const label = { P: 'Punter', K: 'Kicker', LS: 'Long Snapper' }[id] ?? id;
-    const { displayName, nameColor, topLabel, displayPos } = slotMeta(slot, masterPlayers, draftedPlayers);
+    const meta = slotMeta(slot, masterPlayers, draftedPlayers);
+
+    const { setNodeRef: setDropRef, isOver } = useDroppable({
+        id: `drop-spec-${id}`,
+        data: { kind: 'item', posId: id, slotIdx: 0, targetZone: undefined },
+    });
+    const { attributes, listeners, setNodeRef: setDragRef, isDragging } = useDraggable({
+        id: `drag-spec-${id}`,
+        disabled: !slot,
+        data: { kind: 'item', posId: id, slotIdx: 0, slot },
+    });
 
     return (
         <div
-            onDragEnter={e => { e.preventDefault(); setIsDragOver(true); }}
-            onDragOver={e => e.preventDefault()}
-            onDragLeave={() => setIsDragOver(false)}
-            onDrop={e => { setIsDragOver(false); onDrop(e, { posId: id, slotIdx: 0 }); }}
-            className={`rv-specialist ${slot ? 'filled' : ''} ${isDragOver ? 'drag-over' : ''}`}
+            ref={setDropRef}
+            className={`rv-specialist ${slot ? 'filled' : ''} ${isOver ? 'drag-over' : ''}`}
         >
             <div className="rv-specialist-label">{label}</div>
             {slot ? (
                 <div
-                    draggable
-                    onDragStart={e => onDragStart(e, { posId: id, slotIdx: 0, slot })}
-                    className="rv-slot-content"
+                    ref={setDragRef}
+                    {...listeners}
+                    {...attributes}
+                    className={`rv-slot-content ${isDragging ? 'dragging-source' : ''}`}
                     style={{ cursor: 'grab' }}
                 >
-                    <span className="rv-slot-name" style={{ color: nameColor, fontSize: '0.85rem', fontWeight: 800 }}>{displayName}</span>
+                    <span className="rv-slot-name" style={{ color: meta.nameColor, fontSize: '0.85rem', fontWeight: 800 }}>{meta.displayName}</span>
                     <div className="rv-slot-meta">
-                        <span className="rv-slot-tag">{topLabel}</span>
-                        <span className="rv-slot-pos">{displayPos}</span>
+                        <span className="rv-slot-tag">{meta.topLabel}</span>
+                        <span className="rv-slot-pos">{meta.displayPos}</span>
                     </div>
                 </div>
             ) : (
@@ -189,25 +262,21 @@ function SpecialistCell({ id, slot, onDragStart, onDrop, masterPlayers, draftedP
 }
 
 // ── Roster Side Panel ── Cut panel only (IR is at bottom of main content)
-function RosterSidebar({ cuts, onDrop, onDragStart, onSign, masterPlayers, draftedPlayers }) {
-    const [isDragOver, setIsDragOver] = useState(false);
+function RosterSidebar({ cuts, onSign, masterPlayers, draftedPlayers }) {
+    const { setNodeRef, isOver } = useDroppable({
+        id: 'drop-cut-zone',
+        data: { kind: 'item', posId: '__cut__', slotIdx: cuts.length, targetZone: 'cut' },
+    });
     return (
         <div className="roster-sidebar">
             <button onClick={onSign} className="action-pill roster-sign-btn">+ SIGN PLAYER</button>
 
-            <div
-                onDragEnter={e => { e.preventDefault(); setIsDragOver(true); }}
-                onDragOver={e => e.preventDefault()}
-                onDragLeave={() => setIsDragOver(false)}
-                onDrop={e => { setIsDragOver(false); onDrop(e, { posId: '__cut__', slotIdx: cuts.length, targetZone: 'cut' }); }}
-                className={`roster-cuts ${isDragOver ? 'drag-over' : ''}`}
-            >
+            <div ref={setNodeRef} className={`roster-cuts ${isOver ? 'drag-over' : ''}`}>
                 <div className="roster-cuts-label">CUT PANEL — {cuts.length}</div>
                 <div className="roster-cuts-list">
                     {cuts.map((name, i) => (
                         <SlotCell
                             key={i} slot={{ name, zone: 'cut' }} zone="cut" posId="__cut__" slotIdx={i} targetZone="cut"
-                            onDragStart={onDragStart} onDrop={onDrop}
                             masterPlayers={masterPlayers} draftedPlayers={draftedPlayers}
                         />
                     ))}
@@ -327,11 +396,7 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
         setState(prev => ({ ...prev, reserve: [...prev.reserve, customPlayer.name] }));
     };
 
-    const handleDrop = useCallback((e, dst) => {
-        e.preventDefault();
-        const raw = e.dataTransfer.getData('application/json');
-        if (!raw) return;
-        const src = JSON.parse(raw);
+    const performMove = useCallback((src, dst) => {
         if (src.posId === dst.posId && src.slotIdx === dst.slotIdx) return;
 
         setState(prev => {
@@ -372,10 +437,6 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
         });
     }, [setState]);
 
-    const handleDragStart = (e, data) => {
-        e.dataTransfer.setData('application/json', JSON.stringify(data));
-    };
-
     const handleAddPosition = (label) => {
         if (!label || !addPositionPhase) return;
         const phase = addPositionPhase;
@@ -400,14 +461,7 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
     const updateOffenseConfig = (cfg) => setState(prev => ({ ...prev, positionConfig: { ...prev.positionConfig, offense: cfg } }));
     const updateDefenseConfig = (cfg) => setState(prev => ({ ...prev, positionConfig: { ...prev.positionConfig, defense: cfg } }));
 
-    const handleRowDragStart = (e, idx, phase) => {
-        e.dataTransfer.setData('rowIdx', idx);
-        e.dataTransfer.setData('rowPhase', phase);
-    };
-
-    const handleRowDrop = (e, dstIdx, dstPhase) => {
-        const srcIdx = parseInt(e.dataTransfer.getData('rowIdx'));
-        const srcPhase = e.dataTransfer.getData('rowPhase');
+    const performRowMove = useCallback((srcIdx, srcPhase, dstIdx, dstPhase) => {
         if (isNaN(srcIdx)) return;
         setState(prev => {
             const next = { ...prev, positionConfig: { ...prev.positionConfig } };
@@ -424,7 +478,39 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
             }
             return next;
         });
-    };
+    }, [setState]);
+
+    // ── Drag-and-drop (mouse + touch, via @dnd-kit) ──────────────────────────
+    // MouseSensor uses a small movement threshold so plain clicks don't start
+    // a drag. TouchSensor uses a hold delay instead: a quick swipe (scrolling)
+    // is released back to the browser as a normal scroll, and only a
+    // deliberate press-and-hold locks into a drag — this is what actually
+    // stops touch drags from hijacking scroll gestures.
+    const sensors = useSensors(
+        useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
+        useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
+    );
+    const [activeDragData, setActiveDragData] = useState(null);
+
+    const handleDragStart = useCallback(({ active }) => {
+        setActiveDragData(active.data.current ?? null);
+    }, []);
+
+    const handleDragEnd = useCallback(({ active, over }) => {
+        setActiveDragData(null);
+        if (!over) return;
+        const src = active.data.current;
+        const dst = over.data.current;
+        if (!src || !dst || src.kind !== dst.kind) return;
+
+        if (src.kind === 'row') {
+            performRowMove(src.idx, src.phase, dst.idx, dst.phase);
+        } else {
+            performMove(src, dst);
+        }
+    }, [performMove, performRowMove]);
+
+    const handleDragCancel = useCallback(() => setActiveDragData(null), []);
 
     const handleBootstrap = async (e) => {
         const file = e.target.files[0];
@@ -545,6 +631,7 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
     };
 
     return (
+        <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={handleDragCancel}>
         <div className="roster-view">
             {/* Toolbar — visually matches the Draft view's top-panel */}
             <div className="top-panel">
@@ -577,7 +664,7 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
                     <div className="roster-grid">
                         <DepthHeader />
                         {positionConfig.offense.map((p, idx) => (
-                            <DepthRow key={p.id} idx={idx} phase="offense" posConfig={p} slots={depthChart[p.id] ?? []} onDragStart={handleDragStart} onDrop={handleDrop} onConfigChange={val => handleSlotsChange(p.id, val)} onDeletePosition={() => updateOffenseConfig(positionConfig.offense.filter(x => x.id !== p.id))} onRowDragStart={handleRowDragStart} onRowDrop={handleRowDrop} masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} />
+                            <DepthRow key={p.id} idx={idx} phase="offense" posConfig={p} slots={depthChart[p.id] ?? []} onConfigChange={val => handleSlotsChange(p.id, val)} onDeletePosition={() => updateOffenseConfig(positionConfig.offense.filter(x => x.id !== p.id))} masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} />
                         ))}
                     </div>
 
@@ -589,14 +676,14 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
                     <div className="roster-grid">
                         <DepthHeader />
                         {positionConfig.defense.map((p, idx) => (
-                            <DepthRow key={p.id} idx={idx} phase="defense" posConfig={p} slots={depthChart[p.id] ?? []} onDragStart={handleDragStart} onDrop={handleDrop} onConfigChange={val => handleSlotsChange(p.id, val)} onDeletePosition={() => updateDefenseConfig(positionConfig.defense.filter(x => x.id !== p.id))} onRowDragStart={handleRowDragStart} onRowDrop={handleRowDrop} masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} />
+                            <DepthRow key={p.id} idx={idx} phase="defense" posConfig={p} slots={depthChart[p.id] ?? []} onConfigChange={val => handleSlotsChange(p.id, val)} onDeletePosition={() => updateDefenseConfig(positionConfig.defense.filter(x => x.id !== p.id))} masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} />
                         ))}
                     </div>
 
                     <div className="roster-specialists">
                         <div style={{ display: 'flex', gap: 12 }}>
                             {SPECIALIST_IDS.map(id => (
-                                <SpecialistCell key={id} id={id} slot={depthChart[id]?.[0] ?? null} onDragStart={handleDragStart} onDrop={handleDrop} masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} />
+                                <SpecialistCell key={id} id={id} slot={depthChart[id]?.[0] ?? null} masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} />
                             ))}
                         </div>
                         <div style={{ flex: 1 }} />
@@ -604,10 +691,10 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
                     </div>
 
                     {/* IR — bottom */}
-                    <IRDropZone reserve={reserve} onDrop={handleDrop} onDragStart={handleDragStart} masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} />
+                    <IRDropZone reserve={reserve} masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} />
                 </div>
 
-                <RosterSidebar cuts={cuts} onDragStart={handleDragStart} onDrop={handleDrop} masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} onSign={() => setIsSignModalOpen(true)} />
+                <RosterSidebar cuts={cuts} masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} onSign={() => setIsSignModalOpen(true)} />
             </div>
 
             <UnrankedModal key={`sign-${isSignModalOpen}`} isOpen={isSignModalOpen} onClose={() => setIsSignModalOpen(false)} onDraft={handleSignPlayer} mode={isDraftComplete ? 'postdraft' : 'roster'} />
@@ -630,23 +717,31 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
                 />
             )}
         </div>
+
+        <DragOverlay dropAnimation={null}>
+            {activeDragData?.kind === 'item' && activeDragData.slot ? (
+                <div className="rv-slot filled rv-drag-overlay">
+                    <SlotCardContent {...slotMeta(activeDragData.slot, masterPlayers, draftedPlayers)} />
+                </div>
+            ) : activeDragData?.kind === 'row' ? (
+                <div className="rv-pos-label rv-drag-overlay">{activeDragData.label}</div>
+            ) : null}
+        </DragOverlay>
+        </DndContext>
     );
 }
 
-function IRDropZone({ reserve, onDrop, onDragStart, masterPlayers, draftedPlayers }) {
-    const [isDragOver, setIsDragOver] = useState(false);
+function IRDropZone({ reserve, masterPlayers, draftedPlayers }) {
+    const { setNodeRef, isOver } = useDroppable({
+        id: 'drop-ir-zone',
+        data: { kind: 'item', posId: '__ir__', slotIdx: reserve.length, targetZone: 'ir' },
+    });
     return (
-        <div
-            onDragEnter={e => { e.preventDefault(); setIsDragOver(true); }}
-            onDragOver={e => e.preventDefault()}
-            onDragLeave={() => setIsDragOver(false)}
-            onDrop={e => { setIsDragOver(false); onDrop(e, { posId: '__ir__', slotIdx: reserve.length, targetZone: 'ir' }); }}
-            className={`roster-ir ${isDragOver ? 'drag-over' : ''}`}
-        >
+        <div ref={setNodeRef} className={`roster-ir ${isOver ? 'drag-over' : ''}`}>
             <div className="roster-ir-label">INJURY RESERVE — {reserve.length}</div>
             <div className="roster-ir-list">
                 {reserve.map((name, i) => (
-                    <SlotCell key={i} slot={{ name, zone: 'ir' }} zone="ir" posId="__ir__" slotIdx={i} targetZone="ir" onDragStart={onDragStart} onDrop={onDrop} masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} />
+                    <SlotCell key={i} slot={{ name, zone: 'ir' }} zone="ir" posId="__ir__" slotIdx={i} targetZone="ir" masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} />
                 ))}
             </div>
         </div>
