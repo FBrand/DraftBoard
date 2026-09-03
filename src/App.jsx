@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import useDraftState from './hooks/useDraftState';
 import TopPanelDraft from './components/TopPanel_Draft';
-import TopPanelRoster from './components/TopPanel_Roster';
 import LeftPanel from './components/LeftPanel';
 import CenterBoard from './components/CenterBoard';
 import RightPanel from './components/RightPanel';
@@ -57,6 +56,20 @@ function App() {
 
   return (
     <div className={`app-container${isFocusMode ? ' focus-mode' : ''}`}>
+      {/* View switcher tabs — always first so it never shifts position when switching views */}
+      <div className="view-tabbar">
+        {[
+          { id: 'draft', label: '📋 Draft Board' },
+          { id: 'roster', label: '🏈 Roster' },
+        ].map(({ id, label }) => (
+          <button
+            key={id}
+            onClick={() => setView(id)}
+            className={`view-tab${view === id ? ' active' : ''}`}
+          >{label}</button>
+        ))}
+      </div>
+
       {view === 'draft' && (
         <TopPanelDraft
           currentPick={currentPick}
@@ -73,39 +86,6 @@ function App() {
           onSetFocus={setIsFocusMode}
         />
       )}
-
-      {/* View switcher tabs */}
-      <div style={{
-        display: 'flex',
-        gap: 0,
-        borderBottom: '2px solid rgba(255,183,0,0.2)',
-        background: 'rgba(0,0,0,0.3)',
-        paddingLeft: 16,
-      }}>
-        {[
-          { id: 'draft', label: '📋 Draft Board' },
-          { id: 'roster', label: '🏈 Roster' },
-        ].map(({ id, label }) => (
-          <button
-            key={id}
-            onClick={() => setView(id)}
-            style={{
-              background: view === id ? 'rgba(255,183,0,0.12)' : 'transparent',
-              border: 'none',
-              borderBottom: view === id ? '2px solid #FFD700' : '2px solid transparent',
-              color: view === id ? '#FFD700' : 'rgba(255,255,255,0.4)',
-              fontWeight: 700,
-              fontSize: '0.75rem',
-              letterSpacing: '0.08em',
-              textTransform: 'uppercase',
-              padding: '8px 18px',
-              cursor: 'pointer',
-              transition: 'all .15s',
-              marginBottom: -2, // align border with tab bar border
-            }}
-          >{label}</button>
-        ))}
-      </div>
 
       {/* ── Roster View ───────────────────────────────────────────────── */}
       {view === 'roster' && <RosterView masterPlayers={players} draftedPlayers={draftedPlayers} currentPick={currentPick} onDraft={draftPlayer} />}
@@ -168,6 +148,7 @@ function App() {
       )}
 
       <PicksModal
+        key={`picks-${isModalOpen}`}
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         initialPicks={ourPicksLeft}
@@ -175,6 +156,7 @@ function App() {
       />
 
       <UnrankedModal
+        key={`unranked-${isUnrankedModalOpen}`}
         isOpen={isUnrankedModalOpen}
         onClose={() => setIsUnrankedModalOpen(false)}
         onDraft={draftPlayer}

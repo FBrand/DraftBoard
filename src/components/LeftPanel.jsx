@@ -2,10 +2,7 @@ import React, { useState } from 'react';
 import PlayerCard from './PlayerCard';
 
 const LeftPanel = ({ players, onDraft, onDraftUnranked }) => {
-    const [expandedRounds, setExpandedRounds] = useState({ 1: true, 2: true, 3: true, 4: true, 5: true, 6: true, 7: true });
     const [searchTerm, setSearchTerm] = useState('');
-
-    const getRound = (rank) => Math.min(7, Math.ceil(rank / 32));
 
     const remaining = players
         .filter(p => !p.drafted)
@@ -17,10 +14,6 @@ const LeftPanel = ({ players, onDraft, onDraftUnranked }) => {
         .sort((a, b) => a.overallRank - b.overallRank);
 
     const rounds = [1, 2, 3, 4, 5, 6, 7, 8];
-
-    const toggleRound = (round) => {
-        setExpandedRounds(prev => ({ ...prev, [round]: !prev[round] }));
-    };
 
     return (
         <div className="side-panel left-panel">
@@ -59,22 +52,16 @@ const LeftPanel = ({ players, onDraft, onDraftUnranked }) => {
 
                         return (
                             <div key={round} style={{ marginBottom: '1.5rem' }}>
-                                <div
-                                    className="round-header"
-                                // onClick={() => toggleRound(round)}
-                                >
+                                <div className="round-header">
                                     <span>ROUND {round}</span>
-                                    <span>{expandedRounds[round] ? '' : ''}</span>
                                 </div>
-                                {expandedRounds[round] && (
-                                    <div className="rankings-list">
-                                        {roundPlayers.map(player => (
-                                            <div key={player.name} onClick={() => onDraft(player)} style={{ cursor: 'pointer' }}>
-                                                <PlayerCard player={player} />
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
+                                <div className="rankings-list">
+                                    {roundPlayers.map(player => (
+                                        <div key={player.name} onClick={() => onDraft(player)} style={{ cursor: 'pointer' }}>
+                                            <PlayerCard player={player} />
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                         );
                     })

@@ -79,7 +79,7 @@ export const useDraftState = () => {
     }, []);
 
     const saveHistory = useCallback(() => {
-        setHistory(prev => ({ players, ourPicksLeft, currentPick, draftedPlayers, yourPicks }));
+        setHistory({ players, ourPicksLeft, currentPick, draftedPlayers, yourPicks });
     }, [players, ourPicksLeft, currentPick, draftedPlayers, yourPicks]);
 
     // Initial load
@@ -187,7 +187,7 @@ export const useDraftState = () => {
                             const lastPick = enrichedDrafted.reduce((max, p) => Math.max(max, p.pickNumber), 0);
                             setCurrentPick(lastPick + 1);
                         }
-                    } catch (e) {
+                    } catch {
                         console.warn("Corrupted localStorage, using fresh data");
                         setPlayers(parsedPlayers);
                         setOurPicksLeft(parsedOurPicks);
@@ -254,7 +254,7 @@ export const useDraftState = () => {
 
         triggerChime();
         setCurrentPick(prev => prev + 1);
-    }, [currentPick, ourPicksLeft, remotePicks, saveHistory, triggerChime]);
+    }, [currentPick, ourPicksLeft, remotePicks, players, saveHistory, triggerChime]);
 
     const undoAction = useCallback(() => {
         if (!history) return;
@@ -487,7 +487,7 @@ export const useDraftState = () => {
         poll();
         const interval = setInterval(poll, 30000);
         return () => clearInterval(interval);
-    }, [isLiveSync, loading, draftedPlayers, yourPicks, ourPicksLeft, currentPick]);
+    }, [isLiveSync, loading, draftedPlayers, yourPicks, ourPicksLeft, currentPick, triggerChime]);
 
     return {
         players: players || [],

@@ -61,9 +61,9 @@ const CenterBoard = ({ players, onDraft, columnOrder = [], isFocusMode = false }
                 >
                     RD
                 </div>
-                {positions.map((pos, idx) => (
-                    <div 
-                        key={pos} 
+                {positions.map((pos) => (
+                    <div
+                        key={pos}
                         className="header-cell"
                         style={{ position: 'sticky', top: 0, zIndex: 90 }}
                     >
