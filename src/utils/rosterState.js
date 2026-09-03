@@ -2,6 +2,7 @@
  * Roster state management + CSV import/export.
  * Stored in localStorage under key 'rosterState'.
  */
+import { parseCsvLine, csvField } from './csvUtils';
 
 // Reasonable 53-man slot defaults by major position
 const DEFAULT_SLOTS53 = {
@@ -91,39 +92,6 @@ export function saveState(state) {
 // ---------------------------------------------------------------------------
 // CSV Import
 // ---------------------------------------------------------------------------
-
-// RFC-4180-style quote-aware split: a plain `line.split(',')` corrupts any
-// field containing a literal comma — and Ourlads' own "Last, First" name
-// convention makes that a real, not just theoretical, input (players signed
-// or pasted in that format silently split into two garbled reserve/cut
-// entries on export/re-import). Handles quoted fields and doubled-quote
-// escaping; doesn't handle a quoted field spanning multiple physical lines,
-// since parseCSV splits on '\n' before this ever runs.
-function parseCsvLine(line) {
-    const fields = [];
-    let cur = '';
-    let inQuotes = false;
-    for (let i = 0; i < line.length; i++) {
-        const c = line[i];
-        if (inQuotes) {
-            if (c === '"') {
-                if (line[i + 1] === '"') { cur += '"'; i++; }
-                else inQuotes = false;
-            } else {
-                cur += c;
-            }
-        } else if (c === '"') {
-            inQuotes = true;
-        } else if (c === ',') {
-            fields.push(cur);
-            cur = '';
-        } else {
-            cur += c;
-        }
-    }
-    fields.push(cur);
-    return fields;
-}
 
 export function parseCSV(csvText) {
     const lines = csvText
@@ -220,18 +188,6 @@ export function parseCSV(csvText) {
     }
 
     return { positionConfig: { offense, defense }, depthChart, reserve, cuts };
-}
-
-// Counterpart to parseCsvLine: quote any field containing a comma, quote
-// character, or newline (RFC 4180 style), doubling embedded quotes. Without
-// this, a name like Ourlads' "Last, First" convention silently expands into
-// extra columns on export.
-function csvField(value) {
-    const s = String(value ?? '');
-    if (/[",\n]/.test(s)) {
-        return `"${s.replace(/"/g, '""')}"`;
-    }
-    return s;
 }
 
 export function exportCSV(state) {
