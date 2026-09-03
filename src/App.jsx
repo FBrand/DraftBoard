@@ -3,6 +3,7 @@ import useDraftState from './hooks/useDraftState';
 import DraftView from './components/DraftView';
 import UdfaView from './components/UdfaView';
 import ScoutingView from './components/ScoutingView';
+import FreeAgencyView from './components/FreeAgencyView';
 import RosterView from './components/RosterView';
 
 // UDFA and Scouting/FA views land in later phases of the 5-stage build
@@ -63,7 +64,10 @@ function App() {
         ))}
       </div>
 
-      {view === 'fa' && <ComingSoon label="Free Agency" />}
+      {/* Like Roster, doesn't gate on Draft's loading state — masterPlayers/
+          draftedPlayers are only used for name-display metadata, same as
+          RosterView, and work fine with whatever's available so far. */}
+      {view === 'fa' && <FreeAgencyView masterPlayers={players} draftedPlayers={draftedPlayers} />}
 
       {view === 'scouting' && (
         loading
