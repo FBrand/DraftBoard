@@ -92,6 +92,39 @@ export function saveState(state) {
 // CSV Import
 // ---------------------------------------------------------------------------
 
+// RFC-4180-style quote-aware split: a plain `line.split(',')` corrupts any
+// field containing a literal comma — and Ourlads' own "Last, First" name
+// convention makes that a real, not just theoretical, input (players signed
+// or pasted in that format silently split into two garbled reserve/cut
+// entries on export/re-import). Handles quoted fields and doubled-quote
+// escaping; doesn't handle a quoted field spanning multiple physical lines,
+// since parseCSV splits on '\n' before this ever runs.
+function parseCsvLine(line) {
+    const fields = [];
+    let cur = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+        const c = line[i];
+        if (inQuotes) {
+            if (c === '"') {
+                if (line[i + 1] === '"') { cur += '"'; i++; }
+                else inQuotes = false;
+            } else {
+                cur += c;
+            }
+        } else if (c === '"') {
+            inQuotes = true;
+        } else if (c === ',') {
+            fields.push(cur);
+            cur = '';
+        } else {
+            cur += c;
+        }
+    }
+    fields.push(cur);
+    return fields;
+}
+
 export function parseCSV(csvText) {
     const lines = csvText
         .trim()
@@ -109,7 +142,7 @@ export function parseCSV(csvText) {
     SPECIALIST_IDS.forEach(id => { depthChart[id] = []; });
 
     for (const line of lines) {
-        const cols = line.split(',');
+        const cols = parseCsvLine(line);
         const phase = cols[0].trim().toUpperCase();
 
         if (phase === 'IR') {
@@ -189,10 +222,22 @@ export function parseCSV(csvText) {
     return { positionConfig: { offense, defense }, depthChart, reserve, cuts };
 }
 
+// Counterpart to parseCsvLine: quote any field containing a comma, quote
+// character, or newline (RFC 4180 style), doubling embedded quotes. Without
+// this, a name like Ourlads' "Last, First" convention silently expands into
+// extra columns on export.
+function csvField(value) {
+    const s = String(value ?? '');
+    if (/[",\n]/.test(s)) {
+        return `"${s.replace(/"/g, '""')}"`;
+    }
+    return s;
+}
+
 export function exportCSV(state) {
     const maxSlots = Math.max(...Object.values(state.depthChart).map(arr => arr.length), 5);
     const headers = ['Phase', 'pos', 'slots53', ...Array.from({ length: maxSlots }, (_, i) => `slot${i + 1}`)];
-    const rows = [headers.join(',')];
+    const rows = [headers.map(csvField).join(',')];
 
     const addRows = (phase, positions) => {
         positions.forEach(p => {
@@ -204,7 +249,7 @@ export function exportCSV(state) {
                 if (s.zone === 'r') return `R:${s.name}`;
                 return s.name;
             });
-            rows.push([phase, p.label, p.slots53, ...cells].join(','));
+            rows.push([phase, p.label, p.slots53, ...cells].map(csvField).join(','));
         });
     };
 
@@ -212,13 +257,13 @@ export function exportCSV(state) {
     addRows('D', state.positionConfig.defense);
     SPECIALIST_IDS.forEach(id => {
         const s = state.depthChart[id]?.[0];
-        rows.push(['S', id, s ? s.name : ''].join(','));
+        rows.push(['S', id, s ? s.name : ''].map(csvField).join(','));
     });
     if (state.reserve && state.reserve.length > 0) {
-        rows.push(['IR', 'IR', '', ...state.reserve].join(','));
+        rows.push(['IR', 'IR', '', ...state.reserve].map(csvField).join(','));
     }
     if (state.cuts && state.cuts.length > 0) {
-        rows.push(['CUT', 'CUT', '', ...state.cuts].join(','));
+        rows.push(['CUT', 'CUT', '', ...state.cuts].map(csvField).join(','));
     }
     return rows.join('\n');
 }
