@@ -463,8 +463,27 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
         });
     };
 
-    const updateOffenseConfig = (cfg) => setState(prev => ({ ...prev, positionConfig: { ...prev.positionConfig, offense: cfg } }));
-    const updateDefenseConfig = (cfg) => setState(prev => ({ ...prev, positionConfig: { ...prev.positionConfig, defense: cfg } }));
+    // Deleting a row used to only drop it from positionConfig — anyone still
+    // in its depthChart slots became orphaned (not rendered anywhere, but
+    // not actually removed from state either — just silently gone from the
+    // UI). Move any occupants to Cuts instead, matching how IR/Cuts already
+    // work as a never-truly-lose-a-player safety net rather than a hard delete.
+    const handleDeletePosition = (phase, posId) => {
+        setState(prev => {
+            const occupants = (prev.depthChart[posId] ?? []).filter(Boolean).map(s => s.name);
+            const nextDepthChart = { ...prev.depthChart };
+            delete nextDepthChart[posId];
+            return {
+                ...prev,
+                depthChart: nextDepthChart,
+                cuts: [...prev.cuts, ...occupants],
+                positionConfig: {
+                    ...prev.positionConfig,
+                    [phase]: prev.positionConfig[phase].filter(x => x.id !== posId),
+                },
+            };
+        });
+    };
 
     const performRowMove = useCallback((srcIdx, srcPhase, dstIdx, dstPhase) => {
         if (isNaN(srcIdx)) return;
@@ -684,7 +703,7 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
                     <div className="roster-grid">
                         <DepthHeader />
                         {positionConfig.offense.map((p, idx) => (
-                            <DepthRow key={p.id} idx={idx} phase="offense" posConfig={p} slots={depthChart[p.id] ?? []} onConfigChange={val => handleSlotsChange(p.id, val)} onDeletePosition={() => updateOffenseConfig(positionConfig.offense.filter(x => x.id !== p.id))} masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} />
+                            <DepthRow key={p.id} idx={idx} phase="offense" posConfig={p} slots={depthChart[p.id] ?? []} onConfigChange={val => handleSlotsChange(p.id, val)} onDeletePosition={() => handleDeletePosition('offense', p.id)} masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} />
                         ))}
                     </div>
 
@@ -696,7 +715,7 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
                     <div className="roster-grid">
                         <DepthHeader />
                         {positionConfig.defense.map((p, idx) => (
-                            <DepthRow key={p.id} idx={idx} phase="defense" posConfig={p} slots={depthChart[p.id] ?? []} onConfigChange={val => handleSlotsChange(p.id, val)} onDeletePosition={() => updateDefenseConfig(positionConfig.defense.filter(x => x.id !== p.id))} masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} />
+                            <DepthRow key={p.id} idx={idx} phase="defense" posConfig={p} slots={depthChart[p.id] ?? []} onConfigChange={val => handleSlotsChange(p.id, val)} onDeletePosition={() => handleDeletePosition('defense', p.id)} masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} />
                         ))}
                     </div>
 
