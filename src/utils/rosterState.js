@@ -376,19 +376,21 @@ export function parseHTMLToRoster(html) {
 // backed by a licensed/authorized source can be dropped in at the path below
 // without touching this file again; must implement `fetchRosterHTML(): Promise<string>`
 // returning HTML in the same shape parseHTMLToRoster() already parses.
-const ROSTER_ADAPTER_PATH = '../services/RosterSourceAdapter.js';
-
+// import.meta.glob() requires a literal string argument — Vite parses it
+// statically at build time, not at runtime — so the path can't be shared
+// via a variable and has to be repeated (matches the ESPNProvider pattern).
 export function hasRosterSourceAdapter() {
-    const modules = import.meta.glob(ROSTER_ADAPTER_PATH);
+    const modules = import.meta.glob('../services/RosterSourceAdapter.js');
     return Object.keys(modules).length > 0;
 }
 
 export async function fetchAdapterRoster() {
-    const modules = import.meta.glob(ROSTER_ADAPTER_PATH);
-    if (!modules[ROSTER_ADAPTER_PATH]) {
+    const modules = import.meta.glob('../services/RosterSourceAdapter.js');
+    const modulePath = '../services/RosterSourceAdapter.js';
+    if (!modules[modulePath]) {
         throw new Error('No roster source adapter configured');
     }
-    const mod = await modules[ROSTER_ADAPTER_PATH]();
+    const mod = await modules[modulePath]();
     const adapter = new mod.RosterSourceAdapter();
     const html = await adapter.fetchRosterHTML();
     if (!html) throw new Error('Adapter returned no data');
