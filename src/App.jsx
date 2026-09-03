@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import useDraftState from './hooks/useDraftState';
 import DraftView from './components/DraftView';
 import UdfaView from './components/UdfaView';
+import ScoutingView from './components/ScoutingView';
 import RosterView from './components/RosterView';
 
 // UDFA and Scouting/FA views land in later phases of the 5-stage build
@@ -63,7 +64,12 @@ function App() {
       </div>
 
       {view === 'fa' && <ComingSoon label="Free Agency" />}
-      {view === 'scouting' && <ComingSoon label="Scouting" />}
+
+      {view === 'scouting' && (
+        loading
+          ? <div className="loading">Loading Chiefs Draft Board...</div>
+          : <ScoutingView players={players} columnOrder={columnOrder} />
+      )}
 
       {view === 'draft' && (
         loading

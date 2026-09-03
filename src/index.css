@@ -2069,3 +2069,109 @@ body.export-mode .card-glow {
     flex-shrink: 0;
   }
 }
+
+/* ── Scouting view ─────────────────────────────────────────────────────── */
+.scouting-controls {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  width: 320px;
+  max-width: calc(100vw - 40px);
+  background: var(--dark-bg, #1a1a1a);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
+  padding: 14px 16px;
+  z-index: 950;
+}
+
+.scouting-controls-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 10px;
+}
+
+.scouting-controls-pos {
+  color: var(--text-dim);
+  font-size: 0.85rem;
+}
+
+.scouting-controls-tags {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.scouting-tag-btn {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--text-main);
+  border-radius: 6px;
+  padding: 6px 4px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.scouting-tag-btn.active {
+  background: var(--chiefs-gold, #ffb81c);
+  color: #111;
+  border-color: var(--chiefs-gold, #ffb81c);
+}
+
+.scouting-controls-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.scouting-controls-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.scouting-controls-row input {
+  width: 70px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  color: var(--text-main);
+  padding: 6px 8px;
+}
+
+.scouting-value-gap {
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: var(--text-dim);
+}
+
+.scouting-value-gap.positive {
+  color: #4ade80;
+}
+
+.scouting-value-gap.negative {
+  color: var(--chiefs-red, #e31837);
+}
+
+.scouting-controls-notes {
+  width: 100%;
+  min-height: 60px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  color: var(--text-main);
+  padding: 8px;
+  font-size: 0.85rem;
+  font-family: inherit;
+  resize: vertical;
+  box-sizing: border-box;
+}
