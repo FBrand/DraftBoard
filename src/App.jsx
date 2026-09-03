@@ -1,13 +1,22 @@
 import React, { useState } from 'react';
 import useDraftState from './hooks/useDraftState';
-import TopPanelDraft from './components/TopPanel_Draft';
-import LeftPanel from './components/LeftPanel';
-import CenterBoard from './components/CenterBoard';
-import RightPanel from './components/RightPanel';
-import BottomPanel from './components/BottomPanel';
-import PicksModal from './components/PicksModal';
-import UnrankedModal from './components/UnrankedModal';
+import DraftView from './components/DraftView';
 import RosterView from './components/RosterView';
+
+// UDFA and Scouting/FA views land in later phases of the 5-stage build
+// (see /home/dev/.claude/plans/structured-growing-cat.md) — placeholder here
+// keeps every tab clickable and the app in a working state at each step.
+function ComingSoon({ label }) {
+  return <div className="loading">{label} — coming soon</div>;
+}
+
+const TABS = [
+  { id: 'fa', label: '💰 Free Agency' },
+  { id: 'scouting', label: '🔎 Scouting' },
+  { id: 'draft', label: '📋 Draft Board' },
+  { id: 'udfa', label: '🪧 UDFA' },
+  { id: 'roster', label: '🏈 Roster' },
+];
 
 function App() {
   const {
@@ -29,39 +38,21 @@ function App() {
     importDraftState
   } = useDraftState();
 
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isUnrankedModalOpen, setIsUnrankedModalOpen] = useState(false);
-  const [isFocusMode, setIsFocusMode] = useState(() => {
-    const saved = localStorage.getItem('draft_board_focus');
-    return saved === 'true';
-  });
-  const [showLeftSidebar, setShowLeftSidebar] = useState(false);
-  const [showRightSidebar, setShowRightSidebar] = useState(false);
   const [view, setView] = useState(() => {
     return localStorage.getItem('draft_board_view') || 'draft';
-  }); // 'draft' | 'roster'
-
-  React.useEffect(() => {
-    localStorage.setItem('draft_board_focus', isFocusMode);
-  }, [isFocusMode]);
+  });
 
   React.useEffect(() => {
     localStorage.setItem('draft_board_view', view);
   }, [view]);
 
-  if (loading) return <div className="loading">Loading Chiefs Draft Board...</div>;
-
-  const currentPickData = remotePicks.find(p => p.overall === currentPick);
-  const currentPickStatus = currentPickData?.status ? currentPickData.status.replace(/_/g, ' ') : 'NOW DRAFTING';
-
   return (
-    <div className={`app-container${isFocusMode ? ' focus-mode' : ''}`}>
-      {/* View switcher tabs — always first so it never shifts position when switching views */}
+    <div className="app-container">
+      {/* View switcher tabs — always first so it never shifts position when
+          the active view changes, and never blocked by Draft's own loading
+          state (only the Draft/Scouting views actually need `players`). */}
       <div className="view-tabbar">
-        {[
-          { id: 'draft', label: '📋 Draft Board' },
-          { id: 'roster', label: '🏈 Roster' },
-        ].map(({ id, label }) => (
+        {TABS.map(({ id, label }) => (
           <button
             key={id}
             onClick={() => setView(id)}
@@ -70,98 +61,38 @@ function App() {
         ))}
       </div>
 
+      {view === 'fa' && <ComingSoon label="Free Agency" />}
+      {view === 'scouting' && <ComingSoon label="Scouting" />}
+
       {view === 'draft' && (
-        <TopPanelDraft
-          currentPick={currentPick}
-          currentPickStatus={currentPickStatus}
-          ourPicksLeft={ourPicksLeft}
-          onUndo={undoAction}
-          onUpdatePicks={() => setIsModalOpen(true)}
-          onReset={resetDraft}
-          isLiveSync={isLiveSync}
-          canLiveSync={canLiveSync}
-          toggleLiveSync={toggleLiveSync}
-          isFocusMode={isFocusMode}
-          onToggleFocus={() => setIsFocusMode(f => !f)}
-          onSetFocus={setIsFocusMode}
-        />
-      )}
-
-      {/* ── Roster View ───────────────────────────────────────────────── */}
-      {view === 'roster' && <RosterView masterPlayers={players} draftedPlayers={draftedPlayers} currentPick={currentPick} onDraft={draftPlayer} />}
-
-      {/* ── Draft View ────────────────────────────────────────────────── */}
-      {view === 'draft' && (
-        <>
-          {!isFocusMode && (
-            <>
-              <button
-                className={`sidebar-toggle toggle-left ${showLeftSidebar && !isFocusMode ? 'active' : ''}`}
-                onClick={() => setShowLeftSidebar(!showLeftSidebar)}
-                aria-label="Toggle Rankings"
-              >
-                {showLeftSidebar ? '✕' : '📊'}
-              </button>
-              <button
-                className={`sidebar-toggle toggle-right ${showRightSidebar && !isFocusMode ? 'active' : ''}`}
-                onClick={() => setShowRightSidebar(!showRightSidebar)}
-                aria-label="Toggle Picks"
-              >
-                {showRightSidebar ? '✕' : '🕒'}
-              </button>
-            </>
-          )}
-
-          <div className="main-layout">
-            <div className={`left-sidebar-wrapper ${showLeftSidebar && !isFocusMode ? 'mobile-open' : ''}`}>
-              {!isFocusMode && (
-                <LeftPanel
-                  players={players}
-                  onDraft={draftPlayer}
-                  onDraftUnranked={() => setIsUnrankedModalOpen(true)}
-                />
-              )}
-            </div>
-
-            <CenterBoard
+        loading
+          ? <div className="loading">Loading Chiefs Draft Board...</div>
+          : (
+            <DraftView
               players={players}
-              onDraft={draftPlayer}
+              ourPicksLeft={ourPicksLeft}
+              draftedPlayers={draftedPlayers}
+              yourPicks={yourPicks}
+              currentPick={currentPick}
+              remotePicks={remotePicks}
+              isLiveSync={isLiveSync}
+              canLiveSync={canLiveSync}
+              toggleLiveSync={toggleLiveSync}
+              draftPlayer={draftPlayer}
+              updateOurPicks={updateOurPicks}
+              resetDraft={resetDraft}
+              undoAction={undoAction}
               columnOrder={columnOrder}
-              isFocusMode={isFocusMode}
+              importDraftState={importDraftState}
             />
-
-            <div className={`right-sidebar-wrapper ${showRightSidebar && !isFocusMode ? 'mobile-open' : ''}`}>
-              {!isFocusMode && (
-                <RightPanel
-                  remotePicks={remotePicks}
-                  draftedPlayers={draftedPlayers}
-                  currentPick={currentPick}
-                  ourPicksLeft={ourPicksLeft}
-                  onImport={importDraftState}
-                />
-              )}
-            </div>
-          </div>
-
-          {!isFocusMode && <BottomPanel yourPicks={yourPicks} />}
-        </>
+          )
       )}
 
-      <PicksModal
-        key={`picks-${isModalOpen}`}
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        initialPicks={ourPicksLeft}
-        onSave={updateOurPicks}
-      />
+      {view === 'udfa' && <ComingSoon label="UDFA" />}
 
-      <UnrankedModal
-        key={`unranked-${isUnrankedModalOpen}`}
-        isOpen={isUnrankedModalOpen}
-        onClose={() => setIsUnrankedModalOpen(false)}
-        onDraft={draftPlayer}
-        mode={(currentPick || 1) > 257 ? 'postdraft' : 'draft'}
-      />
+      {view === 'roster' && (
+        <RosterView masterPlayers={players} draftedPlayers={draftedPlayers} currentPick={currentPick} onDraft={draftPlayer} />
+      )}
     </div>
   );
 }
