@@ -9,6 +9,7 @@ import UnrankedModal from './UnrankedModal';
 import DepthChartGrid from './DepthChartGrid';
 import { TextPromptDialog, ConfirmDialog } from './Dialogs';
 import Toast from './Toast';
+import Menu from './Menu';
 
 function CounterBox({ label, val, max, status, isLast, maxLabel }) {
     return (
@@ -424,8 +425,10 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
                         >+</button>
                     </div>
                     <button onClick={handleSyncFromStages} className="action-pill" title="Fill empty slots from FA candidates, draft picks, and UDFA signings — never overwrites">Sync from FA/Draft/UDFA</button>
-                    <button onClick={handleExport} className="action-pill">Export CSV</button>
-                    <button onClick={() => setShowResetConfirm(true)} className="action-pill reset-pill">Reset</button>
+                    <Menu items={[
+                        { label: 'Export Roster CSV…', onClick: handleExport },
+                        { label: 'Reset Roster…', onClick: () => setShowResetConfirm(true), tone: 'danger' },
+                    ]} />
                 </div>
             </div>
 

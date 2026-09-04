@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { exportBoardToImage } from '../utils/exportBoard';
 import Toast from './Toast';
+import Menu from './Menu';
 
 const TopPanel = ({ currentPick, currentPickStatus, ourPicksLeft, onUndo, onUpdatePicks, onReset, isLiveSync, canLiveSync, toggleLiveSync, isFocusMode, onToggleFocus }) => {
     const [isExporting, setIsExporting] = useState(false);
@@ -152,10 +153,15 @@ const TopPanel = ({ currentPick, currentPickStatus, ourPicksLeft, onUndo, onUpda
                         Live Sync
                     </label>
                 )}
+                {/* Undo and Full Board stay out here — both are used live,
+                    mid-draft. Everything occasional moves into the menu. */}
                 <button className="action-pill undo-pill" onClick={onUndo}>Undo</button>
-                <button className="action-pill trade-pill" onClick={onUpdatePicks}>Update Picks</button>
                 <button className="action-pill focus-pill" onClick={onToggleFocus}>⛶ Full Board</button>
-                <button className="action-pill reset-pill" onClick={onReset}>Reset All</button>
+                <Menu items={[
+                    { label: 'Update Our Picks…', onClick: onUpdatePicks },
+                    { label: 'Export Board Image…', onClick: handleExport, title: 'JPEG snapshot of the board' },
+                    { label: 'Reset Draft…', onClick: onReset, tone: 'danger' },
+                ]} />
             </div>
 
             <Toast message={toast?.message} tone={toast?.tone} onDismiss={dismissToast} />

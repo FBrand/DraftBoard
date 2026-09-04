@@ -4,6 +4,7 @@ import * as rosterState from '../utils/rosterState';
 import { makeSlot, resolvePosition } from '../utils/rosterState';
 import DepthChartGrid from './DepthChartGrid';
 import { TextPromptDialog } from './Dialogs';
+import Menu from './Menu';
 import useEscapeKey from '../hooks/useEscapeKey';
 
 // ── Small quick-add modal — Name + Position only. The shared depth-chart
@@ -240,13 +241,12 @@ export default function FreeAgencyView({ masterPlayers, draftedPlayers, onInfoOp
                 </div>
 
                 <div className="top-actions">
-                    <button onClick={handleSyncPositionsFromRoster} className="action-pill">Import Positions from Roster</button>
                     <button onClick={() => setIsAddOpen(true)} className="action-pill">+ Add Candidate</button>
-                    <button onClick={handleExport} className="action-pill">Export CSV</button>
-                    <label className="action-pill" style={{ cursor: 'pointer' }}>
-                        Import CSV
-                        <input type="file" accept=".csv" onChange={handleImport} style={{ display: 'none' }} />
-                    </label>
+                    <Menu items={[
+                        { label: 'Import Positions from Roster', onClick: handleSyncPositionsFromRoster, title: 'Adds any position row Roster has that FA doesn\'t' },
+                        { label: 'Export Candidates CSV…', onClick: handleExport },
+                        { label: 'Import Candidates CSV…', file: { accept: '.csv', onFile: handleImport } },
+                    ]} />
                 </div>
             </div>
 

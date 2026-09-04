@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import useDraftState from './hooks/useDraftState';
 import DraftView from './components/DraftView';
 import UdfaView from './components/UdfaView';
@@ -6,6 +6,10 @@ import ScoutingView from './components/ScoutingView';
 import FreeAgencyView from './components/FreeAgencyView';
 import RosterView from './components/RosterView';
 import PlayerInfoModal from './components/PlayerInfoModal';
+import Menu from './components/Menu';
+import Toast from './components/Toast';
+import { ConfirmDialog } from './components/Dialogs';
+import { exportSession, importSession, sessionFilename } from './utils/appSession';
 
 const TABS = [
   { id: 'fa', label: '💰 Free Agency' },
@@ -44,9 +48,48 @@ function App() {
   // primary click, so this only gets wired into Draft/UDFA.
   const [infoPlayer, setInfoPlayer] = useState(null);
 
+  const [toast, setToast] = useState(null);
+  const dismissToast = useCallback(() => setToast(null), []);
+  // Import replaces every stage's state at once, so it asks first. The file
+  // is read before confirming — no point warning about an overwrite that a
+  // corrupt file would fail anyway.
+  const [pendingImport, setPendingImport] = useState(null);
+
   React.useEffect(() => {
     localStorage.setItem('draft_board_view', view);
   }, [view]);
+
+  const handleSessionExport = () => {
+    const blob = new Blob([exportSession()], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = sessionFilename();
+    a.click();
+    URL.revokeObjectURL(url);
+    setToast({ message: 'Full session exported.', tone: 'success' });
+  };
+
+  const handleSessionFile = async (e) => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    setPendingImport({ name: file.name, text: await file.text() });
+  };
+
+  const applySessionImport = () => {
+    const { text } = pendingImport;
+    setPendingImport(null);
+    try {
+      importSession(text);
+      // Every stage keeps its state in its own hook/module, seeded from
+      // localStorage at mount — a reload is the honest way to re-seed them
+      // all rather than threading setters through five views.
+      window.location.reload();
+    } catch (err) {
+      setToast({ message: err.message, tone: 'error' });
+    }
+  };
 
   return (
     <div className="app-container">
@@ -61,6 +104,19 @@ function App() {
             className={`view-tab${view === id ? ' active' : ''}`}
           >{label}</button>
         ))}
+
+        {/* Whole-app session lives here rather than in any one view — it
+            spans all five stages, so it doesn't belong to any of them. The
+            per-view CSV exports remain untouched in their own toolbars. */}
+        <div className="view-tabbar-actions">
+          <Menu
+            label="Session"
+            items={[
+              { label: 'Export Full Session…', onClick: handleSessionExport, title: 'Every stage — draft, roster, FA, scouting — in one JSON file' },
+              { label: 'Import Full Session…', file: { accept: '.json', onFile: handleSessionFile }, title: 'Replaces all current state' },
+            ]}
+          />
+        </div>
       </div>
 
       {/* Like Roster, doesn't gate on Draft's loading state — masterPlayers/
@@ -118,6 +174,18 @@ function App() {
       )}
 
       <PlayerInfoModal key={infoPlayer?.name ?? 'none'} player={infoPlayer} onClose={() => setInfoPlayer(null)} />
+
+      {pendingImport && (
+        <ConfirmDialog
+          title="Import full session?"
+          message={`Restoring "${pendingImport.name}" replaces your current draft, roster, free agency, and scouting data. This cannot be undone.`}
+          confirmLabel="Replace everything"
+          onConfirm={applySessionImport}
+          onCancel={() => setPendingImport(null)}
+        />
+      )}
+
+      <Toast message={toast?.message} tone={toast?.tone} onDismiss={dismissToast} />
     </div>
   );
 }

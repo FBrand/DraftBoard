@@ -5,6 +5,7 @@ import ScoutingLeftPanel from './ScoutingLeftPanel';
 import * as scoutingState from '../utils/scoutingState';
 import { buildNameIndex, findMatchingIndex } from '../utils/nameMatcher';
 import useIsMobile from '../hooks/useIsMobile';
+import Menu from './Menu';
 
 const { BOARDS, BOARD_LABELS } = scoutingState;
 
@@ -181,12 +182,11 @@ export default function ScoutingView({ players, columnOrder }) {
                 <div style={{ flex: 1 }} />
 
                 <div className="top-actions">
-                    <button onClick={handleExportRankings} className="action-pill" title="group,name,position — ready for public/ or ?rankings=">Export as Board CSV</button>
-                    <button onClick={handleExport} className="action-pill">Export CSV</button>
-                    <label className="action-pill" style={{ cursor: 'pointer' }}>
-                        Import CSV
-                        <input type="file" accept=".csv" onChange={handleImport} style={{ display: 'none' }} />
-                    </label>
+                    <Menu items={[
+                        { label: 'Export as Board CSV…', onClick: handleExportRankings, title: 'group,name,position — ready for public/ or ?rankings=' },
+                        { label: 'Export Scouting CSV…', onClick: handleExport, title: 'Full overlay: tags, notes, matrix numbers' },
+                        { label: 'Import Scouting CSV…', file: { accept: '.csv', onFile: handleImport } },
+                    ]} />
                 </div>
             </div>
 
