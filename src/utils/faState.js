@@ -38,19 +38,57 @@ export async function fetchSeasonStartRoster() {
     return parseCSV(await res.text());
 }
 
+/**
+ * Writes the season-start roster into free agency if nothing is saved yet, and
+ * resolves with whatever FA should now hold.
+ *
+ * Called at app start rather than only when the Free Agency tab is opened:
+ * "Roster: sync from FA/Draft/UDFA" reads free agency out of storage, so a
+ * seed that waited for a visit meant the pipeline silently had nothing to pull
+ * from until you happened to click the tab. Idempotent, and shared by both
+ * callers so there is one implementation of what seeding means.
+ */
+let seedPromise = null;
+
+export function ensureSeeded() {
+    if (seedPromise) return seedPromise;
+    seedPromise = (async () => {
+        if (hasSavedState()) return loadState();
+        try {
+            const seeded = await fetchSeasonStartRoster();
+            saveState(seeded);
+            return seeded;
+        } catch {
+            return loadState(); // leave FA empty rather than blocking
+        }
+    })();
+    return seedPromise;
+}
+
+// Same versioning contract as rosterState — see the note there. Unversioned
+// data is treated as version 1, which is what it is.
+export const STATE_VERSION = 1;
+
+function migrate(parsed) {
+    const from = typeof parsed.version === 'number' ? parsed.version : 1;
+    if (from > STATE_VERSION) return null; // written by a newer app
+    // (no migration steps yet)
+    return { ...parsed, version: STATE_VERSION };
+}
+
 export function loadState() {
     try {
         const raw = localStorage.getItem(STORAGE_KEY);
         if (raw) {
             const parsed = JSON.parse(raw);
-            if (parsed?.positionConfig) return parsed;
+            if (parsed?.positionConfig) return migrate(parsed) ?? defaultState();
         }
     } catch { /* ignore */ }
     return defaultState();
 }
 
 export function saveState(state) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...state, version: STATE_VERSION }));
 }
 
 /**

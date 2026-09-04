@@ -74,19 +74,37 @@ export function defaultState() {
 // ---------------------------------------------------------------------------
 // Persistence
 // ---------------------------------------------------------------------------
+/**
+ * Stored shape version. Bump when the persisted shape changes in a way older
+ * data can't satisfy, and add a step to `migrate` — without this there was no
+ * way to tell an old shape from a current one, so a stale blob was simply
+ * trusted and rendered wrong.
+ *
+ * Version 1 is the shape that already existed; unversioned data is treated as
+ * version 1 rather than discarded, since that is exactly what it is.
+ */
+export const STATE_VERSION = 1;
+
+function migrate(parsed) {
+    const from = typeof parsed.version === 'number' ? parsed.version : 1;
+    if (from > STATE_VERSION) return null; // written by a newer app — don't guess
+    // (no migration steps yet; add them here as the shape changes)
+    return { ...parsed, version: STATE_VERSION };
+}
+
 export function loadState() {
     try {
         const raw = localStorage.getItem(STORAGE_KEY);
         if (raw) {
             const parsed = JSON.parse(raw);
-            if (parsed?.positionConfig?.offense?.length > 0) return parsed;
+            if (parsed?.positionConfig?.offense?.length > 0) return migrate(parsed);
         }
     } catch { /* ignore */ }
     return null;
 }
 
 export function saveState(state) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...state, version: STATE_VERSION }));
 }
 
 // ---------------------------------------------------------------------------
@@ -474,6 +492,25 @@ export async function fetchAdapterRoster() {
     const html = await adapter.fetchRosterHTML();
     if (!html) throw new Error('Adapter returned no data');
     return parseHTMLToRoster(html);
+}
+
+/**
+ * Last season's position structure with every slot emptied — the depth chart
+ * you start an offseason with before anyone is signed or drafted into it.
+ *
+ * defaultState() has no position rows at all, so a roster built from it has
+ * nowhere to put anybody: "Sync from FA/Draft/UDFA" resolves each player to a
+ * row, finds none, and silently places nothing. Starting from the real shape
+ * means the pipeline (free agency + draft picks + UDFA signings -> the 53)
+ * actually has somewhere to land.
+ */
+export async function fetchSeasonStartStructure() {
+    const res = await fetch(`${import.meta.env.BASE_URL}roster_2025_end.csv`);
+    if (!res.ok) throw new Error(`Could not load last season's roster (HTTP ${res.status})`);
+    const parsed = parseCSV(await res.text());
+    const depthChart = {};
+    Object.keys(parsed.depthChart).forEach(id => { depthChart[id] = []; });
+    return { ...parsed, depthChart, reserve: [], cuts: [] };
 }
 
 export async function fetchLocalRoster() {
