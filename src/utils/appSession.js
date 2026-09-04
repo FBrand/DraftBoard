@@ -17,6 +17,7 @@
 // adding a stage is a deliberate one-line change here.
 const KEYS = [
     'nfl_draft_board_state',   // useDraftState
+    'nfl_draft_live_sync',     // useDraftState's live-sync toggle
     'rosterState',             // rosterState.js
     'fa_state_v1',             // faState.js
     'scouting_overlay_v1__consensus',
@@ -24,6 +25,7 @@ const KEYS = [
     'scouting_overlay_v1__ryan',
     'draft_board_view',        // last active tab
     'draft_board_focus',       // Draft's focus-mode toggle
+    'athletic_matrix_url',     // configurable Athletic Matrix link (appLinks.js)
 ];
 
 export const SESSION_VERSION = 1;

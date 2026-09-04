@@ -37,9 +37,11 @@ function Row({ player, rank, group, onSelect, isSelected }) {
 // LeftPanel, except it's not just "remaining undrafted players" (this is a
 // personal big board, drafted-or-not doesn't matter) and it's editable via
 // drag-and-drop rather than click-to-draft. Dragging a row to a new spot
-// reorders the whole list and the caller renumbers personalRank 1..N to
-// match — see ScoutingView.jsx's handleReorder.
-export default function ScoutingLeftPanel({ orderedPlayers, entryFor, selectedName, onSelect, onReorder }) {
+// reorders the whole list and the caller records the new within-tier order
+// (moving the player into the tier it was dropped among) — see
+// ScoutingView.jsx's handleReorder. Ranks themselves are derived, never
+// stored; see boardRanking.js.
+export default function ScoutingLeftPanel({ orderedPlayers, selectedName, onSelect, onReorder }) {
     const [searchTerm, setSearchTerm] = useState('');
     const [activeName, setActiveName] = useState(null);
 
@@ -102,7 +104,7 @@ export default function ScoutingLeftPanel({ orderedPlayers, entryFor, selectedNa
                                     key={player.name}
                                     player={player}
                                     rank={searchTerm ? (orderedPlayers.indexOf(player) + 1) : (i + 1)}
-                                    group={entryFor?.(player.name)?.group}
+                                    group={player.group}
                                     onSelect={onSelect}
                                     isSelected={player.name === selectedName}
                                 />

@@ -6,6 +6,8 @@ import * as scoutingState from '../utils/scoutingState';
 import { buildNameIndex, findMatchingIndex } from '../utils/nameMatcher';
 import useIsMobile from '../hooks/useIsMobile';
 import Menu from './Menu';
+import { rankBoard, moveToRank } from '../utils/boardRanking';
+import useBoardRankings from '../hooks/useBoardRankings';
 
 const { BOARDS, BOARD_LABELS } = scoutingState;
 
@@ -34,6 +36,10 @@ const TAG_FILTERS = [
 export default function ScoutingView({ players, columnOrder }) {
     const [boards, setBoards] = useState(() => Object.fromEntries(BOARDS.map(b => [b, scoutingState.loadState(b)])));
     const [activeBoard, setActiveBoard] = useState('consensus');
+    // Each analyst's own rankings file — switching board switches the actual
+    // player pool, not just the overlay on top of one shared list.
+    const { pools } = useBoardRankings(players);
+    const boardPlayers = pools?.[activeBoard] ?? players;
     const [selectedName, setSelectedName] = useState(null);
     const [tagFilter, setTagFilter] = useState('all');
     // On mobile the three columns stack, so the info card would sit far below
@@ -49,63 +55,113 @@ export default function ScoutingView({ players, columnOrder }) {
         return idx !== -1 ? state.entries[idx] : null;
     };
 
+    // Scouting's "Total Rank", "Position Rank" and "Round.Group" are not a
+    // parallel set of fields — they ARE the board's own parameters, the ones
+    // CenterBoard places cards by and the exported rankings CSV carries into
+    // the draft board and roster import.
+    //
+    // Only the group and the within-tier order are stored. Total rank and
+    // position rank are DERIVED from them (see boardRanking.js): subgroups
+    // are authoritative, so 1.2 always outranks 1.3, and within a tier the
+    // order is the analyst's explicit choice or, failing that, positional
+    // value. That's why they can't drift apart or collide — there is one
+    // ordering and both numbers are read off it.
+    const effectivePlayers = useMemo(
+        () => rankBoard(boardPlayers, entryFor),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [boardPlayers, entryIndex],
+    );
+
     const visiblePlayers = useMemo(() => {
-        if (tagFilter === 'all') return players;
-        return players.filter(p => {
+        if (tagFilter === 'all') return effectivePlayers;
+        return effectivePlayers.filter(p => {
             const entry = entryFor(p.name);
             if (tagFilter === 'untagged') return !entry?.tag;
             return entry?.tag === tagFilter;
         });
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [players, tagFilter, entryIndex]);
+    }, [effectivePlayers, tagFilter, entryIndex]);
 
-    // This board's in-progress order: personalRank when set, else fall back
-    // to consensus overallRank so untouched players still sort sensibly
-    // (a starting point to refine, not a comparison being drawn).
-    const orderedPlayers = useMemo(() => {
-        return [...players].sort((a, b) => {
-            const ra = entryFor(a.name)?.personalRank ?? a.overallRank ?? Infinity;
-            const rb = entryFor(b.name)?.personalRank ?? b.overallRank ?? Infinity;
-            return ra - rb;
+    // Already ordered by effective rank above.
+    const orderedPlayers = effectivePlayers;
+
+    const selectedPlayer = selectedName ? effectivePlayers.find(p => p.name === selectedName) : null;
+
+    // Records an explicit ordering by stamping each player's position WITHIN
+    // ITS OWN TIER, plus the tier it now belongs to. Nothing stores a global
+    // rank: that stays derived, so it can't drift out of step with the groups.
+    // `groupOverrides` optionally moves specific players into another tier.
+    const applyOrder = (entries, orderedNames, groupOverrides = {}) => {
+        const out = [...entries];
+        const now = new Date().toISOString();
+        const groupOf = new Map(effectivePlayers.map(p => [p.name, p.group]));
+        const seenPerGroup = new Map();
+
+        orderedNames.forEach(name => {
+            const group = groupOverrides[name] ?? groupOf.get(name) ?? null;
+            const nextWithin = (seenPerGroup.get(group) ?? 0) + 1;
+            seenPerGroup.set(group, nextWithin);
+
+            const idx = findMatchingIndex(name, buildNameIndex(out));
+            if (idx !== -1) {
+                out[idx] = { ...out[idx], group, withinGroup: nextWithin, updatedAt: now };
+            } else {
+                const position = boardPlayers.find(p => p.name === name)?.position ?? '';
+                out.push({ ...scoutingState.makeEntry(name, position), group, withinGroup: nextWithin, updatedAt: now });
+            }
         });
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [players, entryIndex]);
-
-    const selectedPlayer = selectedName ? players.find(p => p.name === selectedName) : null;
-
-    const saveEntry = (updated) => {
-        setBoards(prev => {
-            const boardState = prev[activeBoard];
-            const idx = findMatchingIndex(updated.name, buildNameIndex(boardState.entries));
-            const entries = idx !== -1
-                ? boardState.entries.map((e, i) => i === idx ? updated : e)
-                : [...boardState.entries, updated];
-            const next = { version: 1, entries };
-            scoutingState.saveState(activeBoard, next);
-            return { ...prev, [activeBoard]: next };
-        });
+        return out;
     };
 
-    // Drag-and-drop reorder from ScoutingLeftPanel: renumber personalRank
-    // 1..N to match the new order, creating an entry for any player that
-    // didn't have one yet (a plain drag with no prior tag/notes).
+    const commitBoard = (entries) => {
+        const next = { version: 1, entries };
+        scoutingState.saveState(activeBoard, next);
+        setBoards(prev => ({ ...prev, [activeBoard]: next }));
+    };
+
+    const saveEntry = (updated) => {
+        const current = effectivePlayers.find(p => p.name === updated.name);
+        const wantedRank = updated.personalRank;
+        const wantedGroup = updated.group;
+
+        const boardState = boards[activeBoard];
+        let entries = [...boardState.entries];
+        const idx = findMatchingIndex(updated.name, buildNameIndex(entries));
+        // personalRank is derived, never stored — strip it before persisting
+        // so a stale copy can't start competing with the derivation.
+        const { personalRank: _drop, ...persisted } = updated;
+        if (idx !== -1) entries[idx] = { ...entries[idx], ...persisted };
+        else entries.push(persisted);
+
+        // Typing a total rank is a MOVE, not an assignment: the player takes
+        // that slot, adopts that slot's tier, and everyone between the old and
+        // new position shifts by one. Two players can never share a rank
+        // because the rank is only ever read off the resulting order.
+        if (wantedRank != null && current && wantedRank !== current.overallRank) {
+            const moved = moveToRank(effectivePlayers, updated.name, wantedRank);
+            if (moved) entries = applyOrder(entries, moved.order, { [updated.name]: moved.group });
+        } else if (wantedGroup != null && current && wantedGroup !== current.group) {
+            // Changing the tier directly: keep the rest of the order as-is and
+            // let the derivation re-place this player within its new tier.
+            entries = applyOrder(entries, effectivePlayers.map(p => p.name), { [updated.name]: wantedGroup });
+        }
+
+        commitBoard(entries);
+    };
+
+    // Drag-and-drop reorder from ScoutingLeftPanel. Dropping a player among a
+    // different tier's players moves them into that tier, same as typing the
+    // rank would.
     const handleReorder = (newOrderedNames) => {
-        setBoards(prev => {
-            const boardState = prev[activeBoard];
-            const entries = [...boardState.entries];
-            newOrderedNames.forEach((name, i) => {
-                const idx = findMatchingIndex(name, buildNameIndex(entries));
-                if (idx !== -1) {
-                    entries[idx] = { ...entries[idx], personalRank: i + 1, updatedAt: new Date().toISOString() };
-                } else {
-                    const position = players.find(p => p.name === name)?.position ?? '';
-                    entries.push({ ...scoutingState.makeEntry(name, position), personalRank: i + 1, updatedAt: new Date().toISOString() });
-                }
-            });
-            const next = { version: 1, entries };
-            scoutingState.saveState(activeBoard, next);
-            return { ...prev, [activeBoard]: next };
-        });
+        const idx = newOrderedNames.findIndex((n, i) => effectivePlayers[i]?.name !== n);
+        const overrides = {};
+        if (idx !== -1) {
+            const movedName = newOrderedNames[idx];
+            const neighbour = newOrderedNames[idx + 1] ?? newOrderedNames[idx - 1];
+            const group = effectivePlayers.find(p => p.name === neighbour)?.group;
+            if (group != null) overrides[movedName] = group;
+        }
+        commitBoard(applyOrder(boards[activeBoard].entries, newOrderedNames, overrides));
     };
 
     const cycleBoard = (dir) => {
@@ -136,7 +192,7 @@ export default function ScoutingView({ players, columnOrder }) {
     // ?rankings=, unlike Export CSV above (which round-trips the full
     // overlay: tags/notes/matrix numbers/etc. for re-import into Scouting).
     const handleExportRankings = () => {
-        const csv = scoutingState.exportRankingsCSV(state);
+        const csv = scoutingState.exportRankingsCSV(effectivePlayers);
         const blob = new Blob([csv], { type: 'text/csv' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -193,7 +249,6 @@ export default function ScoutingView({ players, columnOrder }) {
             <div className="scouting-layout">
                 <ScoutingLeftPanel
                     orderedPlayers={orderedPlayers}
-                    entryFor={entryFor}
                     selectedName={selectedName}
                     onSelect={(p) => setSelectedName(p.name)}
                     onReorder={handleReorder}

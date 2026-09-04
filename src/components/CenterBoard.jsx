@@ -17,12 +17,21 @@ const CenterBoard = ({ players, onAction, columnOrder = [], isFocusMode = false,
         ...rawPositions.filter(rp => !columnOrder.includes(rp))
     ];
 
-    // Extract absolute group order from the unmodified players set to ensure rows never swap positions
-    const masterGroups = [];
-    players.forEach(p => {
-        if (!masterGroups.includes(p.group)) {
-            masterGroups.push(p.group);
-        }
+    // Subgroup row order comes from the group labels themselves ("1.1", "1.2",
+    // "2.1", …), sorted by round then tier. This used to be first-appearance
+    // order in `players`, which silently depended on the caller handing over
+    // players in rankings-CSV order — Scouting sorts by rank instead, which
+    // scrambled the rows. Sorting the labels is what was actually meant by
+    // "rows never swap positions", and is stable for every caller.
+    const groupKey = (group) => {
+        const m = String(group ?? '').match(/^(\d+)(?:\.(\d+))?/);
+        if (!m) return [Number.MAX_SAFE_INTEGER, 0];
+        return [parseInt(m[1], 10), m[2] ? parseInt(m[2], 10) : 0];
+    };
+    const masterGroups = [...new Set(players.map(p => p.group))].sort((a, b) => {
+        const [ra, ta] = groupKey(a);
+        const [rb, tb] = groupKey(b);
+        return ra - rb || ta - tb || String(a).localeCompare(String(b));
     });
 
     // Strip out active groups natively while inheriting the stable order

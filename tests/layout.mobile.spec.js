@@ -49,8 +49,11 @@ test.describe('mobile layout', () => {
         const box = page.locator('.scouting-modal-box');
         await expect(box).toBeVisible();
 
-        // Scouting stays editable even on mobile — this is where notes get written.
-        await expect(box.locator('.scouting-number-grid input')).toHaveCount(4);
+        // Scouting stays editable even on mobile — this is where notes get
+        // written. Three of the four numbers are typeable; position rank is
+        // derived from the board's ordering and rendered as text.
+        await expect(box.locator('.scouting-number-grid input')).toHaveCount(3);
+        await expect(box.locator('.scouting-derived-value')).toHaveCount(1);
         await expect(box.locator('.scouting-group-field')).toHaveCount(1);
 
         await page.keyboard.press('Escape');

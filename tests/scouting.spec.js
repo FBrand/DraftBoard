@@ -73,13 +73,17 @@ test.describe('scouting', () => {
         await openApp(page, 'scouting');
         await page.waitForSelector('.scouting-layout');
 
-        await page.locator('.center-board-container .player-card').first().click();
+        const card = page.locator('.center-board-container .player-card').first();
+        const name = (await card.locator('.player-name').innerText()).trim();
+        await card.click();
         await page.locator('.scouting-group-field input').fill('1.3');
         await page.locator('.scouting-group-field input').blur();
-        await page.waitForTimeout(300);
+        await page.waitForTimeout(500);
 
-        // The group badge shows on the ranked list
-        await expect(page.locator('.scouting-rank-group').first()).toHaveText('1.3');
+        // The group badge follows the player, who is no longer top of the list —
+        // moving them to tier 1.3 puts them below everyone still in 1.x above it.
+        await expect(page.locator('.scouting-rank-row', { hasText: name })
+            .locator('.scouting-rank-group')).toHaveText('1.3');
 
         await page.getByRole('button', { name: 'More ▾' }).click();
         const [download] = await Promise.all([
@@ -95,7 +99,9 @@ test.describe('scouting', () => {
 
         const lines = text.trim().split('\n');
         expect(lines[0]).toBe('group,name,position');
-        expect(lines[1]).toMatch(/^1\.3,/);
+        const row = lines.find(l => l.includes(name));
+        expect(row).toBeDefined();
+        expect(row.startsWith('1.3,')).toBe(true);
         expect(errors).toEqual([]);
     });
 });

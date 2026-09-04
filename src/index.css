@@ -2626,3 +2626,34 @@ body.export-mode .card-glow {
   align-items: center;
   padding: 4px 12px 4px 0;
 }
+
+/* Derived (non-editable) value inside the scouting number grid */
+.scouting-derived-value {
+  display: flex;
+  align-items: center;
+  min-height: 31px;
+  padding: 6px 8px;
+  border: 1px dashed rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  color: var(--gold-color);
+  font-weight: 800;
+  font-family: 'Outfit', sans-serif;
+  box-sizing: border-box;
+}
+
+/* Athletic Matrix attribution — shown only when a player carries matrix numbers */
+.scouting-matrix-credit {
+  display: block;
+  margin: -4px 0 16px;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  text-decoration: none;
+  border-bottom: 1px dotted var(--text-dim);
+  padding-bottom: 1px;
+  width: fit-content;
+}
+
+.scouting-matrix-credit:hover {
+  color: var(--gold-color);
+  border-bottom-color: var(--gold-color);
+}

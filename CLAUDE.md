@@ -25,30 +25,73 @@ GitHub Pages via `.github/workflows/deploy.yml`, and is fully static —
 sequential-but-revisitable stages.
 
 1. **Free Agency** — FA signings, budget/contract tracking, board holes after FA
-2. **Scouting** — personal rankings, ✓/✗/? tags, consensus-vs-personal comparison
+2. **Scouting** — building a board: rankings, tiers, ✓/✗/? tags, notes
+   (note: `ROADMAP.md` frames this as "consensus-vs-personal comparison"; the
+   built feature is deliberately *not* that — see the ranking model below)
 3. **Draft** — the original live board (this is the app's current core)
 4. **UDFA** — undrafted free agent signings, priority targets
 5. **Roster Construction** — 53-man depth chart, practice squad/IR, specialist alignment
 
 ### Actual build status (verify against code before trusting any doc, including this one)
 
+**All five stages now exist as their own tab** in `App.jsx`
+(`fa | scouting | draft | udfa | roster`). Two shared primitives do the heavy
+lifting rather than five bespoke UIs:
+
+- **`CenterBoard.jsx`** — the board grid (position columns × round/tier rows).
+  Used by Draft, UDFA and Scouting.
+- **`DepthChartGrid.jsx`** — the depth-chart grid (position rows × 53-man/PS/
+  reserve slots, drag-and-drop, IR and cuts). Used by Roster and Free Agency.
+
+Stage notes:
+
 - **Stage 3 (Draft) — done.** `useDraftState.js` (central state/undo/pick
-  tracking), `CenterBoard.jsx` (grid), `LeftPanel.jsx`/`RightPanel.jsx`/
-  `BottomPanel.jsx`, live sync via `ESPNProvider.js` + `services/DraftService.js`.
-- **Stage 5 (Roster) — substantially built,** and moving fast. `RosterView.jsx`
-  + `utils/rosterState.js` implement full drag-and-drop 53-man/practice-squad/
-  IR/cuts management, Ourlads auto-fetch, CSV import/export, position config.
-  This is *not* a minimal skeleton — treat it as near-parity with Draft.
-- **Stage 4 (UDFA) — folded into Roster's "Sign Player" flow** rather than
-  being a distinct stage/view. `UnrankedModal.jsx` has a `postdraft`/`roster`
-  mode (see `mode={(currentPick || 1) > 257 ? 'postdraft' : 'draft'}` in
-  `App.jsx`) instead of its own priority-targets UI.
-- **Stages 1 (FA) and 2 (Scouting) — not started.** No FA budget tracking or
-  personal scouting-tag code exists anywhere in `src/`.
-- **App navigation is a 2-tab switcher** in `App.jsx` (`view: 'draft' | 'roster'`),
-  not the 5-stage tab shell `ROADMAP.md` describes. If/when building that
-  shell, Draft and Roster are the two stages closest to done; UDFA needs to be
-  split out of Roster's sign-player flow into its own view.
+  tracking), `DraftView.jsx`, `CenterBoard.jsx`, `LeftPanel.jsx`/
+  `RightPanel.jsx`/`BottomPanel.jsx`, live sync via `ESPNProvider.js`.
+- **Stage 5 (Roster) — substantially built.** `RosterView.jsx` +
+  `utils/rosterState.js`: drag-and-drop 53-man/practice-squad/IR/cuts, CSV
+  import/export, position config, and "Sync from FA/Draft/UDFA" which fills
+  empty slots additively from the other stages (never overwrites).
+- **Stage 4 (UDFA) — its own view** (`UdfaView.jsx`), reusing `CenterBoard`
+  with its own chrome, no longer folded into Roster's sign-player flow.
+- **Stage 1 (FA) — built** as a *needs-and-candidates snapshot*, deliberately
+  not a signings/budget tracker: `FreeAgencyView.jsx` + `utils/faState.js`
+  render the same depth-chart grid against a candidate pool, and read Roster's
+  real depth chart read-only to compute needs.
+- **Stage 2 (Scouting) — built** as a board *builder*, not a
+  consensus-vs-personal comparison: `ScoutingView.jsx` +
+  `utils/scoutingState.js` + `utils/boardRanking.js`. See the ranking model
+  below — it's the part most easily broken by a well-meaning change.
+
+### The board ranking model (read before touching ranks or groups)
+
+Scouting's "Total Rank", "Position Rank" and "Round.Group" are **not** a
+separate annotation layer sitting beside the board's own numbers — they are
+the board's own parameters, the ones `CenterBoard` places cards by and that
+the exported `group,name,position` CSV carries into the draft board and roster
+import.
+
+Only two things are stored per player (`utils/scoutingState.js`): the `group`
+(tier) and `withinGroup` (position inside that tier). **Total rank and
+position rank are derived**, never stored, by `utils/boardRanking.js`:
+
+1. Subgroups are authoritative — everyone in `1.2` outranks everyone in `1.3`.
+2. Inside a tier, the analyst's explicit order wins (set by dragging, or by
+   typing a total rank).
+3. Otherwise, positional value breaks the tie (`POSITION_VALUE`).
+
+Consequences that are easy to regress and are covered by
+`tests/scouting-params.spec.js`:
+
+- A rank is a *position in an ordering*, so two players can never share one.
+  Typing a rank is a **move** — the player takes that slot, adopts that slot's
+  tier, and everyone between the old and new position shifts by one. It is
+  never a bare assignment.
+- Because both numbers are read off one ordering, they cannot disagree with
+  each other or with where a card actually sits on the board.
+- `CenterBoard` derives its subgroup row order by sorting the group labels,
+  *not* by the order players arrive in — Scouting hands it players in rank
+  order, and relying on arrival order silently scrambled the rows.
 - `ROADMAP.md` also describes a **Normal vs. Focus view toggle** for the Draft
   board (Normal = hide drafted, collapse empty rows; Focus = show all,
   dim drafted). This exists as `isFocusMode` state in `App.jsx`/`CenterBoard.jsx`

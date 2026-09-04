@@ -173,7 +173,12 @@ function App() {
         <RosterView masterPlayers={players} draftedPlayers={draftedPlayers} currentPick={currentPick} onDraft={draftPlayer} onInfoOpen={setInfoPlayer} />
       )}
 
-      <PlayerInfoModal key={infoPlayer?.name ?? 'none'} player={infoPlayer} onClose={() => setInfoPlayer(null)} />
+      <PlayerInfoModal
+        key={infoPlayer?.name ?? 'none'}
+        player={infoPlayer}
+        players={players}
+        onClose={() => setInfoPlayer(null)}
+      />
 
       {pendingImport && (
         <ConfirmDialog

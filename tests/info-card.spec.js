@@ -18,10 +18,20 @@ test.describe('player info card', () => {
         await expect(box.locator('input')).toHaveCount(0);
         await expect(box.locator('.scouting-group-field')).toHaveCount(0);
 
-        // Unset numbers read as "?" rather than disappearing.
-        const values = await box.locator('.scouting-readonly-value').allTextContents();
+        // Four numeric fields, always shown. Total Rank is the board's own
+        // overallRank, so an un-scouted player still has one; the other three
+        // have no underlying source and read "?" until someone fills them in.
+        const values = (await box.locator('.scouting-readonly-value').allTextContents())
+            .map(v => v.trim());
         expect(values).toHaveLength(4);
-        expect(values.every(v => v.trim() === '?')).toBe(true);
+
+        // Total rank matches the board card, and position rank is derived from
+        // the same ordering, so both are real numbers. Only the two
+        // athletic-matrix fields have no source and read "?".
+        const shownRank = (await card.locator('.player-rank').innerText()).replace('#', '').trim();
+        expect(values[0]).toBe(shownRank);
+        expect(values[1]).toMatch(/^\d+$/);
+        expect(values.slice(2)).toEqual(['?', '?']);
 
         // Opening the card must not draft the player.
         if (wasAvailable) {

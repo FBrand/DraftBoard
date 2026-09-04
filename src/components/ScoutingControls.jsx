@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import useEscapeKey from '../hooks/useEscapeKey';
+import { getAthleticMatrixUrl } from '../utils/appLinks';
 
 const TAGS = [
     { id: 'like', label: '✓ Like' },
@@ -7,11 +8,14 @@ const TAGS = [
     { id: 'monitor', label: '? Monitor' },
 ];
 
+// derived: read off the board's ordering (boardRanking.js), not stored — so
+// they're shown from the player, and Total Rank is the only one you can type
+// into (typing it moves the player, which re-derives both).
 const NUMBER_FIELDS = [
-    { key: 'personalRank', label: 'Total Rank' },
-    { key: 'positionRank', label: 'Position Rank' },
-    { key: 'athleticMatrixTotal', label: 'Athletic Matrix (Total)' },
-    { key: 'athleticMatrixPosition', label: 'Athletic Matrix (Pos)' },
+    { key: 'personalRank', label: 'Total Rank', derived: 'overallRank', editable: true },
+    { key: 'positionRank', label: 'Position Rank', derived: 'positionRank' },
+    { key: 'athleticMatrixTotal', label: 'Athletic Matrix (Total)', editable: true },
+    { key: 'athleticMatrixPosition', label: 'Athletic Matrix (Pos)', editable: true },
 ];
 
 const LIST_FIELDS = [
@@ -82,13 +86,20 @@ function BulletListEditor({ label, items, onChange, readOnly }) {
 // remounts it on selection change rather than syncing state via an effect
 // (see https://react.dev/learn/you-might-not-need-an-effect).
 export default function ScoutingControls({ player, entry, onChange, onClose, boardLabel, onPrevBoard, onNextBoard, variant = 'panel', readOnly = false }) {
+    // Total Rank, Position Rank and Round.Group are the board's own
+    // parameters, so they show the player's current values rather than blank
+    // boxes — you're adjusting the real thing, not a field that merely sits
+    // beside it. Rank and position rank are derived from the board's ordering
+    // (boardRanking.js); typing a total rank moves the player, which
+    // re-derives both. The athletic-matrix numbers have no source and stay
+    // empty until filled in.
     const [numbers, setNumbers] = useState({
-        personalRank: entry?.personalRank ?? '',
-        positionRank: entry?.positionRank ?? '',
+        personalRank: player?.overallRank ?? '',
+        positionRank: player?.positionRank ?? '',
         athleticMatrixTotal: entry?.athleticMatrixTotal ?? '',
         athleticMatrixPosition: entry?.athleticMatrixPosition ?? '',
     });
-    const [group, setGroup] = useState(entry?.group ?? '');
+    const [group, setGroup] = useState(entry?.group ?? player?.group ?? '');
     // Only the modal presentation is dismissable — the panel variant is a
     // permanent column, not something Escape should blank out.
     useEscapeKey(onClose, variant === 'modal' && !!player);
@@ -109,8 +120,7 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
             position: player.position,
             tag: entry?.tag ?? null,
             group: entry?.group ?? null,
-            personalRank: entry?.personalRank ?? null,
-            positionRank: entry?.positionRank ?? null,
+            withinGroup: entry?.withinGroup ?? null,
             athleticMatrixTotal: entry?.athleticMatrixTotal ?? null,
             athleticMatrixPosition: entry?.athleticMatrixPosition ?? null,
             strengths: entry?.strengths ?? [],
@@ -121,12 +131,21 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
         });
     };
 
+    // Credit line for the Athletic Matrix, shown once a player actually has
+    // matrix numbers on them — attribution where the data is displayed,
+    // rather than an advert on every card.
+    const hasMatrixValues = entry?.athleticMatrixTotal != null || entry?.athleticMatrixPosition != null;
+
     // Read-only cards show only what's actually filled in, so an untouched
     // player would otherwise render as an empty box with no explanation.
+    // Only counts things an analyst actually entered. Total and position rank
+    // are excluded on purpose: they're derived, so every player on a board has
+    // them and they say nothing about whether anyone has looked at this player.
     const hasAnyContent = !!(
         entry && (
-            entry.tag || entry.group != null ||
-            NUMBER_FIELDS.some(f => entry[f.key] != null && entry[f.key] !== '') ||
+            entry.tag ||
+            entry.athleticMatrixTotal != null ||
+            entry.athleticMatrixPosition != null ||
             LIST_FIELDS.some(f => entry[f.key]?.length)
         )
     );
@@ -178,8 +197,12 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
                     // dropping the field.
                     <div className="scouting-readonly-grid">
                         {NUMBER_FIELDS.map(f => {
-                            const val = entry?.[f.key];
-                            const isSet = val != null && val !== '';
+                            // Total and position rank are derived from the
+                            // board's ordering, so every player on a board has
+                            // both; only the athletic-matrix numbers can be
+                            // genuinely unset.
+                            const val = f.derived ? player[f.derived] : entry?.[f.key];
+                            const isSet = val != null && val !== '' && val !== '-';
                             return (
                                 <div key={f.key} className="scouting-readonly-field">
                                     <span className="scouting-readonly-label">{f.label}</span>
@@ -207,16 +230,35 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
                             {NUMBER_FIELDS.map(f => (
                                 <label key={f.key}>
                                     {f.label}
-                                    <input
-                                        type="number"
-                                        value={numbers[f.key]}
-                                        onChange={e => setNumbers(n => ({ ...n, [f.key]: e.target.value }))}
-                                        onBlur={() => commit({ [f.key]: numbers[f.key] === '' ? null : parseInt(numbers[f.key], 10) })}
-                                    />
+                                    {f.editable ? (
+                                        <input
+                                            type="number"
+                                            value={numbers[f.key]}
+                                            onChange={e => setNumbers(n => ({ ...n, [f.key]: e.target.value }))}
+                                            onBlur={() => commit({ [f.key]: numbers[f.key] === '' ? null : parseInt(numbers[f.key], 10) })}
+                                        />
+                                    ) : (
+                                        // Position rank is purely derived from the
+                                        // board's ordering — there's nothing to type.
+                                        <span className="scouting-derived-value" title="Derived from this board's order">
+                                            {player[f.derived] ?? '—'}
+                                        </span>
+                                    )}
                                 </label>
                             ))}
                         </div>
                     </>
+                )}
+
+                {hasMatrixValues && (
+                    <a
+                        className="scouting-matrix-credit"
+                        href={getAthleticMatrixUrl()}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                    >
+                        Get your Athletic Matrix copy here.
+                    </a>
                 )}
 
                 {LIST_FIELDS.map(f => (
