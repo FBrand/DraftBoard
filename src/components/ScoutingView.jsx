@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import CenterBoard from './CenterBoard';
 import ScoutingControls from './ScoutingControls';
 import ScoutingLeftPanel from './ScoutingLeftPanel';
@@ -113,10 +113,37 @@ export default function ScoutingView({ players, columnOrder }) {
         return out;
     };
 
+    // History is per board — undoing on Dan's board must not rewind Ryan's.
+    // Bounded, since a scouting board's entries can run to the full pool.
+    const past = useRef({});
+    // Depth is tracked per board, not as one number: the Undo button reflects
+    // whichever board is on screen, and switching to an untouched board must
+    // show nothing to undo rather than the previous board's depth.
+    const [undoDepths, setUndoDepths] = useState({});
+    const canUndo = (undoDepths[activeBoard] ?? 0) > 0;
+
+    const recordDepth = (board) => {
+        setUndoDepths(prev => ({ ...prev, [board]: past.current[board]?.length ?? 0 }));
+    };
+
     const commitBoard = (entries) => {
         const next = { version: 1, entries };
+        const stack = past.current[activeBoard] ?? (past.current[activeBoard] = []);
+        stack.push(boards[activeBoard]);
+        if (stack.length > 25) stack.shift();
+        recordDepth(activeBoard);
+
         scoutingState.saveState(activeBoard, next);
         setBoards(prev => ({ ...prev, [activeBoard]: next }));
+    };
+
+    const undoBoard = () => {
+        const stack = past.current[activeBoard];
+        const previous = stack?.pop();
+        if (!previous) return;
+        recordDepth(activeBoard);
+        scoutingState.saveState(activeBoard, previous);
+        setBoards(prev => ({ ...prev, [activeBoard]: previous }));
     };
 
     const saveEntry = (updated) => {
@@ -185,6 +212,7 @@ export default function ScoutingView({ players, columnOrder }) {
         const text = await file.text();
         const imported = scoutingState.parseCSV(text);
         scoutingState.saveState(activeBoard, imported);
+        past.current[activeBoard] = []; recordDepth(activeBoard); // importing replaces the board
         setBoards(prev => ({ ...prev, [activeBoard]: imported }));
     };
 
@@ -238,6 +266,12 @@ export default function ScoutingView({ players, columnOrder }) {
                 <div style={{ flex: 1 }} />
 
                 <div className="top-actions">
+                    <button
+                        onClick={undoBoard}
+                        disabled={!canUndo}
+                        className="action-pill undo-pill"
+                        title="Undo the last change on this board"
+                    >Undo</button>
                     <Menu items={[
                         { label: 'Export as Board CSV…', onClick: handleExportRankings, title: 'group,name,position — ready for public/ or ?rankings=' },
                         { label: 'Export Scouting CSV…', onClick: handleExport, title: 'Full overlay: tags, notes, matrix numbers' },

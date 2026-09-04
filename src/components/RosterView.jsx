@@ -11,6 +11,7 @@ import { TextPromptDialog, ConfirmDialog } from './Dialogs';
 import Toast from './Toast';
 import Menu from './Menu';
 import { shouldSeed } from '../utils/appInit';
+import useUndoableState from '../hooks/useUndoableState';
 
 function CounterBox({ label, val, max, status, isLast, maxLabel }) {
     return (
@@ -26,12 +27,6 @@ function CounterBox({ label, val, max, status, isLast, maxLabel }) {
 // slots, specialists, IR, cuts) is DepthChartGrid.jsx, shared with Free Agency.
 export default function RosterView({ masterPlayers, draftedPlayers, currentPick, onDraft, onInfoOpen }) {
     const isDraftComplete = (currentPick || 1) > 257;
-    const [state, setStateRaw] = useState(() => {
-        const loaded = loadState() ?? defaultState();
-        if (!loaded.cuts) loaded.cuts = [];
-        if (!loaded.reserve) loaded.reserve = [];
-        return loaded;
-    });
     // Seeded mode loads the shipped roster.csv rather than showing the
     // initialize screen: that file is the real post-offseason roster, so the
     // app should open on it the way the draft board opens on the real completed
@@ -53,46 +48,50 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
     // layout) lets a mobile user shrink the whole grid to fit more on screen.
     const [zoomLevel, setZoomLevel] = useState(1);
 
-    const setState = useCallback(next => {
-        setStateRaw(prev => {
-            const result = typeof next === 'function' ? next(prev) : next;
-            if (result && result.depthChart && result.positionConfig) {
-                const normalize = (slots, limit53) => {
-                    if (!slots) return [];
-                    const newSlots = [];
-                    // 1. Keep 53-man slots (indices 0 to limit53 - 1)
-                    for (let i = 0; i < limit53; i++) {
-                        newSlots[i] = slots[i] || null;
-                    }
-                    // 2. PS slots (limit53 to limit53 + 2)
-                    const psSlots = slots.slice(limit53, limit53 + 3).filter(Boolean);
-                    for (let i = 0; i < 3; i++) {
-                        newSlots[limit53 + i] = psSlots[i] || null;
-                    }
-                    // 3. Reserve slots (from limit53 + 3 onwards)
-                    const rSlots = slots.slice(limit53 + 3).filter(Boolean);
-                    rSlots.forEach((slot, idx) => {
-                        newSlots[limit53 + 3 + idx] = slot;
-                    });
-                    return newSlots;
-                };
+    // Slots are normalised on the way in, so the value that lands in state,
+    // in history and in storage is always the same shape — an un-normalised
+    // snapshot would come back subtly different when undone.
+    const normalizeState = useCallback(result => {
+        if (!result?.depthChart || !result?.positionConfig) return result;
 
-                const newDC = { ...result.depthChart };
-                const allPositions = [
-                    ...(result.positionConfig.offense || []),
-                    ...(result.positionConfig.defense || [])
-                ];
-                allPositions.forEach(p => {
-                    if (newDC[p.id]) {
-                        newDC[p.id] = normalize(newDC[p.id], Math.max(1, p.slots53));
-                    }
-                });
-                result.depthChart = newDC;
+        const normalize = (slots, limit53) => {
+            if (!slots) return [];
+            const newSlots = [];
+            // 1. Keep 53-man slots (indices 0 to limit53 - 1)
+            for (let i = 0; i < limit53; i++) {
+                newSlots[i] = slots[i] || null;
             }
-            saveState(result);
-            return result;
-        });
+            // 2. PS slots (limit53 to limit53 + 2)
+            const psSlots = slots.slice(limit53, limit53 + 3).filter(Boolean);
+            for (let i = 0; i < 3; i++) {
+                newSlots[limit53 + i] = psSlots[i] || null;
+            }
+            // 3. Reserve slots (from limit53 + 3 onwards)
+            const rSlots = slots.slice(limit53 + 3).filter(Boolean);
+            rSlots.forEach((slot, idx) => {
+                newSlots[limit53 + 3 + idx] = slot;
+            });
+            return newSlots;
+        };
+
+        const newDC = { ...result.depthChart };
+        [...(result.positionConfig.offense || []), ...(result.positionConfig.defense || [])]
+            .forEach(p => {
+                if (newDC[p.id]) newDC[p.id] = normalize(newDC[p.id], Math.max(1, p.slots53));
+            });
+        return { ...result, depthChart: newDC };
     }, []);
+
+    const [state, setUndoableState, history] = useUndoableState(() => {
+        const loaded = loadState() ?? defaultState();
+        if (!loaded.cuts) loaded.cuts = [];
+        if (!loaded.reserve) loaded.reserve = [];
+        return loaded;
+    }, saveState);
+
+    const setState = useCallback(next => {
+        setUndoableState(prev => normalizeState(typeof next === 'function' ? next(prev) : next));
+    }, [setUndoableState, normalizeState]);
 
     // One-shot: only runs when there is nothing saved and we're in seeded mode.
     // Any later edit writes state, so this never fires again and can't overwrite
@@ -105,7 +104,7 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
             try {
                 const loaded = await fetchLocalRoster();
                 if (cancelled) return;
-                setState(loaded);
+                history.reset(loaded);
             } catch (err) {
                 if (cancelled) return;
                 setToast({ message: `Couldn't load the shipped roster: ${err.message}`, tone: 'error' });
@@ -115,7 +114,10 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
             }
         })();
         return () => { cancelled = true; };
-    }, [seeding, setState]);
+        // history.reset is stable (useCallback in useUndoableState); listing
+        // the whole object would re-run this on every render.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [seeding]);
 
     const handleSignPlayer = (customPlayer) => {
         if (onDraft) onDraft(customPlayer);
@@ -229,14 +231,14 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
         const file = e.target.files[0];
         if (!file) return;
         const text = await file.text();
-        setState(parseCSV(text));
+        history.reset(parseCSV(text));
         setBootstrapping(false);
     };
 
     const handleFetchAdapter = async () => {
         try {
             setBootstrapping(true);
-            setState(await fetchAdapterRoster());
+            history.reset(await fetchAdapterRoster());
             setBootstrapping(false);
         } catch (err) {
             setToast({ message: 'Failed to fetch roster: ' + err.message, tone: 'error' });
@@ -342,7 +344,7 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
     const handlePasteHtml = () => {
         if (!pastedHtml.trim()) return;
         try {
-            setState(parseHTMLToRoster(pastedHtml));
+            history.reset(parseHTMLToRoster(pastedHtml));
             setBootstrapping(false);
             setIsPasting(false);
         } catch (err) { setToast({ message: 'Could not parse pasted roster: ' + err.message, tone: 'error' }); }
@@ -453,6 +455,12 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
                             title="Zoom in"
                         >+</button>
                     </div>
+                    <button
+                        onClick={history.undo}
+                        disabled={!history.canUndo}
+                        className="action-pill undo-pill"
+                        title="Undo the last change"
+                    >Undo</button>
                     <button onClick={handleSyncFromStages} className="action-pill" title="Fill empty slots from FA candidates, draft picks, and UDFA signings — never overwrites">Sync from FA/Draft/UDFA</button>
                     <Menu items={[
                         { label: 'Export Roster CSV…', onClick: handleExport },
@@ -493,7 +501,7 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
                 <ConfirmDialog
                     title="Reset Roster?"
                     message="This clears your entire depth chart, practice squad, injury reserve, and cut list. This cannot be undone."
-                    onConfirm={() => { setState(defaultState()); setBootstrapping(true); setShowResetConfirm(false); }}
+                    onConfirm={() => { history.reset(defaultState()); setBootstrapping(true); setShowResetConfirm(false); }}
                     onCancel={() => setShowResetConfirm(false)}
                 />
             )}

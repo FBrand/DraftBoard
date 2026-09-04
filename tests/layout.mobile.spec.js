@@ -61,9 +61,16 @@ test.describe('mobile layout', () => {
     });
 
     test('the roster bootstrap screen fits the viewport', async ({ page }) => {
-        await openApp(page, 'roster');
-        const title = page.locator('.roster-bootstrap-title');
-        test.skip(await title.count() === 0, 'roster already initialised');
+        // The screen only appears in clean mode now that seeded mode loads the
+        // shipped roster, so put the app in clean mode rather than skipping —
+        // a test that always skips silently covers nothing.
+        await openApp(page);
+        await page.evaluate(() => localStorage.setItem('draftboard_init_mode', 'clean'));
+        await page.reload();
+        await gotoTab(page, 'roster');
+        await page.waitForTimeout(800);
+
+        await expect(page.locator('.roster-bootstrap-title')).toBeVisible();
 
         const vw = page.viewportSize().width;
         for (const sel of ['.roster-bootstrap-title', '.roster-bootstrap-actions']) {

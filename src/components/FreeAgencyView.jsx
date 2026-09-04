@@ -5,6 +5,7 @@ import { makeSlot, resolvePosition } from '../utils/rosterState';
 import DepthChartGrid from './DepthChartGrid';
 import { TextPromptDialog } from './Dialogs';
 import Menu from './Menu';
+import useUndoableState from '../hooks/useUndoableState';
 import useEscapeKey from '../hooks/useEscapeKey';
 
 // ── Small quick-add modal — Name + Position only. The shared depth-chart
@@ -52,7 +53,6 @@ function AddCandidateModal({ isOpen, onClose, onAdd }) {
 // pool. Roster's real depth chart is read fresh on every render (cheap,
 // always current) purely to compute need indicators — never written to.
 export default function FreeAgencyView({ masterPlayers, draftedPlayers, onInfoOpen }) {
-    const [state, setStateRaw] = useState(() => faState.loadState());
     const [isAddOpen, setIsAddOpen] = useState(false);
     const [addPositionPhase, setAddPositionPhase] = useState(null);
     // Same control Roster has: this grid is desktop-wide by design, so on a
@@ -60,13 +60,11 @@ export default function FreeAgencyView({ masterPlayers, draftedPlayers, onInfoOp
     // DepthChartGrid but was missing it.
     const [zoomLevel, setZoomLevel] = useState(1);
 
-    const setState = useCallback(next => {
-        setStateRaw(prev => {
-            const result = typeof next === 'function' ? next(prev) : next;
-            faState.saveState(result);
-            return result;
-        });
-    }, []);
+    // Every write goes through setState, so wrapping it here is all undo needs.
+    const [state, setState, history] = useUndoableState(
+        () => faState.loadState(),
+        useCallback(next => faState.saveState(next), []),
+    );
 
     const rosterSnapshot = rosterState.loadState();
     const needs = faState.computePositionNeed(rosterSnapshot);
@@ -201,7 +199,9 @@ export default function FreeAgencyView({ masterPlayers, draftedPlayers, onInfoOp
         const file = e.target.files[0];
         if (!file) return;
         const text = await file.text();
-        setState(faState.parseCSV(text));
+        // reset, not setState: undoing back into the file you just replaced
+        // would be surprising rather than useful.
+        history.reset(faState.parseCSV(text));
     };
 
     return (
@@ -241,6 +241,12 @@ export default function FreeAgencyView({ masterPlayers, draftedPlayers, onInfoOp
                 </div>
 
                 <div className="top-actions">
+                    <button
+                        onClick={history.undo}
+                        disabled={!history.canUndo}
+                        className="action-pill undo-pill"
+                        title="Undo the last change"
+                    >Undo</button>
                     <button onClick={() => setIsAddOpen(true)} className="action-pill">+ Add Candidate</button>
                     <Menu items={[
                         { label: 'Import Positions from Roster', onClick: handleSyncPositionsFromRoster, title: 'Adds any position row Roster has that FA doesn\'t' },
