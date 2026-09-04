@@ -122,7 +122,11 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
     // empty until filled in.
     // The matrix is a measurement of the player, so it lives in one shared
     // store rather than being copied onto each analyst's board.
-    const matrix = athleticMatrix.getScores(player?.name);
+    // Held in state, not read fresh each render: writing a score updates the
+    // shared store, and the card has to re-render off that new value — the
+    // Athletic Matrix credit line keys off it, and previously only appeared
+    // after a remount.
+    const [matrix, setMatrix] = useState(() => athleticMatrix.getScores(player?.name));
     const [numbers, setNumbers] = useState({
         personalRank: player?.overallRank ?? '',
         positionRank: player?.positionRank ?? '',
@@ -155,9 +159,15 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
     // this card belongs to the board being edited.
     const commitNumber = (field, raw) => {
         const value = raw === '' ? null : parseInt(raw, 10);
-        if (field.key === 'athleticMatrixTotal') athleticMatrix.setScore(player.name, 'total', value);
-        else if (field.key === 'athleticMatrixPosition') athleticMatrix.setScore(player.name, 'position', value);
-        else commit({ [field.key]: value });
+        if (field.key === 'athleticMatrixTotal') {
+            athleticMatrix.setScore(player.name, 'total', value);
+            setMatrix(m => ({ ...m, total: value }));
+        } else if (field.key === 'athleticMatrixPosition') {
+            athleticMatrix.setScore(player.name, 'position', value);
+            setMatrix(m => ({ ...m, position: value }));
+        } else {
+            commit({ [field.key]: value });
+        }
     };
 
     const commitGroup = (r, t) => {
