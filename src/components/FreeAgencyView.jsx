@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import * as faState from '../utils/faState';
 import * as rosterState from '../utils/rosterState';
 import { makeSlot, resolvePosition } from '../utils/rosterState';
@@ -65,6 +65,29 @@ export default function FreeAgencyView({ masterPlayers, draftedPlayers, onInfoOp
         () => faState.loadState(),
         useCallback(next => faState.saveState(next), []),
     );
+
+    // Free agency opens on last season's roster rather than an empty grid —
+    // that's the squad you actually carry into it, and the thing needs are
+    // judged against. Only when nothing has been saved yet, so it can never
+    // overwrite work; a failure leaves the empty grid rather than blocking.
+    const [seeding, setSeeding] = useState(() => !faState.hasSavedState());
+    useEffect(() => {
+        if (!seeding) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                const seeded = await faState.fetchSeasonStartRoster();
+                if (!cancelled) history.reset(seeded);
+            } catch {
+                /* leave FA empty */
+            } finally {
+                if (!cancelled) setSeeding(false);
+            }
+        })();
+        return () => { cancelled = true; };
+        // history.reset is stable; the object identity is not.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [seeding]);
 
     const rosterSnapshot = rosterState.loadState();
     const needs = faState.computePositionNeed(rosterSnapshot);

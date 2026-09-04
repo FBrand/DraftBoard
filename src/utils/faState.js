@@ -16,6 +16,28 @@ const STORAGE_KEY = 'fa_state_v1';
 
 export { parseCSV, exportCSV };
 
+export function hasSavedState() {
+    try {
+        return localStorage.getItem(STORAGE_KEY) !== null;
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * Free agency starts from where last season ended — the roster you actually
+ * carry into it, minus everyone acquired since. That file is derived from
+ * roster.csv's own provenance suffixes (:FA, :UDFA and bare 2026 round
+ * numbers mark 2026 acquisitions; :YY/R and unsuffixed names are holdovers),
+ * so it stays consistent with the roster it came from rather than being a
+ * separately maintained list.
+ */
+export async function fetchSeasonStartRoster() {
+    const res = await fetch(`${import.meta.env.BASE_URL}roster_2025_end.csv`);
+    if (!res.ok) throw new Error(`Could not load last season's roster (HTTP ${res.status})`);
+    return parseCSV(await res.text());
+}
+
 export function loadState() {
     try {
         const raw = localStorage.getItem(STORAGE_KEY);

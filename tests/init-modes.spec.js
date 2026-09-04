@@ -91,3 +91,57 @@ test.describe('re-initialising', () => {
         expect(drafted).toBeGreaterThan(200);
     });
 });
+
+test.describe('clean slate keeps its inputs', () => {
+    // A clean slate is the start of an offseason, not an empty app: the
+    // draftable pool, the three prepared boards, and last season's roster are
+    // inputs you work *from*. Only the offseason's own decisions are cleared.
+    const startClean = async (page) => {
+        await page.locator('.view-tabbar-actions .app-menu-trigger').click();
+        await page.getByRole('menuitem', { name: /Start Clean Slate/ }).click();
+        await page.waitForTimeout(400);
+        await page.locator('.rv-inline-dialog button.save-pill').click();
+        await page.waitForTimeout(2500);
+    };
+
+    test('free agency opens on last season\'s roster', async ({ page }) => {
+        await openApp(page);
+        await startClean(page);
+
+        await gotoTab(page, 'fa');
+        await page.waitForTimeout(2000);
+
+        const names = await page.$$eval('.rv-slot-name', els => els.map(e => e.textContent.trim()));
+        expect(names.length).toBeGreaterThan(20);
+
+        // Holdovers and earlier draft classes are there...
+        expect(names).toContain('Creed Humphrey');
+        expect(names).toContain('Trey Smith');
+        // ...and nobody acquired during the 2026 offseason is.
+        expect(names).not.toContain('Kenneth Walker');   // 2026 free agent
+        expect(names).not.toContain('Peter Woods');      // 2026 first-rounder
+    });
+
+    test('the draftable pool and the prepared boards survive', async ({ page }) => {
+        await openApp(page);
+        await startClean(page);
+
+        // Draft board still has its players, just nobody drafted yet.
+        await gotoTab(page, 'draft');
+        await page.waitForTimeout(1200);
+        expect(await page.locator('.center-board-container .player-card').count()).toBeGreaterThan(100);
+        await expect(page.locator('.center-board-container .player-card.drafted')).toHaveCount(0);
+
+        // All three boards still load, and still differ from each other.
+        await gotoTab(page, 'scouting');
+        await page.waitForSelector('.scouting-rank-row');
+        const top = () => page.$$eval('.scouting-rank-row',
+            r => r.slice(0, 8).map(x => x.querySelector('.player-name')?.textContent.trim()));
+        const consensus = await top();
+        expect(consensus.filter(Boolean).length).toBe(8);
+
+        await page.locator('.board-switcher .switcher-btn', { hasText: 'Ryan' }).click();
+        await page.waitForTimeout(800);
+        expect(await top()).not.toEqual(consensus);
+    });
+});
