@@ -7,13 +7,6 @@ import FreeAgencyView from './components/FreeAgencyView';
 import RosterView from './components/RosterView';
 import PlayerInfoModal from './components/PlayerInfoModal';
 
-// UDFA and Scouting/FA views land in later phases of the 5-stage build
-// (see /home/dev/.claude/plans/structured-growing-cat.md) — placeholder here
-// keeps every tab clickable and the app in a working state at each step.
-function ComingSoon({ label }) {
-  return <div className="loading">{label} — coming soon</div>;
-}
-
 const TABS = [
   { id: 'fa', label: '💰 Free Agency' },
   { id: 'scouting', label: '🔎 Scouting' },

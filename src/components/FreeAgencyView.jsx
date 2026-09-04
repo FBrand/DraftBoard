@@ -3,6 +3,8 @@ import * as faState from '../utils/faState';
 import * as rosterState from '../utils/rosterState';
 import { makeSlot, resolvePosition } from '../utils/rosterState';
 import DepthChartGrid from './DepthChartGrid';
+import { TextPromptDialog } from './Dialogs';
+import useEscapeKey from '../hooks/useEscapeKey';
 
 // ── Small quick-add modal — Name + Position only. The shared depth-chart
 // shape (makeSlot: {name, zone}) has no room for free-text notes without
@@ -12,6 +14,7 @@ import DepthChartGrid from './DepthChartGrid';
 function AddCandidateModal({ isOpen, onClose, onAdd }) {
     const [name, setName] = useState('');
     const [position, setPosition] = useState('');
+    useEscapeKey(onClose, isOpen);
     if (!isOpen) return null;
     const submit = (e) => {
         e.preventDefault();
@@ -50,6 +53,7 @@ function AddCandidateModal({ isOpen, onClose, onAdd }) {
 export default function FreeAgencyView({ masterPlayers, draftedPlayers }) {
     const [state, setStateRaw] = useState(() => faState.loadState());
     const [isAddOpen, setIsAddOpen] = useState(false);
+    const [addPositionPhase, setAddPositionPhase] = useState(null);
 
     const setState = useCallback(next => {
         setStateRaw(prev => {
@@ -123,14 +127,14 @@ export default function FreeAgencyView({ masterPlayers, draftedPlayers }) {
         });
     };
 
-    const handleAddPosition = (phase) => {
-        const label = window.prompt(`Position label for ${phase} (e.g. WR.Z)`);
-        if (!label) return;
+    const handleAddPosition = (label) => {
+        const phase = addPositionPhase;
         const id = `${phase[0].toUpperCase()}-${label}-${Date.now()}`;
         setState(prev => ({
             ...prev,
             positionConfig: { ...prev.positionConfig, [phase]: [...prev.positionConfig[phase], { id, label, slots53: 2 }] },
         }));
+        setAddPositionPhase(null);
     };
 
     // Additive only: adds any Roster position row FA doesn't already have
@@ -239,11 +243,20 @@ export default function FreeAgencyView({ masterPlayers, draftedPlayers }) {
                 onRowMove={performRowMove}
                 onDeletePosition={handleDeletePosition}
                 onSlotsChange={handleSlotsChange}
-                onAddPosition={handleAddPosition}
+                onAddPosition={setAddPositionPhase}
                 showNeeds={false}
             />
 
             <AddCandidateModal isOpen={isAddOpen} onClose={() => setIsAddOpen(false)} onAdd={handleAddCandidate} />
+
+            {addPositionPhase && (
+                <TextPromptDialog
+                    title={`Add ${addPositionPhase} position`}
+                    placeholder="e.g. WR.Z"
+                    onSubmit={handleAddPosition}
+                    onCancel={() => setAddPositionPhase(null)}
+                />
+            )}
         </div>
     );
 }

@@ -7,54 +7,7 @@ import {
 import * as faState from '../utils/faState';
 import UnrankedModal from './UnrankedModal';
 import DepthChartGrid from './DepthChartGrid';
-
-// ── Small in-app replacements for window.prompt / window.confirm ───────────
-function TextPromptDialog({ title, placeholder, onSubmit, onCancel }) {
-    const [value, setValue] = useState('');
-    return (
-        <div className="modal-overlay rv-inline-dialog" onClick={onCancel}>
-            <div className="modal-content" onClick={e => e.stopPropagation()}>
-                <div className="modal-header">
-                    <h2>{title}</h2>
-                    <button className="close-btn" onClick={onCancel}>&times;</button>
-                </div>
-                <form onSubmit={e => { e.preventDefault(); if (value.trim()) onSubmit(value.trim()); }}>
-                    <div className="modal-body">
-                        <input
-                            autoFocus
-                            type="text"
-                            value={value}
-                            placeholder={placeholder}
-                            onChange={e => setValue(e.target.value)}
-                        />
-                    </div>
-                    <div className="modal-footer">
-                        <button type="button" className="cancel-pill" onClick={onCancel}>Cancel</button>
-                        <button type="submit" className="save-pill" disabled={!value.trim()}>Add</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    );
-}
-
-function ConfirmDialog({ title, message, onConfirm, onCancel }) {
-    return (
-        <div className="modal-overlay rv-inline-dialog" onClick={onCancel}>
-            <div className="modal-content" onClick={e => e.stopPropagation()}>
-                <div className="modal-header">
-                    <h2>{title}</h2>
-                    <button className="close-btn" onClick={onCancel}>&times;</button>
-                </div>
-                <div className="modal-body"><p>{message}</p></div>
-                <div className="modal-footer">
-                    <button className="cancel-pill" onClick={onCancel}>Cancel</button>
-                    <button className="save-pill" onClick={onConfirm}>Confirm</button>
-                </div>
-            </div>
-        </div>
-    );
-}
+import { TextPromptDialog, ConfirmDialog } from './Dialogs';
 
 function CounterBox({ label, val, max, status, isLast, maxLabel }) {
     return (

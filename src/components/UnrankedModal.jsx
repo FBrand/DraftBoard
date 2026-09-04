@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import useEscapeKey from '../hooks/useEscapeKey';
 
 // mode: 'draft' | 'roster' | 'postdraft'
 // 'draft'     → during draft, draft board: Name+Pos, Draft button
@@ -8,6 +9,7 @@ const UnrankedModal = ({ isOpen, onClose, onDraft, mode = 'draft', initialPlayer
     const [name, setName] = useState(() => initialPlayer?.name || '');
     const [position, setPosition] = useState(() => initialPlayer?.position || '');
     const [team, setTeam] = useState(() => initialPlayer?.team || 'KC');
+    useEscapeKey(onClose, isOpen);
 
     if (!isOpen) return null;
 

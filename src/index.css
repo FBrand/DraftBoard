@@ -2270,20 +2270,6 @@ body.export-mode .card-glow {
   color: var(--gold-color);
 }
 
-.scouting-controls-notes {
-  width: 100%;
-  min-height: 60px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 6px;
-  color: var(--text-main);
-  padding: 8px;
-  font-size: 0.85rem;
-  font-family: inherit;
-  resize: vertical;
-  box-sizing: border-box;
-}
-
 .scouting-group-field {
   display: flex;
   flex-direction: column;

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import useEscapeKey from '../hooks/useEscapeKey';
 
 const TAGS = [
     { id: 'like', label: '✓ Like' },
@@ -79,6 +80,9 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
         athleticMatrixPosition: entry?.athleticMatrixPosition ?? '',
     });
     const [group, setGroup] = useState(entry?.group ?? '');
+    // Only the modal presentation is dismissable — the panel variant is a
+    // permanent column, not something Escape should blank out.
+    useEscapeKey(onClose, variant === 'modal' && !!player);
 
     if (!player) {
         if (variant === 'modal') return null;
