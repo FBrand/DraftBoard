@@ -318,6 +318,24 @@ body {
   align-items: center;
 }
 
+.roster-zoom-ctrl {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  padding: 4px 10px;
+}
+
+.rv-zoom-label {
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: var(--text-dim);
+  min-width: 34px;
+  text-align: center;
+}
+
 .sync-toggle {
   display: flex;
   align-items: center;
@@ -1137,16 +1155,6 @@ body.export-mode .card-glow {
   transform: translateY(-1px);
 }
 
-.focus-board-name {
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: var(--gold);
-  letter-spacing: 0.08rem;
-  text-transform: uppercase;
-  opacity: 0.8;
-  white-space: nowrap;
-}
-
 /* Sidebar toggles are mobile-only */
 .sidebar-toggle {
   display: none;
@@ -1360,5 +1368,704 @@ body.export-mode .card-glow {
     width: auto !important;
     padding-bottom: 0 !important;
     gap: 15px !important;
+  }
+}
+
+/* View switcher tabs (Draft Board / Roster) — always the first element in
+   .app-container so it never shifts position when the active view changes */
+.view-tabbar {
+  display: flex;
+  gap: 0;
+  border-bottom: 2px solid rgba(255, 183, 0, 0.2);
+  background: rgba(0, 0, 0, 0.3);
+  padding-left: 16px;
+  flex-shrink: 0;
+}
+
+.view-tab {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: rgba(255, 255, 255, 0.4);
+  font-weight: 700;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 8px 18px;
+  cursor: pointer;
+  transition: all 0.15s;
+  margin-bottom: -2px;
+  /* align border with tab bar border */
+}
+
+.view-tab.active {
+  background: rgba(255, 183, 0, 0.12);
+  border-bottom-color: var(--chiefs-gold);
+  color: var(--chiefs-gold);
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   Roster View — shares the same tokens/toolbar language as the Draft view
+   ══════════════════════════════════════════════════════════════════════ */
+
+.roster-view {
+  background: var(--bg-color);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  color: var(--text-main);
+  overflow: hidden;
+}
+
+.roster-brand {
+  display: flex;
+  flex-direction: column;
+}
+
+.roster-brand-name {
+  font-size: 1.4rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  color: var(--text-main);
+  font-family: 'Outfit', sans-serif;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.roster-brand-sub {
+  font-size: 0.75rem;
+  color: var(--chiefs-gold);
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.3em;
+}
+
+.roster-counters {
+  display: flex;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 10px;
+  padding: 5px;
+  border: 1px solid var(--border-color);
+}
+
+.roster-counter {
+  text-align: center;
+  padding: 0 22px;
+  border-right: 1px solid rgba(255, 255, 255, 0.15);
+  height: 45px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.roster-counter.last {
+  border-right: none;
+}
+
+.roster-counter-label {
+  font-size: 0.6rem;
+  color: rgba(255, 255, 255, 0.4);
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 2px;
+}
+
+.roster-counter-value {
+  font-size: 1.3rem;
+  font-weight: 900;
+}
+
+.roster-counter-value.status-ok {
+  color: #4ade80;
+  text-shadow: 0 0 15px rgba(74, 222, 128, 0.33);
+}
+
+.roster-counter-value.status-under {
+  color: var(--chiefs-gold);
+  text-shadow: 0 0 15px rgba(255, 184, 28, 0.33);
+}
+
+.roster-counter-value.status-over {
+  color: var(--chiefs-red);
+  text-shadow: 0 0 15px rgba(227, 24, 55, 0.33);
+}
+
+.roster-counter-max {
+  font-size: 0.85rem;
+  opacity: 0.4;
+}
+
+.roster-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.roster-main {
+  flex: 1;
+  padding: 10px 24px 40px;
+  overflow-y: auto;
+  min-height: 0;
+  min-width: 0;
+  background: var(--bg-color);
+}
+
+.roster-section-header {
+  display: flex;
+  align-items: flex-end;
+  padding: 15px 0 10px;
+  border-bottom: 3px solid var(--chiefs-red);
+  margin-bottom: 15px;
+  font-family: 'Outfit', sans-serif;
+  gap: 20px;
+}
+
+.roster-section-title {
+  font-size: 1.5rem;
+  font-weight: 900;
+  letter-spacing: 0.15em;
+  color: var(--text-main);
+  text-transform: uppercase;
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
+}
+
+.roster-section-count {
+  flex: 1;
+  text-align: right;
+  font-size: 1.3rem;
+  font-weight: 900;
+  color: var(--chiefs-gold);
+}
+
+.roster-grid {
+  display: grid;
+  grid-template-columns: 85px 1fr 1fr 1fr;
+  gap: 0;
+  margin-bottom: 40px;
+}
+
+.rv-h {
+  font-size: 0.65rem;
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.3);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 4px 0 5px;
+}
+
+.rv-row-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  min-height: 52px;
+}
+
+.rv-row-cell.odd {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.rv-row-cell.last {
+  border-right: none;
+}
+
+.rv-pos-cell {
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  cursor: grab;
+  padding: 4px 6px;
+  position: relative;
+}
+
+.rv-pos-label {
+  font-size: 0.9rem;
+  font-weight: 900;
+  color: var(--chiefs-gold);
+  font-family: 'Outfit', sans-serif;
+  line-height: 1;
+}
+
+.rv-pos-ctrl {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: 2px;
+}
+
+.rv-ctrl-btn {
+  background: none;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: var(--chiefs-gold);
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  padding: 0;
+}
+
+.rv-pos-count {
+  font-size: 0.72rem;
+  font-weight: 900;
+  color: #fff;
+  min-width: 10px;
+  text-align: center;
+}
+
+.rv-delete-pos {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.3);
+  font-size: 0.65rem;
+  cursor: pointer;
+  opacity: 0;
+  padding: 2px;
+  line-height: 1;
+  transition: opacity 0.15s;
+}
+
+.rv-pos-cell:hover .rv-delete-pos {
+  opacity: 1;
+}
+
+.rv-delete-pos:hover {
+  color: var(--chiefs-red);
+}
+
+/* Slot cells */
+.rv-slot {
+  width: 175px;
+  height: 42px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  user-select: none;
+  flex-shrink: 0;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  background: transparent;
+  border: 1px dashed rgba(255, 255, 255, 0.1);
+}
+
+.rv-slot.filled {
+  cursor: grab;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  background: linear-gradient(135deg, rgba(30, 30, 30, 0.8), rgba(255, 255, 255, 0.05));
+  border-style: solid;
+  z-index: 2;
+}
+
+.rv-slot.zone-53 {
+  border-color: rgba(255, 183, 0, 0.7);
+}
+
+.rv-slot.zone-ps {
+  border-color: rgba(59, 130, 246, 0.7);
+}
+
+.rv-slot.zone-ir {
+  border-color: rgba(239, 68, 68, 0.6);
+}
+
+.rv-slot.zone-r {
+  border-color: rgba(171, 171, 171, 0.4);
+}
+
+.rv-slot.zone-cut {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.rv-slot.zone-need {
+  border-color: rgba(255, 183, 0, 0.5);
+  background: rgba(255, 183, 0, 0.05);
+}
+
+.rv-slot.drag-over {
+  border-color: var(--chiefs-gold) !important;
+  background: rgba(255, 183, 0, 0.15) !important;
+  transform: scale(1.04);
+}
+
+/* dnd-kit: dim the origin card while its clone follows the pointer via DragOverlay */
+.rv-slot.dragging-source,
+.rv-slot-content.dragging-source,
+.rv-pos-label.dragging-source {
+  opacity: 0.35;
+}
+
+/* dnd-kit DragOverlay clone — same look as a filled slot/label, lifted higher */
+.rv-drag-overlay {
+  cursor: grabbing;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.5);
+  transform: scale(1.05);
+}
+
+.rv-pos-label.rv-drag-overlay {
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: rgba(30, 30, 30, 0.95);
+}
+
+/* Empty slots collapse to a square "+" tile instead of a full-width card —
+   more compact (helps the already-wide grid on mobile) and a clearer
+   drop-target affordance than a blank dashed rectangle. */
+.rv-slot.empty-square {
+  width: 42px;
+  padding: 0;
+  justify-content: center;
+}
+
+.rv-slot-add-icon {
+  font-size: 1.15rem;
+  font-weight: 300;
+  color: rgba(255, 255, 255, 0.25);
+  line-height: 1;
+  transition: color 0.15s;
+}
+
+.rv-slot.empty-square:hover .rv-slot-add-icon,
+.rv-slot.empty-square.drag-over .rv-slot-add-icon {
+  color: var(--chiefs-gold);
+}
+
+.rv-slot-content {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  overflow: hidden;
+}
+
+.rv-slot-name {
+  flex: 1;
+  font-size: 0.8rem;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  letter-spacing: 0.01em;
+}
+
+.rv-slot-meta {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  border-left: 1px solid rgba(255, 255, 255, 0.15);
+  padding-left: 4px;
+  text-align: right;
+  gap: 5px;
+}
+
+.rv-slot-tag {
+  font-size: 0.65rem;
+  color: var(--chiefs-red);
+  font-weight: 900;
+  text-transform: uppercase;
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.rv-slot-pos {
+  font-size: 0.65rem;
+  color: var(--text-dim);
+  font-weight: 700;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.1;
+}
+
+/* Specialists row */
+.roster-specialists {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  margin-top: 60px;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 183, 0, 0.3);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.rv-specialist {
+  width: 175px;
+  padding: 10px 15px;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: all 0.2s ease;
+  position: relative;
+  border: 1px dashed rgba(255, 255, 255, 0.1);
+}
+
+.rv-specialist.filled {
+  border: 1px solid rgba(255, 183, 0, 0.7);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+}
+
+.rv-specialist.drag-over {
+  border-color: var(--chiefs-gold);
+  background: rgba(255, 183, 0, 0.1);
+}
+
+.rv-specialist-label {
+  font-size: 0.7rem;
+  color: var(--chiefs-gold);
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  font-family: 'Outfit', sans-serif;
+}
+
+.rv-specialist-need {
+  font-size: 0.75rem;
+  color: rgba(255, 183, 0, 0.3);
+  font-style: italic;
+  font-weight: 800;
+}
+
+.roster-needs-label {
+  font-size: 1rem;
+  color: var(--chiefs-gold);
+  font-weight: 900;
+  font-family: 'Outfit', sans-serif;
+  letter-spacing: 0.1em;
+}
+
+/* IR block */
+.roster-ir {
+  padding: 20px 12px;
+  border-top: 2px solid rgba(255, 255, 255, 0.1);
+  margin-top: 30px;
+  border-radius: 8px;
+  transition: background 0.15s;
+}
+
+.roster-ir.drag-over {
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.roster-ir-label {
+  font-size: 0.9rem;
+  font-weight: 900;
+  color: var(--chiefs-red);
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  margin-bottom: 15px;
+  font-family: 'Outfit', sans-serif;
+}
+
+.roster-ir-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+/* Sidebar / cut panel */
+.roster-sidebar {
+  width: 230px;
+  border-left: 2px solid rgba(255, 255, 255, 0.15);
+  display: flex;
+  flex-direction: column;
+  background: rgba(0, 0, 0, 0.3);
+  flex-shrink: 0;
+}
+
+.roster-sign-btn {
+  margin: 15px;
+  background: var(--chiefs-gold);
+  color: #000;
+  font-weight: 900;
+  border-radius: 8px;
+  height: 45px;
+  font-size: 0.85rem;
+  border-radius: 9999px;
+}
+
+.roster-cuts {
+  flex: 1;
+  padding: 0 15px;
+  overflow-y: auto;
+  transition: background 0.15s;
+  border-radius: 8px;
+}
+
+.roster-cuts.drag-over {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.roster-cuts-label {
+  font-size: 0.8rem;
+  font-weight: 900;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  margin-bottom: 10px;
+  border-bottom: 2px solid var(--chiefs-red);
+  padding-bottom: 6px;
+  font-family: 'Outfit', sans-serif;
+}
+
+.roster-cuts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.roster-cuts-list .rv-slot {
+  width: 100%;
+}
+
+/* Bootstrap screen */
+.roster-bootstrap {
+  background: var(--bg-color);
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 25px;
+  background-image: radial-gradient(circle at center, rgba(255, 183, 0, 0.05) 0%, transparent 70%);
+}
+
+.roster-bootstrap-title {
+  color: var(--chiefs-gold);
+  font-size: 2rem;
+  font-weight: 900;
+  font-family: 'Outfit', sans-serif;
+  letter-spacing: 0.1em;
+  text-shadow: 0 0 20px rgba(255, 183, 0, 0.3);
+}
+
+.roster-bootstrap-actions {
+  display: flex;
+  gap: 15px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.roster-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  color: var(--text-main);
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 700;
+  transition: all 0.2s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 15px 30px;
+}
+
+.roster-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.roster-btn.primary {
+  background: var(--chiefs-gold);
+  color: #000;
+  box-shadow: 0 4px 15px rgba(255, 183, 0, 0.4);
+}
+
+.roster-btn.primary:hover {
+  background: #ffc94d;
+}
+
+.roster-bootstrap-hint {
+  color: var(--text-dim);
+  font-size: 0.9rem;
+  text-align: center;
+  max-width: 500px;
+  line-height: 1.6;
+  font-style: italic;
+}
+
+.roster-paste-box {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  width: 100%;
+  max-width: 600px;
+}
+
+.roster-paste-textarea {
+  height: 250px;
+  background: rgba(0, 0, 0, 0.5);
+  border: 2px solid rgba(255, 183, 0, 0.2);
+  color: #fff;
+  border-radius: 12px;
+  padding: 15px;
+  font-size: 0.8rem;
+  font-family: monospace;
+}
+
+/* Small in-app confirm/prompt dialogs (replace window.confirm / window.prompt) */
+.rv-inline-dialog .modal-content {
+  max-width: 420px;
+}
+
+.rv-inline-dialog .modal-body input {
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--bg-color);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--text-main);
+  font-size: 0.95rem;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.rv-inline-dialog .modal-body input:focus {
+  border-color: var(--gold-color);
+}
+
+@media (max-width: 1024px) {
+  .roster-body {
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  .roster-sidebar {
+    width: 100%;
+    border-left: none;
+    border-top: 2px solid rgba(255, 255, 255, 0.15);
+  }
+
+  /* Was `display: none` — counters just didn't fit the fixed-height row.
+     Match the swipeable-toolbar pattern already used for Draft's top-panel
+     at 600px (see .top-panel below) instead of hiding content on mobile. */
+  .roster-view .top-panel {
+    height: auto;
+    min-height: 80px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .roster-counters {
+    flex-shrink: 0;
   }
 }

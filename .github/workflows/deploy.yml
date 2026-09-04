@@ -2,7 +2,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [ master ]
+    branches: [ master, pastel-lantern ]
 
 permissions:
   contents: write
@@ -26,8 +26,19 @@ jobs:
       - name: Build
         run: VITE_ENABLE_SYNC=true npm run build
 
-      - name: Deploy
+      - name: Deploy master to root
+        if: github.ref == 'refs/heads/master'
         uses: JamesIves/github-pages-deploy-action@v4
         with:
           folder: dist
           branch: gh-pages
+          clean-exclude: |
+            pastel-lantern
+
+      - name: Deploy pastel-lantern to subpath
+        if: github.ref == 'refs/heads/pastel-lantern'
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: dist
+          branch: gh-pages
+          target-folder: pastel-lantern

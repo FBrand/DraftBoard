@@ -1,20 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 
 // mode: 'draft' | 'roster' | 'postdraft'
 // 'draft'     → during draft, draft board: Name+Pos, Draft button
 // 'roster'    → during draft, roster view: Name+Pos, Sign FA / Trade
 // 'postdraft' → after draft, both views: Name+Pos+Team(KC), Sign FA / Sign UDFA / Invite
 const UnrankedModal = ({ isOpen, onClose, onDraft, mode = 'draft', initialPlayer = null }) => {
-    const [name, setName] = useState('');
-    const [position, setPosition] = useState('');
-    const [team, setTeam] = useState('KC');
-
-    useEffect(() => {
-        if (!isOpen) return;
-        setName(initialPlayer?.name || '');
-        setPosition(initialPlayer?.position || '');
-        setTeam(initialPlayer?.team || 'KC');
-    }, [isOpen, initialPlayer]);
+    const [name, setName] = useState(() => initialPlayer?.name || '');
+    const [position, setPosition] = useState(() => initialPlayer?.position || '');
+    const [team, setTeam] = useState(() => initialPlayer?.team || 'KC');
 
     if (!isOpen) return null;
 

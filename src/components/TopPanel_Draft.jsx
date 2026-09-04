@@ -22,12 +22,6 @@ const TopPanel = ({ currentPick, currentPickStatus, ourPicksLeft, onUndo, onUpda
 
     // ── Focus Mode ────────────────────────────────────────────────────────────
     if (isFocusMode) {
-        const boardName = currentRankings.includes('rankings_chris.csv') ? 'Chris'
-            : currentRankings.includes('rankings_dan.csv') ? 'Dan'
-                : currentRankings.includes('rankings_ryan.csv') ? 'Ryan'
-                    : currentRankings.includes('rankings_seth.csv') ? 'Seth'
-                        : 'Consensus';
-
         return (
             <div className="top-panel top-panel--focus">
                 <div className="pick-section">

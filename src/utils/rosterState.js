@@ -92,6 +92,39 @@ export function saveState(state) {
 // CSV Import
 // ---------------------------------------------------------------------------
 
+// RFC-4180-style quote-aware split: a plain `line.split(',')` corrupts any
+// field containing a literal comma — and Ourlads' own "Last, First" name
+// convention makes that a real, not just theoretical, input (players signed
+// or pasted in that format silently split into two garbled reserve/cut
+// entries on export/re-import). Handles quoted fields and doubled-quote
+// escaping; doesn't handle a quoted field spanning multiple physical lines,
+// since parseCSV splits on '\n' before this ever runs.
+function parseCsvLine(line) {
+    const fields = [];
+    let cur = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+        const c = line[i];
+        if (inQuotes) {
+            if (c === '"') {
+                if (line[i + 1] === '"') { cur += '"'; i++; }
+                else inQuotes = false;
+            } else {
+                cur += c;
+            }
+        } else if (c === '"') {
+            inQuotes = true;
+        } else if (c === ',') {
+            fields.push(cur);
+            cur = '';
+        } else {
+            cur += c;
+        }
+    }
+    fields.push(cur);
+    return fields;
+}
+
 export function parseCSV(csvText) {
     const lines = csvText
         .trim()
@@ -109,7 +142,7 @@ export function parseCSV(csvText) {
     SPECIALIST_IDS.forEach(id => { depthChart[id] = []; });
 
     for (const line of lines) {
-        const cols = line.split(',');
+        const cols = parseCsvLine(line);
         const phase = cols[0].trim().toUpperCase();
 
         if (phase === 'IR') {
@@ -189,10 +222,22 @@ export function parseCSV(csvText) {
     return { positionConfig: { offense, defense }, depthChart, reserve, cuts };
 }
 
+// Counterpart to parseCsvLine: quote any field containing a comma, quote
+// character, or newline (RFC 4180 style), doubling embedded quotes. Without
+// this, a name like Ourlads' "Last, First" convention silently expands into
+// extra columns on export.
+function csvField(value) {
+    const s = String(value ?? '');
+    if (/[",\n]/.test(s)) {
+        return `"${s.replace(/"/g, '""')}"`;
+    }
+    return s;
+}
+
 export function exportCSV(state) {
     const maxSlots = Math.max(...Object.values(state.depthChart).map(arr => arr.length), 5);
     const headers = ['Phase', 'pos', 'slots53', ...Array.from({ length: maxSlots }, (_, i) => `slot${i + 1}`)];
-    const rows = [headers.join(',')];
+    const rows = [headers.map(csvField).join(',')];
 
     const addRows = (phase, positions) => {
         positions.forEach(p => {
@@ -204,7 +249,7 @@ export function exportCSV(state) {
                 if (s.zone === 'r') return `R:${s.name}`;
                 return s.name;
             });
-            rows.push([phase, p.label, p.slots53, ...cells].join(','));
+            rows.push([phase, p.label, p.slots53, ...cells].map(csvField).join(','));
         });
     };
 
@@ -212,13 +257,13 @@ export function exportCSV(state) {
     addRows('D', state.positionConfig.defense);
     SPECIALIST_IDS.forEach(id => {
         const s = state.depthChart[id]?.[0];
-        rows.push(['S', id, s ? s.name : ''].join(','));
+        rows.push(['S', id, s ? s.name : ''].map(csvField).join(','));
     });
     if (state.reserve && state.reserve.length > 0) {
-        rows.push(['IR', 'IR', '', ...state.reserve].join(','));
+        rows.push(['IR', 'IR', '', ...state.reserve].map(csvField).join(','));
     }
     if (state.cuts && state.cuts.length > 0) {
-        rows.push(['CUT', 'CUT', '', ...state.cuts].join(','));
+        rows.push(['CUT', 'CUT', '', ...state.cuts].map(csvField).join(','));
     }
     return rows.join('\n');
 }
@@ -297,17 +342,42 @@ function cleanPlayerNameWithStatus(el) {
     return tag ? `${name}:${tag}` : name;
 }
 
+// Ourlads' IR/PUP table has a different shape from the other four: the row
+// label is a status ("IR"/"PUP"), not a position, and each player's own
+// position is instead appended as a trailing code in the name cell itself
+// (e.g. "Holiday, Jimmy WR", "Norman-Lott, Omarr DT^") — cleanPlayerNameWithStatus's
+// suffix-stripping regexes only match digit-bearing draft-status tokens, so
+// reusing it here would leave the position stuck between first and last name
+// ("Jimmy WR Holiday"). Strip it first, then apply the same Last, First swap.
+function cleanIRPlayerName(el) {
+    if (!el) return null;
+    let raw = el.textContent.trim();
+    if (!raw) return null;
+    raw = raw.replace(/\s+[A-Z]{1,3}\^?$/, '').trim();
+    if (raw.includes(',')) {
+        const [last, ...rest] = raw.split(',');
+        const first = rest.join(',').trim();
+        if (first) return `${first} ${last.trim()}`;
+    }
+    return raw;
+}
+
 export function parseHTMLToRoster(html) {
     const parser = new DOMParser();
     const doc = parser.parseFromString(html, 'text/html');
 
     const allTables = Array.from(doc.querySelectorAll('table.table-bordered'));
-    const tables = allTables.filter(t => t.rows[0]?.cells.length >= 3).slice(0, 3);
+    // Offense, Defense, Specialists, Practice Squad, IR/PUP — in that order
+    // on Ourlads' depth chart pages. Only the first 3 were parsed previously;
+    // PS/IR data had to be entered by hand as a result (see project memory:
+    // this was a known scraper coverage gap, not a design choice).
+    const tables = allTables.filter(t => t.rows[0]?.cells.length >= 3).slice(0, 5);
+    const [psTable, irTable] = [tables[3], tables[4]];
 
     // Use an accumulator to merge positions
     const mergedData = { O: {}, D: {}, S: {} };
 
-    tables.forEach((table, tableIdx) => {
+    tables.slice(0, 3).forEach((table, tableIdx) => {
         const phaseLabel = tableIdx === 0 ? 'O' : (tableIdx === 1 ? 'D' : 'S');
         const rows = Array.from(table.querySelectorAll('tr')).slice(1);
 
@@ -362,18 +432,91 @@ export function parseHTMLToRoster(html) {
         });
     });
 
-    return { positionConfig: { offense, defense }, depthChart, reserve: [], cuts: [] };
+    // Practice Squad — one player per generic position code, resolved against
+    // the specific starter rows just built (e.g. a bare "WR" entry can land
+    // in WR.Z/WR.X/WR.S; resolvePosition prefers whichever sibling row has
+    // the fewest players so far, so repeated generic codes spread across
+    // siblings rather than piling onto one). Ourlads' PS table uses a few
+    // codes ("OT", "OG", "ED") that don't correspond to any specific starter
+    // label at all — those get their own new row rather than being silently
+    // dropped, which is what happened before this table was parsed at all.
+    if (psTable) {
+        const rows = Array.from(psTable.querySelectorAll('tr')).slice(1);
+        rows.forEach(row => {
+            const cells = Array.from(row.querySelectorAll('td'));
+            if (cells.length < 3) return;
+            const rawPos = cells[0].textContent.trim();
+            if (!rawPos) return;
+            const playerLink = cells[2]?.querySelector('a');
+            const name = cleanPlayerNameWithStatus(playerLink || cells[2]);
+            if (!name) return;
+
+            let rowId = resolvePosition(rawPos, { offense, defense }, depthChart);
+            if (!rowId) {
+                const isDefense = ['ED', 'DT', 'DE', 'LB', 'CB', 'S', 'NT'].includes(rawPos);
+                rowId = `${isDefense ? 'D' : 'O'}-${rawPos}-0`; // matches parseCSV's own `${phase}-${pos}-0` id convention
+                if (!depthChart[rowId]) {
+                    (isDefense ? defense : offense).push({ id: rowId, label: rawPos, slots53: slots53ForPos(rawPos) });
+                    depthChart[rowId] = [];
+                }
+            }
+
+            const limit53 = [...offense, ...defense].find(p => p.id === rowId)?.slots53 ?? 2;
+            const arr = depthChart[rowId] = depthChart[rowId] ?? [];
+            const psCount = arr.filter(s => s?.zone === 'ps').length;
+            arr[limit53 + psCount] = makeSlot(name, 'ps');
+        });
+    }
+
+    // IR/PUP — flat name list, no position tracking, matching the app's
+    // existing IR model (state.reserve is just player names, see performMove
+    // in RosterView.jsx). Row label here is a status ("IR"/"PUP"), not a
+    // position, so unlike every other table there's nothing to resolve.
+    const reserve = [];
+    if (irTable) {
+        const rows = Array.from(irTable.querySelectorAll('tr')).slice(1);
+        rows.forEach(row => {
+            const cells = Array.from(row.querySelectorAll('td'));
+            for (let i = 2; i < cells.length; i += 2) {
+                const playerLink = cells[i].querySelector('a');
+                const name = cleanIRPlayerName(playerLink || cells[i]);
+                if (name) reserve.push(name);
+            }
+        });
+    }
+
+    return { positionConfig: { offense, defense }, depthChart, reserve, cuts: [] };
 }
 
-export async function fetchOurladsRoster() {
-    const url = "https://www.ourlads.com/nfldepthcharts/depthchart/KC";
-    const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`;
+// Roster auto-fetch is a pluggable adapter, same pattern as Draft's live sync
+// (see useDraftState.js's ESPNProvider discovery): the module is discovered
+// via import.meta.glob so the app builds and runs fine with it absent, same
+// as ESPNProvider.js — this one just doesn't exist yet. The previous
+// hardcoded fetch here pulled directly
+// from ourlads.com via a public CORS proxy — dropped because Ourlads' Terms
+// explicitly prohibit automated access/reproduction of their depth charts
+// (see project memory: project_ourlads_scraping_legal_risk). An adapter
+// backed by a licensed/authorized source can be dropped in at the path below
+// without touching this file again; must implement `fetchRosterHTML(): Promise<string>`
+// returning HTML in the same shape parseHTMLToRoster() already parses.
+// import.meta.glob() requires a literal string argument — Vite parses it
+// statically at build time, not at runtime — so the path can't be shared
+// via a variable and has to be repeated (matches the ESPNProvider pattern).
+export function hasRosterSourceAdapter() {
+    const modules = import.meta.glob('../services/RosterSourceAdapter.js');
+    return Object.keys(modules).length > 0;
+}
 
-    const res = await fetch(proxyUrl);
-    if (!res.ok) throw new Error("Network fetch failed");
-    const html = await res.text();
-    if (!html) throw new Error("Empty response from proxy");
-
+export async function fetchAdapterRoster() {
+    const modules = import.meta.glob('../services/RosterSourceAdapter.js');
+    const modulePath = '../services/RosterSourceAdapter.js';
+    if (!modules[modulePath]) {
+        throw new Error('No roster source adapter configured');
+    }
+    const mod = await modules[modulePath]();
+    const adapter = new mod.RosterSourceAdapter();
+    const html = await adapter.fetchRosterHTML();
+    if (!html) throw new Error('Adapter returned no data');
     return parseHTMLToRoster(html);
 }
 

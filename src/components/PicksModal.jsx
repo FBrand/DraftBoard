@@ -1,13 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 
 const PicksModal = ({ isOpen, onClose, initialPicks, onSave }) => {
-    const [picksText, setPicksText] = useState('');
-
-    useEffect(() => {
-        if (isOpen) {
-            setPicksText(initialPicks.join(', '));
-        }
-    }, [isOpen, initialPicks]);
+    const [picksText, setPicksText] = useState(() => initialPicks.join(', '));
 
     if (!isOpen) return null;
 

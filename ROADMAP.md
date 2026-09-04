@@ -136,13 +136,38 @@ Player {
 
 ---
 
+## Long-Term: Collaborative Expert & Public Sync
+
+### Overview
+Enable content creators/experts to log in, host public draft boards/rosters, and sync draft execution in real-time. Unauthenticated users can view boards or play locally.
+
+### Key Features
+- **Expert Authentication**: Simple login for up to 10 designated experts/content creators. No complex role hierarchy—only two states: authenticated (expert) vs anonymous (viewer).
+- **Public & Local Boards**:
+  - **Authenticated (Experts)**: Can create persistent boards/rosters and "run" the live draft.
+  - **Unauthenticated (Anonymous)**: Can see expert boards, click through draft simulation, and build their roster locally (stored in localStorage only), but cannot create public boards.
+- **Real-Time Draft Sync (Follow Function)**:
+  - One expert can "run" the draft live for all active viewers.
+  - Viewers can opt to "follow" an expert's draft state, syncing their local view in real-time.
+- **Player Report Cards**: Detailed player breakdown sheets/cards with grades, scouting highlights, and fit assessment.
+- **Architecture/Backend**:
+  - Requires a persistent database (e.g., Supabase, Firebase, or a light SQL backend).
+  - WebSockets or lightweight subscription channels for real-time draft pick dispatching.
+
+---
+
 ## Priority Order
 
+_Updated 2026-09-03 against actual code, not just prior status — re-verify before trusting either._
+
 1. ✅ Fix current board stability (no more sticky changes)
-2. 🔲 Normal vs Focus view toggle (Short-Term)
-3. 🔲 Clean up CenterBoard — remove sentinel/collapse machinery
-4. 🔲 Stage navigation shell (tabs, routing)
-5. 🔲 Stage 2: Scouting view (builds on existing rankings data)
-6. 🔲 Stage 1: FA tracker
-7. 🔲 Stage 4: UDFA
-8. 🔲 Stage 5: Roster builder
+2. ✅ Normal vs Focus view toggle (Short-Term) — implemented in `CenterBoard.jsx` (`visiblePlayers = isFocusMode ? players : players.filter(p => !p.drafted)`, groups/rounds derived from the filtered set); confirm with a visual smoke-test
+3. ✅ Clean up CenterBoard — no sentinel/shelf machinery found in current code; only ordinary CSS `position: sticky` headers remain
+4. 🔲 **Fix Roster drag-and-drop on mobile/touch** — `RosterView.jsx` uses native HTML5 `draggable`/`dragstart`/`drop` only, no touch handlers, no dnd library in `package.json`; native HTML5 DnD doesn't fire on touch devices by design. Needs touch-event handling or a touch-aware library (e.g. `@dnd-kit/core`)
+5. 🔲 Verify Ourlads auto-fetch position coverage (EDGE/specialists had repeated parsing gaps during development — regression-check before relying on it)
+6. 🔲 Stage navigation shell (tabs, routing) — unify Draft/Roster into the full 5-stage tab bar; currently a flat 2-tab switcher in `App.jsx`
+7. 🔲 Stage 2: Scouting view (builds on existing rankings data)
+8. 🔲 Stage 1: FA tracker
+9. 🔶 Stage 4: UDFA — folded into Roster's "Sign Player" flow (`UnrankedModal`'s `postdraft` mode) rather than a separate view; functionally covered, not a standalone UI
+10. 🔶 Stage 5: Roster builder — substantially built and near-parity with Draft: drag-and-drop 53-man/practice-squad/IR/cuts, CSV import/export, Ourlads auto-fetch, position config. Remaining work is item 4 (mobile DnD) and general polish, not core functionality
+11. 🔲 Long-Term: Expert Authentication & Real-Time Follow Sync (Database backed)

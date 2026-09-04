@@ -1,21 +1,7 @@
 import React from 'react';
+import { parseName } from '../utils/formatName';
 
 const isIntString = (val) => /^\d+$/.test(val);
-
-function parseName(rawName, defaultColor = 'inherit') {
-    if (!rawName) return { displayName: '', suffix: '', nameColor: defaultColor };
-    const parts = rawName.split(':');
-    const displayName = parts[0].trim();
-    const suffix = parts[1]?.trim() || '';
-
-    let nameColor = defaultColor;
-    if (suffix) {
-        if (/^\d+$/.test(suffix)) nameColor = '#FFD700'; // Gold (Draft Pick)
-        else if (suffix === 'UDFA') nameColor = 'rgba(255, 215, 0, 0.6)'; // Dim Gold
-        else if (suffix === 'FA') nameColor = '#3b82f6'; // Blue (Free Agent)
-    }
-    return { displayName, suffix, nameColor };
-}
 
 
 const PlayerCard = ({ player, isBest, onClick, slim, team, displayPick, noStrikethrough, isCurrent, traded, tradeNote }) => {

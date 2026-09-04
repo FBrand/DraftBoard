@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { parseRankings, parsePicks } from '../utils/dataParser';
 import { TEAM_CONFIG } from '../constants';
-import { findMatchingPlayerIndex } from '../utils/nameMatcher';
+import { findMatchingPlayerIndex, buildNameIndex, findMatchingIndex } from '../utils/nameMatcher';
 
 const DRAFT_STORAGE_KEY = 'nfl_draft_board_state';
 const IS_LIVE_SYNC_KEY = 'nfl_draft_live_sync';
@@ -79,7 +79,7 @@ export const useDraftState = () => {
     }, []);
 
     const saveHistory = useCallback(() => {
-        setHistory(prev => ({ players, ourPicksLeft, currentPick, draftedPlayers, yourPicks }));
+        setHistory({ players, ourPicksLeft, currentPick, draftedPlayers, yourPicks });
     }, [players, ourPicksLeft, currentPick, draftedPlayers, yourPicks]);
 
     // Initial load
@@ -136,8 +136,9 @@ export const useDraftState = () => {
                         const savedKCLeft = Array.isArray(parsedState.ourPicksLeft) ? parsedState.ourPicksLeft : seedKCLeft;
 
                         // 1. Reconcile fresh parsedPlayers with saved history (Board View)
+                        const savedDraftedIndex = buildNameIndex(savedDrafted);
                         const reconciledPlayers = parsedPlayers.map(p => {
-                            const matchIdx = findMatchingPlayerIndex(p.name, savedDrafted);
+                            const matchIdx = findMatchingIndex(p.name, savedDraftedIndex);
                             if (matchIdx !== -1) {
                                 const match = savedDrafted[matchIdx];
                                 return {
@@ -154,8 +155,9 @@ export const useDraftState = () => {
                         // 2. Re-enrich saved draft history (Right Panel View) with fresh metadata
                         // NOTE: use sd.draftedByUs (persisted value) — savedKCLeft only has *remaining* picks,
                         // so re-computing from it would always yield false for already-drafted players.
+                        const parsedPlayersIndex = buildNameIndex(parsedPlayers);
                         const enrichedDrafted = savedDrafted.map(sd => {
-                            const matchIdx = findMatchingPlayerIndex(sd.name, parsedPlayers);
+                            const matchIdx = findMatchingIndex(sd.name, parsedPlayersIndex);
                             const draftedByUs = sd.draftedByUs === true || sd.team === TEAM_CONFIG.abbreviation; // Trust persisted or evaluate from CSV team string
                             if (matchIdx !== -1) {
                                 const updatedMetadata = parsedPlayers[matchIdx];
@@ -187,7 +189,7 @@ export const useDraftState = () => {
                             const lastPick = enrichedDrafted.reduce((max, p) => Math.max(max, p.pickNumber), 0);
                             setCurrentPick(lastPick + 1);
                         }
-                    } catch (e) {
+                    } catch {
                         console.warn("Corrupted localStorage, using fresh data");
                         setPlayers(parsedPlayers);
                         setOurPicksLeft(parsedOurPicks);
@@ -254,7 +256,7 @@ export const useDraftState = () => {
 
         triggerChime();
         setCurrentPick(prev => prev + 1);
-    }, [currentPick, ourPicksLeft, remotePicks, saveHistory, triggerChime]);
+    }, [currentPick, ourPicksLeft, remotePicks, players, saveHistory, triggerChime]);
 
     const undoAction = useCallback(() => {
         if (!history) return;
@@ -288,8 +290,9 @@ export const useDraftState = () => {
         // Enrich imported player objects with ranking metadata if available.
         // draftedByUs: trust the imported flag (importedKCLeft is *remaining* picks, not historical).
         // The CSV import sets draftedByUs on each entry; fall back to checking if team === KC.
+        const playersIndex = buildNameIndex(players);
         const enrichedDrafted = importedDrafted.map(id => {
-            const matchIdx = findMatchingPlayerIndex(id.name, players);
+            const matchIdx = findMatchingIndex(id.name, playersIndex);
             const draftedByUs = id.draftedByUs === true || id.team === TEAM_CONFIG.abbreviation;
             if (matchIdx !== -1) {
                 const playerFromRankings = players[matchIdx];
@@ -307,8 +310,9 @@ export const useDraftState = () => {
         setDraftedPlayers(enrichedDrafted);
 
         // Update players availability
+        const enrichedDraftedIndex = buildNameIndex(enrichedDrafted);
         setPlayers(prev => prev.map(p => {
-            const matchIdx = findMatchingPlayerIndex(p.name, enrichedDrafted);
+            const matchIdx = findMatchingIndex(p.name, enrichedDraftedIndex);
             if (matchIdx !== -1) {
                 const match = enrichedDrafted[matchIdx];
                 return {
@@ -370,6 +374,9 @@ export const useDraftState = () => {
                 let updatedKCLeft = [...ourPicksLeft];
                 let maxOverall = currentPick;
                 let changed = false;
+                // updatedPlayers only has existing entries replaced in place below
+                // (never grown), so its name index stays valid for the whole loop.
+                const updatedPlayersIndex = buildNameIndex(updatedPlayers);
 
                 // 1. Update pick assignments (Trades)
                 const chiefsPicks = picks
@@ -386,7 +393,7 @@ export const useDraftState = () => {
                     if (rp.player) {
                         const isOurPick = (rp.team === TEAM_CONFIG.abbreviation);
 
-                        const playerIndex = findMatchingPlayerIndex(rp.player.name, updatedPlayers);
+                        const playerIndex = findMatchingIndex(rp.player.name, updatedPlayersIndex);
 
                         if (playerIndex !== -1) {
                             const existingPlayer = updatedPlayers[playerIndex];
@@ -487,7 +494,7 @@ export const useDraftState = () => {
         poll();
         const interval = setInterval(poll, 30000);
         return () => clearInterval(interval);
-    }, [isLiveSync, loading, draftedPlayers, yourPicks, ourPicksLeft, currentPick]);
+    }, [isLiveSync, loading, draftedPlayers, yourPicks, ourPicksLeft, currentPick, triggerChime]);
 
     return {
         players: players || [],

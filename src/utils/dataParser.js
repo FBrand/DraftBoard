@@ -1,6 +1,5 @@
 export const parseRankings = (csvText) => {
   const lines = csvText.trim().split('\n');
-  const header = lines[0].split(',');
   const data = lines.slice(1);
 
   let currentGroup = '';
