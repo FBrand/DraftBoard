@@ -58,16 +58,20 @@ function BulletListEditor({ label, items, onChange }) {
     );
 }
 
-// Player info/scouting panel — rendered as a persistent right-side panel
-// (matches Draft's LeftPanel/RightPanel convention) rather than a floating
-// fixed-position overlay, which is what it was before and read as randomly
-// parked in a corner regardless of what else was on screen.
+// Player info/scouting panel. Two presentations of the same fields:
+// variant="panel" (default) is Scouting's own persistent right-side column
+// (matches Draft's LeftPanel/RightPanel convention) rather than the floating
+// fixed-position overlay this used to be, which read as randomly parked in a
+// corner regardless of what else was on screen. variant="modal" is the same
+// content as a centered dialog — used outside Scouting (Draft/UDFA) where a
+// right-click or long-press on any card opens this without a dedicated
+// column to put it in; see PlayerInfoModal.jsx.
 //
 // Local numeric-input state intentionally resets when the selected player
 // changes — the caller renders this with `key={player.name}` so React
 // remounts it on selection change rather than syncing state via an effect
 // (see https://react.dev/learn/you-might-not-need-an-effect).
-export default function ScoutingControls({ player, entry, onChange, onClose, boardLabel, onPrevBoard, onNextBoard }) {
+export default function ScoutingControls({ player, entry, onChange, onClose, boardLabel, onPrevBoard, onNextBoard, variant = 'panel' }) {
     const [numbers, setNumbers] = useState({
         personalRank: entry?.personalRank ?? '',
         positionRank: entry?.positionRank ?? '',
@@ -77,6 +81,7 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
     const [group, setGroup] = useState(entry?.group ?? '');
 
     if (!player) {
+        if (variant === 'modal') return null;
         return (
             <div className="side-panel right-panel">
                 <h3 className="panel-title">Player Info</h3>
@@ -103,8 +108,8 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
         });
     };
 
-    return (
-        <div className="side-panel right-panel">
+    const content = (
+        <div className={variant === 'modal' ? 'side-panel right-panel scouting-modal-box' : 'side-panel right-panel'}>
             <div className="scouting-controls-header">
                 <div>
                     <strong>{player.name}</strong>
@@ -168,4 +173,13 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
             </div>
         </div>
     );
+
+    if (variant === 'modal') {
+        return (
+            <div className="modal-overlay" onClick={onClose}>
+                <div onClick={e => e.stopPropagation()}>{content}</div>
+            </div>
+        );
+    }
+    return content;
 }

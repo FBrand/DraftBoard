@@ -9,7 +9,7 @@ import UnrankedModal from './UnrankedModal';
 // player (useDraftState's draftPlayer marks them drafted, assigns a team) —
 // same underlying state, no new signing pathway needed; only the
 // surrounding chrome differs from Draft view.
-export default function UdfaView({ players, draftedPlayers, columnOrder, draftPlayer }) {
+export default function UdfaView({ players, draftedPlayers, columnOrder, draftPlayer, onInfoOpen }) {
     const [isUnrankedOpen, setIsUnrankedOpen] = useState(false);
     const udfaCount = draftedPlayers.filter(p => (p.pickNumber || 0) > 257).length;
 
@@ -66,6 +66,7 @@ export default function UdfaView({ players, draftedPlayers, columnOrder, draftPl
                 onAction={draftPlayer}
                 columnOrder={columnOrder}
                 isFocusMode={false}
+                onInfoOpen={onInfoOpen}
             />
 
             <UnrankedModal

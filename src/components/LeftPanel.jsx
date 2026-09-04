@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import PlayerCard from './PlayerCard';
 
-const LeftPanel = ({ players, onDraft, onDraftUnranked }) => {
+const LeftPanel = ({ players, onDraft, onDraftUnranked, onInfoOpen }) => {
     const [searchTerm, setSearchTerm] = useState('');
 
     const remaining = players
@@ -36,7 +36,7 @@ const LeftPanel = ({ players, onDraft, onDraftUnranked }) => {
                         {remaining.length > 0 ? (
                             remaining.map(player => (
                                 <div key={player.name} onClick={() => onDraft(player)} style={{ cursor: 'pointer' }}>
-                                    <PlayerCard player={player} />
+                                    <PlayerCard player={player} onInfoOpen={onInfoOpen} />
                                 </div>
                             ))
                         ) : (
@@ -58,7 +58,7 @@ const LeftPanel = ({ players, onDraft, onDraftUnranked }) => {
                                 <div className="rankings-list">
                                     {roundPlayers.map(player => (
                                         <div key={player.name} onClick={() => onDraft(player)} style={{ cursor: 'pointer' }}>
-                                            <PlayerCard player={player} />
+                                            <PlayerCard player={player} onInfoOpen={onInfoOpen} />
                                         </div>
                                     ))}
                                 </div>

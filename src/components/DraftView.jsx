@@ -14,7 +14,7 @@ import UnrankedModal from './UnrankedModal';
 export default function DraftView({
     players, ourPicksLeft, draftedPlayers, yourPicks, currentPick, remotePicks,
     isLiveSync, canLiveSync, toggleLiveSync, draftPlayer, updateOurPicks,
-    resetDraft, undoAction, columnOrder, importDraftState,
+    resetDraft, undoAction, columnOrder, importDraftState, onInfoOpen,
 }) {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isUnrankedModalOpen, setIsUnrankedModalOpen] = useState(false);
@@ -75,6 +75,7 @@ export default function DraftView({
                             players={players}
                             onDraft={draftPlayer}
                             onDraftUnranked={() => setIsUnrankedModalOpen(true)}
+                            onInfoOpen={onInfoOpen}
                         />
                     )}
                 </div>
@@ -84,6 +85,7 @@ export default function DraftView({
                     onAction={draftPlayer}
                     columnOrder={columnOrder}
                     isFocusMode={isFocusMode}
+                    onInfoOpen={onInfoOpen}
                 />
 
                 <div className={`right-sidebar-wrapper ${showRightSidebar && !isFocusMode ? 'mobile-open' : ''}`}>

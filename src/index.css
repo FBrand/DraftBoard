@@ -2115,6 +2115,25 @@ body.export-mode .card-glow {
   box-sizing: border-box;
 }
 
+/* Cross-cutting info card (PlayerInfoModal): same ScoutingControls fields as
+   the Scouting panel, opened via right-click/long-press outside Scouting
+   where there's no dedicated right-column to render it in. */
+.scouting-modal-box {
+  width: 380px;
+  max-width: calc(100vw - 40px);
+  height: auto;
+  max-height: 80vh;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
+  padding: 14px 16px;
+  box-sizing: border-box;
+}
+
+.scouting-modal-box .panel-content {
+  max-height: calc(80vh - 120px);
+}
+
 .scouting-empty {
   color: var(--text-dim);
   font-size: 0.85rem;

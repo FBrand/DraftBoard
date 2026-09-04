@@ -5,6 +5,7 @@ import UdfaView from './components/UdfaView';
 import ScoutingView from './components/ScoutingView';
 import FreeAgencyView from './components/FreeAgencyView';
 import RosterView from './components/RosterView';
+import PlayerInfoModal from './components/PlayerInfoModal';
 
 // UDFA and Scouting/FA views land in later phases of the 5-stage build
 // (see /home/dev/.claude/plans/structured-growing-cat.md) — placeholder here
@@ -44,6 +45,11 @@ function App() {
   const [view, setView] = useState(() => {
     return localStorage.getItem('draft_board_view') || 'draft';
   });
+
+  // Cross-cutting info card (right-click / long-press on a card) outside
+  // Scouting — Scouting has its own always-visible info panel, opened via
+  // primary click, so this only gets wired into Draft/UDFA.
+  const [infoPlayer, setInfoPlayer] = useState(null);
 
   React.useEffect(() => {
     localStorage.setItem('draft_board_view', view);
@@ -95,6 +101,7 @@ function App() {
               undoAction={undoAction}
               columnOrder={columnOrder}
               importDraftState={importDraftState}
+              onInfoOpen={setInfoPlayer}
             />
           )
       )}
@@ -108,6 +115,7 @@ function App() {
               draftedPlayers={draftedPlayers}
               columnOrder={columnOrder}
               draftPlayer={draftPlayer}
+              onInfoOpen={setInfoPlayer}
             />
           )
       )}
@@ -115,6 +123,8 @@ function App() {
       {view === 'roster' && (
         <RosterView masterPlayers={players} draftedPlayers={draftedPlayers} currentPick={currentPick} onDraft={draftPlayer} />
       )}
+
+      <PlayerInfoModal key={infoPlayer?.name ?? 'none'} player={infoPlayer} onClose={() => setInfoPlayer(null)} />
     </div>
   );
 }

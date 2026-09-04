@@ -1,11 +1,43 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { parseName } from '../utils/formatName';
 
 const isIntString = (val) => /^\d+$/.test(val);
+const LONG_PRESS_MS = 500;
 
-
-const PlayerCard = ({ player, isBest, onClick, slim, team, displayPick, noStrikethrough, isCurrent, traded, tradeNote, alwaysClickable, hideDraftedStyle }) => {
+const PlayerCard = ({ player, isBest, onClick, slim, team, displayPick, noStrikethrough, isCurrent, traded, tradeNote, alwaysClickable, hideDraftedStyle, onInfoOpen }) => {
     const { name, position, overallRank, drafted, draftedByUs, team: draftedTeam } = player;
+
+    // Secondary-click (desktop) / long-press (touch) opens the scouting info
+    // card without disturbing the card's primary action (draft/sign/select).
+    // suppressClickRef blocks the synthetic click a touchend fires right
+    // after a long-press resolves — without it, a long-press would also
+    // trigger onClick's draft/sign action immediately after opening the info
+    // card.
+    const pressTimer = useRef(null);
+    const suppressClickRef = useRef(false);
+
+    const clearPressTimer = () => {
+        if (pressTimer.current) { clearTimeout(pressTimer.current); pressTimer.current = null; }
+    };
+    const handleContextMenu = (e) => {
+        if (!onInfoOpen) return;
+        e.preventDefault();
+        onInfoOpen(player);
+    };
+    const handleTouchStart = () => {
+        if (!onInfoOpen) return;
+        clearPressTimer();
+        pressTimer.current = setTimeout(() => {
+            suppressClickRef.current = true;
+            onInfoOpen(player);
+        }, LONG_PRESS_MS);
+    };
+    const handleTouchEnd = () => clearPressTimer();
+    const handleTouchMove = () => clearPressTimer();
+    const handleClick = () => {
+        if (suppressClickRef.current) { suppressClickRef.current = false; return; }
+        if ((alwaysClickable || !drafted) && onClick) onClick(player);
+    };
 
     const classes = [
         'player-card',
@@ -45,7 +77,14 @@ const PlayerCard = ({ player, isBest, onClick, slim, team, displayPick, noStrike
     }
 
     return (
-        <div className={classes} onClick={() => (alwaysClickable || !drafted) && onClick && onClick(player)}>
+        <div
+            className={classes}
+            onClick={handleClick}
+            onContextMenu={handleContextMenu}
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
+            onTouchMove={handleTouchMove}
+        >
             <div className="card-top">
                 <span className="player-rank">{rankDisplay}</span>
                 <div className="card-team-info">
