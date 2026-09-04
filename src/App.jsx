@@ -66,7 +66,7 @@ function App() {
       {/* Like Roster, doesn't gate on Draft's loading state — masterPlayers/
           draftedPlayers are only used for name-display metadata, same as
           RosterView, and work fine with whatever's available so far. */}
-      {view === 'fa' && <FreeAgencyView masterPlayers={players} draftedPlayers={draftedPlayers} />}
+      {view === 'fa' && <FreeAgencyView masterPlayers={players} draftedPlayers={draftedPlayers} onInfoOpen={setInfoPlayer} />}
 
       {view === 'scouting' && (
         loading
@@ -114,7 +114,7 @@ function App() {
       )}
 
       {view === 'roster' && (
-        <RosterView masterPlayers={players} draftedPlayers={draftedPlayers} currentPick={currentPick} onDraft={draftPlayer} />
+        <RosterView masterPlayers={players} draftedPlayers={draftedPlayers} currentPick={currentPick} onDraft={draftPlayer} onInfoOpen={setInfoPlayer} />
       )}
 
       <PlayerInfoModal key={infoPlayer?.name ?? 'none'} player={infoPlayer} onClose={() => setInfoPlayer(null)} />

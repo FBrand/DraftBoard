@@ -4,6 +4,7 @@ import ScoutingControls from './ScoutingControls';
 import ScoutingLeftPanel from './ScoutingLeftPanel';
 import * as scoutingState from '../utils/scoutingState';
 import { buildNameIndex, findMatchingIndex } from '../utils/nameMatcher';
+import useIsMobile from '../hooks/useIsMobile';
 
 const { BOARDS, BOARD_LABELS } = scoutingState;
 
@@ -34,6 +35,10 @@ export default function ScoutingView({ players, columnOrder }) {
     const [activeBoard, setActiveBoard] = useState('consensus');
     const [selectedName, setSelectedName] = useState(null);
     const [tagFilter, setTagFilter] = useState('all');
+    // On mobile the three columns stack, so the info card would sit far below
+    // the board — tapping a player looked like it did nothing. Present it as
+    // a modal there instead. Still fully editable: this is Scouting.
+    const isMobile = useIsMobile();
 
     const state = boards[activeBoard];
     const entryIndex = useMemo(() => buildNameIndex(state.entries), [state.entries]);
@@ -203,17 +208,33 @@ export default function ScoutingView({ players, columnOrder }) {
                     hideDraftedStyle={true}
                 />
 
+                {!isMobile && (
+                    <ScoutingControls
+                        key={`${selectedName || 'none'}-${activeBoard}`}
+                        player={selectedPlayer}
+                        entry={selectedPlayer ? entryFor(selectedPlayer.name) : null}
+                        onChange={saveEntry}
+                        onClose={() => setSelectedName(null)}
+                        boardLabel={selectedPlayer ? BOARD_LABELS[activeBoard] : null}
+                        onPrevBoard={() => cycleBoard(-1)}
+                        onNextBoard={() => cycleBoard(1)}
+                    />
+                )}
+            </div>
+
+            {isMobile && selectedPlayer && (
                 <ScoutingControls
-                    key={`${selectedName || 'none'}-${activeBoard}`}
+                    key={`${selectedName}-${activeBoard}-modal`}
+                    variant="modal"
                     player={selectedPlayer}
-                    entry={selectedPlayer ? entryFor(selectedPlayer.name) : null}
+                    entry={entryFor(selectedPlayer.name)}
                     onChange={saveEntry}
                     onClose={() => setSelectedName(null)}
-                    boardLabel={selectedPlayer ? BOARD_LABELS[activeBoard] : null}
+                    boardLabel={BOARD_LABELS[activeBoard]}
                     onPrevBoard={() => cycleBoard(-1)}
                     onNextBoard={() => cycleBoard(1)}
                 />
-            </div>
+            )}
         </div>
     );
 }

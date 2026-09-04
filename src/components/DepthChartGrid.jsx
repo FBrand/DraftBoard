@@ -92,11 +92,25 @@ function SlotCardContent({ displayName, nameColor, topLabel, displayPos, small, 
 // Draggable (when filled) and droppable (always) share the same logical id
 // but separate dnd-kit registries (useDraggable/useDroppable each track
 // their own id namespace), so reusing `posId::slotIdx` for both is safe.
-function SlotCell({ slot, zone, posId, slotIdx, targetZone, onClick, masterPlayers, draftedPlayers }) {
+// onInfoOpen: opens the read-only player info card. Wired to BOTH right-click
+// and a plain tap/click, deliberately: dnd-kit's TouchSensor already claims
+// press-and-hold to start a drag, so long-press isn't available here the way
+// it is on draft-board cards, and a plain click was otherwise unused on these
+// slots. MouseSensor's 8px distance activation means a click without movement
+// never starts a drag, so the two don't collide.
+function SlotCell({ slot, zone, posId, slotIdx, targetZone, onInfoOpen, masterPlayers, draftedPlayers }) {
     const isNeed = !slot && zone === '53';
     const meta = slotMeta(slot, masterPlayers, draftedPlayers);
     const resolvedZone = targetZone ?? zone;
     const cellId = `${posId}::${slotIdx}`;
+
+    const openInfo = (e) => {
+        if (!slot || !onInfoOpen) return;
+        e.preventDefault();
+        // Roster slots store a name + zone, not a player record; the info card
+        // only reads name/position (see PlayerInfoModal).
+        onInfoOpen({ name: meta.displayName, position: meta.displayPos });
+    };
 
     const { setNodeRef: setDropRef, isOver } = useDroppable({
         id: `drop-${cellId}`,
@@ -113,7 +127,8 @@ function SlotCell({ slot, zone, posId, slotIdx, targetZone, onClick, masterPlaye
             ref={node => { setDropRef(node); setDragRef(node); }}
             {...(slot ? listeners : {})}
             {...(slot ? attributes : {})}
-            onClick={() => slot && onClick && onClick(slot, posId, slotIdx)}
+            onClick={openInfo}
+            onContextMenu={openInfo}
             className={`rv-slot ${slot ? 'filled' : 'empty-square'} ${zoneClass(slot?.zone ?? zone, isNeed)} ${isOver ? 'drag-over' : ''} ${isDragging ? 'dragging-source' : ''}`}
             style={slot ? { cursor: 'grab' } : undefined}
         >
@@ -131,7 +146,7 @@ function SlotCell({ slot, zone, posId, slotIdx, targetZone, onClick, masterPlaye
 // label is a drag handle — keeping the delete/±count buttons outside the
 // drag listeners avoids any pointerdown conflict between "click a button"
 // and "start dragging the row".
-function DepthRow({ posConfig, slots, idx, phase, onConfigChange, onDeletePosition, masterPlayers, draftedPlayers }) {
+function DepthRow({ posConfig, slots, idx, phase, onConfigChange, onDeletePosition, masterPlayers, draftedPlayers, onInfoOpen }) {
     const { id, label, slots53 } = posConfig;
     const rowParity = idx % 2 === 0 ? 'odd' : '';
     const rowId = `${phase}::${idx}`;
@@ -204,21 +219,21 @@ function DepthRow({ posConfig, slots, idx, phase, onConfigChange, onDeletePositi
             {/* Col 2: 53-Man */}
             <div className={`rv-row-cell ${rowParity}`}>
                 {slots53Items.map(item => (
-                    <SlotCell key={item.idx} slot={item.slot} zone={item.zone} posId={id} slotIdx={item.idx} targetZone="53" masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} />
+                    <SlotCell key={item.idx} slot={item.slot} zone={item.zone} posId={id} slotIdx={item.idx} targetZone="53" masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} onInfoOpen={onInfoOpen} />
                 ))}
             </div>
 
             {/* Col 3: Practice Squad */}
             <div className={`rv-row-cell ${rowParity}`}>
                 {psItems.map(item => (
-                    <SlotCell key={item.idx} slot={item.slot} zone={item.zone} posId={id} slotIdx={item.idx} targetZone="ps" masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} />
+                    <SlotCell key={item.idx} slot={item.slot} zone={item.zone} posId={id} slotIdx={item.idx} targetZone="ps" masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} onInfoOpen={onInfoOpen} />
                 ))}
             </div>
 
             {/* Col 4: Reserve */}
             <div className={`rv-row-cell last ${rowParity}`}>
                 {rItems.map(item => (
-                    <SlotCell key={item.idx} slot={item.slot} zone={item.zone} posId={id} slotIdx={item.idx} targetZone="r" masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} />
+                    <SlotCell key={item.idx} slot={item.slot} zone={item.zone} posId={id} slotIdx={item.idx} targetZone="r" masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} onInfoOpen={onInfoOpen} />
                 ))}
             </div>
         </React.Fragment>
@@ -271,7 +286,7 @@ function SpecialistCell({ id, slot, masterPlayers, draftedPlayers, showNeeds }) 
 }
 
 // ── Roster Side Panel ── Cut panel only (IR is at bottom of main content)
-function RosterSidebar({ cuts, onSign, signLabel, masterPlayers, draftedPlayers }) {
+function RosterSidebar({ cuts, onSign, signLabel, masterPlayers, draftedPlayers, onInfoOpen }) {
     const { setNodeRef, isOver } = useDroppable({
         id: 'drop-cut-zone',
         data: { kind: 'item', posId: '__cut__', slotIdx: cuts.length, targetZone: 'cut' },
@@ -286,7 +301,7 @@ function RosterSidebar({ cuts, onSign, signLabel, masterPlayers, draftedPlayers 
                     {cuts.map((name, i) => (
                         <SlotCell
                             key={i} slot={{ name, zone: 'cut' }} zone="cut" posId="__cut__" slotIdx={i} targetZone="cut"
-                            masterPlayers={masterPlayers} draftedPlayers={draftedPlayers}
+                            masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} onInfoOpen={onInfoOpen}
                         />
                     ))}
                 </div>
@@ -295,7 +310,7 @@ function RosterSidebar({ cuts, onSign, signLabel, masterPlayers, draftedPlayers 
     );
 }
 
-function IRDropZone({ reserve, masterPlayers, draftedPlayers }) {
+function IRDropZone({ reserve, masterPlayers, draftedPlayers, onInfoOpen }) {
     const { setNodeRef, isOver } = useDroppable({
         id: 'drop-ir-zone',
         data: { kind: 'item', posId: '__ir__', slotIdx: reserve.length, targetZone: 'ir' },
@@ -305,7 +320,7 @@ function IRDropZone({ reserve, masterPlayers, draftedPlayers }) {
             <div className="roster-ir-label">INJURY RESERVE — {reserve.length}</div>
             <div className="roster-ir-list">
                 {reserve.map((name, i) => (
-                    <SlotCell key={i} slot={{ name, zone: 'ir' }} zone="ir" posId="__ir__" slotIdx={i} targetZone="ir" masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} />
+                    <SlotCell key={i} slot={{ name, zone: 'ir' }} zone="ir" posId="__ir__" slotIdx={i} targetZone="ir" masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} onInfoOpen={onInfoOpen} />
                 ))}
             </div>
         </div>
@@ -342,7 +357,7 @@ export default function DepthChartGrid({
     masterPlayers, draftedPlayers,
     onMove, onRowMove, onDeletePosition, onSlotsChange, onAddPosition,
     onSignClick, signButtonLabel = '+ SIGN PLAYER',
-    zoomLevel = 1, showNeeds = true,
+    zoomLevel = 1, showNeeds = true, onInfoOpen,
 }) {
     const sensors = useSensors(
         useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
@@ -398,7 +413,7 @@ export default function DepthChartGrid({
                     <div className="roster-grid">
                         <DepthHeader />
                         {positionConfig.offense.map((p, idx) => (
-                            <DepthRow key={p.id} idx={idx} phase="offense" posConfig={p} slots={depthChart[p.id] ?? []} onConfigChange={val => onSlotsChange(p.id, val)} onDeletePosition={() => onDeletePosition('offense', p.id)} masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} />
+                            <DepthRow key={p.id} idx={idx} phase="offense" posConfig={p} slots={depthChart[p.id] ?? []} onConfigChange={val => onSlotsChange(p.id, val)} onDeletePosition={() => onDeletePosition('offense', p.id)} masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} onInfoOpen={onInfoOpen} />
                         ))}
                     </div>
 
@@ -410,7 +425,7 @@ export default function DepthChartGrid({
                     <div className="roster-grid">
                         <DepthHeader />
                         {positionConfig.defense.map((p, idx) => (
-                            <DepthRow key={p.id} idx={idx} phase="defense" posConfig={p} slots={depthChart[p.id] ?? []} onConfigChange={val => onSlotsChange(p.id, val)} onDeletePosition={() => onDeletePosition('defense', p.id)} masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} />
+                            <DepthRow key={p.id} idx={idx} phase="defense" posConfig={p} slots={depthChart[p.id] ?? []} onConfigChange={val => onSlotsChange(p.id, val)} onDeletePosition={() => onDeletePosition('defense', p.id)} masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} onInfoOpen={onInfoOpen} />
                         ))}
                     </div>
 
@@ -425,10 +440,10 @@ export default function DepthChartGrid({
                     </div>
 
                     {/* IR — bottom */}
-                    <IRDropZone reserve={reserve} masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} />
+                    <IRDropZone reserve={reserve} masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} onInfoOpen={onInfoOpen} />
                 </div>
 
-                <RosterSidebar cuts={cuts} onSign={onSignClick} signLabel={signButtonLabel} masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} />
+                <RosterSidebar cuts={cuts} onSign={onSignClick} signLabel={signButtonLabel} masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} onInfoOpen={onInfoOpen} />
             </div>
 
             <DragOverlay dropAnimation={null}>

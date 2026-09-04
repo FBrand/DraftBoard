@@ -21,8 +21,11 @@ const LIST_FIELDS = [
 ];
 
 // Small "add a bullet, remove a bullet" list editor — used for
-// strengths/weaknesses/notes, which are all the same shape.
-function BulletListEditor({ label, items, onChange }) {
+// strengths/weaknesses/notes, which are all the same shape. When readOnly,
+// renders the bullets as plain text (and nothing at all when empty) rather
+// than showing disabled inputs, which would be visual noise in a card whose
+// whole job is to be read.
+function BulletListEditor({ label, items, onChange, readOnly }) {
     const [draft, setDraft] = useState('');
 
     const add = () => {
@@ -32,6 +35,8 @@ function BulletListEditor({ label, items, onChange }) {
         setDraft('');
     };
 
+    if (readOnly && !items?.length) return null;
+
     return (
         <div className="scouting-list-field">
             <div className="scouting-list-label">{label}</div>
@@ -40,21 +45,25 @@ function BulletListEditor({ label, items, onChange }) {
                     {items.map((item, i) => (
                         <li key={i}>
                             <span>{item}</span>
-                            <button type="button" onClick={() => onChange(items.filter((_, x) => x !== i))} aria-label={`Remove ${label.toLowerCase()} item`}>&times;</button>
+                            {!readOnly && (
+                                <button type="button" onClick={() => onChange(items.filter((_, x) => x !== i))} aria-label={`Remove ${label.toLowerCase()} item`}>&times;</button>
+                            )}
                         </li>
                     ))}
                 </ul>
             )}
-            <div className="scouting-list-add">
-                <input
-                    type="text"
-                    value={draft}
-                    placeholder={`Add ${label.toLowerCase()}...`}
-                    onChange={e => setDraft(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
-                />
-                <button type="button" onClick={add}>+</button>
-            </div>
+            {!readOnly && (
+                <div className="scouting-list-add">
+                    <input
+                        type="text"
+                        value={draft}
+                        placeholder={`Add ${label.toLowerCase()}...`}
+                        onChange={e => setDraft(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
+                    />
+                    <button type="button" onClick={add}>+</button>
+                </div>
+            )}
         </div>
     );
 }
@@ -72,7 +81,7 @@ function BulletListEditor({ label, items, onChange }) {
 // changes — the caller renders this with `key={player.name}` so React
 // remounts it on selection change rather than syncing state via an effect
 // (see https://react.dev/learn/you-might-not-need-an-effect).
-export default function ScoutingControls({ player, entry, onChange, onClose, boardLabel, onPrevBoard, onNextBoard, variant = 'panel' }) {
+export default function ScoutingControls({ player, entry, onChange, onClose, boardLabel, onPrevBoard, onNextBoard, variant = 'panel', readOnly = false }) {
     const [numbers, setNumbers] = useState({
         personalRank: entry?.personalRank ?? '',
         positionRank: entry?.positionRank ?? '',
@@ -112,6 +121,16 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
         });
     };
 
+    // Read-only cards show only what's actually filled in, so an untouched
+    // player would otherwise render as an empty box with no explanation.
+    const hasAnyContent = !!(
+        entry && (
+            entry.tag || entry.group != null ||
+            NUMBER_FIELDS.some(f => entry[f.key] != null && entry[f.key] !== '') ||
+            LIST_FIELDS.some(f => entry[f.key]?.length)
+        )
+    );
+
     const content = (
         <div className={variant === 'modal' ? 'side-panel right-panel scouting-modal-box' : 'side-panel right-panel'}>
             <div className="scouting-controls-header">
@@ -131,40 +150,74 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
             )}
 
             <div className="panel-content scroll-container">
-                <div className="scouting-controls-tags">
-                    {TAGS.map(t => (
-                        <button
-                            key={t.id}
-                            className={`scouting-tag-btn ${entry?.tag === t.id ? 'active' : ''}`}
-                            onClick={() => commit({ tag: entry?.tag === t.id ? null : t.id })}
-                        >{t.label}</button>
-                    ))}
-                </div>
+                {readOnly ? (
+                    entry?.tag && (
+                        <div className="scouting-controls-tags">
+                            <span className="scouting-tag-btn active scouting-tag-static">
+                                {TAGS.find(t => t.id === entry.tag)?.label ?? entry.tag}
+                            </span>
+                        </div>
+                    )
+                ) : (
+                    <div className="scouting-controls-tags">
+                        {TAGS.map(t => (
+                            <button
+                                key={t.id}
+                                className={`scouting-tag-btn ${entry?.tag === t.id ? 'active' : ''}`}
+                                onClick={() => commit({ tag: entry?.tag === t.id ? null : t.id })}
+                            >{t.label}</button>
+                        ))}
+                    </div>
+                )}
 
-                <label className="scouting-group-field">
-                    Round.Group
-                    <input
-                        type="text"
-                        value={group}
-                        placeholder="e.g. 1.3"
-                        onChange={e => setGroup(e.target.value)}
-                        onBlur={() => commit({ group: group.trim() || null })}
-                    />
-                </label>
-
-                <div className="scouting-number-grid">
-                    {NUMBER_FIELDS.map(f => (
-                        <label key={f.key}>
-                            {f.label}
+                {readOnly ? (
+                    // Round.Group is omitted here — it's a board-building
+                    // control, not a scouting read-out. The four numbers
+                    // always show, falling back to "?" so an unevaluated
+                    // player reads as "not rated yet" rather than silently
+                    // dropping the field.
+                    <div className="scouting-readonly-grid">
+                        {NUMBER_FIELDS.map(f => {
+                            const val = entry?.[f.key];
+                            const isSet = val != null && val !== '';
+                            return (
+                                <div key={f.key} className="scouting-readonly-field">
+                                    <span className="scouting-readonly-label">{f.label}</span>
+                                    <span className={`scouting-readonly-value${isSet ? '' : ' unset'}`}>
+                                        {isSet ? val : '?'}
+                                    </span>
+                                </div>
+                            );
+                        })}
+                    </div>
+                ) : (
+                    <>
+                        <label className="scouting-group-field">
+                            Round.Group
                             <input
-                                type="number"
-                                value={numbers[f.key]}
-                                onChange={e => setNumbers(n => ({ ...n, [f.key]: e.target.value }))}
-                                onBlur={() => commit({ [f.key]: numbers[f.key] === '' ? null : parseInt(numbers[f.key], 10) })}
+                                type="text"
+                                value={group}
+                                placeholder="e.g. 1.3"
+                                onChange={e => setGroup(e.target.value)}
+                                onBlur={() => commit({ group: group.trim() || null })}
                             />
                         </label>
-                    ))}
-                </div>
+
+                        <div className="scouting-number-grid">
+                            {NUMBER_FIELDS.map(f => (
+                                <label key={f.key}>
+                                    {f.label}
+                                    <input
+                                        type="number"
+                                        value={numbers[f.key]}
+                                        onChange={e => setNumbers(n => ({ ...n, [f.key]: e.target.value }))}
+                                        onBlur={() => commit({ [f.key]: numbers[f.key] === '' ? null : parseInt(numbers[f.key], 10) })}
+                                    />
+                                </label>
+                            ))}
+                        </div>
+                    </>
+                )}
 
                 {LIST_FIELDS.map(f => (
                     <BulletListEditor
@@ -172,8 +225,15 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
                         label={f.label}
                         items={entry?.[f.key] ?? []}
                         onChange={items => commit({ [f.key]: items })}
+                        readOnly={readOnly}
                     />
                 ))}
+
+                {readOnly && !hasAnyContent && (
+                    <div className="scouting-empty">
+                        Not scouted yet — add notes in the Scouting tab.
+                    </div>
+                )}
             </div>
         </div>
     );

@@ -22,7 +22,7 @@ function CounterBox({ label, val, max, status, isLast, maxLabel }) {
 // ── Main RosterView ────────────────────────────────────────────────────────
 // Owns roster state/persistence/CSV/bootstrap; the grid itself (drag-and-drop,
 // slots, specialists, IR, cuts) is DepthChartGrid.jsx, shared with Free Agency.
-export default function RosterView({ masterPlayers, draftedPlayers, currentPick, onDraft }) {
+export default function RosterView({ masterPlayers, draftedPlayers, currentPick, onDraft, onInfoOpen }) {
     const isDraftComplete = (currentPick || 1) > 257;
     const [state, setStateRaw] = useState(() => {
         const loaded = loadState() ?? defaultState();
@@ -443,6 +443,7 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
                 onAddPosition={setAddPositionPhase}
                 onSignClick={() => setIsSignModalOpen(true)}
                 zoomLevel={zoomLevel}
+                onInfoOpen={onInfoOpen}
             />
 
             <UnrankedModal key={`sign-${isSignModalOpen}`} isOpen={isSignModalOpen} onClose={() => setIsSignModalOpen(false)} onDraft={handleSignPlayer} mode={isDraftComplete ? 'postdraft' : 'roster'} />

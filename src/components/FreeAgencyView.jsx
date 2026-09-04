@@ -50,7 +50,7 @@ function AddCandidateModal({ isOpen, onClose, onAdd }) {
 // Renders the same DepthChartGrid Roster uses, against FA's own candidate
 // pool. Roster's real depth chart is read fresh on every render (cheap,
 // always current) purely to compute need indicators — never written to.
-export default function FreeAgencyView({ masterPlayers, draftedPlayers }) {
+export default function FreeAgencyView({ masterPlayers, draftedPlayers, onInfoOpen }) {
     const [state, setStateRaw] = useState(() => faState.loadState());
     const [isAddOpen, setIsAddOpen] = useState(false);
     const [addPositionPhase, setAddPositionPhase] = useState(null);
@@ -264,6 +264,7 @@ export default function FreeAgencyView({ masterPlayers, draftedPlayers }) {
                 onAddPosition={setAddPositionPhase}
                 showNeeds={false}
                 zoomLevel={zoomLevel}
+                onInfoOpen={onInfoOpen}
             />
 
             <AddCandidateModal isOpen={isAddOpen} onClose={() => setIsAddOpen(false)} onAdd={handleAddCandidate} />

@@ -2514,3 +2514,49 @@ body.export-mode .card-glow {
     flex-shrink: 0;
   }
 }
+
+
+/* Read-only player info card (PlayerInfoModal) */
+.scouting-readonly-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.scouting-readonly-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 6px;
+  padding: 7px 9px;
+}
+
+.scouting-readonly-label {
+  font-size: 0.62rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.scouting-readonly-value {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--gold-color);
+  font-family: 'Outfit', sans-serif;
+}
+
+/* Unset values read as "not rated yet", not as a real number */
+.scouting-readonly-value.unset {
+  color: var(--text-dim);
+  opacity: 0.5;
+}
+
+/* The tag is a static badge in read-only mode, not a button */
+.scouting-tag-static {
+  flex: 0 0 auto;
+  cursor: default;
+  padding: 6px 12px;
+}
