@@ -1,8 +1,11 @@
 import React, { useState, useMemo } from 'react';
 import CenterBoard from './CenterBoard';
 import ScoutingControls from './ScoutingControls';
+import ScoutingLeftPanel from './ScoutingLeftPanel';
 import * as scoutingState from '../utils/scoutingState';
 import { buildNameIndex, findMatchingIndex } from '../utils/nameMatcher';
+
+const { BOARDS, BOARD_LABELS } = scoutingState;
 
 const TAG_FILTERS = [
     { id: 'all', label: 'All' },
@@ -14,14 +17,25 @@ const TAG_FILTERS = [
 
 // Uses the same board-grid CenterBoard renders for Draft — building a
 // personal big board is structurally the same problem as building the
-// consensus one. Read-only board (v1): click a card to open tag/rank/notes
-// controls rather than dragging cards to reorder tiers — see plan doc for
-// why that's scoped out of this first pass.
+// consensus one. Every player is clickable/undimmed here regardless of
+// live-draft .drafted status (alwaysClickable/hideDraftedStyle on
+// CenterBoard/PlayerCard) — scouting happens independent of who's already
+// off the board in the real draft.
+//
+// Scouting BUILDS boards, it doesn't compare one personal opinion against a
+// fixed consensus — so evaluations are kept per board (Consensus/Dan/Ryan,
+// same three identities the Draft/UDFA board-switcher uses), all loaded at
+// once here so the info card's ‹/› arrows can page between an analyst's
+// takes on the same player without losing the current selection. "My
+// Board" (ScoutingLeftPanel) always reflects the currently active board's
+// in-progress personal order.
 export default function ScoutingView({ players, columnOrder }) {
-    const [state, setState] = useState(() => scoutingState.loadState());
+    const [boards, setBoards] = useState(() => Object.fromEntries(BOARDS.map(b => [b, scoutingState.loadState(b)])));
+    const [activeBoard, setActiveBoard] = useState('consensus');
     const [selectedName, setSelectedName] = useState(null);
     const [tagFilter, setTagFilter] = useState('all');
 
+    const state = boards[activeBoard];
     const entryIndex = useMemo(() => buildNameIndex(state.entries), [state.entries]);
 
     const entryFor = (name) => {
@@ -39,18 +53,58 @@ export default function ScoutingView({ players, columnOrder }) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [players, tagFilter, entryIndex]);
 
+    // This board's in-progress order: personalRank when set, else fall back
+    // to consensus overallRank so untouched players still sort sensibly
+    // (a starting point to refine, not a comparison being drawn).
+    const orderedPlayers = useMemo(() => {
+        return [...players].sort((a, b) => {
+            const ra = entryFor(a.name)?.personalRank ?? a.overallRank ?? Infinity;
+            const rb = entryFor(b.name)?.personalRank ?? b.overallRank ?? Infinity;
+            return ra - rb;
+        });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [players, entryIndex]);
+
     const selectedPlayer = selectedName ? players.find(p => p.name === selectedName) : null;
 
     const saveEntry = (updated) => {
-        setState(prev => {
-            const idx = findMatchingIndex(updated.name, buildNameIndex(prev.entries));
+        setBoards(prev => {
+            const boardState = prev[activeBoard];
+            const idx = findMatchingIndex(updated.name, buildNameIndex(boardState.entries));
             const entries = idx !== -1
-                ? prev.entries.map((e, i) => i === idx ? updated : e)
-                : [...prev.entries, updated];
+                ? boardState.entries.map((e, i) => i === idx ? updated : e)
+                : [...boardState.entries, updated];
             const next = { version: 1, entries };
-            scoutingState.saveState(next);
-            return next;
+            scoutingState.saveState(activeBoard, next);
+            return { ...prev, [activeBoard]: next };
         });
+    };
+
+    // Drag-and-drop reorder from ScoutingLeftPanel: renumber personalRank
+    // 1..N to match the new order, creating an entry for any player that
+    // didn't have one yet (a plain drag with no prior tag/notes).
+    const handleReorder = (newOrderedNames) => {
+        setBoards(prev => {
+            const boardState = prev[activeBoard];
+            const entries = [...boardState.entries];
+            newOrderedNames.forEach((name, i) => {
+                const idx = findMatchingIndex(name, buildNameIndex(entries));
+                if (idx !== -1) {
+                    entries[idx] = { ...entries[idx], personalRank: i + 1, updatedAt: new Date().toISOString() };
+                } else {
+                    const position = players.find(p => p.name === name)?.position ?? '';
+                    entries.push({ ...scoutingState.makeEntry(name, position), personalRank: i + 1, updatedAt: new Date().toISOString() });
+                }
+            });
+            const next = { version: 1, entries };
+            scoutingState.saveState(activeBoard, next);
+            return { ...prev, [activeBoard]: next };
+        });
+    };
+
+    const cycleBoard = (dir) => {
+        const idx = BOARDS.indexOf(activeBoard);
+        setActiveBoard(BOARDS[(idx + dir + BOARDS.length) % BOARDS.length]);
     };
 
     const handleExport = () => {
@@ -59,7 +113,7 @@ export default function ScoutingView({ players, columnOrder }) {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'scouting_overlay.csv';
+        a.download = `scouting_${activeBoard}.csv`;
         a.click();
     };
 
@@ -68,8 +122,21 @@ export default function ScoutingView({ players, columnOrder }) {
         if (!file) return;
         const text = await file.text();
         const imported = scoutingState.parseCSV(text);
-        scoutingState.saveState(imported);
-        setState(imported);
+        scoutingState.saveState(activeBoard, imported);
+        setBoards(prev => ({ ...prev, [activeBoard]: imported }));
+    };
+
+    // group,name,position — ready to drop into public/ or load via
+    // ?rankings=, unlike Export CSV above (which round-trips the full
+    // overlay: tags/notes/matrix numbers/etc. for re-import into Scouting).
+    const handleExportRankings = () => {
+        const csv = scoutingState.exportRankingsCSV(state);
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `rankings_${activeBoard}_scouting.csv`;
+        a.click();
     };
 
     return (
@@ -78,6 +145,21 @@ export default function ScoutingView({ players, columnOrder }) {
                 <div className="roster-brand">
                     <span className="roster-brand-name">SCOUTING</span>
                     <span className="roster-brand-sub">BUILD YOUR BOARD</span>
+                </div>
+
+                <div style={{ width: '20px' }} />
+
+                <div className="board-switcher">
+                    <span className="switcher-label">BOARD</span>
+                    <div className="switcher-buttons">
+                        {BOARDS.map(b => (
+                            <button
+                                key={b}
+                                className={`switcher-btn ${activeBoard === b ? 'active' : ''}`}
+                                onClick={() => setActiveBoard(b)}
+                            >{BOARD_LABELS[b]}</button>
+                        ))}
+                    </div>
                 </div>
 
                 <div className="roster-zoom-ctrl" style={{ gap: 6 }}>
@@ -94,6 +176,7 @@ export default function ScoutingView({ players, columnOrder }) {
                 <div style={{ flex: 1 }} />
 
                 <div className="top-actions">
+                    <button onClick={handleExportRankings} className="action-pill" title="group,name,position — ready for public/ or ?rankings=">Export as Board CSV</button>
                     <button onClick={handleExport} className="action-pill">Export CSV</button>
                     <label className="action-pill" style={{ cursor: 'pointer' }}>
                         Import CSV
@@ -102,22 +185,35 @@ export default function ScoutingView({ players, columnOrder }) {
                 </div>
             </div>
 
-            <CenterBoard
-                players={visiblePlayers}
-                onAction={(p) => setSelectedName(p.name)}
-                columnOrder={columnOrder}
-                isFocusMode={true}
-            />
+            <div className="scouting-layout">
+                <ScoutingLeftPanel
+                    orderedPlayers={orderedPlayers}
+                    entryFor={entryFor}
+                    selectedName={selectedName}
+                    onSelect={(p) => setSelectedName(p.name)}
+                    onReorder={handleReorder}
+                />
 
-            {selectedPlayer && (
+                <CenterBoard
+                    players={visiblePlayers}
+                    onAction={(p) => setSelectedName(p.name)}
+                    columnOrder={columnOrder}
+                    isFocusMode={true}
+                    alwaysClickable={true}
+                    hideDraftedStyle={true}
+                />
+
                 <ScoutingControls
-                    key={selectedPlayer.name}
+                    key={`${selectedName || 'none'}-${activeBoard}`}
                     player={selectedPlayer}
-                    entry={entryFor(selectedPlayer.name)}
+                    entry={selectedPlayer ? entryFor(selectedPlayer.name) : null}
                     onChange={saveEntry}
                     onClose={() => setSelectedName(null)}
+                    boardLabel={selectedPlayer ? BOARD_LABELS[activeBoard] : null}
+                    onPrevBoard={() => cycleBoard(-1)}
+                    onNextBoard={() => cycleBoard(1)}
                 />
-            )}
+            </div>
         </div>
     );
 }

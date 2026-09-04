@@ -6,7 +6,7 @@ import PlayerCard from './PlayerCard';
 // across Draft (onAction = draft the player), UDFA (onAction = sign them),
 // and Scouting (onAction = open tag/rank/notes controls) — see
 // /home/dev/.claude/plans/structured-growing-cat.md.
-const CenterBoard = ({ players, onAction, columnOrder = [], isFocusMode = false }) => {
+const CenterBoard = ({ players, onAction, columnOrder = [], isFocusMode = false, alwaysClickable = false, hideDraftedStyle = false }) => {
     const visiblePlayers = isFocusMode ? players : players.filter(p => !p.drafted);
 
     const rawPositions = [...new Set(players.map(p => p.position.split('.', 1)[0]))];
@@ -114,6 +114,8 @@ const CenterBoard = ({ players, onAction, columnOrder = [], isFocusMode = false 
                                                     isBest={isBest}
                                                     onClick={onAction}
                                                     slim={true}
+                                                    alwaysClickable={alwaysClickable}
+                                                    hideDraftedStyle={hideDraftedStyle}
                                                 />
                                             );
                                         })}

@@ -4,13 +4,13 @@ import { parseName } from '../utils/formatName';
 const isIntString = (val) => /^\d+$/.test(val);
 
 
-const PlayerCard = ({ player, isBest, onClick, slim, team, displayPick, noStrikethrough, isCurrent, traded, tradeNote }) => {
+const PlayerCard = ({ player, isBest, onClick, slim, team, displayPick, noStrikethrough, isCurrent, traded, tradeNote, alwaysClickable, hideDraftedStyle }) => {
     const { name, position, overallRank, drafted, draftedByUs, team: draftedTeam } = player;
 
     const classes = [
         'player-card',
         'anim-fade-in',
-        drafted ? 'drafted' : 'available',
+        drafted && !hideDraftedStyle ? 'drafted' : 'available',
         draftedByUs || (team === 'KC') || (draftedTeam === 'KC') ? 'ours' : '',
         isBest ? 'best' : '',
         slim ? 'slim' : '',
@@ -45,7 +45,7 @@ const PlayerCard = ({ player, isBest, onClick, slim, team, displayPick, noStrike
     }
 
     return (
-        <div className={classes} onClick={() => !drafted && onClick && onClick(player)}>
+        <div className={classes} onClick={() => (alwaysClickable || !drafted) && onClick && onClick(player)}>
             <div className="card-top">
                 <span className="player-rank">{rankDisplay}</span>
                 <div className="card-team-info">

@@ -2086,18 +2086,100 @@ body.export-mode .card-glow {
 }
 
 /* ── Scouting view ─────────────────────────────────────────────────────── */
-.scouting-controls {
-  position: fixed;
-  right: 20px;
-  bottom: 20px;
-  width: 320px;
-  max-width: calc(100vw - 40px);
-  background: var(--dark-bg, #1a1a1a);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 10px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
+/* Scouting: 3-column layout like Draft (ranking list | board | info card) —
+   replaced an earlier fixed-position floating info card that read as
+   randomly parked in a corner regardless of what else was on screen. */
+.scouting-layout {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.scouting-layout .left-panel {
+  width: 280px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--border-color);
+}
+
+.scouting-layout .center-board-container {
+  flex: 1;
+  min-width: 0;
+}
+
+.scouting-layout .right-panel {
+  width: 340px;
+  flex-shrink: 0;
+  border-left: 1px solid var(--border-color);
   padding: 14px 16px;
-  z-index: 950;
+  box-sizing: border-box;
+}
+
+.scouting-empty {
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  padding: 1rem 0;
+}
+
+/* My Board (ScoutingLeftPanel) — draggable ranked list */
+.scouting-rank-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.scouting-rank-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+
+.scouting-rank-row.drag-over {
+  background: rgba(255, 184, 28, 0.12);
+}
+
+.scouting-rank-row.dragging-source {
+  opacity: 0.4;
+}
+
+.scouting-rank-row.selected {
+  outline: 2px solid var(--gold-color);
+  outline-offset: -2px;
+  border-radius: 6px;
+}
+
+.scouting-rank-handle {
+  color: var(--text-dim);
+  font-size: 1.1rem;
+  padding: 0 2px;
+  touch-action: none;
+}
+
+.scouting-rank-num {
+  width: 26px;
+  flex-shrink: 0;
+  text-align: right;
+  color: var(--text-dim);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.scouting-rank-group {
+  flex-shrink: 0;
+  background: rgba(255, 184, 28, 0.12);
+  color: var(--gold-color);
+  font-size: 0.68rem;
+  font-weight: 800;
+  padding: 2px 5px;
+  border-radius: 4px;
+}
+
+.scouting-rank-card {
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
 }
 
 .scouting-controls-header {
@@ -2136,45 +2218,37 @@ body.export-mode .card-glow {
   border-color: var(--chiefs-gold, #ffb81c);
 }
 
-.scouting-controls-row {
+.scouting-board-pager {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 10px;
-}
-
-.scouting-controls-row label {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 0.72rem;
+  gap: 8px;
+  padding: 6px 0 12px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 0.78rem;
+  font-weight: 700;
   color: var(--text-dim);
   text-transform: uppercase;
-  font-weight: 700;
+  letter-spacing: 0.05em;
 }
 
-.scouting-controls-row input {
-  width: 70px;
+.scouting-board-pager button {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 6px;
   color: var(--text-main);
-  padding: 6px 8px;
+  cursor: pointer;
+  width: 26px;
+  height: 26px;
+  font-size: 1rem;
+  line-height: 1;
+  flex-shrink: 0;
 }
 
-.scouting-value-gap {
-  font-size: 0.78rem;
-  font-weight: 800;
-  color: var(--text-dim);
-}
-
-.scouting-value-gap.positive {
-  color: #4ade80;
-}
-
-.scouting-value-gap.negative {
-  color: var(--chiefs-red, #e31837);
+.scouting-board-pager button:hover {
+  border-color: var(--gold-color);
+  color: var(--gold-color);
 }
 
 .scouting-controls-notes {
@@ -2189,4 +2263,136 @@ body.export-mode .card-glow {
   font-family: inherit;
   resize: vertical;
   box-sizing: border-box;
+}
+
+.scouting-group-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.68rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.scouting-group-field input {
+  width: 100px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  color: var(--text-main);
+  padding: 6px 8px;
+  box-sizing: border-box;
+  text-transform: none;
+}
+
+.scouting-number-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.scouting-number-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.68rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.scouting-number-grid input {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  color: var(--text-main);
+  padding: 6px 8px;
+  box-sizing: border-box;
+}
+
+.scouting-list-field {
+  margin-bottom: 14px;
+}
+
+.scouting-list-label {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.scouting-bullet-list {
+  list-style: none;
+  margin: 0 0 6px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.scouting-bullet-list li {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-size: 0.82rem;
+}
+
+.scouting-bullet-list li::before {
+  content: '•';
+  color: var(--gold-color);
+  margin-right: 6px;
+}
+
+.scouting-bullet-list li span {
+  flex: 1;
+}
+
+.scouting-bullet-list li button {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 0.9rem;
+  line-height: 1;
+  padding: 0;
+}
+
+.scouting-bullet-list li button:hover {
+  color: var(--chiefs-red);
+}
+
+.scouting-list-add {
+  display: flex;
+  gap: 6px;
+}
+
+.scouting-list-add input {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  color: var(--text-main);
+  padding: 6px 8px;
+  font-size: 0.82rem;
+  box-sizing: border-box;
+}
+
+.scouting-list-add button {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  color: var(--text-main);
+  cursor: pointer;
+  width: 30px;
+  flex-shrink: 0;
+  font-weight: 700;
 }
