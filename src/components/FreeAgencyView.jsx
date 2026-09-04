@@ -54,6 +54,10 @@ export default function FreeAgencyView({ masterPlayers, draftedPlayers }) {
     const [state, setStateRaw] = useState(() => faState.loadState());
     const [isAddOpen, setIsAddOpen] = useState(false);
     const [addPositionPhase, setAddPositionPhase] = useState(null);
+    // Same control Roster has: this grid is desktop-wide by design, so on a
+    // phone it needs shrinking to be navigable. FA renders the identical
+    // DepthChartGrid but was missing it.
+    const [zoomLevel, setZoomLevel] = useState(1);
 
     const setState = useCallback(next => {
         setStateRaw(prev => {
@@ -221,6 +225,20 @@ export default function FreeAgencyView({ masterPlayers, draftedPlayers }) {
 
                 <div style={{ flex: 1 }} />
 
+                <div className="roster-zoom-ctrl">
+                    <button
+                        onClick={() => setZoomLevel(z => Math.max(0.5, +(z - 0.1).toFixed(2)))}
+                        className="rv-ctrl-btn"
+                        title="Zoom out"
+                    >−</button>
+                    <span className="rv-zoom-label">{Math.round(zoomLevel * 100)}%</span>
+                    <button
+                        onClick={() => setZoomLevel(z => Math.min(1, +(z + 0.1).toFixed(2)))}
+                        className="rv-ctrl-btn"
+                        title="Zoom in"
+                    >+</button>
+                </div>
+
                 <div className="top-actions">
                     <button onClick={handleSyncPositionsFromRoster} className="action-pill">Import Positions from Roster</button>
                     <button onClick={() => setIsAddOpen(true)} className="action-pill">+ Add Candidate</button>
@@ -245,6 +263,7 @@ export default function FreeAgencyView({ masterPlayers, draftedPlayers }) {
                 onSlotsChange={handleSlotsChange}
                 onAddPosition={setAddPositionPhase}
                 showNeeds={false}
+                zoomLevel={zoomLevel}
             />
 
             <AddCandidateModal isOpen={isAddOpen} onClose={() => setIsAddOpen(false)} onAdd={handleAddCandidate} />

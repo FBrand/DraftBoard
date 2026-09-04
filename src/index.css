@@ -2449,3 +2449,68 @@ body.export-mode .card-glow {
   flex-shrink: 0;
   font-weight: 700;
 }
+
+/* ── Mobile layout fixes ──────────────────────────────────────────────────
+   .app-container hides overflow, so anything wider than the viewport is
+   silently CLIPPED rather than scrollable — content ends up unreachable
+   instead of merely awkward. These rules make the offenders either scroll
+   or stack. */
+
+@media (max-width: 1024px) {
+
+  /* Five tabs don't fit a phone; without this the first tab is cut off and
+     there's no way to scroll to it. */
+  .view-tabbar {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-left: 0;
+  }
+
+  .view-tab {
+    flex-shrink: 0;
+  }
+
+  /* Scouting's three columns (ranked list | board | info card) stack, since
+     side by side on a phone pushes the board entirely off-screen. */
+  .scouting-layout {
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  .scouting-layout .left-panel,
+  .scouting-layout .right-panel {
+    width: 100%;
+    flex-shrink: 0;
+    border-left: none;
+    border-right: none;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .scouting-layout .left-panel {
+    max-height: 45vh;
+  }
+
+  .scouting-layout .center-board-container {
+    flex-shrink: 0;
+    min-height: 60vh;
+  }
+}
+
+@media (max-width: 600px) {
+
+  /* Centered bootstrap screen overflowed both edges at phone width, putting
+     half of "INITIALIZE ROSTER" and part of its buttons off-screen. */
+  .roster-bootstrap {
+    padding: 20px;
+    text-align: center;
+  }
+
+  .roster-bootstrap-title {
+    font-size: 1.4rem;
+  }
+
+  /* Brand block was overlapping the toolbar buttons next to it. */
+  .roster-brand {
+    flex-shrink: 0;
+  }
+}
