@@ -35,7 +35,9 @@ export const exportBoardToImage = async (elementId = 'center-board-container') =
 
     } catch (err) {
         console.error('Image Export failed:', err);
-        alert('Failed to generate image. Please try the "Print Board" (Ctrl+P) method instead.');
+        // Rethrown rather than alert()ed so the calling component can surface
+        // it through the app's own Toast, like every other error path.
+        throw new Error('Could not generate the board image. Try "Print Board" (Ctrl+P) instead.');
     } finally {
         document.body.classList.remove('export-mode');
     }

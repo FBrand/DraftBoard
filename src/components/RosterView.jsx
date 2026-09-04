@@ -8,6 +8,7 @@ import * as faState from '../utils/faState';
 import UnrankedModal from './UnrankedModal';
 import DepthChartGrid from './DepthChartGrid';
 import { TextPromptDialog, ConfirmDialog } from './Dialogs';
+import Toast from './Toast';
 
 function CounterBox({ label, val, max, status, isLast, maxLabel }) {
     return (
@@ -35,6 +36,10 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
     const [pastedHtml, setPastedHtml] = useState('');
     const [addPositionPhase, setAddPositionPhase] = useState(null); // 'offense' | 'defense' | null
     const [showResetConfirm, setShowResetConfirm] = useState(false);
+    const [toast, setToast] = useState(null); // { message, tone }
+    // Stable identity: Toast's auto-dismiss timer keys off this, so an inline
+    // arrow would restart the countdown on every render.
+    const dismissToast = useCallback(() => setToast(null), []);
     // The depth-chart grid is desktop-wide by design (many position columns);
     // on a phone that means horizontal scrolling to reach most slots. `zoom`
     // (not transform:scale, which wouldn't shrink the actual scrollable
@@ -204,7 +209,7 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
             setState(await fetchAdapterRoster());
             setBootstrapping(false);
         } catch (err) {
-            alert('Failed to fetch: ' + err.message);
+            setToast({ message: 'Failed to fetch roster: ' + err.message, tone: 'error' });
             setBootstrapping(false);
         }
     };
@@ -215,7 +220,7 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
             setState(await fetchLocalRoster());
             setBootstrapping(false);
         } catch (err) {
-            alert('Failed to load: ' + err.message);
+            setToast({ message: 'Failed to load default roster: ' + err.message, tone: 'error' });
             setBootstrapping(false);
         }
     };
@@ -241,37 +246,67 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
         const ourPicks = (draftedPlayers || []).filter(p => p.draftedByUs && (p.pickNumber || 0) <= 257);
         const udfaSignings = (draftedPlayers || []).filter(p => (p.pickNumber || 0) > 257);
 
-        setState(prev => {
-            const next = { ...prev, depthChart: { ...prev.depthChart } };
-            const dc = next.depthChart;
-            const allChips = [...prev.positionConfig.offense, ...prev.positionConfig.defense];
+        // Computed from `state` directly and applied as a plain value, NOT
+        // inside a setState updater: the updater is deferred to the render
+        // phase (and may run more than once), so counters mutated in there
+        // can't be read back here to build the summary — an earlier version
+        // did exactly that and reported stale/doubled numbers.
+        let placed = 0, noRow = 0, rowFull = 0, alreadyPresent = 0;
 
-            const placeInFirstEmpty53 = (name, declaredPos) => {
-                if (!name || !declaredPos) return;
-                const rowId = resolvePosition(declaredPos, prev.positionConfig, dc);
-                if (!rowId) return; // no matching row — leave for manual placement, don't guess a new one
-                const chip = allChips.find(p => p.id === rowId);
-                const limit53 = chip?.slots53 ?? 2;
-                const arr = dc[rowId] = [...(dc[rowId] ?? [])];
-                for (let i = 0; i < limit53; i++) {
-                    if (!arr[i]) { arr[i] = makeSlot(name, '53'); return; }
-                }
-                // Row's 53-man slots are all full — don't overflow into PS/reserve
-                // implicitly, don't overwrite; this player is simply skipped this run.
-            };
+        const next = { ...state, depthChart: { ...state.depthChart } };
+        const dc = next.depthChart;
+        const allChips = [...state.positionConfig.offense, ...state.positionConfig.defense];
 
-            if (fa?.depthChart) {
-                const faChips = [...(fa.positionConfig?.offense ?? []), ...(fa.positionConfig?.defense ?? [])];
-                Object.entries(fa.depthChart).forEach(([faRowId, slots]) => {
-                    const label = faChips.find(p => p.id === faRowId)?.label ?? faRowId;
-                    (slots || []).forEach(s => { if (s) placeInFirstEmpty53(s.name, label); });
-                });
+        const isAlreadyOnRoster = (name) =>
+            Object.values(dc).some(slots => (slots ?? []).some(s => s?.name === name)) ||
+            (next.reserve ?? []).includes(name) ||
+            (next.cuts ?? []).includes(name);
+
+        const placeInFirstEmpty53 = (name, declaredPos) => {
+            if (!name || !declaredPos) return;
+            if (isAlreadyOnRoster(name)) { alreadyPresent++; return; }
+            const rowId = resolvePosition(declaredPos, state.positionConfig, dc);
+            if (!rowId) { noRow++; return; } // no matching row — leave for manual placement, don't guess a new one
+            const chip = allChips.find(p => p.id === rowId);
+            const limit53 = chip?.slots53 ?? 2;
+            const arr = dc[rowId] = [...(dc[rowId] ?? [])];
+            for (let i = 0; i < limit53; i++) {
+                if (!arr[i]) { arr[i] = makeSlot(name, '53'); placed++; return; }
             }
-            ourPicks.forEach(p => placeInFirstEmpty53(p.name, p.position));
-            udfaSignings.forEach(p => placeInFirstEmpty53(p.name, p.position));
+            // Row's 53-man slots are all full — don't overflow into PS/reserve
+            // implicitly, don't overwrite; this player is simply skipped this run.
+            rowFull++;
+        };
 
-            return next;
-        });
+        if (fa?.depthChart) {
+            const faChips = [...(fa.positionConfig?.offense ?? []), ...(fa.positionConfig?.defense ?? [])];
+            Object.entries(fa.depthChart).forEach(([faRowId, slots]) => {
+                const label = faChips.find(p => p.id === faRowId)?.label ?? faRowId;
+                (slots || []).forEach(s => { if (s) placeInFirstEmpty53(s.name, label); });
+            });
+        }
+        ourPicks.forEach(p => placeInFirstEmpty53(p.name, p.position));
+        udfaSignings.forEach(p => placeInFirstEmpty53(p.name, p.position));
+
+        if (placed > 0) setState(next);
+
+        const skips = [
+            noRow && `${noRow} had no matching position row`,
+            rowFull && `${rowFull} had no free 53-man slot`,
+            alreadyPresent && `${alreadyPresent} already on the roster`,
+        ].filter(Boolean);
+
+        setToast(placed > 0
+            ? {
+                message: `Placed ${placed} player${placed === 1 ? '' : 's'}` + (skips.length ? ` — skipped: ${skips.join(', ')}.` : '.'),
+                tone: 'success',
+            }
+            : {
+                message: skips.length
+                    ? `Nothing placed — ${skips.join(', ')}.`
+                    : 'Nothing to sync — no FA candidates, draft picks, or UDFA signings found.',
+                tone: 'info',
+            });
     };
 
     const handlePasteHtml = () => {
@@ -280,7 +315,7 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
             setState(parseHTMLToRoster(pastedHtml));
             setBootstrapping(false);
             setIsPasting(false);
-        } catch (err) { alert('Failed: ' + err.message); }
+        } catch (err) { setToast({ message: 'Could not parse pasted roster: ' + err.message, tone: 'error' }); }
     };
 
     if (bootstrapping && !state.positionConfig.offense.length) {
@@ -317,6 +352,7 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
                 <div className="roster-bootstrap-hint">
                     Automate your roster setup by fetching the latest depth chart directly,<br />or use your manual baseline files.
                 </div>
+                <Toast message={toast?.message} tone={toast?.tone} onDismiss={dismissToast} />
             </div>
         );
     }
@@ -428,6 +464,8 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
                     onCancel={() => setShowResetConfirm(false)}
                 />
             )}
+
+            <Toast message={toast?.message} tone={toast?.tone} onDismiss={dismissToast} />
         </div>
     );
 }

@@ -1,11 +1,14 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import PlayerCard from './PlayerCard';
+import Toast from './Toast';
 import { serializeDraftState, deserializeDraftState, getExportFilename } from '../utils/sessionSerializer';
 
 const RightPanel = ({ remotePicks, draftedPlayers, currentPick, ourPicksLeft, onImport }) => {
     const scrollRef = useRef(null);
     const currentPickRef = useRef(null);
     const fileInputRef = useRef(null);
+    const [toast, setToast] = useState(null);
+    const dismissToast = useCallback(() => setToast(null), []);
 
     // Auto-scroll to current pick — scoped to this panel's own scroll
     // container. scrollIntoView() walks up and scrolls EVERY scrollable
@@ -56,12 +59,13 @@ const RightPanel = ({ remotePicks, draftedPlayers, currentPick, ourPicksLeft, on
                 const importedState = deserializeDraftState(text);
                 if (importedState.draftedPlayers.length > 0 || importedState.ourPicksLeft.length > 0) {
                     onImport(importedState);
+                    setToast({ message: `Loaded session — ${importedState.draftedPlayers.length} picks.`, tone: 'success' });
                 } else {
-                    alert("No valid draft data found in file.");
+                    setToast({ message: 'No valid draft data found in that file.', tone: 'error' });
                 }
             } catch (err) {
                 console.error("Parse error:", err);
-                alert("Failed to parse draft file. Please ensure it's a valid CSV.");
+                setToast({ message: "Couldn't parse that draft file — expected a session CSV.", tone: 'error' });
             }
         };
         reader.readAsText(file);
@@ -131,6 +135,8 @@ const RightPanel = ({ remotePicks, draftedPlayers, currentPick, ourPicksLeft, on
                     onChange={handleFileChange}
                 />
             </div>
+
+            <Toast message={toast?.message} tone={toast?.tone} onDismiss={dismissToast} />
         </div>
     );
 };

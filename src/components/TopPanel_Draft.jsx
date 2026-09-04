@@ -1,13 +1,23 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { exportBoardToImage } from '../utils/exportBoard';
+import Toast from './Toast';
 
 const TopPanel = ({ currentPick, currentPickStatus, ourPicksLeft, onUndo, onUpdatePicks, onReset, isLiveSync, canLiveSync, toggleLiveSync, isFocusMode, onToggleFocus }) => {
     const [isExporting, setIsExporting] = useState(false);
+    const [toast, setToast] = useState(null);
+    const dismissToast = useCallback(() => setToast(null), []);
 
+    // finally, not a plain sequence: a throwing export used to leave the
+    // button stuck in its "exporting" state permanently.
     const handleExport = async () => {
         setIsExporting(true);
-        await exportBoardToImage();
-        setIsExporting(false);
+        try {
+            await exportBoardToImage();
+        } catch (err) {
+            setToast({ message: err.message, tone: 'error' });
+        } finally {
+            setIsExporting(false);
+        }
     };
 
     const updateRankingsParam = (newPath) => {
@@ -79,6 +89,8 @@ const TopPanel = ({ currentPick, currentPickStatus, ourPicksLeft, onUndo, onUpda
                     <button className="action-pill focus-pill" onClick={onToggleFocus}>⛶ Exit Full Board</button>
                     <button className="action-pill undo-pill" onClick={onUndo}>Undo</button>
                 </div>
+
+                <Toast message={toast?.message} tone={toast?.tone} onDismiss={dismissToast} />
             </div>
         );
     }
@@ -145,6 +157,8 @@ const TopPanel = ({ currentPick, currentPickStatus, ourPicksLeft, onUndo, onUpda
                 <button className="action-pill focus-pill" onClick={onToggleFocus}>⛶ Full Board</button>
                 <button className="action-pill reset-pill" onClick={onReset}>Reset All</button>
             </div>
+
+            <Toast message={toast?.message} tone={toast?.tone} onDismiss={dismissToast} />
         </div>
     );
 };
