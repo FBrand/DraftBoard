@@ -76,8 +76,11 @@ test.describe('scouting', () => {
         const card = page.locator('.center-board-container .player-card').first();
         const name = (await card.locator('.player-name').innerText()).trim();
         await card.click();
-        await page.locator('.scouting-group-field input').fill('1.3');
-        await page.locator('.scouting-group-field input').blur();
+        // Round and tier are separate inputs; together they make "1.3".
+        const groupInputs = page.locator('.scouting-group-fields input');
+        await groupInputs.first().fill('1');
+        await groupInputs.nth(1).fill('3');
+        await groupInputs.nth(1).blur();
         await page.waitForTimeout(500);
 
         // The group badge follows the player, who is no longer top of the list —

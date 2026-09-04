@@ -75,13 +75,10 @@ export default function FreeAgencyView({ masterPlayers, draftedPlayers, onInfoOp
         if (!seeding) return;
         let cancelled = false;
         (async () => {
-            try {
-                const seeded = await faState.fetchSeasonStartRoster();
-                if (!cancelled) history.reset(seeded);
-            } catch {
-                /* leave FA empty */
-            } finally {
-                if (!cancelled) setSeeding(false);
+            const seeded = await faState.ensureSeeded();
+            if (!cancelled) {
+                if (seeded) history.reset(seeded);
+                setSeeding(false);
             }
         })();
         return () => { cancelled = true; };

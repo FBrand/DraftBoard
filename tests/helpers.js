@@ -57,12 +57,10 @@ export async function ensureRoster(page) {
             await gotoTab(page, 'roster');
         }
     } else {
-        const bootstrap = page.getByRole('button', { name: 'Load Default Roster' });
-        if (await bootstrap.count()) {
-            await bootstrap.click();
-            await page.waitForSelector('.roster-grid', { timeout: 30_000 });
-            cachedRosterState = await page.evaluate(k => localStorage.getItem(k), STORAGE_KEYS.roster);
-        }
+        // Roster loads itself now — no button to press first.
+        await page.waitForSelector('.roster-grid', { timeout: 30_000 });
+        await page.waitForTimeout(600);
+        cachedRosterState = await page.evaluate(k => localStorage.getItem(k), STORAGE_KEYS.roster);
     }
 
     await expect(page.locator('.roster-grid').first()).toBeVisible();

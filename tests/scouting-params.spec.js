@@ -23,8 +23,11 @@ test.describe('scouting fields drive the real board parameters', () => {
 
         // Total Rank reflects the player's current rank instead of an empty box.
         await expect(page.locator('.scouting-number-grid input').first()).toHaveValue(shownRank);
-        // Round.Group reflects the player's current tier.
-        await expect(page.locator('.scouting-group-field input')).not.toHaveValue('');
+        // Round and tier are two inputs now, both prefilled from the player's
+        // current tier rather than shown blank.
+        const groupInputs = page.locator('.scouting-group-fields input');
+        await expect(groupInputs).toHaveCount(2);
+        await expect(groupInputs.first()).not.toHaveValue('');
         // Position rank is derived, so it's shown but not typeable.
         await expect(page.locator('.scouting-derived-value')).toHaveCount(1);
         await expect(page.locator('.scouting-derived-value')).not.toBeEmpty();
@@ -81,12 +84,13 @@ test.describe('scouting fields drive the real board parameters', () => {
         const name = (await card.innerText()).split('\n').pop().trim();
         await card.click();
 
-        const groupInput = page.locator('.scouting-group-field input');
-        const originalGroup = await groupInput.inputValue();
+        const groupInputs = page.locator('.scouting-group-fields input');
+        const originalGroup = await groupInputs.first().inputValue();
 
         // Move the player to a clearly different round.
-        await groupInput.fill('7.1');
-        await groupInput.blur();
+        await groupInputs.first().fill('7');
+        await groupInputs.nth(1).fill('1');
+        await groupInputs.nth(1).blur();
         await page.waitForTimeout(600);
 
         // The board now renders that player under round 7, not their old one.
@@ -102,7 +106,7 @@ test.describe('scouting fields drive the real board parameters', () => {
         await expect(page.locator('.scouting-rank-row', { hasText: name })
             .locator('.scouting-rank-group')).toHaveText('7.1');
 
-        expect(originalGroup).not.toBe('7.1');
+        expect(originalGroup).not.toBe('7');
         expect(errors).toEqual([]);
     });
 
@@ -172,8 +176,10 @@ test.describe('scouting fields drive the real board parameters', () => {
         const card = page.locator('.center-board-container .player-card').first();
         const name = (await card.innerText()).split('\n').pop().trim();
         await card.click();
-        await page.locator('.scouting-group-field input').fill('7.1');
-        await page.locator('.scouting-group-field input').blur();
+        const gi = page.locator('.scouting-group-fields input');
+        await gi.first().fill('7');
+        await gi.nth(1).fill('1');
+        await gi.nth(1).blur();
         await page.waitForTimeout(500);
 
         await page.locator('.top-actions .app-menu-trigger').click();

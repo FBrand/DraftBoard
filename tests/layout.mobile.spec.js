@@ -54,29 +54,32 @@ test.describe('mobile layout', () => {
         // derived from the board's ordering and rendered as text.
         await expect(box.locator('.scouting-number-grid input')).toHaveCount(3);
         await expect(box.locator('.scouting-derived-value')).toHaveCount(1);
-        await expect(box.locator('.scouting-group-field')).toHaveCount(1);
+        await expect(box.locator('.scouting-group-fields input')).toHaveCount(2);
 
         await page.keyboard.press('Escape');
         await expect(box).toHaveCount(0);
     });
 
-    test('the roster bootstrap screen fits the viewport', async ({ page }) => {
-        // The screen only appears in clean mode now that seeded mode loads the
-        // shipped roster, so put the app in clean mode rather than skipping —
-        // a test that always skips silently covers nothing.
-        await openApp(page);
-        await page.evaluate(() => localStorage.setItem('draftboard_init_mode', 'clean'));
-        await page.reload();
-        await gotoTab(page, 'roster');
-        await page.waitForTimeout(800);
+    test('the roster toolbar fits the viewport', async ({ page }) => {
+        // Roster no longer has a bootstrap screen of its own — it comes up as
+        // a grid like every other phase — so this guards the toolbar that
+        // replaced it.
+        await openApp(page, 'roster');
+        await page.waitForTimeout(1800);
 
-        await expect(page.locator('.roster-bootstrap-title')).toBeVisible();
+        await expect(page.locator('.roster-grid').first()).toBeVisible();
 
-        const vw = page.viewportSize().width;
-        for (const sel of ['.roster-bootstrap-title', '.roster-bootstrap-actions']) {
-            const box = await page.locator(sel).boundingBox();
-            expect(box.x).toBeGreaterThanOrEqual(-1);
-            expect(box.x + box.width).toBeLessThanOrEqual(vw + 1);
+        // The toolbar is deliberately wider than a phone and scrolls
+        // horizontally, so asserting it fits would be wrong. What matters is
+        // that it scrolls rather than being clipped with controls unreachable,
+        // and that the first thing in it starts on screen.
+        const panel = page.locator('.roster-view .top-panel').first();
+        if (await panel.evaluate(el => el.scrollWidth > el.clientWidth)) {
+            expect(await panel.evaluate(el => getComputedStyle(el).overflowX)).toBe('auto');
         }
+
+        const brand = await page.locator('.roster-brand').first().boundingBox();
+        expect(brand.x).toBeGreaterThanOrEqual(-1);
+        expect(brand.x).toBeLessThan(page.viewportSize().width);
     });
 });

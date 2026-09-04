@@ -69,18 +69,36 @@ Each stage has its own view, data model, and actions. Navigation between stages 
 ---
 
 ### Stage 1 — Free Agency
-**Goal:** Track FA signings and budget impact  
-- Available/signed/released FA player list
-- Contract value tracking per player
-- Position need chart updated as FAs are signed
-- Board shows remaining holes after FA
+**Goal:** Show needs and the candidates who could fill them  
+- ✅ Seeded from last season's roster — the squad you actually carry in
+- ✅ Position need chart, computed against the real roster
+- ✅ Board shows remaining holes after FA
+- ~~Contract value tracking per player~~ — **out of scope.** Cap and contract
+  context is not something this tool tries to model; that conversation happens
+  elsewhere. The stage is a needs-and-candidates snapshot, not a cap sheet.
 
 ### Stage 2 — Scouting
 **Goal:** Rank and tag draft prospects before the draft  
 - View/edit personal rankings per position
 - Tag players: ✓ like, ✗ avoid, ? monitor
-- Compare consensus vs personal rank (value gap)
-- Mock draft simulation mode
+- ~~Compare consensus vs personal rank (value gap)~~ — dropped deliberately.
+  Scouting *builds* boards; each analyst has their own board and player pool,
+  so there is no single "personal vs consensus" axis to compare along.
+- ~~Mock draft simulation mode~~ — **dropped, not wanted.**
+
+**Proposed (mid-term): replace the board grid in Scouting with a grouped
+list.** The board grid is the right shape for *drafting* (position columns ×
+round rows, "who's left at each spot"). For *scouting* the natural unit is a
+group of comparable players — by position, or by school when you're working
+through one team's prospects. A grouped list would also give each player more
+horizontal room for the evaluation fields the grid can't show.
+
+⚠️ **Blocked on data, not UI.** Grouping by position works today. Grouping by
+school does not: no school/college field exists anywhere in the app. The
+rankings CSVs are `group,name,position` only, and `college` appears solely as
+a documented field in `services/DraftService.js`'s interface contract, with no
+data behind it. This needs a new column in the rankings files (and the
+generator that produces them) before the view can be built.
 
 ### Stage 3 — Draft (current app)
 **Goal:** Live draft board with pick tracking  
@@ -149,7 +167,11 @@ Enable content creators/experts to log in, host public draft boards/rosters, and
 - **Real-Time Draft Sync (Follow Function)**:
   - One expert can "run" the draft live for all active viewers.
   - Viewers can opt to "follow" an expert's draft state, syncing their local view in real-time.
-- **Player Report Cards**: Detailed player breakdown sheets/cards with grades, scouting highlights, and fit assessment.
+- ~~**Player Report Cards**~~ — ✅ **done, and considered sufficient.** The info
+  card carries tags, total/position rank, the athletic-matrix numbers, and
+  strengths/weaknesses/notes from every board at once. Editable in Scouting,
+  read-only everywhere else (right-click or long-press a player). No further
+  "grades and fit assessment" layer is planned.
 - **Architecture/Backend**:
   - Requires a persistent database (e.g., Supabase, Firebase, or a light SQL backend).
   - WebSockets or lightweight subscription channels for real-time draft pick dispatching.
@@ -170,4 +192,14 @@ _Updated 2026-09-03 against actual code, not just prior status — re-verify bef
 8. 🔲 Stage 1: FA tracker
 9. 🔶 Stage 4: UDFA — folded into Roster's "Sign Player" flow (`UnrankedModal`'s `postdraft` mode) rather than a separate view; functionally covered, not a standalone UI
 10. 🔶 Stage 5: Roster builder — substantially built and near-parity with Draft: drag-and-drop 53-man/practice-squad/IR/cuts, CSV import/export, Ourlads auto-fetch, position config. Remaining work is item 4 (mobile DnD) and general polish, not core functionality
-11. 🔲 Long-Term: Expert Authentication & Real-Time Follow Sync (Database backed)
+11. 🔲 Mid-Term: Multi-season. Seasons are a **stack** — only the current one is
+    writable, earlier ones are read-only, and you can scrap the current season to
+    drop back to the previous one. Nothing ever edits a season a later one was
+    derived from, because going back means the later one no longer exists.
+    Per-player provenance already exists in `roster.csv` (`:FA`, `:UDFA`,
+    `:24/1`), and `roster_2025_end.csv` is derived from it — that suffix is the
+    seed of the model. Wants the same "state belongs to a scope" change as item
+    13, so they're cheaper built together.
+12. 🔲 Mid-Term: Scouting grouped list (see Stage 2 above) — blocked on adding a
+    school/college column to the rankings data.
+13. 🔲 Long-Term: Expert Authentication & Real-Time Follow Sync (Database backed)

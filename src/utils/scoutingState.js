@@ -25,6 +25,7 @@
  * re-ranks when you page between analysts.
  */
 import { parseCsvLine, csvField } from './csvUtils';
+import { buildNameIndex, findMatchingIndex } from './nameMatcher';
 
 export const BOARDS = ['consensus', 'dan', 'ryan'];
 export const BOARD_LABELS = { consensus: 'Consensus', dan: 'Dan', ryan: 'Ryan' };
@@ -91,6 +92,36 @@ export function loadState(board) {
         }
     } catch { /* ignore */ }
     return { version: 1, entries: [] };
+}
+
+/**
+ * Turns the rankings file's `*` favourites into real `like` tags on that
+ * board, once, for players that have no entry yet.
+ *
+ * The star and the like tag were two mechanics for one idea: the star was
+ * read straight off the CSV at render time while the tag lived in the board,
+ * so un-liking a starred player did nothing and the two could disagree. Now
+ * the star is only a *seed* — after this runs, the board's tag is the single
+ * source of truth, and clearing it actually clears it.
+ */
+export function seedFavourites(board, players) {
+    if (!players?.length) return false;
+    const state = loadState(board);
+    const entries = [...state.entries];
+    const index = buildNameIndex(entries);
+    let changed = false;
+
+    players.forEach(p => {
+        if (!p?.isFavorite) return;
+        if (findMatchingIndex(p.name, index) !== -1) return; // already has an entry
+        const seeded = { ...makeEntry(p.name, p.position), tag: 'like' };
+        entries.push(seeded);
+        index.push(...buildNameIndex([seeded]).map(e => ({ ...e, index: entries.length - 1 })));
+        changed = true;
+    });
+
+    if (changed) saveState(board, { version: 1, entries });
+    return changed;
 }
 
 export function saveState(board, state) {

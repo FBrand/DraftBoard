@@ -1,10 +1,11 @@
 import React, { useRef } from 'react';
 import { parseName } from '../utils/formatName';
+import { tagById } from '../utils/playerTags';
 
 const isIntString = (val) => /^\d+$/.test(val);
 const LONG_PRESS_MS = 500;
 
-const PlayerCard = ({ player, isBest, onClick, slim, team, displayPick, noStrikethrough, isCurrent, traded, tradeNote, alwaysClickable, hideDraftedStyle, onInfoOpen }) => {
+const PlayerCard = ({ player, isBest, onClick, slim, team, displayPick, noStrikethrough, isCurrent, traded, tradeNote, alwaysClickable, hideDraftedStyle, onInfoOpen, tag }) => {
     const { name, position, overallRank, drafted, draftedByUs, team: draftedTeam } = player;
 
     // Secondary-click (desktop) / long-press (touch) opens the scouting info
@@ -112,7 +113,14 @@ const PlayerCard = ({ player, isBest, onClick, slim, team, displayPick, noStrike
                 </div>
                 {!slim && <div className="player-pos">{position}</div>}
             </div>
-            {player.isFavorite && <span className="fav-star">★</span>}
+            {(() => {
+                // The rankings-file "*" is seeded into the board as a real
+                // like tag, so there is one thing to read; see playerTags.js.
+                const marker = tagById(tag);
+                return marker && (
+                    <span className={`player-tag-marker tag-${marker.id}`} title={marker.title}>{marker.symbol}</span>
+                );
+            })()}
             {(draftedByUs || team === 'KC') && <div className="card-glow"></div>}
         </div>
     );

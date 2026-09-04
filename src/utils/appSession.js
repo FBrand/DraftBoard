@@ -26,6 +26,7 @@ const KEYS = [
     'draft_board_view',        // last active tab
     'draft_board_focus',       // Draft's focus-mode toggle
     'athletic_matrix_url',     // configurable Athletic Matrix link (appLinks.js)
+    'athletic_matrix_v1',      // per-player matrix scores, shared across boards
 ];
 
 export const SESSION_VERSION = 1;

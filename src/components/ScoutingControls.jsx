@@ -1,12 +1,11 @@
 import React, { useState } from 'react';
 import useEscapeKey from '../hooks/useEscapeKey';
 import { getAthleticMatrixUrl } from '../utils/appLinks';
+import { PLAYER_TAGS } from '../utils/playerTags';
+import * as athleticMatrix from '../utils/athleticMatrix';
 
-const TAGS = [
-    { id: 'like', label: '✓ Like' },
-    { id: 'avoid', label: '✗ Avoid' },
-    { id: 'monitor', label: '? Monitor' },
-];
+// Shared with the board markers so a tag looks the same wherever it appears.
+const TAGS = PLAYER_TAGS.map(t => ({ id: t.id, label: `${t.symbol} ${t.label}` }));
 
 // derived: read off the board's ordering (boardRanking.js), not stored — so
 // they're shown from the player, and Total Rank is the only one you can type
@@ -121,13 +120,20 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
     // (boardRanking.js); typing a total rank moves the player, which
     // re-derives both. The athletic-matrix numbers have no source and stay
     // empty until filled in.
+    // The matrix is a measurement of the player, so it lives in one shared
+    // store rather than being copied onto each analyst's board.
+    const matrix = athleticMatrix.getScores(player?.name);
     const [numbers, setNumbers] = useState({
         personalRank: player?.overallRank ?? '',
         positionRank: player?.positionRank ?? '',
-        athleticMatrixTotal: entry?.athleticMatrixTotal ?? '',
-        athleticMatrixPosition: entry?.athleticMatrixPosition ?? '',
+        athleticMatrixTotal: matrix.total ?? '',
+        athleticMatrixPosition: matrix.position ?? '',
     });
-    const [group, setGroup] = useState(entry?.group ?? player?.group ?? '');
+    // Round and tier are two separate inputs; the board stores them joined as
+    // 1.3, which is the form rankings.csv uses.
+    const [round, tier] = String(entry?.group ?? player?.group ?? '').split('.');
+    const [roundVal, setRoundVal] = useState(round ?? '');
+    const [tierVal, setTierVal] = useState(tier ?? '');
     // Only the modal presentation is dismissable — the panel variant is a
     // permanent column, not something Escape should blank out.
     useEscapeKey(onClose, variant === 'modal' && !!player);
@@ -141,6 +147,25 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
             </div>
         );
     }
+
+    // Round and tier are edited separately but stored joined, because that is
+    // the form rankings.csv uses and boardRanking.js sorts by. A round with no
+    // tier is stored bare ("2"), which the sort already treats as tier 0.
+    // Matrix numbers go to the shared per-player store; everything else on
+    // this card belongs to the board being edited.
+    const commitNumber = (field, raw) => {
+        const value = raw === '' ? null : parseInt(raw, 10);
+        if (field.key === 'athleticMatrixTotal') athleticMatrix.setScore(player.name, 'total', value);
+        else if (field.key === 'athleticMatrixPosition') athleticMatrix.setScore(player.name, 'position', value);
+        else commit({ [field.key]: value });
+    };
+
+    const commitGroup = (r, t) => {
+        const round = String(r ?? '').trim();
+        const tier = String(t ?? '').trim();
+        if (!round) return commit({ group: null });
+        commit({ group: tier ? `${round}.${tier}` : round });
+    };
 
     const commit = (patch) => {
         onChange({
@@ -162,7 +187,7 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
     // Credit line for the Athletic Matrix, shown once a player actually has
     // matrix numbers on them — attribution where the data is displayed,
     // rather than an advert on every card.
-    const hasMatrixValues = entry?.athleticMatrixTotal != null || entry?.athleticMatrixPosition != null;
+    const hasMatrixValues = matrix.total != null || matrix.position != null;
 
     // Read-only cards show only what's actually filled in, so an untouched
     // player would otherwise render as an empty box with no explanation.
@@ -234,7 +259,11 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
                             // board's ordering, so every player on a board has
                             // both; only the athletic-matrix numbers can be
                             // genuinely unset.
-                            const val = f.derived ? player[f.derived] : entry?.[f.key];
+                            const val = f.derived
+                                ? player[f.derived]
+                                : f.key === 'athleticMatrixTotal' ? matrix.total
+                                : f.key === 'athleticMatrixPosition' ? matrix.position
+                                : entry?.[f.key];
                             const isSet = val != null && val !== '' && val !== '-';
                             return (
                                 <div key={f.key} className="scouting-readonly-field">
@@ -248,16 +277,30 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
                     </div>
                 ) : (
                     <>
-                        <label className="scouting-group-field">
-                            Round.Group
-                            <input
-                                type="text"
-                                value={group}
-                                placeholder="e.g. 1.3"
-                                onChange={e => setGroup(e.target.value)}
-                                onBlur={() => commit({ group: group.trim() || null })}
-                            />
-                        </label>
+                        <div className="scouting-group-fields">
+                            <label className="scouting-group-field">
+                                Round
+                                <input
+                                    type="number"
+                                    min="1"
+                                    value={roundVal}
+                                    placeholder="1"
+                                    onChange={e => setRoundVal(e.target.value)}
+                                    onBlur={() => commitGroup(roundVal, tierVal)}
+                                />
+                            </label>
+                            <label className="scouting-group-field">
+                                Tier
+                                <input
+                                    type="number"
+                                    min="1"
+                                    value={tierVal}
+                                    placeholder="3"
+                                    onChange={e => setTierVal(e.target.value)}
+                                    onBlur={() => commitGroup(roundVal, tierVal)}
+                                />
+                            </label>
+                        </div>
 
                         <div className="scouting-number-grid">
                             {NUMBER_FIELDS.map(f => (
@@ -268,7 +311,7 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
                                             type="number"
                                             value={numbers[f.key]}
                                             onChange={e => setNumbers(n => ({ ...n, [f.key]: e.target.value }))}
-                                            onBlur={() => commit({ [f.key]: numbers[f.key] === '' ? null : parseInt(numbers[f.key], 10) })}
+                                            onBlur={() => commitNumber(f, numbers[f.key])}
                                         />
                                     ) : (
                                         // Position rank is purely derived from the

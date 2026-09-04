@@ -8,10 +8,9 @@ test.describe('smoke', () => {
 
         for (const key of Object.keys(TABS)) {
             await gotoTab(page, key);
-            // Each view roots itself in one of these shells. Roster shows its
-            // bootstrap screen instead until it has data.
+            // Every view roots itself in one of these two shells.
             await expect(
-                page.locator('.roster-view, .draft-view-shell, .roster-bootstrap').first()
+                page.locator('.roster-view, .draft-view-shell').first()
             ).toBeVisible();
         }
 

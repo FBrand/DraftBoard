@@ -731,25 +731,46 @@ body {
   font-style: italic;
 }
 
-.fav-star {
+/* Tag marker on a player card — one look wherever a tag appears.
+   This is the original .fav-star treatment (offset out of the corner, heavy
+   shadow so it reads over gold borders and glows); the other three tags reuse
+   it rather than inventing their own scale. */
+.player-tag-marker {
   position: absolute;
   top: -8px;
   right: -8px;
-  color: #FFB81C;
-  /* Chiefs Gold */
   font-size: 1.3rem;
-  /* Slightly larger */
   line-height: 1;
-  /* Stronger multi-layer shadow to ensure visibility on gold borders */
   text-shadow:
     0 0 4px rgba(0, 0, 0, 1),
     0 0 2px rgba(0, 0, 0, 1),
     0 0 8px rgba(255, 184, 28, 0.4);
   pointer-events: none;
-  z-index: 500;
-  /* High enough to beat borders and glows */
+  /* Above the card's own border and glow, but BELOW the sticky position and
+     round headers (40-100). .player-card is position:relative with no
+     z-index, so it isn't a stacking context — a high value here competed at
+     the root and painted markers over the header row while scrolling. */
+  z-index: 2;
   opacity: 1 !important;
   filter: none !important;
+}
+
+.player-tag-marker.tag-like {
+  color: var(--gold-color);
+}
+
+/* The medical red cross */
+.player-tag-marker.tag-injury {
+  color: var(--chiefs-red);
+}
+
+/* ❗ and 🔎 are emoji — the font draws them noticeably larger than the text
+   glyphs (★ ✚) at the same font-size, so they are set smaller here to come
+   out the same size on screen. Matching the numbers would not match the
+   appearance. Both carry their own colour, so none is set. */
+.player-tag-marker.tag-avoid,
+.player-tag-marker.tag-monitor {
+  font-size: 0.95rem;
 }
 
 .player-card.no-strike {
@@ -2707,4 +2728,28 @@ body.export-mode .card-glow {
 
 .scouting-remark.note .scouting-remark-symbol {
   color: var(--text-dim);
+}
+
+/* UDFA: why signing is unavailable before the draft ends */
+.udfa-locked-note {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  font-style: italic;
+  white-space: nowrap;
+}
+
+/* Round and tier sit side by side — they're two halves of one value ("1.3") */
+.scouting-group-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.scouting-group-fields .scouting-group-field {
+  margin-bottom: 0;
+}
+
+.scouting-group-fields .scouting-group-field input {
+  width: 100%;
 }

@@ -58,6 +58,9 @@ const OWNED_KEYS = [
     'scouting_overlay_v1__ryan',
     'draft_board_view',
     'draft_board_focus',
+    // Matrix scores are measurements of players, not offseason decisions — but
+    // a clean slate should still be clean, so they clear with everything else.
+    'athletic_matrix_v1',
 ];
 
 /**

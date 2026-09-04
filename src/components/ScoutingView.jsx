@@ -8,14 +8,14 @@ import useIsMobile from '../hooks/useIsMobile';
 import Menu from './Menu';
 import { rankBoard, moveToRank } from '../utils/boardRanking';
 import useBoardRankings from '../hooks/useBoardRankings';
+import useUrlParam from '../hooks/useUrlParam';
+import { PLAYER_TAGS } from '../utils/playerTags';
 
 const { BOARDS, BOARD_LABELS } = scoutingState;
 
 const TAG_FILTERS = [
     { id: 'all', label: 'All' },
-    { id: 'like', label: '✓ Like' },
-    { id: 'avoid', label: '✗ Avoid' },
-    { id: 'monitor', label: '? Monitor' },
+    ...PLAYER_TAGS.map(t => ({ id: t.id, label: `${t.symbol} ${t.label}` })),
     { id: 'untagged', label: 'Untagged' },
 ];
 
@@ -35,12 +35,18 @@ const TAG_FILTERS = [
 // in-progress personal order.
 export default function ScoutingView({ players, columnOrder }) {
     const [boards, setBoards] = useState(() => Object.fromEntries(BOARDS.map(b => [b, scoutingState.loadState(b)])));
-    const [activeBoard, setActiveBoard] = useState('consensus');
+    // Board and selected player live in the URL: "here's what Dan says about
+    // this guy" is the thing you actually want to send someone.
+    const [activeBoard, setActiveBoard] = useUrlParam('board', 'consensus', BOARDS);
     // Each analyst's own rankings file — switching board switches the actual
     // player pool, not just the overlay on top of one shared list.
     const { pools } = useBoardRankings(players);
     const boardPlayers = pools?.[activeBoard] ?? players;
-    const [selectedName, setSelectedName] = useState(null);
+    const [selectedNameParam, setSelectedNameParam] = useUrlParam('player', '');
+    const selectedName = selectedNameParam || null;
+    // replace, not push: flicking between players shouldn't fill the history
+    // stack, but the address bar should still point at whoever is open.
+    const setSelectedName = (name) => setSelectedNameParam(name ?? '', { replace: true });
     const [tagFilter, setTagFilter] = useState('all');
     // On mobile the three columns stack, so the info card would sit far below
     // the board — tapping a player looked like it did nothing. Present it as
@@ -97,17 +103,28 @@ export default function ScoutingView({ players, columnOrder }) {
         const groupOf = new Map(effectivePlayers.map(p => [p.name, p.group]));
         const seenPerGroup = new Map();
 
+        // The name index is built ONCE and extended as entries are appended.
+        // It used to be rebuilt inside the loop — for a 313-player board that
+        // meant 313 rebuilds and ~147k fuzzy-name comparisons for a single
+        // reorder, all to answer a question the index already knew.
+        const index = buildNameIndex(out);
+        // Positions are looked up the same way, from a map rather than a
+        // linear scan of the pool per appended player.
+        const positionOf = new Map(boardPlayers.map(p => [p.name, p.position]));
+
         orderedNames.forEach(name => {
             const group = groupOverrides[name] ?? groupOf.get(name) ?? null;
             const nextWithin = (seenPerGroup.get(group) ?? 0) + 1;
             seenPerGroup.set(group, nextWithin);
 
-            const idx = findMatchingIndex(name, buildNameIndex(out));
+            const idx = findMatchingIndex(name, index);
             if (idx !== -1) {
                 out[idx] = { ...out[idx], group, withinGroup: nextWithin, updatedAt: now };
             } else {
-                const position = boardPlayers.find(p => p.name === name)?.position ?? '';
+                const position = positionOf.get(name) ?? '';
                 out.push({ ...scoutingState.makeEntry(name, position), group, withinGroup: nextWithin, updatedAt: now });
+                // Keep the index in step so a later name can still match it.
+                index.push(...buildNameIndex([out[out.length - 1]]).map(e => ({ ...e, index: out.length - 1 })));
             }
         });
         return out;
@@ -293,6 +310,7 @@ export default function ScoutingView({ players, columnOrder }) {
                     onAction={(p) => setSelectedName(p.name)}
                     columnOrder={columnOrder}
                     isFocusMode={true}
+                    tagFor={(name) => entryFor(name)?.tag ?? null}
                     alwaysClickable={true}
                     hideDraftedStyle={true}
                 />
