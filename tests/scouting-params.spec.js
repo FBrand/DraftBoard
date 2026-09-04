@@ -375,3 +375,66 @@ test.describe('each board has its own player pool', () => {
         expect(disagreements.length).toBeGreaterThan(0);
     });
 });
+
+test.describe('read-only card shows remarks from every board', () => {
+    test('groups by analyst with +/-/dot symbols and no field headers', async ({ page }) => {
+        await openApp(page, 'scouting');
+        await page.waitForSelector('.scouting-rank-row');
+        const name = await page.locator('.scouting-rank-row').first().locator('.player-name').innerText();
+
+        const addRemarks = async (board, strength, weakness, note) => {
+            await page.locator('.board-switcher .switcher-btn', { hasText: board }).click();
+            await page.waitForTimeout(700);
+            const row = page.locator('.scouting-rank-row', { hasText: name }).first();
+            if (!await row.count()) return false;
+            await row.locator('.scouting-rank-card').click();
+            await page.waitForTimeout(400);
+            const fields = page.locator('.scouting-list-field');
+            for (const [i, text] of [strength, weakness, note].entries()) {
+                await fields.nth(i).locator('input').fill(text);
+                await fields.nth(i).getByRole('button', { name: '+' }).click();
+            }
+            await page.waitForTimeout(400);
+            return true;
+        };
+
+        await addRemarks('Consensus', 'Elite burst', 'Small hands', 'Check tape vs zone');
+        const onDan = await addRemarks('Dan', 'Great motor', 'Raw technique', 'Rising fast');
+
+        // Open the read-only card outside Scouting.
+        await gotoTab(page, 'draft');
+        await page.waitForTimeout(600);
+        const focus = page.getByRole('button', { name: /Full Board/ });
+        if (await focus.count()) { await focus.click(); await page.waitForTimeout(600); }
+
+        const opened = await page.evaluate((n) => {
+            const el = [...document.querySelectorAll('.center-board-container .player-card')]
+                .find(e => e.querySelector('.player-name')?.textContent.trim() === n);
+            if (!el) return false;
+            el.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true }));
+            return true;
+        }, name);
+        test.skip(!opened, 'player not on the draft board');
+
+        const box = page.locator('.scouting-modal-box');
+        await expect(box).toBeVisible();
+
+        // Headed by the analyst, not by "Strengths"/"Weaknesses"/"Notes".
+        await expect(box.locator('.scouting-list-label')).toHaveCount(0);
+        const headers = await box.locator('.scouting-board-notes-header').allTextContents();
+        expect(headers).toContain('Consensus');
+        if (onDan) expect(headers).toContain('Dan');
+        // Boards with nothing to say are omitted.
+        expect(headers).not.toContain('Ryan');
+
+        // Each remark carries the symbol for its kind.
+        const consensus = box.locator('.scouting-board-notes-group').first();
+        await expect(consensus.locator('.scouting-remark.strength .scouting-remark-symbol').first()).toHaveText('+');
+        await expect(consensus.locator('.scouting-remark.weakness .scouting-remark-symbol').first()).toHaveText('−');
+        await expect(consensus.locator('.scouting-remark.note .scouting-remark-symbol').first()).toHaveText('•');
+        await expect(consensus.locator('li', { hasText: 'Elite burst' })).toBeVisible();
+
+        // Remarks from every board show at once, without paging.
+        if (onDan) await expect(box.locator('li', { hasText: 'Great motor' })).toBeVisible();
+    });
+});

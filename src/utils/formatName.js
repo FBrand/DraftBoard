@@ -15,7 +15,10 @@ export function parseName(rawName, defaultColor = 'inherit') {
 
     let nameColor = defaultColor;
     if (suffix) {
-        if (/^\d+$/.test(suffix)) nameColor = '#FFD700'; // Draft round number
+        // "4" is a round; "25/4" is year 2025, round 4 — the form roster.csv
+        // actually uses to record which draft a player came from. Both are
+        // draft provenance and read the same way on a card.
+        if (/^\d+$/.test(suffix) || /^\d{2}\/\d+$/.test(suffix)) nameColor = '#FFD700';
         else if (SUFFIX_COLORS[suffix]) nameColor = SUFFIX_COLORS[suffix];
     }
     return { displayName, suffix, nameColor };

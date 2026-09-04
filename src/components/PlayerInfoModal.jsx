@@ -52,6 +52,18 @@ export default function PlayerInfoModal({ player, players = [], onClose }) {
         return i !== -1 ? ranked[i] : player;
     }, [player, ranked, rankedIndex]);
 
+    // Remarks from every board, shown together on the card — see BoardNotes.
+    // Only the ranks and tags page with ‹/›; what an analyst wrote about a
+    // player is worth seeing all at once.
+    const allBoardNotes = useMemo(() => {
+        if (!player) return [];
+        return BOARDS.map(board => {
+            const list = boards[board]?.entries ?? [];
+            const i = findMatchingIndex(player.name, buildNameIndex(list));
+            return { board, label: BOARD_LABELS[board], entry: i !== -1 ? list[i] : null };
+        });
+    }, [boards, player]);
+
     if (!player) return null;
 
     const cycleBoard = (dir) => {
@@ -66,6 +78,7 @@ export default function PlayerInfoModal({ player, players = [], onClose }) {
             readOnly
             player={resolved}
             entry={entryFor(player.name)}
+            allBoardNotes={allBoardNotes}
             onClose={onClose}
             boardLabel={BOARD_LABELS[activeBoard]}
             onPrevBoard={() => cycleBoard(-1)}

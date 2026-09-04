@@ -104,3 +104,21 @@ test.describe('depth chart slots with holes', () => {
         for (const name of firstRowPlayers) expect(cuts).toContain(name);
     });
 });
+
+test('an empty practice-squad row shows one drop target, not three', async ({ page }) => {
+    // Regression: the fix for holes rendered all PS_SLOTS unconditionally,
+    // leaving three "+" boxes on every empty row.
+    await openApp(page);
+    await ensureRoster(page);
+
+    const counts = await page.evaluate(() => {
+        // 4 cells per row: pos | 53-man | practice squad | reserve.
+        const ps = document.querySelectorAll('.rv-row-cell')[2];
+        return {
+            empty: ps.querySelectorAll('.rv-slot.empty-square').length,
+            filled: ps.querySelectorAll('.rv-slot.filled').length,
+        };
+    });
+    expect(counts.filled).toBe(0);
+    expect(counts.empty).toBe(1);
+});

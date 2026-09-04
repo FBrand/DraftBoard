@@ -10,6 +10,7 @@ import Menu from './components/Menu';
 import Toast from './components/Toast';
 import { ConfirmDialog } from './components/Dialogs';
 import { exportSession, importSession, sessionFilename } from './utils/appSession';
+import { resetTo, INIT_SEEDED, INIT_CLEAN } from './utils/appInit';
 
 const TABS = [
   { id: 'fa', label: '💰 Free Agency' },
@@ -54,6 +55,8 @@ function App() {
   // is read before confirming — no point warning about an overwrite that a
   // corrupt file would fail anyway.
   const [pendingImport, setPendingImport] = useState(null);
+  // Both re-initialisations throw away current work, so both confirm first.
+  const [pendingInit, setPendingInit] = useState(null); // INIT_SEEDED | INIT_CLEAN | null
 
   React.useEffect(() => {
     localStorage.setItem('draft_board_view', view);
@@ -114,6 +117,8 @@ function App() {
             items={[
               { label: 'Export Full Session…', onClick: handleSessionExport, title: 'Every stage — draft, roster, FA, scouting — in one JSON file' },
               { label: 'Import Full Session…', file: { accept: '.json', onFile: handleSessionFile }, title: 'Replaces all current state' },
+              { label: 'Load Current State', onClick: () => setPendingInit(INIT_SEEDED), title: 'The real offseason as it happened — completed draft and the roster it produced' },
+              { label: 'Start Clean Slate', onClick: () => setPendingInit(INIT_CLEAN), tone: 'danger', title: 'Empty every stage and build a season from scratch' },
             ]}
           />
         </div>
@@ -179,6 +184,18 @@ function App() {
         players={players}
         onClose={() => setInfoPlayer(null)}
       />
+
+      {pendingInit && (
+        <ConfirmDialog
+          title={pendingInit === INIT_CLEAN ? 'Start from a clean slate?' : 'Load the current state?'}
+          message={pendingInit === INIT_CLEAN
+            ? 'Every stage starts empty — no draft picks, no roster, no scouting notes. Your current work is discarded.'
+            : 'Reloads the real offseason: the completed draft and the roster that came out of free agency, the draft and UDFA signings. Your current work is discarded.'}
+          confirmLabel={pendingInit === INIT_CLEAN ? 'Start clean' : 'Load it'}
+          onConfirm={() => { resetTo(pendingInit); window.location.reload(); }}
+          onCancel={() => setPendingInit(null)}
+        />
+      )}
 
       {pendingImport && (
         <ConfirmDialog

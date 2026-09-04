@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
     loadState, saveState, defaultState,
     parseCSV, exportCSV, makeSlot, resolvePosition,
@@ -10,6 +10,7 @@ import DepthChartGrid from './DepthChartGrid';
 import { TextPromptDialog, ConfirmDialog } from './Dialogs';
 import Toast from './Toast';
 import Menu from './Menu';
+import { shouldSeed } from '../utils/appInit';
 
 function CounterBox({ label, val, max, status, isLast, maxLabel }) {
     return (
@@ -31,7 +32,12 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
         if (!loaded.reserve) loaded.reserve = [];
         return loaded;
     });
-    const [bootstrapping, setBootstrapping] = useState(() => loadState() === null);
+    // Seeded mode loads the shipped roster.csv rather than showing the
+    // initialize screen: that file is the real post-offseason roster, so the
+    // app should open on it the way the draft board opens on the real completed
+    // draft. Only "clean" mode starts at the bootstrap screen.
+    const [bootstrapping, setBootstrapping] = useState(() => loadState() === null && !shouldSeed());
+    const [seeding, setSeeding] = useState(() => loadState() === null && shouldSeed());
     const [isSignModalOpen, setIsSignModalOpen] = useState(false);
     const [isPasting, setIsPasting] = useState(false);
     const [pastedHtml, setPastedHtml] = useState('');
@@ -87,6 +93,29 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
             return result;
         });
     }, []);
+
+    // One-shot: only runs when there is nothing saved and we're in seeded mode.
+    // Any later edit writes state, so this never fires again and can't overwrite
+    // real work. A failure drops through to the bootstrap screen rather than
+    // leaving the view stuck on a spinner.
+    useEffect(() => {
+        if (!seeding) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                const loaded = await fetchLocalRoster();
+                if (cancelled) return;
+                setState(loaded);
+            } catch (err) {
+                if (cancelled) return;
+                setToast({ message: `Couldn't load the shipped roster: ${err.message}`, tone: 'error' });
+                setBootstrapping(true);
+            } finally {
+                if (!cancelled) setSeeding(false);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [seeding, setState]);
 
     const handleSignPlayer = (customPlayer) => {
         if (onDraft) onDraft(customPlayer);

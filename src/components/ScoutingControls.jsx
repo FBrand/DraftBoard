@@ -19,10 +19,38 @@ const NUMBER_FIELDS = [
 ];
 
 const LIST_FIELDS = [
-    { key: 'strengths', label: 'Strengths' },
-    { key: 'weaknesses', label: 'Weaknesses' },
-    { key: 'notes', label: 'Notes' },
+    { key: 'strengths', label: 'Strengths', symbol: '+', cls: 'strength' },
+    { key: 'weaknesses', label: 'Weaknesses', symbol: '−', cls: 'weakness' },
+    { key: 'notes', label: 'Notes', symbol: '•', cls: 'note' },
 ];
+
+// Read-only cards show every board's notes at once, headed by the analyst's
+// name rather than by field name — what matters when you glance at a player
+// mid-draft is who said it, and the +/−/• symbol already says which kind of
+// remark it is. Boards with nothing to say are omitted entirely.
+function BoardNotes({ boards }) {
+    const withContent = (boards ?? []).filter(b =>
+        LIST_FIELDS.some(f => b.entry?.[f.key]?.length));
+    if (!withContent.length) return null;
+
+    return (
+        <div className="scouting-board-notes">
+            {withContent.map(b => (
+                <div key={b.board} className="scouting-board-notes-group">
+                    <div className="scouting-board-notes-header">{b.label}</div>
+                    <ul className="scouting-bullet-list">
+                        {LIST_FIELDS.flatMap(f => (b.entry[f.key] ?? []).map((item, i) => (
+                            <li key={`${f.key}-${i}`} className={`scouting-remark ${f.cls}`}>
+                                <span className="scouting-remark-symbol" aria-label={f.label}>{f.symbol}</span>
+                                <span>{item}</span>
+                            </li>
+                        )))}
+                    </ul>
+                </div>
+            ))}
+        </div>
+    );
+}
 
 // Small "add a bullet, remove a bullet" list editor — used for
 // strengths/weaknesses/notes, which are all the same shape. When readOnly,
@@ -85,7 +113,7 @@ function BulletListEditor({ label, items, onChange, readOnly }) {
 // changes — the caller renders this with `key={player.name}` so React
 // remounts it on selection change rather than syncing state via an effect
 // (see https://react.dev/learn/you-might-not-need-an-effect).
-export default function ScoutingControls({ player, entry, onChange, onClose, boardLabel, onPrevBoard, onNextBoard, variant = 'panel', readOnly = false }) {
+export default function ScoutingControls({ player, entry, onChange, onClose, boardLabel, onPrevBoard, onNextBoard, variant = 'panel', readOnly = false, allBoardNotes }) {
     // Total Rank, Position Rank and Round.Group are the board's own
     // parameters, so they show the player's current values rather than blank
     // boxes — you're adjusting the real thing, not a field that merely sits
@@ -141,13 +169,18 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
     // Only counts things an analyst actually entered. Total and position rank
     // are excluded on purpose: they're derived, so every player on a board has
     // them and they say nothing about whether anyone has looked at this player.
+    // Read-only cards pull remarks from every board, so "nothing here yet"
+    // has to account for all of them, not just the one being paged to.
+    const anyBoardHasNotes = (allBoardNotes ?? []).some(b =>
+        LIST_FIELDS.some(f => b.entry?.[f.key]?.length));
+
     const hasAnyContent = !!(
-        entry && (
+        anyBoardHasNotes || (entry && (
             entry.tag ||
             entry.athleticMatrixTotal != null ||
             entry.athleticMatrixPosition != null ||
             LIST_FIELDS.some(f => entry[f.key]?.length)
-        )
+        ))
     );
 
     const content = (
@@ -261,7 +294,7 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
                     </a>
                 )}
 
-                {LIST_FIELDS.map(f => (
+                {readOnly ? <BoardNotes boards={allBoardNotes} /> : LIST_FIELDS.map(f => (
                     <BulletListEditor
                         key={f.key}
                         label={f.label}

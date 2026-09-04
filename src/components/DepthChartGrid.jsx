@@ -176,8 +176,15 @@ function DepthRow({ posConfig, slots, idx, phase, onConfigChange, onDeletePositi
     const s53 = Math.max(slots53, 1);
     const slots53Items = Array.from({ length: s53 }, (_, i) => ({ slot: slots[i] || null, zone: '53', idx: i }));
 
+    // Practice squad shows everyone in it plus ONE empty cell to drop into —
+    // not all PS_SLOTS every time, which left three "+" boxes on every empty
+    // row. Holes before the last occupant are still rendered, so indices keep
+    // matching positions.
     const psStart = s53;
-    const psItems = Array.from({ length: PS_SLOTS }, (_, i) => ({ slot: slots[psStart + i] || null, zone: 'ps', idx: psStart + i }));
+    let psLastOccupied = -1;
+    for (let i = 0; i < PS_SLOTS; i++) { if (slots[psStart + i]) psLastOccupied = i; }
+    const psCount = Math.min(PS_SLOTS, psLastOccupied + 2);
+    const psItems = Array.from({ length: psCount }, (_, i) => ({ slot: slots[psStart + i] || null, zone: 'ps', idx: psStart + i }));
 
     // Reserve has no fixed cap, so its window runs to the last occupied
     // index (scanning the whole tail, not stopping at the first hole) plus

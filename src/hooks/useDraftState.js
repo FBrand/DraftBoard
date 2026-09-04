@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { parseRankings, parsePicks } from '../utils/dataParser';
+import { shouldSeed } from '../utils/appInit';
 import { TEAM_CONFIG } from '../constants';
 import { findMatchingPlayerIndex, buildNameIndex, findMatchingIndex } from '../utils/nameMatcher';
 
@@ -111,8 +112,9 @@ export const useDraftState = () => {
                 let seedDrafted = [];
                 let seedKCLeft = parsedOurPicks;
 
-                // If no saved localStorage state but CSV exists, use CSV as seed
-                if (!savedState && preloadRes && preloadRes.ok) {
+                // If no saved localStorage state but CSV exists, use CSV as seed.
+                // Skipped in "clean" mode — see utils/appInit.js.
+                if (!savedState && shouldSeed() && preloadRes && preloadRes.ok) {
                     const csvText = await preloadRes.text();
                     try {
                         const { deserializeDraftState } = await import('../utils/sessionSerializer');
@@ -273,9 +275,13 @@ export const useDraftState = () => {
         setOurPicksLeft(newPicks);
     }, [saveHistory]);
 
+    // Clears the draft only, and stops the shipped picks file re-seeding it on
+    // the way back up. (This used to write the literal string 'empty' into the
+    // state key, which worked only because it is truthy enough to skip seeding
+    // and then throws inside the JSON.parse try/catch.)
     const resetDraft = useCallback(() => {
         localStorage.removeItem(DRAFT_STORAGE_KEY);
-        localStorage.setItem(DRAFT_STORAGE_KEY, 'empty')
+        localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify({ draftedPlayers: [], ourPicksLeft: [] }));
         window.location.reload();
     }, []);
 
