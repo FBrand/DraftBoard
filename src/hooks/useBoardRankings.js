@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { parseRankings } from '../utils/dataParser';
-import { BOARDS, BOARD_RANKINGS } from '../utils/scoutingState';
+import * as scoutingState from '../utils/scoutingState';
+
+const { BOARDS, BOARD_RANKINGS } = scoutingState;
 
 /**
  * Loads every analyst's rankings file once, so Scouting can show each board's
@@ -35,7 +37,17 @@ function loadPools() {
             // than being retried on every mount.
             return [board, null];
         }
-    })).then(Object.fromEntries);
+    })).then(entries => {
+        const pools = Object.fromEntries(entries);
+        // A `*` in a rankings file becomes a real `like` tag on that board, so
+        // the star and the tag are one mechanic rather than two that can
+        // disagree. Runs once per load, and only adds entries for players that
+        // don't have one — it can never overwrite an analyst's own tag.
+        BOARDS.forEach(board => {
+            if (pools[board]?.length) scoutingState.seedFavourites(board, pools[board]);
+        });
+        return pools;
+    });
 
     return poolsPromise;
 }

@@ -1,5 +1,7 @@
-import html2canvas from 'html2canvas';
-
+// html2canvas is the single biggest thing in the bundle and is needed only
+// when someone actually exports a board image — a button that lives in Focus
+// mode. Importing it lazily keeps it out of the initial download, which
+// matters most for viewers who will never press it.
 export const exportBoardToImage = async (elementId = 'center-board-container') => {
     const element = document.querySelector(`.${elementId}`);
     if (!element) {
@@ -11,6 +13,8 @@ export const exportBoardToImage = async (elementId = 'center-board-container') =
     document.body.classList.add('export-mode');
 
     try {
+        const { default: html2canvas } = await import('html2canvas');
+
         // Wait for layout adjustments to settle
         await new Promise(resolve => setTimeout(resolve, 400));
 
