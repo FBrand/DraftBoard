@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import {
     loadState, saveState, defaultState,
     parseCSV, exportCSV, makeSlot, resolvePosition,
-    SPECIALIST_IDS, hasRosterSourceAdapter, fetchAdapterRoster, fetchLocalRoster, parseHTMLToRoster
+    SPECIALIST_IDS, hasRosterSourceAdapter, fetchAdapterRoster, fetchLocalRoster, fetchSeasonStartStructure, parseHTMLToRoster
 } from '../utils/rosterState';
 import * as faState from '../utils/faState';
 import UnrankedModal from './UnrankedModal';
@@ -25,14 +25,15 @@ function CounterBox({ label, val, max, status, isLast, maxLabel }) {
 // ── Main RosterView ────────────────────────────────────────────────────────
 // Owns roster state/persistence/CSV/bootstrap; the grid itself (drag-and-drop,
 // slots, specialists, IR, cuts) is DepthChartGrid.jsx, shared with Free Agency.
-export default function RosterView({ masterPlayers, draftedPlayers, currentPick, onDraft, onInfoOpen }) {
+export default function RosterView({ masterPlayers, draftedPlayers, currentPick, onInfoOpen }) {
     const isDraftComplete = (currentPick || 1) > 257;
-    // Seeded mode loads the shipped roster.csv rather than showing the
-    // initialize screen: that file is the real post-offseason roster, so the
-    // app should open on it the way the draft board opens on the real completed
-    // draft. Only "clean" mode starts at the bootstrap screen.
-    const [bootstrapping, setBootstrapping] = useState(() => loadState() === null && !shouldSeed());
-    const [seeding, setSeeding] = useState(() => loadState() === null && shouldSeed());
+    // Roster initialises like every other phase — silently, with no screen of
+    // its own to get past. Seeded mode loads the real post-offseason roster;
+    // clean mode loads last season's position structure with the slots empty,
+    // so there is a depth chart to build into and "Sync from FA/Draft/UDFA"
+    // has somewhere to place players. The import options that used to live on
+    // the blocking bootstrap screen are in this view's menu instead.
+    const [seeding, setSeeding] = useState(() => loadState() === null);
     const [isSignModalOpen, setIsSignModalOpen] = useState(false);
     const [isPasting, setIsPasting] = useState(false);
     const [pastedHtml, setPastedHtml] = useState('');
@@ -102,13 +103,16 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
         let cancelled = false;
         (async () => {
             try {
-                const loaded = await fetchLocalRoster();
+                const loaded = shouldSeed()
+                    ? await fetchLocalRoster()
+                    : await fetchSeasonStartStructure();
                 if (cancelled) return;
                 history.reset(loaded);
             } catch (err) {
                 if (cancelled) return;
-                setToast({ message: `Couldn't load the shipped roster: ${err.message}`, tone: 'error' });
-                setBootstrapping(true);
+                // An empty grid plus the menu's import options is still a
+                // usable view, so report and carry on.
+                setToast({ message: `Couldn't load the roster: ${err.message}`, tone: 'error' });
             } finally {
                 if (!cancelled) setSeeding(false);
             }
@@ -119,9 +123,54 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [seeding]);
 
+    // Signing is a roster move, not a draft pick.
+    //
+    // This used to call draftPlayer, which stamps the *current* pick number on
+    // the player and advances the draft — so signing a free agent after nine
+    // picks recorded him as pick ten. It also pushed the name onto `reserve`,
+    // which is the injury-reserve pool, so every signing arrived injured.
+    //
+    // A signing now lands in the player's own position row: first free 53-man
+    // slot, then practice squad, then that row's reserve column. Nothing
+    // touches draft state; the :FA / :UDFA suffix on the name already records
+    // how they arrived, the same way roster.csv does.
     const handleSignPlayer = (customPlayer) => {
-        if (onDraft) onDraft(customPlayer);
-        setState(prev => ({ ...prev, reserve: [...prev.reserve, customPlayer.name] }));
+        const { name, position } = customPlayer;
+        const displayName = String(name).split(':')[0];
+
+        // Computed outside setState: an updater is deferred to the render
+        // phase, so a result read back straight after it would be stale.
+        const next = { ...state, depthChart: { ...state.depthChart } };
+        const rowId = resolvePosition(position, state.positionConfig, next.depthChart);
+
+        if (!rowId) {
+            setToast({
+                message: `No ${position} row on the depth chart — add one, then sign ${displayName}.`,
+                tone: 'error',
+            });
+            return;
+        }
+
+        const chip = [...state.positionConfig.offense, ...state.positionConfig.defense]
+            .find(p => p.id === rowId);
+        const limit53 = Math.max(1, chip?.slots53 ?? 2);
+        const arr = next.depthChart[rowId] = [...(next.depthChart[rowId] ?? [])];
+
+        const placeAt = (index, zone, label) => {
+            arr[index] = makeSlot(name, zone);
+            setState(next);
+            setToast({ message: `Signed ${displayName} — ${chip?.label ?? position}, ${label}.`, tone: 'success' });
+        };
+
+        for (let i = 0; i < limit53; i++) {
+            if (!arr[i]) return placeAt(i, '53', '53-man');
+        }
+        for (let i = limit53; i < limit53 + 3; i++) {
+            if (!arr[i]) return placeAt(i, 'ps', 'practice squad');
+        }
+        let i = limit53 + 3;
+        while (arr[i]) i++;
+        return placeAt(i, 'r', 'reserve');
     };
 
     const performMove = useCallback((src, dst) => {
@@ -232,28 +281,21 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
         if (!file) return;
         const text = await file.text();
         history.reset(parseCSV(text));
-        setBootstrapping(false);
     };
 
     const handleFetchAdapter = async () => {
         try {
-            setBootstrapping(true);
             history.reset(await fetchAdapterRoster());
-            setBootstrapping(false);
         } catch (err) {
             setToast({ message: 'Failed to fetch roster: ' + err.message, tone: 'error' });
-            setBootstrapping(false);
         }
     };
 
     const handleFetchLocal = async () => {
         try {
-            setBootstrapping(true);
-            setState(await fetchLocalRoster());
-            setBootstrapping(false);
+            history.reset(await fetchLocalRoster());
         } catch (err) {
             setToast({ message: 'Failed to load default roster: ' + err.message, tone: 'error' });
-            setBootstrapping(false);
         }
     };
 
@@ -345,49 +387,32 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
         if (!pastedHtml.trim()) return;
         try {
             history.reset(parseHTMLToRoster(pastedHtml));
-            setBootstrapping(false);
             setIsPasting(false);
         } catch (err) { setToast({ message: 'Could not parse pasted roster: ' + err.message, tone: 'error' }); }
     };
 
-    if (bootstrapping && !state.positionConfig.offense.length) {
-        return (
-            <div className="roster-bootstrap">
-                <div className="roster-bootstrap-title">INITIALIZE ROSTER</div>
-
-                {!isPasting ? (
-                    <div className="roster-bootstrap-actions">
-                        {hasRosterSourceAdapter() && (
-                            <button onClick={handleFetchAdapter} className="roster-btn primary">Auto-Fetch Depth Chart</button>
-                        )}
-                        <button onClick={handleFetchLocal} className="roster-btn">Load Default Roster</button>
-                        <button onClick={() => setIsPasting(true)} className="roster-btn">Paste HTML source</button>
-                        <label className="roster-btn" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-                            Upload CSV
-                            <input type="file" accept=".csv" onChange={handleBootstrap} style={{ display: 'none' }} />
-                        </label>
-                    </div>
-                ) : (
-                    <div className="roster-paste-box">
-                        <textarea
-                            className="roster-paste-textarea"
-                            placeholder="Paste Ourlads source (Ctrl+U from the site)..."
-                            value={pastedHtml}
-                            onChange={e => setPastedHtml(e.target.value)}
-                        />
-                        <div style={{ display: 'flex', gap: 15 }}>
-                            <button onClick={handlePasteHtml} className="roster-btn primary" style={{ flex: 1 }}>Process HTML</button>
-                            <button onClick={() => setIsPasting(false)} className="roster-btn" style={{ flex: 1 }}>Cancel</button>
-                        </div>
-                    </div>
-                )}
-                <div className="roster-bootstrap-hint">
-                    Automate your roster setup by fetching the latest depth chart directly,<br />or use your manual baseline files.
+    // The paste-source flow is a modal now rather than a whole-screen mode,
+    // so the depth chart stays visible behind it.
+    const pasteDialog = isPasting && (
+        <div className="modal-overlay" onClick={() => setIsPasting(false)}>
+            <div className="modal-content roster-paste-box" onClick={e => e.stopPropagation()}>
+                <div className="modal-header">
+                    <h2>Paste depth chart source</h2>
+                    <button className="close-btn" onClick={() => setIsPasting(false)}>&times;</button>
                 </div>
-                <Toast message={toast?.message} tone={toast?.tone} onDismiss={dismissToast} />
+                <textarea
+                    className="roster-paste-textarea"
+                    placeholder="Paste the page source (Ctrl+U on the depth chart page)..."
+                    value={pastedHtml}
+                    onChange={e => setPastedHtml(e.target.value)}
+                />
+                <div className="modal-footer">
+                    <button onClick={() => setIsPasting(false)} className="cancel-pill">Cancel</button>
+                    <button onClick={handlePasteHtml} className="save-pill" disabled={!pastedHtml.trim()}>Process</button>
+                </div>
             </div>
-        );
-    }
+        </div>
+    );
 
     const { positionConfig, depthChart, reserve, cuts } = state;
     let oCount = 0, dCount = 0, psCount = 0, total = 0;
@@ -463,8 +488,14 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
                     >Undo</button>
                     <button onClick={handleSyncFromStages} className="action-pill" title="Fill empty slots from FA candidates, draft picks, and UDFA signings — never overwrites">Sync from FA/Draft/UDFA</button>
                     <Menu items={[
+                        // The load/import options that used to be a blocking
+                        // "initialize roster" screen.
+                        hasRosterSourceAdapter() && { label: 'Auto-Fetch Depth Chart', onClick: handleFetchAdapter },
+                        { label: 'Load Default Roster', onClick: handleFetchLocal, title: 'The shipped post-offseason roster' },
+                        { label: 'Paste Depth Chart Source…', onClick: () => setIsPasting(true) },
+                        { label: 'Import Roster CSV…', file: { accept: '.csv', onFile: handleBootstrap } },
                         { label: 'Export Roster CSV…', onClick: handleExport },
-                        { label: 'Reset Roster…', onClick: () => setShowResetConfirm(true), tone: 'danger' },
+                        { label: 'Clear Roster…', onClick: () => setShowResetConfirm(true), tone: 'danger' },
                     ]} />
                 </div>
             </div>
@@ -497,11 +528,24 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
                 />
             )}
 
+            {pasteDialog}
+
             {showResetConfirm && (
                 <ConfirmDialog
-                    title="Reset Roster?"
-                    message="This clears your entire depth chart, practice squad, injury reserve, and cut list. This cannot be undone."
-                    onConfirm={() => { history.reset(defaultState()); setBootstrapping(true); setShowResetConfirm(false); }}
+                    title="Clear the roster?"
+                    message="Empties every slot, the practice squad, injury reserve and the cut list, leaving the position rows in place to rebuild into."
+                    confirmLabel="Clear it"
+                    onConfirm={() => {
+                        // Keep the position rows: an empty depth chart with no
+                        // rows has nowhere for Sync — or you — to put anyone.
+                        history.reset({
+                            ...state,
+                            depthChart: Object.fromEntries(Object.keys(state.depthChart).map(id => [id, []])),
+                            reserve: [],
+                            cuts: [],
+                        });
+                        setShowResetConfirm(false);
+                    }}
                     onCancel={() => setShowResetConfirm(false)}
                 />
             )}

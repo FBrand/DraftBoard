@@ -260,6 +260,29 @@ export const useDraftState = () => {
         setCurrentPick(prev => prev + 1);
     }, [currentPick, ourPicksLeft, remotePicks, players, saveHistory, triggerChime]);
 
+    /**
+     * Signs an undrafted free agent. Deliberately NOT draftPlayer: that stamps
+     * the current pick number on the player and advances the draft, so signing
+     * from the UDFA board consumed a real pick and recorded the signing as, say,
+     * pick 10. UDFA signings sit past the end of the draft (258+) — the number
+     * is an identifier, not a pick — and `currentPick` never moves.
+     */
+    const signUndrafted = useCallback((player) => {
+        if (player.drafted) return;
+        saveHistory();
+
+        const lastUdfaPick = draftedPlayers.reduce(
+            (max, p) => Math.max(max, (p.pickNumber || 0) > 257 ? p.pickNumber : 257),
+            257,
+        );
+        const pickNumber = lastUdfaPick + 1;
+        const signed = { ...player, drafted: true, pickNumber, draftedByUs: true, team: TEAM_CONFIG.abbreviation };
+
+        const matchIdx = findMatchingPlayerIndex(player.name, players);
+        setPlayers(prev => prev.map((p, idx) => (idx === matchIdx ? { ...p, ...signed } : p)));
+        setDraftedPlayers(prev => [...prev, signed]);
+    }, [draftedPlayers, players, saveHistory]);
+
     const undoAction = useCallback(() => {
         if (!history) return;
         setPlayers(history.players);
@@ -515,6 +538,7 @@ export const useDraftState = () => {
         columnOrder,
         toggleLiveSync: () => setIsLiveSync(prev => !prev),
         draftPlayer,
+        signUndrafted,
         undoAction,
         updateOurPicks,
         resetDraft,

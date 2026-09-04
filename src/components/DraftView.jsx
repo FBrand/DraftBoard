@@ -6,6 +6,7 @@ import RightPanel from './RightPanel';
 import BottomPanel from './BottomPanel';
 import PicksModal from './PicksModal';
 import UnrankedModal from './UnrankedModal';
+import usePlayerTags from '../hooks/usePlayerTags';
 
 // Owns all Draft-view-local UI state (focus mode, sidebar toggles, modals) —
 // previously lived at App level, which doesn't scale as more top-level
@@ -14,10 +15,17 @@ import UnrankedModal from './UnrankedModal';
 export default function DraftView({
     players, ourPicksLeft, draftedPlayers, yourPicks, currentPick, remotePicks,
     isLiveSync, canLiveSync, toggleLiveSync, draftPlayer, updateOurPicks,
-    resetDraft, undoAction, columnOrder, importDraftState, onInfoOpen,
+    resetDraft, undoAction, columnOrder, importDraftState, onInfoOpen, signUndrafted,
 }) {
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const tagFor = usePlayerTags();
     const [isUnrankedModalOpen, setIsUnrankedModalOpen] = useState(false);
+    // Once the draft is over there are no picks left to spend, so clicking a
+    // player opens the sign dialog prefilled with him instead of recording a
+    // phantom pick at 258. UnrankedModal has supported `initialPlayer` for a
+    // long time; nothing had ever passed it.
+    const [signPlayer, setSignPlayer] = useState(null);
+    const draftComplete = (currentPick || 1) > 257;
     const [isFocusMode, setIsFocusMode] = useState(() => {
         const saved = localStorage.getItem('draft_board_focus');
         return saved === 'true';
@@ -73,19 +81,21 @@ export default function DraftView({
                     {!isFocusMode && (
                         <LeftPanel
                             players={players}
-                            onDraft={draftPlayer}
+                            onDraft={draftComplete ? setSignPlayer : draftPlayer}
                             onDraftUnranked={() => setIsUnrankedModalOpen(true)}
                             onInfoOpen={onInfoOpen}
+                            tagFor={tagFor}
                         />
                     )}
                 </div>
 
                 <CenterBoard
                     players={players}
-                    onAction={draftPlayer}
+                    onAction={draftComplete ? setSignPlayer : draftPlayer}
                     columnOrder={columnOrder}
                     isFocusMode={isFocusMode}
                     onInfoOpen={onInfoOpen}
+                    tagFor={tagFor}
                 />
 
                 <div className={`right-sidebar-wrapper ${showRightSidebar && !isFocusMode ? 'mobile-open' : ''}`}>
@@ -111,12 +121,22 @@ export default function DraftView({
                 onSave={updateOurPicks}
             />
 
+            {/* Prefilled with the clicked player, post-draft only. */}
+            <UnrankedModal
+                key={`sign-${signPlayer?.name ?? 'none'}`}
+                isOpen={!!signPlayer}
+                onClose={() => setSignPlayer(null)}
+                onDraft={signUndrafted}
+                mode="postdraft"
+                initialPlayer={signPlayer}
+            />
+
             <UnrankedModal
                 key={`unranked-${isUnrankedModalOpen}`}
                 isOpen={isUnrankedModalOpen}
                 onClose={() => setIsUnrankedModalOpen(false)}
-                onDraft={draftPlayer}
-                mode={(currentPick || 1) > 257 ? 'postdraft' : 'draft'}
+                onDraft={draftComplete ? signUndrafted : draftPlayer}
+                mode={draftComplete ? 'postdraft' : 'draft'}
             />
         </div>
     );

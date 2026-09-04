@@ -11,6 +11,8 @@ import Toast from './components/Toast';
 import { ConfirmDialog } from './components/Dialogs';
 import { exportSession, importSession, sessionFilename } from './utils/appSession';
 import { resetTo, INIT_SEEDED, INIT_CLEAN } from './utils/appInit';
+import * as faState from './utils/faState';
+import useUrlParam from './hooks/useUrlParam';
 
 const TABS = [
   { id: 'fa', label: '💰 Free Agency' },
@@ -36,13 +38,20 @@ function App() {
     updateOurPicks,
     resetDraft,
     undoAction,
+    signUndrafted,
     columnOrder,
     importDraftState
   } = useDraftState();
 
-  const [view, setView] = useState(() => {
-    return localStorage.getItem('draft_board_view') || 'draft';
-  });
+  // The active stage lives in the URL so a view can be linked to. localStorage
+  // is only the fallback for "where was I last time", used when the URL says
+  // nothing — a shared link always wins over the recipient's last session.
+  const [view, setViewParam] = useUrlParam(
+    'view',
+    localStorage.getItem('draft_board_view') || 'draft',
+    TABS.map(t => t.id),
+  );
+  const setView = (id) => setViewParam(id);
 
   // Cross-cutting info card (right-click / long-press on a card) outside
   // Scouting — Scouting has its own always-visible info panel, opened via
@@ -61,6 +70,12 @@ function App() {
   React.useEffect(() => {
     localStorage.setItem('draft_board_view', view);
   }, [view]);
+
+  // Free agency starts from last season's roster. Seeded here rather than
+  // inside its own view because Roster's "Sync from FA/Draft/UDFA" reads free
+  // agency out of storage — waiting for someone to open the tab meant the
+  // pipeline had nothing to pull from until they did.
+  React.useEffect(() => { faState.ensureSeeded(); }, []);
 
   const handleSessionExport = () => {
     const blob = new Blob([exportSession()], { type: 'application/json' });
@@ -155,6 +170,7 @@ function App() {
               undoAction={undoAction}
               columnOrder={columnOrder}
               importDraftState={importDraftState}
+              signUndrafted={signUndrafted}
               onInfoOpen={setInfoPlayer}
             />
           )
@@ -168,14 +184,15 @@ function App() {
               players={players}
               draftedPlayers={draftedPlayers}
               columnOrder={columnOrder}
-              draftPlayer={draftPlayer}
+              signUndrafted={signUndrafted}
+              currentPick={currentPick}
               onInfoOpen={setInfoPlayer}
             />
           )
       )}
 
       {view === 'roster' && (
-        <RosterView masterPlayers={players} draftedPlayers={draftedPlayers} currentPick={currentPick} onDraft={draftPlayer} onInfoOpen={setInfoPlayer} />
+        <RosterView masterPlayers={players} draftedPlayers={draftedPlayers} currentPick={currentPick} onInfoOpen={setInfoPlayer} />
       )}
 
       <PlayerInfoModal

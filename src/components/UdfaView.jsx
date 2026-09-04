@@ -1,17 +1,26 @@
 import React, { useState } from 'react';
 import CenterBoard from './CenterBoard';
 import UnrankedModal from './UnrankedModal';
+import usePlayerTags from '../hooks/usePlayerTags';
 
 // UDFA reuses the exact board-grid Draft uses (see CenterBoard.jsx) — "who's
 // left" is already what its default Normal view (isFocusMode=false) shows,
-// since that filters to undrafted players. Signing a UDFA (board click or
-// the unranked-player modal) is mechanically the same action as drafting a
-// player (useDraftState's draftPlayer marks them drafted, assigns a team) —
-// same underlying state, no new signing pathway needed; only the
-// surrounding chrome differs from Draft view.
-export default function UdfaView({ players, draftedPlayers, columnOrder, draftPlayer, onInfoOpen }) {
+// since that filters to undrafted players.
+//
+// Signing goes through useDraftState's signUndrafted, NOT draftPlayer. It
+// looked like the same action, but draftPlayer stamps the current pick number
+// and advances the draft, so clicking a UDFA card mid-draft consumed a real
+// pick and recorded the signing in draft order.
+export default function UdfaView({ players, draftedPlayers, columnOrder, signUndrafted, currentPick, onInfoOpen }) {
     const [isUnrankedOpen, setIsUnrankedOpen] = useState(false);
+    const tagFor = usePlayerTags();
     const udfaCount = draftedPlayers.filter(p => (p.pickNumber || 0) > 257).length;
+
+    // A player is undrafted only once the draft is over, so signing is held
+    // back until then. The board stays visible and browsable in the meantime —
+    // seeing who is likely to go undrafted is exactly what you want beforehand
+    // — but clicking a card can't record a signing.
+    const draftComplete = (currentPick || 1) > 257;
 
     const updateRankingsParam = (newPath) => {
         const params = new URLSearchParams(window.location.search);
@@ -58,22 +67,32 @@ export default function UdfaView({ players, draftedPlayers, columnOrder, draftPl
                 </div>
 
                 <div className="top-actions">
-                    <button onClick={() => setIsUnrankedOpen(true)} className="action-pill">+ Sign Unranked Player</button>
+                    {!draftComplete && (
+                        <span className="udfa-locked-note" title={`The draft is still on pick ${currentPick}`}>
+                            Signing opens when the draft ends
+                        </span>
+                    )}
+                    <button
+                        onClick={() => setIsUnrankedOpen(true)}
+                        className="action-pill"
+                        disabled={!draftComplete}
+                    >+ Sign Unranked Player</button>
                 </div>
             </div>
             <CenterBoard
                 players={players}
-                onAction={draftPlayer}
+                onAction={draftComplete ? signUndrafted : undefined}
                 columnOrder={columnOrder}
                 isFocusMode={false}
                 onInfoOpen={onInfoOpen}
+                tagFor={tagFor}
             />
 
             <UnrankedModal
                 key={`udfa-unranked-${isUnrankedOpen}`}
                 isOpen={isUnrankedOpen}
                 onClose={() => setIsUnrankedOpen(false)}
-                onDraft={draftPlayer}
+                onDraft={signUndrafted}
                 mode="postdraft"
             />
         </div>
