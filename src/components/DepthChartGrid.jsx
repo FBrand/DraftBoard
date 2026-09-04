@@ -145,19 +145,33 @@ function DepthRow({ posConfig, slots, idx, phase, onConfigChange, onDeletePositi
         data: { kind: 'row', idx, phase, label },
     });
 
-    // Build slot arrays for each zone
+    // Build slot arrays for each zone.
+    //
+    // Every zone renders a CONTIGUOUS window of array indices, so a slot's
+    // rendered position always equals its index in `slots`. Cutting or
+    // dragging a player out leaves a null hole mid-array, and two earlier
+    // bugs both came from treating those holes as if they didn't exist:
+    // the practice-squad list skipped holes but then derived the trailing
+    // empty cell's index from how many items it had *rendered*, so with a
+    // hole present that index collided with a real occupied slot (giving
+    // two cells the same droppable id — an empty cell that, when dropped
+    // on, hit the occupied slot instead); and the reserve list stopped at
+    // the first hole, hiding every player after it, so moving a reserve
+    // player one cell down made him vanish.
     const s53 = Math.max(slots53, 1);
     const slots53Items = Array.from({ length: s53 }, (_, i) => ({ slot: slots[i] || null, zone: '53', idx: i }));
-    // Always show one empty drop target at the end of each section
-    const psStart = s53;
-    const psItems = [];
-    for (let i = 0; i < PS_SLOTS; i++) { if (slots[psStart + i]) psItems.push({ slot: slots[psStart + i], zone: 'ps', idx: psStart + i }); }
-    psItems.push({ slot: null, zone: 'ps', idx: psStart + psItems.length });
 
+    const psStart = s53;
+    const psItems = Array.from({ length: PS_SLOTS }, (_, i) => ({ slot: slots[psStart + i] || null, zone: 'ps', idx: psStart + i }));
+
+    // Reserve has no fixed cap, so its window runs to the last occupied
+    // index (scanning the whole tail, not stopping at the first hole) plus
+    // one trailing empty cell to drop into.
     const rStart = s53 + PS_SLOTS;
-    const rItems = [];
-    for (let i = 0; slots[rStart + i]; i++) rItems.push({ slot: slots[rStart + i], zone: 'r', idx: rStart + i });
-    rItems.push({ slot: null, zone: 'r', idx: rStart + rItems.length });
+    let rLastOccupied = -1;
+    for (let i = rStart; i < slots.length; i++) { if (slots[i]) rLastOccupied = i; }
+    const rCount = (rLastOccupied === -1 ? 0 : rLastOccupied - rStart + 1) + 1;
+    const rItems = Array.from({ length: rCount }, (_, i) => ({ slot: slots[rStart + i] || null, zone: 'r', idx: rStart + i }));
 
     return (
         <React.Fragment>
