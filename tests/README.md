@@ -17,9 +17,9 @@ The npm `playwright` package is installed with `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD
 because this host is memory-constrained — the browsers come from the Docker
 image instead, which is why `test:docker` is the normal way to run.
 
-`playwright.config.js` starts a dev server if one isn't already running, and
-reuses yours if it is. Set `NO_WEBSERVER=1` to skip that entirely and point at
-an already-running server.
+`playwright.config.js` builds and serves the production bundle if a preview
+server isn't already running, and reuses yours if it is. Set
+`NO_WEBSERVER=1` to skip that and point at a server you started yourself.
 
 Useful flags:
 
@@ -43,9 +43,10 @@ npm run test:docker -- --trace on              # traces are off by default (see 
 
 ## Conventions worth knowing
 
-- **Serial by design.** The app keeps all its state in `localStorage`, and
-  several specs deliberately wipe or restore *all* of it. `workers: 1` in the
-  config is load-bearing, not a performance oversight.
+- **Runs in parallel.** Playwright gives every test its own browser context and
+  localStorage is per-context, so even the specs that wipe and restore all app
+  state can't reach each other. Three workers saturate a 4-core box; memory is
+  not the limit (~674 MB average, no extra swapping), CPU is.
 
 - **Use `dragTo()` from `helpers.js` for drag-and-drop.** Rolling your own
   mouse sequence tends to produce flaky, slow failures for two non-obvious
@@ -67,7 +68,16 @@ npm run test:docker -- --trace on              # traces are off by default (see 
   the app uses its own dialogs deliberately.
 
 ## Note on timings
+The suite runs in roughly 9 minutes. It used to take 40, for two independent
+reasons, both measured rather than guessed:
+- It ran against the Vite **dev server**, which serves ~55 unbundled,
+  unminified modules including React's development build. Every test pays that
+  on its own page load — a warm-cache reload cost the same as a cold one, so it
+  was execution, not download. Testing the production build also means testing
+  what ships.
+- It ran with **one worker**, on the mistaken belief that the specs shared
+  localStorage.
 
-Individual tests take 20-90s. That's dominated by real app work (fetching and
-rendering a ~90-slot depth chart, full page reloads to verify persistence), not
-by fixed sleeps. The whole suite runs in roughly 15 minutes.
+Individual tests still take 20-60s, dominated by a full app boot per test.
+Fixed `waitForTimeout` sleeps total well under 5% of the runtime, so they are
+not where the time goes.

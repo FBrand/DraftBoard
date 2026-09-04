@@ -1,24 +1,37 @@
 import { defineConfig, devices } from '@playwright/test';
 
-// Tests run against a live dev server, in the official Playwright Docker
-// image (which supplies the browsers — the npm package here is installed with
-// PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1, since this host is memory-constrained).
-// See `npm run test` / `npm run test:docker` in package.json.
-const PORT = process.env.PORT ?? 5173;
+// Tests run against a PRODUCTION build (vite preview), in the official
+// Playwright Docker image (which supplies the browsers — the npm package here
+// is installed with PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1, since this host is
+// memory-constrained). See `npm run test` / `npm run test:docker`.
+//
+// Not the dev server: Vite serves ~55 unbundled, unminified modules including
+// React's development build, and every test pays that cost again on its own
+// page load. Measured, the same 62 tests took 40.1 min against the dev server
+// with one worker and 10.5 min here. It also means the suite exercises what
+// actually ships.
+const PORT = process.env.PORT ?? 4173;
 const BASE_URL = process.env.BASE_URL ?? `http://localhost:${PORT}`;
 
 export default defineConfig({
     testDir: './tests',
-    // The app's state is global (localStorage), and several specs deliberately
-    // wipe or restore all of it. Running them in parallel would have them
-    // clobbering each other, so this suite is serial by design.
-    workers: 1,
-    fullyParallel: false,
+    // Playwright gives every test its own browser context, and localStorage is
+    // per-context — so the specs that deliberately wipe and restore all app
+    // state cannot reach each other, and the suite parallelises safely. (This
+    // was previously pinned to one worker on the mistaken belief that they
+    // shared storage.)
+    //
+    // Three saturates a 4-core box: measured 674 MB average container memory,
+    // ~260% CPU, and no additional swapping. Memory is not the limit here; CPU
+    // is, so a fourth worker buys little.
+    workers: process.env.CI ? 2 : 3,
+    fullyParallel: true,
     forbidOnly: !!process.env.CI,
     retries: 0,
     reporter: process.env.CI ? [['list'], ['github']] : [['list']],
-    // Generous: these are full-app flows against a dev server, and some seed a
-    // roster, reload, and drag across a wide grid within a single test.
+    // Generous: these are full-app flows, and some seed a roster, reload, and
+    // drag across a wide grid within a single test — under three workers on a
+    // loaded box, individual tests get slower even as the suite gets faster.
     timeout: 120_000,
     expect: { timeout: 10_000 },
     use: {
@@ -43,12 +56,13 @@ export default defineConfig({
             testMatch: /\.mobile\.spec\.js$/,
         },
     ],
-    // Reuses an already-running dev server when there is one (the usual case
-    // during development); starts one otherwise.
+    // Builds and serves the production bundle. Reuses an already-running
+    // preview server when there is one. Set NO_WEBSERVER=1 to point at a
+    // server you started yourself.
     webServer: process.env.NO_WEBSERVER ? undefined : {
-        command: 'npm run dev',
+        command: 'npm run build && npm run preview -- --port ' + PORT,
         url: BASE_URL,
         reuseExistingServer: true,
-        timeout: 120_000,
+        timeout: 180_000,
     },
 });
