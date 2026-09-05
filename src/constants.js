@@ -2,6 +2,13 @@
  * Central configuration for the Draft Board.
  * Change these values to re-brand the board for a different team.
  */
+/**
+ * The draft the app is currently working. Facts recorded during a draft are
+ * stamped with it, so a player picked in this session is distinguishable from
+ * one drafted three years ago when both sit on the same depth chart.
+ */
+export const DRAFT_YEAR = 2026;
+
 export const TEAM_CONFIG = {
     name: "Kansas City Chiefs",
     abbreviation: "KC",

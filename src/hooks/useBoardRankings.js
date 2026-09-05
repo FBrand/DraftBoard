@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { parseRankings } from '../utils/dataParser';
 import * as scoutingState from '../utils/scoutingState';
 import { applyProspects } from '../utils/prospects';
 import { identityKey, nameKey } from '../utils/nameMatcher';
 import { resolveAll } from '../utils/playerRegistry';
+import { migrateLegacyScores } from '../utils/athleticMatrix';
 
 const { BOARDS, BOARD_RANKINGS } = scoutingState;
 
@@ -106,6 +107,11 @@ function loadPools() {
         const ids = resolveAll(union);
         const everyone = union.map((p, i) => (ids[i] ? { ...p, id: ids[i] } : p));
 
+        // Matrix scores used to have a store of their own. Now that every
+        // player has a record to hang facts on, they move onto it — here,
+        // because this is the first moment the records exist to move them to.
+        migrateLegacyScores();
+
         // A player one analyst has ranked and another hasn't is not missing
         // from the second board — he is UNRANKED on it. Dropping him meant a
         // player Ryan rated highly simply did not exist on Dan's board, so
@@ -123,8 +129,8 @@ function loadPools() {
                 const origin = p.sourceIdentity ?? p;
                 const mine = own.get(keyOf(origin));
                 return mine
-                    ? { ...p, group: mine.group, overallRank: mine.overallRank, isFavorite: mine.isFavorite }
-                    : { ...p, group: null, overallRank: null, isFavorite: false };
+                    ? { ...p, round: mine.round, tier: mine.tier, overallRank: mine.overallRank, isFavorite: mine.isFavorite }
+                    : { ...p, round: null, tier: null, overallRank: null, isFavorite: false };
             })];
         }));
 
@@ -134,6 +140,10 @@ function loadPools() {
         // can never overwrite an analyst's own tag.
         BOARDS.forEach(board => {
             if (!pools[board]?.length) return;
+            // The file creates the initial state and then steps out of the
+            // way: after this the board lives in storage and is read from
+            // there. Favourites are seeded as part of it.
+            scoutingState.seedBoard(board, pools[board]);
             // Entries written before the registry existed are joined to their
             // player once, here, rather than by name on every read.
             scoutingState.attachPlayerIds(board, pools[board]);
@@ -170,12 +180,15 @@ export default function useBoardRankings(fallback) {
         return () => { cancelled = true; };
     }, [gen]);
 
-    if (!pools) return { pools: null, loading: true };
+    // Memoised so the returned object is stable between renders. Callers use
+    // it as an effect dependency — "the pools have arrived" is the signal that
+    // the boards have been seeded and are worth re-reading — and a fresh
+    // object every render would make that fire forever.
+    const resolved = useMemo(
+        () => (pools ? Object.fromEntries(BOARDS.map(b => [b, pools[b]?.length ? pools[b] : fallback])) : null),
+        [pools, fallback],
+    );
 
-    return {
-        pools: Object.fromEntries(
-            BOARDS.map(b => [b, pools[b]?.length ? pools[b] : fallback]),
-        ),
-        loading: false,
-    };
+    if (!resolved) return { pools: null, loading: true };
+    return { pools: resolved, loading: false };
 }

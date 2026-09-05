@@ -4,6 +4,7 @@ import useEscapeKey from '../hooks/useEscapeKey';
 import { getAthleticMatrixUrl } from '../utils/appLinks';
 import { PLAYER_TAGS } from '../utils/playerTags';
 import * as athleticMatrix from '../utils/athleticMatrix';
+import { factsFor } from '../utils/playerRegistry';
 
 // Shared with the board markers so a tag looks the same wherever it appears.
 const TAGS = PLAYER_TAGS.map(t => ({ id: t.id, label: `${t.symbol} ${t.label}` }));
@@ -16,6 +17,17 @@ const NUMBER_FIELDS = [
     { key: 'positionRank', label: 'Position Rank', derived: 'positionRank' },
     { key: 'athleticMatrixTotal', label: 'Athletic Matrix (Total)', editable: true },
     { key: 'athleticMatrixPosition', label: 'Athletic Matrix (Pos)', editable: true },
+];
+
+// Facts, not opinions: true whoever is looking, so they sit on the player's
+// record and read the same on every board. League entry settles once; team and
+// previous team say where he is and where he came from.
+const FACT_FIELDS = [
+    { key: 'draftYear', label: 'Draft Year', type: 'number', placeholder: '????' },
+    { key: 'draftRound', label: 'Round', type: 'number', placeholder: '???' },
+    { key: 'draftPick', label: 'Pick', type: 'number', placeholder: '???' },
+    { key: 'team', label: 'Team', type: 'text', placeholder: '???' },
+    { key: 'previousTeam', label: 'Previous Team', type: 'text', placeholder: '???' },
 ];
 
 const LIST_FIELDS = [
@@ -137,9 +149,8 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
     });
     // Round and tier are two separate inputs; the board stores them joined as
     // 1.3, which is the form rankings.csv uses.
-    const [round, tier] = String(entry?.group ?? player?.group ?? '').split('.');
-    const [roundVal, setRoundVal] = useState(round ?? '');
-    const [tierVal, setTierVal] = useState(tier ?? '');
+    const [roundVal, setRoundVal] = useState(entry?.round ?? player?.round ?? '');
+    const [tierVal, setTierVal] = useState(entry?.tier ?? player?.tier ?? '');
     // Base data for a player added in-app — correctable and removable, since a
     // name taken down live on air is often a guess, and a typo would otherwise
     // be permanent. Rankings-file players have no such controls: their base
@@ -150,6 +161,11 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
     });
     const [baseError, setBaseError] = useState('');
     const [confirmRemove, setConfirmRemove] = useState(false);
+    // Facts about the player — shown here, never edited here. A prospect has
+    // not entered the league, so a draft year or a team means nothing while a
+    // board is being built. They are set by the draft itself, by import, and
+    // by the sign/trade modal.
+    const facts = factsFor(player?.id);
     // Only the modal presentation is dismissable — the panel variant is a
     // permanent column, not something Escape should blank out.
     useEscapeKey(onClose, variant === 'modal' && !!player);
@@ -164,11 +180,10 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
         );
     }
 
-    // Round and tier are edited separately but stored joined, because that is
-    // the form rankings.csv uses and boardRanking.js sorts by. A round with no
-    // tier is stored bare ("2"), which the sort already treats as tier 0.
-    // Matrix numbers go to the shared per-player store; everything else on
-    // this card belongs to the board being edited.
+    // Round and tier are two stored numbers. rankings.csv fuses them into one
+    // "1.3" column, but that form now lives only at the CSV boundary.
+    // Matrix numbers are facts and go on the player's record; everything else
+    // on this card belongs to the board being edited.
     const commitNumber = (field, raw) => {
         const value = raw === '' ? null : parseInt(raw, 10);
         if (field.key === 'athleticMatrixTotal') {
@@ -204,11 +219,28 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
         setEditingBase(false);
     };
 
+    // Facts hang off the player's record, so they are written once and read
+    // the same on every board — unlike a tier or a tag, which belong to the
+    // analyst who set them.
+    const knownFacts = (() => {
+        if (!readOnly) return [];
+        const out = [];
+        if (facts.isUdfa === true) out.push({ label: 'Entered', value: `UDFA${facts.draftYear ? ` ${facts.draftYear}` : ''}` });
+        else if (facts.draftYear || facts.draftPick || facts.draftRound) {
+            const round = facts.draftRound ? `Rd ${facts.draftRound}` : null;
+            const pick = facts.draftPick ? `Pick ${facts.draftPick}` : null;
+            out.push({ label: 'Drafted', value: [facts.draftYear, round, pick].filter(Boolean).join(' · ') });
+        }
+        if (facts.team) out.push({ label: 'Team', value: facts.team });
+        if (facts.previousTeam) out.push({ label: 'Previously', value: facts.previousTeam });
+        return out;
+    })();
+
     const commitGroup = (r, t) => {
         const round = String(r ?? '').trim();
         const tier = String(t ?? '').trim();
-        if (!round) return commit({ group: null });
-        commit({ group: tier ? `${round}.${tier}` : round });
+        if (!round) return commit({ round: null, tier: null });
+        commit({ round: parseInt(round, 10), tier: tier ? parseInt(tier, 10) : null });
     };
 
     const commit = (patch) => {
@@ -216,7 +248,8 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
             name: player.name,
             position: player.position,
             tag: entry?.tag ?? null,
-            group: entry?.group ?? null,
+            round: entry?.round ?? null,
+            tier: entry?.tier ?? null,
             withinGroup: entry?.withinGroup ?? null,
             athleticMatrixTotal: entry?.athleticMatrixTotal ?? null,
             athleticMatrixPosition: entry?.athleticMatrixPosition ?? null,
@@ -415,6 +448,17 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
                     >
                         Get your Athletic Matrix copy here.
                     </a>
+                )}
+
+                {readOnly && knownFacts.length > 0 && (
+                    <div className="scouting-fact-readout">
+                        {knownFacts.map(f => (
+                            <div key={f.label} className="scouting-readonly-field">
+                                <span className="scouting-readonly-label">{f.label}</span>
+                                <span className="scouting-readonly-value">{f.value}</span>
+                            </div>
+                        ))}
+                    </div>
                 )}
 
                 {readOnly ? <BoardNotes boards={allBoardNotes} /> : LIST_FIELDS.map(f => (

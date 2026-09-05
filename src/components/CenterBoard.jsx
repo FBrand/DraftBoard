@@ -1,5 +1,6 @@
 import React from 'react';
 import PlayerCard from './PlayerCard';
+import { tierKey, compareTiers } from '../utils/boardRanking';
 
 // Generalized board-grid primitive: position columns x round/tier rows,
 // derived purely from `players`' own position/group/drafted fields. Reused
@@ -17,36 +18,27 @@ const CenterBoard = ({ players, onAction, columnOrder = [], isFocusMode = false,
         ...rawPositions.filter(rp => !columnOrder.includes(rp))
     ];
 
-    // Subgroup row order comes from the group labels themselves ("1.1", "1.2",
-    // "2.1", …), sorted by round then tier. This used to be first-appearance
-    // order in `players`, which silently depended on the caller handing over
-    // players in rankings-CSV order — Scouting sorts by rank instead, which
-    // scrambled the rows. Sorting the labels is what was actually meant by
-    // "rows never swap positions", and is stable for every caller.
-    const groupKey = (group) => {
-        const m = String(group ?? '').match(/^(\d+)(?:\.(\d+))?/);
-        if (!m) return [Number.MAX_SAFE_INTEGER, 0];
-        return [parseInt(m[1], 10), m[2] ? parseInt(m[2], 10) : 0];
-    };
-    const masterGroups = [...new Set(players.map(p => p.group))].sort((a, b) => {
-        const [ra, ta] = groupKey(a);
-        const [rb, tb] = groupKey(b);
-        return ra - rb || ta - tb || String(a).localeCompare(String(b));
+    // Row order comes from the tiers themselves, sorted by round then tier.
+    // This used to be first-appearance order in `players`, which silently
+    // depended on the caller handing players over in rankings-CSV order —
+    // Scouting sorts by rank instead, which scrambled the rows. Sorting the
+    // tiers is what was actually meant by "rows never swap positions", and is
+    // stable for every caller.
+    const tiers = new Map();
+    players.forEach(p => {
+        const key = tierKey(p.round, p.tier);
+        if (!tiers.has(key)) tiers.set(key, { key, round: p.round, tier: p.tier });
     });
+    const masterGroups = [...tiers.values()].sort(compareTiers);
 
-    // Strip out active groups natively while inheriting the stable order
-    const activeGroupsSet = new Set(visiblePlayers.map(p => p.group));
-    const allGroups = masterGroups.filter(g => activeGroupsSet.has(g));
+    // Only rows that still have a visible player in them.
+    const activeGroupsSet = new Set(visiblePlayers.map(p => tierKey(p.round, p.tier)));
+    const allGroups = masterGroups.filter(g => activeGroupsSet.has(g.key));
 
-    // A player with no group is UNRANKED — nobody has placed him in a tier.
-    // He gets his own row after every round rather than falling into round 1,
-    // which is where an unlabelled group used to land.
+    // A player with no round is UNRANKED — nobody has placed him in a tier.
+    // He gets his own row after every round rather than falling into round 1.
     const UNRANKED_ROUND = 99;
-    const getRoundFromGroup = (group) => {
-        if (group == null || group === '') return UNRANKED_ROUND;
-        const match = group.toString().match(/^(\d+)/);
-        return match ? parseInt(match[1], 10) : UNRANKED_ROUND;
-    };
+    const getRoundFromGroup = (g) => g?.round ?? UNRANKED_ROUND;
 
     // Group our rows (groups) into rounds for the sidebar labels
     const roundConfig = [];
@@ -112,9 +104,9 @@ const CenterBoard = ({ players, onAction, columnOrder = [], isFocusMode = false,
                         getRoundFromGroup(allGroups[groupIdx + 1]) !== getRoundFromGroup(group);
 
                     return (
-                        <div key={String(group)} className={`board-row ${isLastInRound ? 'round-row-end' : 'subgroup-row-end'}`}>
+                        <div key={group.key} className={`board-row ${isLastInRound ? 'round-row-end' : 'subgroup-row-end'}`}>
                             {positions.map(pos => {
-                                const roundPlayers = visiblePlayers.filter(p => p.position.split('.', 1)[0] === pos && p.group === group);
+                                const roundPlayers = visiblePlayers.filter(p => p.position.split('.', 1)[0] === pos && tierKey(p.round, p.tier) === group.key);
 
                                 return (
                                     <div key={pos} className="slot-cell">

@@ -26,6 +26,7 @@
  */
 import { parseCsvLine, csvField } from './csvUtils';
 import { buildNameIndex, findMatchingIndex } from './nameMatcher';
+import { parseTier, tierLabel, spaceEvenly } from './boardRanking';
 
 export const BOARDS = ['consensus', 'dan', 'ryan'];
 export const BOARD_LABELS = { consensus: 'Consensus', dan: 'Dan', ryan: 'Ryan' };
@@ -55,11 +56,12 @@ export function makeEntry(name, position, school = '', playerId = null) {
         // school is carried here so an entry can be told apart from a
         // namesake's at the same position.
         name, position, school, tag: null,
-        // group mirrors rankings.csv's own `group` column (e.g. "1.3" —
-        // round 1, tier 3; CenterBoard reads the leading digits as the
-        // round and treats the whole string as the tier-row key) so an
-        // exported board slots straight into the app via exportRankingsCSV.
-        group: null,
+        // Where this analyst has placed him: a round and a tier, stored as
+        // two numbers. rankings.csv fuses them into one "1.3" column, so the
+        // joined form is produced on export and parsed on import — and
+        // nowhere else.
+        round: null,
+        tier: null,
         // Position within this player's own tier. Total rank and position
         // rank are NOT stored — they're derived from group + withinGroup by
         // boardRanking.js, so they can never collide or contradict the board.
@@ -92,15 +94,96 @@ function parseListField(raw) {
     }
 }
 
+/**
+ * Entries saved before round and tier were split still carry a joined "1.3"
+ * `group` string. Converted on read rather than in a one-shot migration, so a
+ * board written by an older build keeps working whenever it turns up.
+ */
+function unfuseGroups(entries) {
+    return entries.map(e => {
+        if (!('group' in e)) return e;
+        const { group, ...rest } = e;
+        return { ...rest, ...parseTier(group) };
+    });
+}
+
 export function loadState(board) {
     try {
         const raw = localStorage.getItem(storageKey(board));
         if (raw) {
             const parsed = JSON.parse(raw);
-            if (parsed?.version === 1 && Array.isArray(parsed.entries)) return parsed;
+            if (parsed?.version === 1 && Array.isArray(parsed.entries)) {
+                return { ...parsed, entries: unfuseGroups(parsed.entries) };
+            }
         }
     } catch { /* ignore */ }
     return { version: 1, entries: [] };
+}
+
+/**
+ * Materialises a board from the rankings file, once.
+ *
+ * A CSV creates the initial state and nothing more. After this runs the board
+ * is self-contained: every player has a stored placement, and the file is not
+ * consulted again. Editing the file later changes nothing until it is
+ * imported, which is the point — a board is the analyst's, not a live view of
+ * somebody else's spreadsheet.
+ *
+ * Placements are spaced rather than consecutive, because `withinGroup` is a
+ * float: a later move lands on the midpoint between two neighbours and writes
+ * one player instead of renumbering the tier.
+ *
+ * A `*` in the file seeds a `like` tag at the same time, so the star and the
+ * tag are one mechanic rather than two that can disagree.
+ */
+export function seedBoard(board, players) {
+    if (!players?.length) return false;
+    const state = loadState(board);
+    if (state.seeded) return false;
+
+    const entries = [...state.entries];
+    const byId = new Map();
+    entries.forEach((e, i) => { if (e.playerId) byId.set(e.playerId, i); });
+    const index = buildNameIndex(entries);
+    const seenPerTier = new Map();
+
+    players.forEach(p => {
+        const key = `${p.round}.${p.tier}`;
+        const nth = seenPerTier.get(key) ?? 0;
+        seenPerTier.set(key, nth + 1);
+
+        const placement = {
+            round: p.round ?? null,
+            tier: p.tier ?? null,
+            // Unplaced players get no order either — there is nothing to be
+            // in order of until somebody tiers them.
+            withinGroup: p.round == null ? null : spaceEvenly(nth),
+        };
+
+        let at = p.id != null && byId.has(p.id) ? byId.get(p.id) : -1;
+        if (at === -1) at = findMatchingIndex(p.name, index, p);
+
+        if (at !== -1) {
+            entries[at] = {
+                ...entries[at],
+                playerId: entries[at].playerId ?? p.id ?? null,
+                ...placement,
+                tag: entries[at].tag ?? (p.isFavorite ? 'like' : null),
+            };
+        } else {
+            const created = {
+                ...makeEntry(p.name, p.position, p.school, p.id ?? null),
+                ...placement,
+                tag: p.isFavorite ? 'like' : null,
+            };
+            entries.push(created);
+            index.push(...buildNameIndex([created]).map(e => ({ ...e, index: entries.length - 1 })));
+            if (p.id != null) byId.set(p.id, entries.length - 1);
+        }
+    });
+
+    saveState(board, { version: 1, seeded: true, entries });
+    return true;
 }
 
 /**
@@ -178,7 +261,7 @@ export function parseCSV(csvText) {
             name: (name ?? '').trim(),
             position: (position ?? '').trim(),
             school: (school ?? '').trim(),
-            group: group && group.trim() ? group.trim() : null,
+            ...parseTier(group),
             tag: tag && tag.trim() ? tag.trim() : null,
             withinGroup: toIntOrNull(withinGroup),
             athleticMatrixTotal: toIntOrNull(athleticMatrixTotal),
@@ -190,7 +273,7 @@ export function parseCSV(csvText) {
         };
     }).filter(e => e.name);
 
-    return { version: 1, entries };
+    return { version: 1, seeded: true, entries };
 }
 
 export function exportCSV(state) {
@@ -205,7 +288,7 @@ export function exportCSV(state) {
     ];
     state.entries.forEach(e => {
         rows.push([
-            e.name, e.position, e.school ?? '', e.group ?? '', e.tag ?? '', e.withinGroup ?? '',
+            e.name, e.position, e.school ?? '', tierLabel(e.round, e.tier), e.tag ?? '', e.withinGroup ?? '',
             e.athleticMatrixTotal ?? '', e.athleticMatrixPosition ?? '',
             JSON.stringify(e.strengths ?? []), JSON.stringify(e.weaknesses ?? []), JSON.stringify(e.notes ?? []),
             e.updatedAt,
@@ -229,7 +312,7 @@ export function exportRankingsCSV(effectivePlayers) {
     (effectivePlayers ?? [])
         .filter(p => p?.name)
         .forEach(p => {
-            rows.push([p.group ?? '', p.name, p.position ?? ''].map(csvField).join(','));
+            rows.push([tierLabel(p.round, p.tier), p.name, p.position ?? ''].map(csvField).join(','));
         });
     return rows.join('\n');
 }

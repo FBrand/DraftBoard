@@ -24,22 +24,31 @@ export const STATE_VERSION = 1;
 
 const EMPTY = () => ({ version: STATE_VERSION, players: [] });
 
+// The registry is read on every facts lookup, and a depth chart asks about
+// ninety players in a render. Parsing the whole store ninety times a frame is
+// the kind of cost that only shows up once the data is real, so the parsed
+// value is cached and dropped on write.
+let cache = null;
+
 function read() {
+    if (cache) return cache;
     try {
         const raw = localStorage.getItem(STORAGE_KEY);
         if (!raw) return EMPTY();
         const parsed = JSON.parse(raw);
         if (typeof parsed?.version === 'number' && parsed.version > STATE_VERSION) return EMPTY();
-        return {
+        cache = {
             version: STATE_VERSION,
             players: Array.isArray(parsed?.players) ? parsed.players : [],
         };
+        return cache;
     } catch {
         return EMPTY();
     }
 }
 
 function write(state) {
+    cache = null;
     try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...state, version: STATE_VERSION }));
     } catch { /* ignore */ }
@@ -55,6 +64,55 @@ function newId() {
 }
 
 const clean = (v) => String(v ?? '').trim();
+
+/**
+ * Facts about a player, as opposed to opinions about him.
+ *
+ * A fact is true whoever is looking, so it lives on the one record rather than
+ * being copied onto each analyst's board — Dan and Ryan can disagree about
+ * where a player belongs; they cannot disagree about who drafted him or what
+ * he scored on the matrix.
+ *
+ * Two groups, because they behave differently:
+ *
+ *   League entry — how he got into the league, settled once and never again.
+ *   `isUdfa` says which shape the rest takes: an undrafted player has a year
+ *   but no round and no pick; a drafted one has all three. Round and overall
+ *   pick are both kept because both get said out loud — "a third-rounder" and
+ *   "pick 78" are not the same sentence.
+ *
+ *   Where he is — `team` is who has him now, the club that drafted or signed
+ *   him. `previousTeam` is where he came from, which only means anything for a
+ *   trade or a free-agent move; a rookie has no previous team.
+ *
+ * Every fact is null when nobody has recorded it, `isUdfa` included: null is
+ * "we don't know", false is "he was drafted".
+ *
+ * Deliberately absent: combine and pro-day measurements (a note covers those
+ * when they matter) and anything about contracts.
+ */
+export const FACT_FIELDS = [
+    'athleticMatrixTotal', 'athleticMatrixPosition',
+    'isUdfa', 'draftYear', 'draftRound', 'draftPick',
+    'team', 'previousTeam',
+];
+
+const NUMERIC_FACTS = new Set([
+    'athleticMatrixTotal', 'athleticMatrixPosition', 'draftYear', 'draftRound', 'draftPick',
+]);
+const BOOLEAN_FACTS = new Set(['isUdfa']);
+
+const BLANK_FACTS = Object.fromEntries(FACT_FIELDS.map(f => [f, null]));
+
+function cleanFact(field, value) {
+    if (value === '' || value === null || value === undefined) return null;
+    if (BOOLEAN_FACTS.has(field)) return !!value;
+    if (NUMERIC_FACTS.has(field)) {
+        const n = parseInt(value, 10);
+        return Number.isFinite(n) ? n : null;
+    }
+    return clean(value).toUpperCase() || null;
+}
 
 /**
  * Every name a record has ever been known by, flattened so one fuzzy pass can
@@ -110,6 +168,7 @@ export function resolveAll(candidates, { create = true } = {}) {
             school: clean(c.school),
             aliases: [],
             hidden: false,
+            ...BLANK_FACTS,
             createdAt: new Date().toISOString(),
         };
         state.players.push(record);
@@ -161,6 +220,40 @@ export function rename(id, patch) {
     }
     next.aliases = aliases;
 
+    state.players[at] = next;
+    write(state);
+    return true;
+}
+
+/** The facts recorded for a player, with nulls for the ones nobody has. */
+export function factsFor(id) {
+    const record = id ? read().players.find(p => p.id === id) : null;
+    if (!record) return { ...BLANK_FACTS };
+    return Object.fromEntries(FACT_FIELDS.map(f => [f, record[f] ?? null]));
+}
+
+/**
+ * Merges facts onto a record. Only the fields passed are touched, so recording
+ * a draft pick doesn't blank a matrix score somebody else entered. Passing
+ * null or '' for a field clears it.
+ */
+export function setFacts(id, patch) {
+    const state = read();
+    const at = state.players.findIndex(p => p.id === id);
+    if (at === -1) return false;
+
+    const next = { ...state.players[at] };
+    let changed = false;
+    FACT_FIELDS.forEach(f => {
+        if (!(f in patch)) return;
+        const value = cleanFact(f, patch[f]);
+        if (next[f] === value) return;
+        next[f] = value;
+        changed = true;
+    });
+    if (!changed) return false;
+
+    next.updatedAt = new Date().toISOString();
     state.players[at] = next;
     write(state);
     return true;

@@ -1,103 +1,106 @@
 /**
- * Athletic Matrix scores, keyed by player and shared across every board.
+ * Athletic Matrix scores.
  *
  * These were per-board scouting fields, which was wrong: the matrix is a
- * measurement of the player, not one analyst's opinion of him. Dan and Ryan
- * can disagree about where he belongs on a board; they cannot disagree about
- * his athletic testing. Keeping a copy per board meant the same number had to
- * be typed three times and could silently drift apart.
+ * measurement of the player, not one analyst's opinion of him. Dan and Ryan can
+ * disagree about where he belongs on a board; they cannot disagree about his
+ * athletic testing. Keeping a copy per board meant the same number had to be
+ * typed three times and could silently drift apart.
  *
- * Stored separately from the scouting boards so it survives switching, and so
- * clearing one analyst's board doesn't take the measurements with it.
+ * They now live where every other fact about a player lives — on his registry
+ * record (see playerRegistry.js). This module stays as the way the app reads
+ * and writes them, so callers don't have to care, and it carries across the
+ * rows written while the scores had a store of their own.
  */
 import { buildNameIndex, findMatchingIndex } from './nameMatcher';
+import { factsFor, setFacts, resolve, loadRegistry } from './playerRegistry';
 
-const STORAGE_KEY = 'athletic_matrix_v1';
+const LEGACY_KEY = 'athletic_matrix_v1';
 export const STATE_VERSION = 1;
 
-function load() {
+const FIELD = { total: 'athleticMatrixTotal', position: 'athleticMatrixPosition' };
+
+function legacyRows() {
     try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (!raw) return { version: STATE_VERSION, players: [] };
+        const raw = localStorage.getItem(LEGACY_KEY);
+        if (!raw) return [];
         const parsed = JSON.parse(raw);
-        if (typeof parsed?.version === 'number' && parsed.version > STATE_VERSION) {
-            return { version: STATE_VERSION, players: [] }; // newer app wrote this
-        }
-        return { version: STATE_VERSION, players: Array.isArray(parsed?.players) ? parsed.players : [] };
+        return Array.isArray(parsed?.players) ? parsed.players : [];
     } catch {
-        return { version: STATE_VERSION, players: [] };
+        return [];
     }
 }
 
-function save(state) {
+/**
+ * Moves scores from the old standalone store onto the registry.
+ *
+ * Rows whose player can't be identified yet are left where they are rather
+ * than dropped: the registry fills up as the rankings load, so a later run may
+ * well place them. Numbers somebody typed in are not worth losing to a race.
+ */
+export function migrateLegacyScores() {
+    const rows = legacyRows();
+    if (!rows.length) return false;
+
+    const registry = loadRegistry();
+    if (!registry.length) return false;
+    const index = buildNameIndex(registry);
+
+    const unplaced = [];
+    let moved = 0;
+
+    rows.forEach(row => {
+        let id = row.playerId ?? null;
+        if (!id) {
+            const at = findMatchingIndex(row.name, index, { position: row.pos });
+            id = at === -1 ? null : registry[at].id;
+        }
+        if (!id) { unplaced.push(row); return; }
+        setFacts(id, { athleticMatrixTotal: row.total, athleticMatrixPosition: row.position });
+        moved += 1;
+    });
+
     try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...state, version: STATE_VERSION }));
+        if (unplaced.length) {
+            localStorage.setItem(LEGACY_KEY, JSON.stringify({ version: STATE_VERSION, players: unplaced }));
+        } else {
+            localStorage.removeItem(LEGACY_KEY);
+        }
     } catch { /* ignore */ }
+
+    return moved > 0;
 }
 
-export function loadAll() {
-    return load().players;
-}
-
-// Scores are keyed by registry id where the caller has one. The qualified
-// name match behind it covers rows written before ids existed, and callers
-// that only know a name.
-function indexOf(players, name, qualifier) {
-    if (qualifier?.id) {
-        const byId = players.findIndex(p => p.playerId === qualifier.id);
-        if (byId !== -1) return byId;
-    }
-    return findMatchingIndex(name, buildNameIndex(players), qualifier);
+/** Resolves without inventing a record: reading a score must not create a player. */
+function idFor(name, qualifier) {
+    if (qualifier?.id) return qualifier.id;
+    if (!name) return null;
+    return resolve({ name, position: qualifier?.position, school: qualifier?.school }, { create: false });
 }
 
 /** `{ total, position }` for a player, or nulls when nothing is recorded. */
 export function getScores(name, qualifier = null) {
-    const players = load().players;
-    if (!name || !players.length) return { total: null, position: null };
-    const i = indexOf(players, name, qualifier);
-    if (i === -1) return { total: null, position: null };
-    return { total: players[i].total ?? null, position: players[i].position ?? null };
-}
-
-/**
- * Follows a player's scores to a new name.
- *
- * A row carrying a registry id needs no help — the id survives the rename, so
- * the scores follow the player for free. This is for rows written before ids
- * existed, which are keyed by name and would otherwise be orphaned on a player
- * who no longer answers to it.
- */
-export function renameScores(oldName, newName, qualifier = null) {
-    if (!oldName || !newName || oldName === newName) return;
-    const state = load();
-    const i = indexOf(state.players, oldName, qualifier);
-    if (i === -1) return;
-    state.players[i] = { ...state.players[i], name: newName };
-    save(state);
+    const id = idFor(name, qualifier);
+    if (!id) return { total: null, position: null };
+    const facts = factsFor(id);
+    return { total: facts.athleticMatrixTotal, position: facts.athleticMatrixPosition };
 }
 
 /** Merges one field; passing null clears it. */
 export function setScore(name, field, value, qualifier = null) {
-    if (!name || (field !== 'total' && field !== 'position')) return;
-    const state = load();
-    const i = indexOf(state.players, name, qualifier);
-    if (i === -1) {
-        state.players.push({
-            playerId: qualifier?.id ?? null,
-            name,
-            pos: qualifier?.position ?? null,
-            total: null,
-            position: null,
-            [field]: value,
-        });
-    } else {
-        // Backfill the id onto a row that predates it, so the next lookup
-        // takes the id path and the name stops mattering.
-        state.players[i] = {
-            ...state.players[i],
-            playerId: state.players[i].playerId ?? qualifier?.id ?? null,
-            [field]: value,
-        };
-    }
-    save(state);
+    if (!name || !FIELD[field]) return;
+    // Entering a score is a statement that this player exists, so unlike a
+    // read this one may create the record.
+    const id = qualifier?.id
+        ?? resolve({ name, position: qualifier?.position, school: qualifier?.school });
+    if (!id) return;
+    setFacts(id, { [FIELD[field]]: value });
+}
+
+/**
+ * Kept for callers that still rename by name. Scores hang off the registry id,
+ * which survives a rename on its own, so there is nothing left to carry.
+ */
+export function renameScores() {
+    return false;
 }

@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { parseRankings, parsePicks } from '../utils/dataParser';
 import { shouldSeed } from '../utils/appInit';
 import { highestDraftPick, isUndraftedSigning, LAST_DRAFT_PICK } from '../utils/draftPhase';
-import { TEAM_CONFIG } from '../constants';
+import { TEAM_CONFIG, DRAFT_YEAR } from '../constants';
+import { resolve as resolvePlayer, setFacts } from '../utils/playerRegistry';
 import { findMatchingPlayerIndex, buildNameIndex, findMatchingIndex } from '../utils/nameMatcher';
 
 const DRAFT_STORAGE_KEY = 'nfl_draft_board_state';
@@ -261,6 +262,13 @@ export const useDraftState = () => {
             setOurPicksLeft(prev => prev.filter(pk => pk !== pickNumber));
         }
 
+        // A pick is a fact about the player, not an opinion, so it goes on his
+        // record rather than only into this session's draft state. The round is
+        // left alone: compensatory picks mean it can't be divided out of the
+        // overall number, and a wrong round is worse than a missing one.
+        const id = resolvePlayer({ name: player.name, position: player.position, school: player.school });
+        if (id) setFacts(id, { isUdfa: false, draftYear: DRAFT_YEAR, draftPick: pickNumber, team });
+
         triggerChime();
         setCurrentPick(prev => prev + 1);
     }, [currentPick, ourPicksLeft, remotePicks, players, saveHistory, triggerChime]);
@@ -291,6 +299,10 @@ export const useDraftState = () => {
         const matchIdx = findMatchingPlayerIndex(player.name, players);
         setPlayers(prev => prev.map((p, idx) => (idx === matchIdx ? { ...p, ...signed } : p)));
         setDraftedPlayers(prev => [...prev, signed]);
+
+        // Going undrafted is just as much a league-entry fact as being picked.
+        const id = resolvePlayer({ name: player.name, position: player.position, school: player.school });
+        if (id) setFacts(id, { isUdfa: true, draftYear: DRAFT_YEAR, draftPick: null, draftRound: null, team: TEAM_CONFIG.abbreviation });
     }, [draftedPlayers, players, saveHistory]);
 
     const undoAction = useCallback(() => {

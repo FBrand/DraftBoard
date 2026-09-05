@@ -179,6 +179,59 @@ proposal, not a bulk write. Collisions block submit and always offer the
 already-existing player's card rather than dead-ending; filling in a different
 position or school is itself a resolution.
 
+### Player facts vs. board opinions
+
+A **fact** is true whoever is looking, so it lives once on the registry record:
+`isUdfa`, `draftYear`, `draftRound`, `draftPick`, `team`, `previousTeam`, and
+the athletic-matrix scores (`athletic_matrix_v1` is retired —
+`athleticMatrix.js` is now a facade over the record and migrates old rows).
+Every fact is null when unrecorded, `isUdfa` included: null is "unknown",
+false is "drafted".
+
+An **opinion** is per board: `round`, `tier`, `withinGroup`, `tag`,
+`strengths`/`weaknesses`/`notes`. Three analysts may disagree about all of
+them; none can disagree about who drafted a player.
+
+Facts are read-only on the scouting card — a prospect has not entered the
+league, so a draft year means nothing while a board is being built. They are
+written by the draft itself, by import, and by the sign/trade modal.
+
+**`draftRound` is never derived from `draftPick`.** Compensatory picks make
+`ceil(pick / 32)` wrong from round three on, and a confidently wrong round is
+worse than a blank one. The live draft records year + overall pick and leaves
+the round for import or hand entry.
+
+### CSVs seed; storage is the truth
+
+A rankings file creates a board's **initial state and nothing more**.
+`scoutingState.seedBoard()` materialises every player's placement on first
+load, marks the board `seeded`, and the file is never consulted again — editing
+it later changes nothing until it is explicitly imported. Anything that writes
+a board must preserve the `seeded` flag; dropping it makes the next load
+re-seed from the file and throw the edit away.
+
+### `withinGroup` is a float
+
+A move writes **one number on one player**. Landing between two players takes
+the midpoint of their values, so nobody else shifts and nobody else is written
+— `moveToRank` returns a placement for the mover, not a new ordering for the
+board. It used to rewrite all 328 entries for one drag, which also quietly
+transcribed the file's order onto every untouched player.
+
+Enough midpoint insertions at one spot will eat into float precision (~50);
+the fix is renormalising that one tier with `spaceEvenly`, not changing the
+model. Total rank is still counted off the ordering rather than stored, so it
+cannot contradict the tiers or collide.
+
+### Positional value is configurable (`utils/appSettings.js`)
+
+It decides the order of players nobody has placed, which makes it an opinion —
+it used to be a hardcoded list quietly shaping every board. It is **global, not
+per board**: if analysts disagree about what a position is worth, that belongs
+in where they place players, not in a hidden default that makes their untouched
+boards differ. Edited via Scouting → Settings, alongside the Athletic Matrix
+link.
+
 ### The board ranking model (read before touching ranks or groups)
 
 Scouting's "Total Rank", "Position Rank" and "Round.Group" are **not** a

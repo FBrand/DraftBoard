@@ -1,3 +1,5 @@
+import { parseTier } from './boardRanking';
+
 export const parseRankings = (csvText) => {
   const lines = csvText.trim().split('\n');
   const data = lines.slice(1);
@@ -17,7 +19,7 @@ export const parseRankings = (csvText) => {
     return {
       name,
       position,
-      group: currentGroup,
+      ...parseTier(currentGroup),
       isFavorite: isFavoriteStr === '*',
       overallRank: index + 1,
       drafted: false,

@@ -47,7 +47,7 @@ const LeftPanel = ({ players, onDraft, onDraftUnranked, onInfoOpen, tagFor }) =>
                     // Grouped by round view
                     rounds.map(round => {
                         // const roundPlayers = remaining.filter(p => getRound(p.overallRank) === round);
-                        const roundPlayers = remaining.filter(p => parseInt(p.group.substring(0, 1), 10) === round);
+                        const roundPlayers = remaining.filter(p => p.round === round);
                         if (roundPlayers.length === 0) return null;
 
                         return (

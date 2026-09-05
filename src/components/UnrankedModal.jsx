@@ -22,7 +22,8 @@ const UnrankedModal = ({ isOpen, onClose, onDraft, mode = 'draft', initialPlayer
             position: position.toUpperCase(),
             ...(mode === 'postdraft' ? { team } : {}),
             overallRank: 999,
-            group: 'Custom',
+            round: null,
+            tier: null,
             isUnranked: true,
         });
         onClose();

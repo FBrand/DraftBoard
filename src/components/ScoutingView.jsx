@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import CenterBoard from './CenterBoard';
 import ScoutingControls from './ScoutingControls';
 import ScoutingLeftPanel from './ScoutingLeftPanel';
@@ -6,11 +6,12 @@ import * as scoutingState from '../utils/scoutingState';
 import { buildNameIndex, findMatchingIndex } from '../utils/nameMatcher';
 import useIsMobile from '../hooks/useIsMobile';
 import Menu from './Menu';
-import { rankBoard, moveToRank } from '../utils/boardRanking';
+import { rankBoard, moveToRank, between } from '../utils/boardRanking';
 import useBoardRankings, { invalidatePools } from '../hooks/useBoardRankings';
 import useUrlParam from '../hooks/useUrlParam';
 import { PLAYER_TAGS } from '../utils/playerTags';
 import AddProspectsModal from './AddProspectsModal';
+import SettingsModal from './SettingsModal';
 import { addProspect, savePlayerEdit, deletePlayer, restorePlayer, hiddenPlayers, toPoolPlayer, classify } from '../utils/prospects';
 import * as athleticMatrix from '../utils/athleticMatrix';
 import * as playerRegistry from '../utils/playerRegistry';
@@ -54,6 +55,7 @@ export default function ScoutingView({ players, columnOrder }) {
     const [tagFilter, setTagFilter] = useState('all');
     const [unrankedOnly, setUnrankedOnly] = useState(false);
     const [addOpen, setAddOpen] = useState(false);
+    const [settingsOpen, setSettingsOpen] = useState(false);
     // Removing a rankings-file player only HIDES him — the file still has him —
     // so there has to be a way back. Undo doesn't cover base data: it is shared
     // by every board, and rewinding one board's history must not silently
@@ -63,6 +65,15 @@ export default function ScoutingView({ players, columnOrder }) {
     // the board — tapping a player looked like it did nothing. Present it as
     // a modal there instead. Still fully editable: this is Scouting.
     const isMobile = useIsMobile();
+
+    // The boards are read once at mount, which is before the pools have
+    // loaded — and loading them is what SEEDS a board from its rankings file.
+    // Without re-reading, an edit would be computed against the empty
+    // pre-seed state and saved over the seeded one.
+    useEffect(() => {
+        if (!pools) return;
+        setBoards(Object.fromEntries(BOARDS.map(b => [b, scoutingState.loadState(b)])));
+    }, [pools]);
 
     const state = boards[activeBoard];
     const entryIndex = useMemo(() => buildNameIndex(state.entries), [state.entries]);
@@ -107,7 +118,7 @@ export default function ScoutingView({ players, columnOrder }) {
             // Unranked means nobody has placed him in a tier yet — the state
             // every added player starts in, and the working list an analyst
             // needs after a weekend of games.
-            if (unrankedOnly && p.group != null) return false;
+            if (unrankedOnly && p.round != null) return false;
             if (tagFilter === 'all') return true;
             const entry = entryFor(p.name, p);
             if (tagFilter === 'untagged') return !entry?.tag;
@@ -121,62 +132,36 @@ export default function ScoutingView({ players, columnOrder }) {
 
     const selectedPlayer = selectedName ? effectivePlayers.find(p => p.name === selectedName) : null;
 
-    // Records an explicit ordering by stamping each player's position WITHIN
-    // ITS OWN TIER, plus the tier it now belongs to. Nothing stores a global
-    // rank: that stays derived, so it can't drift out of step with the groups.
-    // `groupOverrides` optionally moves specific players into another tier.
-    // `basis` is the ordering the names were read off. It defaults to the
-    // committed board, but a batch of moves applied in one go has to pass its
-    // own in-progress ordering — otherwise every move after the first reads
-    // tiers from a board that no longer matches.
-    const applyOrder = (entries, orderedNames, groupOverrides = {}, basis = effectivePlayers) => {
+    // Writes ONE player's placement. Not an ordering of the board: nobody else
+    // moves and nobody else is written.
+    //
+    // This used to stamp a fresh position onto all 328 entries for a single
+    // drag, which was both a lot of writing and a quiet loss of information —
+    // every untouched player ended up with an explicit order transcribed from
+    // whatever the file happened to say. `withinGroup` being a float is what
+    // makes one write enough: landing between two players is the midpoint of
+    // their two values.
+    const placeOne = (entries, player, placement) => {
         const out = [...entries];
         const now = new Date().toISOString();
-        const groupOf = new Map(basis.map(p => [p.name, p.group]));
-        const seenPerGroup = new Map();
 
-        // The name index is built ONCE and extended as entries are appended.
-        // It used to be rebuilt inside the loop — for a 313-player board that
-        // meant 313 rebuilds and ~147k fuzzy-name comparisons for a single
-        // reorder, all to answer a question the index already knew.
-        const index = buildNameIndex(out);
-        // Positions are looked up the same way, from a map rather than a
-        // linear scan of the pool per appended player.
-        const positionOf = new Map(basis.map(p => [p.name, p.position]));
-        const schoolOf = new Map(basis.map(p => [p.name, p.school]));
-        const idOf = new Map(basis.map(p => [p.name, p.id]));
-        const byPlayerId = new Map();
-        out.forEach((e, i) => { if (e.playerId) byPlayerId.set(e.playerId, i); });
+        let idx = player.id ? out.findIndex(e => e.playerId === player.id) : -1;
+        if (idx === -1) idx = findMatchingIndex(player.name, buildNameIndex(out), player);
 
-        orderedNames.forEach(name => {
-            const group = groupOverrides[name] ?? groupOf.get(name) ?? null;
-            const nextWithin = (seenPerGroup.get(group) ?? 0) + 1;
-            seenPerGroup.set(group, nextWithin);
-
-            // By id when both sides have one. The name path is qualified by
-            // position and school because an unqualified match here wrote one
-            // player's tier and order onto a namesake's entry, so two players
-            // shared one entry and the ordering stopped being derivable.
-            const playerId = idOf.get(name) ?? null;
-            const qualifier = { position: positionOf.get(name), school: schoolOf.get(name) };
-            const idx = (playerId != null && byPlayerId.has(playerId))
-                ? byPlayerId.get(playerId)
-                : findMatchingIndex(name, index, qualifier);
-            if (idx !== -1) {
-                out[idx] = { ...out[idx], playerId: out[idx].playerId ?? playerId, group, withinGroup: nextWithin, updatedAt: now };
-                if (playerId != null) byPlayerId.set(playerId, idx);
-            } else {
-                const position = positionOf.get(name) ?? '';
-                out.push({
-                    ...scoutingState.makeEntry(name, position, schoolOf.get(name) ?? '', playerId),
-                    group, withinGroup: nextWithin, updatedAt: now,
-                });
-                // Keep both indexes in step so a later name matches this entry
-                // rather than appending a second one for the same player.
-                index.push(...buildNameIndex([out[out.length - 1]]).map(e => ({ ...e, index: out.length - 1 })));
-                if (playerId != null) byPlayerId.set(playerId, out.length - 1);
-            }
-        });
+        if (idx !== -1) {
+            out[idx] = {
+                ...out[idx],
+                playerId: out[idx].playerId ?? player.id ?? null,
+                ...placement,
+                updatedAt: now,
+            };
+        } else {
+            out.push({
+                ...scoutingState.makeEntry(player.name, player.position, player.school ?? '', player.id ?? null),
+                ...placement,
+                updatedAt: now,
+            });
+        }
         return out;
     };
 
@@ -194,7 +179,10 @@ export default function ScoutingView({ players, columnOrder }) {
     };
 
     const commitBoard = (entries) => {
-        const next = { version: 1, entries };
+        // Spread the current state rather than rebuilding it: dropping the
+        // `seeded` flag here un-seeded the board on every edit, so the next
+        // load re-seeded it from the file and threw the edit away.
+        const next = { ...boards[activeBoard], version: 1, entries };
         const stack = past.current[activeBoard] ?? (past.current[activeBoard] = []);
         stack.push(boards[activeBoard]);
         if (stack.length > 25) stack.shift();
@@ -216,7 +204,7 @@ export default function ScoutingView({ players, columnOrder }) {
     const saveEntry = (updated) => {
         const current = effectivePlayers.find(p => p.name === updated.name);
         const wantedRank = updated.personalRank;
-        const wantedGroup = updated.group;
+        const wantedRound = updated.round;
 
         const boardState = boards[activeBoard];
         let entries = [...boardState.entries];
@@ -228,16 +216,23 @@ export default function ScoutingView({ players, columnOrder }) {
         else entries.push(persisted);
 
         // Typing a total rank is a MOVE, not an assignment: the player takes
-        // that slot, adopts that slot's tier, and everyone between the old and
-        // new position shifts by one. Two players can never share a rank
-        // because the rank is only ever read off the resulting order.
+        // that slot and adopts its tier. Nobody else shifts, because his
+        // position is a value between his new neighbours rather than an index
+        // that everything below has to make room for.
         if (wantedRank != null && current && wantedRank !== current.overallRank) {
             const moved = moveToRank(effectivePlayers, updated.name, wantedRank);
-            if (moved) entries = applyOrder(entries, moved.order, { [updated.name]: moved.group });
-        } else if (wantedGroup != null && current && wantedGroup !== current.group) {
-            // Changing the tier directly: keep the rest of the order as-is and
-            // let the derivation re-place this player within its new tier.
-            entries = applyOrder(entries, effectivePlayers.map(p => p.name), { [updated.name]: wantedGroup });
+            if (moved) entries = placeOne(entries, current, moved);
+        } else if (current && (updated.round !== current.round || updated.tier !== current.tier)) {
+            // Changing the tier directly: he goes to the end of the new tier,
+            // and the rest of the board is untouched.
+            const last = [...effectivePlayers]
+                .filter(p => p.round === wantedRound && p.tier === updated.tier)
+                .pop() ?? null;
+            entries = placeOne(entries, current, {
+                round: wantedRound,
+                tier: updated.tier,
+                withinGroup: between(last, null, wantedRound, updated.tier),
+            });
         }
 
         commitBoard(entries);
@@ -247,15 +242,24 @@ export default function ScoutingView({ players, columnOrder }) {
     // different tier's players moves them into that tier, same as typing the
     // rank would.
     const handleReorder = (newOrderedNames) => {
-        const idx = newOrderedNames.findIndex((n, i) => effectivePlayers[i]?.name !== n);
-        const overrides = {};
-        if (idx !== -1) {
-            const movedName = newOrderedNames[idx];
-            const neighbour = newOrderedNames[idx + 1] ?? newOrderedNames[idx - 1];
-            const group = effectivePlayers.find(p => p.name === neighbour)?.group;
-            if (group != null) overrides[movedName] = group;
-        }
-        commitBoard(applyOrder(boards[activeBoard].entries, newOrderedNames, overrides));
+        // Exactly one player moved; find him and the two he landed between.
+        const at = newOrderedNames.findIndex((n, i) => effectivePlayers[i]?.name !== n);
+        if (at === -1) return;
+
+        const byName = new Map(effectivePlayers.map(p => [p.name, p]));
+        const moved = byName.get(newOrderedNames[at]);
+        if (!moved) return;
+
+        const before = byName.get(newOrderedNames[at - 1]) ?? null;
+        const after = byName.get(newOrderedNames[at + 1]) ?? null;
+        const host = before ?? after;
+        if (!host) return;
+
+        const round = host.round ?? null;
+        const tier = host.tier ?? null;
+        commitBoard(placeOne(boards[activeBoard].entries, moved, {
+            round, tier, withinGroup: between(before, after, round, tier),
+        }));
     };
 
     // Adding prospects. Base data (name/position/school) is shared by every
@@ -274,9 +278,10 @@ export default function ScoutingView({ players, columnOrder }) {
         const index = buildNameIndex(entries);
 
         rows.forEach(r => {
-            const group = r.round ? (r.tier ? `${r.round}.${r.tier}` : String(r.round)) : null;
+            const round = r.round === '' ? null : parseInt(r.round, 10);
+            const tier = r.tier === '' ? null : parseInt(r.tier, 10);
             const patch = {
-                position: r.position, school: r.school, tag: r.tag, group,
+                position: r.position, school: r.school, tag: r.tag, round, tier,
                 strengths: r.strengths, weaknesses: r.weaknesses, notes: r.notes,
                 updatedAt: new Date().toISOString(),
             };
@@ -307,7 +312,7 @@ export default function ScoutingView({ players, columnOrder }) {
         rows.filter(r => r.rank !== '').forEach(r => {
             const moved = moveToRank(ordering, r.name, parseInt(r.rank, 10));
             if (!moved) return;
-            entries = applyOrder(entries, moved.order, { [r.name]: moved.group }, ordering);
+            entries = placeOne(entries, ordering.find(p => p.name === r.name) ?? r, moved);
             ordering = rankBoard(pool, lookup(entries));
         });
 
@@ -472,6 +477,7 @@ export default function ScoutingView({ players, columnOrder }) {
                         { label: 'Export Scouting CSV…', onClick: handleExport, title: 'Full overlay: tags, notes, matrix numbers' },
                         { label: 'Import Scouting CSV…', file: { accept: '.csv', onFile: handleImport } },
                         { label: 'Add Prospects…', onClick: () => setAddOpen(true), title: 'Type or import players missing from the rankings' },
+                        { label: 'Settings…', onClick: () => setSettingsOpen(true), title: 'Positional value and the Athletic Matrix link — shared by every board' },
                         ...(hidden.length ? [{
                             label: `Restore ${hidden.length} Removed Player${hidden.length === 1 ? '' : 's'}`,
                             onClick: handleRestoreAll,
@@ -514,6 +520,17 @@ export default function ScoutingView({ players, columnOrder }) {
                     />
                 )}
             </div>
+
+            {settingsOpen && (
+                <SettingsModal
+                    isOpen
+                    onClose={() => setSettingsOpen(false)}
+                    // Positional value orders players nobody has placed, so a
+                    // change has to re-rank the boards, not just the next one
+                    // somebody opens.
+                    onChanged={invalidatePools}
+                />
+            )}
 
             {addOpen && (
                 <AddProspectsModal

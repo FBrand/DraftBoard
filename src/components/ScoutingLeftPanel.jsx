@@ -4,6 +4,7 @@ import {
     useSensor, useSensors, MouseSensor, TouchSensor,
 } from '@dnd-kit/core';
 import PlayerCard from './PlayerCard';
+import { tierLabel } from '../utils/boardRanking';
 
 // One draggable+droppable row. Draggable via the handle only (keeps the
 // click-to-select target free of drag-listener interference) — same split
@@ -104,7 +105,7 @@ export default function ScoutingLeftPanel({ orderedPlayers, selectedName, onSele
                                     key={`${player.name}|${player.position}`}
                                     player={player}
                                     rank={player.overallRank ?? null}
-                                    group={player.group}
+                                    group={tierLabel(player.round, player.tier)}
                                     onSelect={onSelect}
                                     isSelected={player.name === selectedName}
                                 />
