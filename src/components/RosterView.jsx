@@ -12,6 +12,7 @@ import Toast from './Toast';
 import Menu from './Menu';
 import { shouldSeed } from '../utils/appInit';
 import { isDraftComplete, isDraftPick, isUndraftedSigning } from '../utils/draftPhase';
+import { resolve as resolvePlayer, setFacts } from '../utils/playerRegistry';
 import useUndoableState from '../hooks/useUndoableState';
 
 function CounterBox({ label, val, max, status, isLast, maxLabel }) {
@@ -133,11 +134,19 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
     //
     // A signing now lands in the player's own position row: first free 53-man
     // slot, then practice squad, then that row's reserve column. Nothing
-    // touches draft state; the :FA / :UDFA suffix on the name already records
-    // how they arrived, the same way roster.csv does.
+    // touches draft state; the arrival tag beside the name records how they
+    // arrived, the same thing roster.csv encodes in its suffix.
     const handleSignPlayer = (customPlayer) => {
-        const { name, position } = customPlayer;
+        const { name, position, arrival = null, team, previousTeam } = customPlayer;
         const displayName = String(name).split(':')[0];
+
+        // Team and previous team are facts about the player, so they go on his
+        // record. How he arrived HERE is a fact about this roster, so it stays
+        // on the slot.
+        if (team || previousTeam) {
+            const id = resolvePlayer({ name: displayName, position });
+            if (id) setFacts(id, { ...(team ? { team } : {}), ...(previousTeam ? { previousTeam } : {}) });
+        }
 
         // Computed outside setState: an updater is deferred to the render
         // phase, so a result read back straight after it would be stale.
@@ -158,7 +167,7 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
         const arr = next.depthChart[rowId] = [...(next.depthChart[rowId] ?? [])];
 
         const placeAt = (index, zone, label) => {
-            arr[index] = makeSlot(name, zone);
+            arr[index] = makeSlot(displayName, zone, arrival);
             setState(next);
             setToast({ message: `Signed ${displayName} — ${chip?.label ?? position}, ${label}.`, tone: 'success' });
         };
@@ -201,14 +210,14 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
             else {
                 if (!dc[dst.posId]) dc[dst.posId] = [];
                 dc[dst.posId] = [...dc[dst.posId]];
-                dc[dst.posId][dst.slotIdx] = makeSlot(src.slot.name, dst.targetZone);
+                dc[dst.posId][dst.slotIdx] = makeSlot(src.slot.name, dst.targetZone, src.slot.arrival ?? null);
             }
 
             // Swap displaced back to source
             if (displaced) {
                 if (src.posId === '__ir__') next.reserve.push(displaced.name);
                 else if (src.posId === '__cut__') next.cuts.push(displaced.name);
-                else dc[src.posId][src.slotIdx] = makeSlot(displaced.name, src.slot?.zone ?? '53');
+                else dc[src.posId][src.slotIdx] = makeSlot(displaced.name, src.slot?.zone ?? '53', displaced.arrival ?? null);
             }
 
             return next;

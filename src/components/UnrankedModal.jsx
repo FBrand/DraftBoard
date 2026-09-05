@@ -9,18 +9,30 @@ const UnrankedModal = ({ isOpen, onClose, onDraft, mode = 'draft', initialPlayer
     const [name, setName] = useState(() => initialPlayer?.name || '');
     const [position, setPosition] = useState(() => initialPlayer?.position || '');
     const [team, setTeam] = useState(() => initialPlayer?.team || 'KC');
+    // Where he came from. Only means anything for a move between clubs — a
+    // draft pick and a UDFA are entering the league, not leaving somewhere.
+    const [previousTeam, setPreviousTeam] = useState(() => initialPlayer?.previousTeam || '');
     useEscapeKey(onClose, isOpen);
 
     if (!isOpen) return null;
 
     const disabled = !name || !position;
 
+    // How he arrived is passed alongside the name, not inside it. It used to
+    // be appended as ":FA" — and the name is the identity key, so that made
+    // one player two.
+    const MOVED_CLUBS = new Set(['FA', 'TR']);
+
     const submit = (suffix = '') => {
         if (disabled) return;
         onDraft({
-            name: suffix ? `${name}:${suffix}` : name,
+            name: name.trim(),
             position: position.toUpperCase(),
+            arrival: suffix || null,
             ...(mode === 'postdraft' ? { team } : {}),
+            ...(MOVED_CLUBS.has(suffix) && previousTeam.trim()
+                ? { previousTeam: previousTeam.trim().toUpperCase() }
+                : {}),
             overallRank: 999,
             round: null,
             tier: null,
@@ -54,6 +66,16 @@ const UnrankedModal = ({ isOpen, onClose, onDraft, mode = 'draft', initialPlayer
                             <label>Team</label>
                             <input type="text" value={team} onChange={e => setTeam(e.target.value)}
                                 placeholder="e.g. KC" className="text-input" />
+                        </div>
+                    )}
+                    {/* A signing or a trade comes FROM somewhere; a draft pick
+                        and a UDFA do not. */}
+                    {(mode === 'roster' || mode === 'postdraft') && (
+                        <div className="form-group">
+                            <label>Previous Team</label>
+                            <input type="text" value={previousTeam}
+                                onChange={e => setPreviousTeam(e.target.value)}
+                                placeholder="e.g. LV — for a signing or trade" className="text-input" />
                         </div>
                     )}
                     <div className="modal-actions" style={{ marginTop: 20 }}>

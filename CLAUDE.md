@@ -201,6 +201,29 @@ written by the draft itself, by import, and by the sign/trade modal.
 worse than a blank one. The live draft records year + overall pick and leaves
 the round for import or hand entry.
 
+### The name is the identity — nothing else goes in it
+
+`roster.csv` records how a player arrived inside his own name:
+`Xavier Worthy:24/1`, `Andrew Armstrong:FA`, `Omari Evans:UDFA`. That put
+facts inside the identity key, and the name is what everything matches on — so
+`Trey Smith` and `Trey Smith:24/3` were two different players, one of them
+fiction.
+
+The file keeps its format; it is hand-edited and it is the import format.
+`parseAcquisition()` splits it on the way in: the league-entry facts go on the
+player's registry record, and the app stores a **plain name** plus an
+`arrival` tag on the roster slot. The tag stays on the slot rather than the
+player because it describes a roster, not a person — the same player arrives at
+different clubs by different routes. `exportCSV` rejoins them, so a round trip
+through the file is lossless.
+
+`slotIdentity()` reads either shape, so slots saved by an older build still
+render. The `R:`/`PS:`/`IR:` **prefixes** are a separate thing and were
+already parsed into zones.
+
+The registry therefore holds more players than any one board's pool — roster
+veterans are registered too. A board is a subset of the registry.
+
 ### CSVs seed; storage is the truth
 
 A rankings file creates a board's **initial state and nothing more**.

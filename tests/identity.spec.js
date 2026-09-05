@@ -25,7 +25,13 @@ test.describe('player identity', () => {
         const first = await registry(page);
         const ids = first.map(p => p.id);
         expect(new Set(ids).size).toBe(ids.length);
-        expect(await page.locator('.scouting-rank-row').count()).toBe(first.length);
+
+        // The registry holds every player the app has seen, which is more than
+        // any one board's pool — roster veterans are registered too, from the
+        // acquisition suffixes in roster.csv. A board is a subset of it.
+        expect(first.length).toBeGreaterThanOrEqual(
+            await page.locator('.scouting-rank-row').count(),
+        );
 
         await page.reload();
         await page.waitForSelector('.scouting-rank-row');

@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { parseName } from '../utils/formatName';
+import { parseName, colorForSuffix } from '../utils/formatName';
 import { tagById } from '../utils/playerTags';
 
 const isIntString = (val) => /^\d+$/.test(val);
@@ -55,6 +55,13 @@ const PlayerCard = ({ player, isBest, onClick, slim, team, displayPick, noStrike
     const teamAbbr = team || draftedTeam || (draftedByUs ? 'KC' : null);
     const rankDisplay = overallRank && overallRank !== '-' ? `#${overallRank}` : '';
 
+    // How he arrived travels beside the name now rather than inside it. Names
+    // written by an older build still carry the suffix, so both are read.
+    const parsed = parseName(name);
+    const arrival = player.arrival ?? parsed.suffix;
+    const displayName = parsed.displayName;
+    const nameColor = player.arrival != null ? colorForSuffix(player.arrival) : parsed.nameColor;
+
     let displayTradeNote = '';
     if (traded && tradeNote) {
         // Handle "Compensatory Pick (From TEAM)" to just "TEAM", and strip leading "From "
@@ -102,12 +109,12 @@ const PlayerCard = ({ player, isBest, onClick, slim, team, displayPick, noStrike
             </div>
             <div className="card-bottom">
                 <div className="player-name" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', overflow: 'hidden' }}>
-                    <span style={{ color: parseName(name).nameColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {parseName(name).displayName}
+                    <span style={{ color: nameColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {displayName}
                     </span>
-                    {parseName(name).suffix && (
+                    {arrival && (
                         <span style={{ fontSize: '0.65rem', color: '#ff0000', fontWeight: 800, marginLeft: 4 }}>
-                            {parseName(name).suffix}
+                            {arrival}
                         </span>
                     )}
                 </div>

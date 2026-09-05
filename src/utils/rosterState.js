@@ -3,6 +3,9 @@
  * Stored in localStorage under key 'rosterState'.
  */
 import { parseCsvLine, csvField } from './csvUtils';
+import { parseAcquisition } from './draftPhase';
+import { DRAFT_YEAR } from '../constants';
+import { resolve as resolvePlayer, setFacts } from './playerRegistry';
 
 // Reasonable 53-man slot defaults by major position
 const DEFAULT_SLOTS53 = {
@@ -56,8 +59,35 @@ const STORAGE_KEY = 'rosterState';
 // ---------------------------------------------------------------------------
 // Slot helpers
 // ---------------------------------------------------------------------------
-export function makeSlot(name, zone = '53') {
-    return name ? { name, zone } : null;
+/**
+ * A depth-chart slot.
+ *
+ * `name` is the plain player name — the identity everything else matches on.
+ * `arrival` is how he got to this team ("24/1", "FA", "UDFA"), which the
+ * import file writes into the name and this splits back out. It is kept on the
+ * slot rather than on the player because it describes a roster, not a person:
+ * the same player arrives at different clubs by different routes.
+ */
+export function makeSlot(name, zone = '53', arrival = null) {
+    if (!name) return null;
+    return arrival ? { name, zone, arrival } : { name, zone };
+}
+
+/**
+ * Splits an imported cell into a slot, recording what the suffix says about
+ * the player on his registry record along the way. The file keeps its format;
+ * the app stores a plain name and a tag.
+ */
+function slotFromImport(raw, zone) {
+    const { name, facts } = parseAcquisition(raw, DRAFT_YEAR);
+    if (!name) return null;
+    const arrival = String(raw ?? '').trim().slice(name.length + 1).trim() || null;
+
+    if (Object.keys(facts).length) {
+        const id = resolvePlayer({ name });
+        if (id) setFacts(id, facts);
+    }
+    return makeSlot(name, zone, arrival);
 }
 
 export function defaultState() {
@@ -136,7 +166,9 @@ export function parseCSV(csvText) {
             const parsedSlots = parseInt(col2);
             const hasSlots53Col = !isNaN(parsedSlots);
             const rawSlots = hasSlots53Col ? cols.slice(3) : cols.slice(2);
-            const names = rawSlots.map(s => s.trim()).filter(Boolean).map(n => n.replace(/^(PS:|IR:|R:)/i, '').trim());
+            const names = rawSlots.map(s => s.trim()).filter(Boolean)
+                .map(n => slotFromImport(n.replace(/^(PS:|IR:|R:)/i, '').trim(), '53')?.name)
+                .filter(Boolean);
             reserve.push(...names);
             continue;
         }
@@ -145,7 +177,9 @@ export function parseCSV(csvText) {
             const parsedSlots = parseInt(col2);
             const hasSlots53Col = !isNaN(parsedSlots);
             const rawSlots = hasSlots53Col ? cols.slice(3) : cols.slice(2);
-            const names = rawSlots.map(s => s.trim()).filter(Boolean).map(n => n.replace(/^(PS:|IR:|R:)/i, '').trim());
+            const names = rawSlots.map(s => s.trim()).filter(Boolean)
+                .map(n => slotFromImport(n.replace(/^(PS:|IR:|R:)/i, '').trim(), '53')?.name)
+                .filter(Boolean);
             cuts.push(...names);
             continue;
         }
@@ -183,8 +217,8 @@ export function parseCSV(csvText) {
             else if (v.toUpperCase().startsWith('R:')) zone = 'r';
             else if (rIndex >= limit53) zone = 'r';
 
-            const name = v.replace(/^(PS:|IR:|R:)/i, '').trim();
-            const slot = makeSlot(name, zone);
+            const slot = slotFromImport(v.replace(/^(PS:|IR:|R:)/i, '').trim(), zone);
+            if (!slot) return;
 
             if (zone === 'ps') {
                 const psIdx = limit53 + (parsed.filter(x => x?.zone === 'ps').length);
@@ -208,6 +242,12 @@ export function parseCSV(csvText) {
     return { positionConfig: { offense, defense }, depthChart, reserve, cuts };
 }
 
+// The import format joins the arrival tag back onto the name, so a round trip
+// through the file is lossless.
+function exportName(slot) {
+    return slot.arrival ? `${slot.name}:${slot.arrival}` : slot.name;
+}
+
 export function exportCSV(state) {
     const maxSlots = Math.max(...Object.values(state.depthChart).map(arr => arr.length), 5);
     const headers = ['Phase', 'pos', 'slots53', ...Array.from({ length: maxSlots }, (_, i) => `slot${i + 1}`)];
@@ -218,10 +258,10 @@ export function exportCSV(state) {
             const slots = state.depthChart[p.id] ?? [];
             const cells = slots.map(s => {
                 if (!s) return '';
-                if (s.zone === 'ps') return `PS:${s.name}`;
-                if (s.zone === 'ir') return `IR:${s.name}`;
-                if (s.zone === 'r') return `R:${s.name}`;
-                return s.name;
+                if (s.zone === 'ps') return `PS:${exportName(s)}`;
+                if (s.zone === 'ir') return `IR:${exportName(s)}`;
+                if (s.zone === 'r') return `R:${exportName(s)}`;
+                return exportName(s);
             });
             rows.push([phase, p.label, p.slots53, ...cells].map(csvField).join(','));
         });

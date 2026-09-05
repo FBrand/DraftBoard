@@ -5,7 +5,7 @@ import {
 } from '@dnd-kit/core';
 import { SPECIALIST_IDS, POS_TRANSLATIONS } from '../utils/rosterState';
 import { buildNameIndex, findMatchingIndex } from '../utils/nameMatcher';
-import { parseName } from '../utils/formatName';
+import { slotIdentity } from '../utils/formatName';
 
 const PS_SLOTS = 3;
 
@@ -44,7 +44,9 @@ function getOrBuildIndex(list) {
 }
 
 function slotMeta(slot, masterPlayers, draftedPlayers) {
-    const { displayName, suffix, nameColor } = parseName(slot?.name);
+    // The arrival tag lives beside the name now rather than inside it, so
+    // the name stays a clean identity. slotIdentity reads either shape.
+    const { displayName, suffix, nameColor } = slotIdentity(slot);
 
     const findByRobustName = (list) => {
         if (!list) return null;
