@@ -61,6 +61,11 @@ const OWNED_KEYS = [
     // Matrix scores are measurements of players, not offseason decisions — but
     // a clean slate should still be clean, so they clear with everything else.
     'athletic_matrix_v1',
+    // Players added in the app, and the identity record for every player the
+    // app has seen. The registry re-derives itself from the rankings files on
+    // the next load, so clearing it loses nothing that wasn't entered by hand.
+    'prospects_v1',
+    'player_registry_v1',
 ];
 
 /**

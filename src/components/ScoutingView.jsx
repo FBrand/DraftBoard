@@ -13,6 +13,7 @@ import { PLAYER_TAGS } from '../utils/playerTags';
 import AddProspectsModal from './AddProspectsModal';
 import { addProspect, savePlayerEdit, deletePlayer, restorePlayer, hiddenPlayers, toPoolPlayer, classify } from '../utils/prospects';
 import * as athleticMatrix from '../utils/athleticMatrix';
+import * as playerRegistry from '../utils/playerRegistry';
 
 const { BOARDS, BOARD_LABELS } = scoutingState;
 
@@ -66,11 +67,20 @@ export default function ScoutingView({ players, columnOrder }) {
     const state = boards[activeBoard];
     const entryIndex = useMemo(() => buildNameIndex(state.entries), [state.entries]);
 
-    // A name is not an identity on its own — two players can share one as long
-    // as they play different positions — so every lookup that knows the
-    // position passes it and gets that player's entry rather than his
-    // namesake's.
+    // Entries are joined to players by registry id. The name path below is a
+    // fallback for entries written before ids existed and for players who have
+    // left the pool — a name is not an identity on its own (two players can
+    // share one), which is why the qualifier is passed when there is no id.
+    const entryById = useMemo(
+        () => new Map(state.entries.filter(e => e.playerId).map(e => [e.playerId, e])),
+        [state.entries],
+    );
+
     const entryFor = (name, qualifier) => {
+        if (qualifier?.id) {
+            const hit = entryById.get(qualifier.id);
+            if (hit) return hit;
+        }
         const idx = findMatchingIndex(name, entryIndex, qualifier);
         return idx !== -1 ? state.entries[idx] : null;
     };
@@ -134,25 +144,37 @@ export default function ScoutingView({ players, columnOrder }) {
         // linear scan of the pool per appended player.
         const positionOf = new Map(basis.map(p => [p.name, p.position]));
         const schoolOf = new Map(basis.map(p => [p.name, p.school]));
+        const idOf = new Map(basis.map(p => [p.name, p.id]));
+        const byPlayerId = new Map();
+        out.forEach((e, i) => { if (e.playerId) byPlayerId.set(e.playerId, i); });
 
         orderedNames.forEach(name => {
             const group = groupOverrides[name] ?? groupOf.get(name) ?? null;
             const nextWithin = (seenPerGroup.get(group) ?? 0) + 1;
             seenPerGroup.set(group, nextWithin);
 
-            // Qualified, like every other identity lookup: an unqualified
-            // match here wrote one player's tier and order onto a namesake's
-            // entry, so two players shared one entry and the board's ordering
-            // stopped being derivable from it.
+            // By id when both sides have one. The name path is qualified by
+            // position and school because an unqualified match here wrote one
+            // player's tier and order onto a namesake's entry, so two players
+            // shared one entry and the ordering stopped being derivable.
+            const playerId = idOf.get(name) ?? null;
             const qualifier = { position: positionOf.get(name), school: schoolOf.get(name) };
-            const idx = findMatchingIndex(name, index, qualifier);
+            const idx = (playerId != null && byPlayerId.has(playerId))
+                ? byPlayerId.get(playerId)
+                : findMatchingIndex(name, index, qualifier);
             if (idx !== -1) {
-                out[idx] = { ...out[idx], group, withinGroup: nextWithin, updatedAt: now };
+                out[idx] = { ...out[idx], playerId: out[idx].playerId ?? playerId, group, withinGroup: nextWithin, updatedAt: now };
+                if (playerId != null) byPlayerId.set(playerId, idx);
             } else {
                 const position = positionOf.get(name) ?? '';
-                out.push({ ...scoutingState.makeEntry(name, position, schoolOf.get(name) ?? ''), group, withinGroup: nextWithin, updatedAt: now });
-                // Keep the index in step so a later name can still match it.
+                out.push({
+                    ...scoutingState.makeEntry(name, position, schoolOf.get(name) ?? '', playerId),
+                    group, withinGroup: nextWithin, updatedAt: now,
+                });
+                // Keep both indexes in step so a later name matches this entry
+                // rather than appending a second one for the same player.
                 index.push(...buildNameIndex([out[out.length - 1]]).map(e => ({ ...e, index: out.length - 1 })));
+                if (playerId != null) byPlayerId.set(playerId, out.length - 1);
             }
         });
         return out;
@@ -313,6 +335,11 @@ export default function ScoutingView({ players, columnOrder }) {
         }
 
         savePlayerEdit(previous, { name, position, school });
+        // The registry record keeps its id and gains the old identity as an
+        // alias, so the rankings file — which still carries the old name on
+        // every load — resolves back to this same player instead of creating
+        // a second record for him.
+        if (previous.id) playerRegistry.rename(previous.id, { name, position, school });
         if (name !== previous.name) athleticMatrix.renameScores(previous.name, name, previous);
 
         const next = {};

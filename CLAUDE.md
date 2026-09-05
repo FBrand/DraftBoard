@@ -63,6 +63,34 @@ Stage notes:
   `utils/scoutingState.js` + `utils/boardRanking.js`. See the ranking model
   below — it's the part most easily broken by a well-meaning change.
 
+### The player registry (`utils/playerRegistry.js`) — start here
+
+**A player is a record with a stable id, not a name.** Until recently a player
+*was* his name: every store keyed on it and every read re-derived identity by
+fuzzy-matching. The same bug kept returning in new disguises — two men sharing
+a name, a rename that had to be hand-migrated across three boards and the
+matrix store, two analysts labelling one player at different positions. Each
+was the same missing thing: nothing to point at.
+
+`player_registry_v1` holds one record per player: `{ id, name, position,
+school, aliases[], hidden }`. Ids are opaque and permanent — they survive a
+rename, which any key derived from the name cannot.
+
+Fuzzy matching still happens, because the data arrives as names, but it happens
+**once**, in `resolveAll()`, when `useBoardRankings` loads the pool — never
+again on the read path. Downstream stores key on `playerId`
+(`scoutingState` entries, `athleticMatrix` rows), with the qualified name
+match kept only as a fallback for rows written before ids existed.
+
+A rename records the old identity as an **alias**, which is what stops the next
+load — where the rankings file still supplies the old name — from creating a
+second record. The registry is fully re-derivable from the files, so a clean
+slate clears it and it rebuilds.
+
+This is also the shape a backend needs: a document store keys on ids and cannot
+fuzzy-match server-side, so keying on `playerId` is what makes that move a
+change of adapter rather than a rewrite.
+
 ### Player identity: name + position + school (`utils/nameMatcher.js`)
 
 **A name is not an identity.** Two players really do turn up in one draft class

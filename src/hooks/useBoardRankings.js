@@ -3,6 +3,7 @@ import { parseRankings } from '../utils/dataParser';
 import * as scoutingState from '../utils/scoutingState';
 import { applyProspects } from '../utils/prospects';
 import { identityKey, nameKey } from '../utils/nameMatcher';
+import { resolveAll } from '../utils/playerRegistry';
 
 const { BOARDS, BOARD_RANKINGS } = scoutingState;
 
@@ -95,7 +96,15 @@ function loadPools() {
         // places, tags or exports. From here down there is no such thing as an
         // "app-added" player: they are all just players.
         const keyOf = joinKeyFor(files);
-        const everyone = applyProspects(unionOfFiles(files, keyOf));
+        const union = applyProspects(unionOfFiles(files, keyOf));
+
+        // The one place a name becomes an identity. Every player carries a
+        // stable id from here on, so nothing downstream has to re-derive who
+        // he is from his name (see utils/playerRegistry.js). Resolved in one
+        // batch: the name index is built once for the whole pool rather than
+        // once per player.
+        const ids = resolveAll(union);
+        const everyone = union.map((p, i) => (ids[i] ? { ...p, id: ids[i] } : p));
 
         // A player one analyst has ranked and another hasn't is not missing
         // from the second board — he is UNRANKED on it. Dropping him meant a
@@ -124,7 +133,11 @@ function loadPools() {
         // disagree. Only adds entries for players that don't have one, so it
         // can never overwrite an analyst's own tag.
         BOARDS.forEach(board => {
-            if (pools[board]?.length) scoutingState.seedFavourites(board, pools[board]);
+            if (!pools[board]?.length) return;
+            // Entries written before the registry existed are joined to their
+            // player once, here, rather than by name on every read.
+            scoutingState.attachPlayerIds(board, pools[board]);
+            scoutingState.seedFavourites(board, pools[board]);
         });
         return pools;
     });

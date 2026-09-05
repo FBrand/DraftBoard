@@ -43,8 +43,13 @@ export const BOARD_RANKINGS = {
 
 const storageKey = (board) => `scouting_overlay_v1__${board}`;
 
-export function makeEntry(name, position, school = '') {
+export function makeEntry(name, position, school = '', playerId = null) {
     return {
+        // The player this entry is about. A name is not an identity — see
+        // utils/playerRegistry.js — so the id is what joins an evaluation to
+        // a player. Name/position/school stay alongside it so an entry is
+        // still readable on its own, in an export or a corrupted store.
+        playerId,
         // Name, position and school together are the player's identity — any
         // one differing makes him a different player (see nameMatcher). The
         // school is carried here so an entry can be told apart from a
@@ -118,13 +123,37 @@ export function seedFavourites(board, players) {
     players.forEach(p => {
         if (!p?.isFavorite) return;
         if (findMatchingIndex(p.name, index) !== -1) return; // already has an entry
-        const seeded = { ...makeEntry(p.name, p.position), tag: 'like' };
+        const seeded = { ...makeEntry(p.name, p.position, p.school, p.id ?? null), tag: 'like' };
         entries.push(seeded);
         index.push(...buildNameIndex([seeded]).map(e => ({ ...e, index: entries.length - 1 })));
         changed = true;
     });
 
     if (changed) saveState(board, { version: 1, entries });
+    return changed;
+}
+
+/**
+ * Stamps the registry id onto entries written before ids existed. Runs once
+ * per board per load, against the pool that has just been resolved, so the
+ * fuzzy match happens here and never again on the read path.
+ */
+export function attachPlayerIds(board, players) {
+    const state = loadState(board);
+    if (!state.entries.some(e => !e.playerId)) return false;
+
+    const index = buildNameIndex(players);
+    let changed = false;
+    const entries = state.entries.map(e => {
+        if (e.playerId) return e;
+        const at = findMatchingIndex(e.name, index, e);
+        const id = at === -1 ? null : players[at]?.id;
+        if (!id) return e;
+        changed = true;
+        return { ...e, playerId: id };
+    });
+
+    if (changed) saveState(board, { ...state, entries });
     return changed;
 }
 

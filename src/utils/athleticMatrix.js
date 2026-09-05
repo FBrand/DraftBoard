@@ -39,37 +39,65 @@ export function loadAll() {
     return load().players;
 }
 
+// Scores are keyed by registry id where the caller has one. The qualified
+// name match behind it covers rows written before ids existed, and callers
+// that only know a name.
+function indexOf(players, name, qualifier) {
+    if (qualifier?.id) {
+        const byId = players.findIndex(p => p.playerId === qualifier.id);
+        if (byId !== -1) return byId;
+    }
+    return findMatchingIndex(name, buildNameIndex(players), qualifier);
+}
+
 /** `{ total, position }` for a player, or nulls when nothing is recorded. */
-export function getScores(name, pos = null) {
+export function getScores(name, qualifier = null) {
     const players = load().players;
     if (!name || !players.length) return { total: null, position: null };
-    // Matched by name the same way everything else is, so a rankings reload
-    // or a slightly different spelling doesn't orphan the numbers.
-    const i = findMatchingIndex(name, buildNameIndex(players), pos);
+    const i = indexOf(players, name, qualifier);
     if (i === -1) return { total: null, position: null };
     return { total: players[i].total ?? null, position: players[i].position ?? null };
 }
 
 /**
- * Follows a player's scores to a new name. Names are this app's identity key,
- * so correcting a misheard one has to carry the measurements across or they
- * are silently orphaned on a player who no longer exists.
+ * Follows a player's scores to a new name.
+ *
+ * A row carrying a registry id needs no help — the id survives the rename, so
+ * the scores follow the player for free. This is for rows written before ids
+ * existed, which are keyed by name and would otherwise be orphaned on a player
+ * who no longer answers to it.
  */
-export function renameScores(oldName, newName, pos = null) {
+export function renameScores(oldName, newName, qualifier = null) {
     if (!oldName || !newName || oldName === newName) return;
     const state = load();
-    const i = findMatchingIndex(oldName, buildNameIndex(state.players), pos);
+    const i = indexOf(state.players, oldName, qualifier);
     if (i === -1) return;
     state.players[i] = { ...state.players[i], name: newName };
     save(state);
 }
 
 /** Merges one field; passing null clears it. */
-export function setScore(name, field, value, pos = null) {
+export function setScore(name, field, value, qualifier = null) {
     if (!name || (field !== 'total' && field !== 'position')) return;
     const state = load();
-    const i = findMatchingIndex(name, buildNameIndex(state.players), pos);
-    if (i === -1) state.players.push({ name, pos, total: null, position: null, [field]: value });
-    else state.players[i] = { ...state.players[i], [field]: value };
+    const i = indexOf(state.players, name, qualifier);
+    if (i === -1) {
+        state.players.push({
+            playerId: qualifier?.id ?? null,
+            name,
+            pos: qualifier?.position ?? null,
+            total: null,
+            position: null,
+            [field]: value,
+        });
+    } else {
+        // Backfill the id onto a row that predates it, so the next lookup
+        // takes the id path and the name stops mattering.
+        state.players[i] = {
+            ...state.players[i],
+            playerId: state.players[i].playerId ?? qualifier?.id ?? null,
+            [field]: value,
+        };
+    }
     save(state);
 }

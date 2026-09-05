@@ -45,6 +45,7 @@ all of it a full app boot per test.
 | `scouting.spec.js` | per-board evaluations, drag reordering, board CSV export |
 | `scouting-params.spec.js` | derived ranks, tiers, per-board player pools, tag markers |
 | `add-prospects.spec.js` | adding players missing from the rankings: entry, verification, collisions |
+| `identity.spec.js` | the player registry: stable ids, renames, aliases, rebuild after a wipe |
 | `linking.spec.js` | view/board/player in the URL, back and forward |
 | `session.spec.js` | whole-app session export/import round-trip and its failure modes |
 | `ui.spec.js` | app-wide conventions: no native dialogs, Escape closes overlays, menus |

@@ -28,10 +28,20 @@ export default function PlayerInfoModal({ player, players = [], onClose }) {
     // it, re-ranking the whole pool on every render.
     const entries = useMemo(() => boards[activeBoard]?.entries ?? [], [boards, activeBoard]);
     const entryIndex = useMemo(() => buildNameIndex(entries), [entries]);
+    // By registry id where both sides have one; the qualified name match is
+    // the fallback for entries written before ids existed.
+    const entryById = useMemo(
+        () => new Map(entries.filter(e => e.playerId).map(e => [e.playerId, e])),
+        [entries],
+    );
     const entryFor = useCallback((name, qualifier) => {
+        if (qualifier?.id) {
+            const hit = entryById.get(qualifier.id);
+            if (hit) return hit;
+        }
         const i = findMatchingIndex(name, entryIndex, qualifier);
         return i !== -1 ? entries[i] : null;
-    }, [entries, entryIndex]);
+    }, [entries, entryIndex, entryById]);
 
     // Each analyst ranks a different pool (their own rankings file), so paging
     // boards has to re-rank against that board's players — not re-rank one
