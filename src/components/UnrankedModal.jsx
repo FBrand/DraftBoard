@@ -2,9 +2,16 @@ import React, { useState } from 'react';
 import useEscapeKey from '../hooks/useEscapeKey';
 
 // mode: 'draft' | 'roster' | 'postdraft'
-// 'draft'     → during draft, draft board: Name+Pos, Draft button
-// 'roster'    → during draft, roster view: Name+Pos, Sign FA / Trade
-// 'postdraft' → after draft, both views: Name+Pos+Team(KC), Sign FA / Sign UDFA / Invite
+// 'draft'     → draft board during the draft: Name+Pos, Draft
+// 'roster'    → roster view, whenever: how a player joins THIS team, which is
+//               by signing or by trade. Signing a UDFA belongs to the UDFA
+//               stage; offering it here made the roster modal look like that
+//               stage rather than this one.
+// 'postdraft' → draft board once the draft is over: Sign FA / Sign UDFA / Invite
+// 'candidate' → free agency: the same fields as 'roster', because a candidate
+//               is a player you might acquire and the same things are worth
+//               knowing about him. The verb differs — FA records who you are
+//               considering, it does not sign anybody.
 const UnrankedModal = ({ isOpen, onClose, onDraft, mode = 'draft', initialPlayer = null }) => {
     const [name, setName] = useState(() => initialPlayer?.name || '');
     const [position, setPosition] = useState(() => initialPlayer?.position || '');
@@ -29,7 +36,7 @@ const UnrankedModal = ({ isOpen, onClose, onDraft, mode = 'draft', initialPlayer
             name: name.trim(),
             position: position.toUpperCase(),
             arrival: suffix || null,
-            ...(mode === 'postdraft' ? { team } : {}),
+            ...(team.trim() ? { team: team.trim().toUpperCase() } : {}),
             ...(MOVED_CLUBS.has(suffix) && previousTeam.trim()
                 ? { previousTeam: previousTeam.trim().toUpperCase() }
                 : {}),
@@ -41,7 +48,7 @@ const UnrankedModal = ({ isOpen, onClose, onDraft, mode = 'draft', initialPlayer
         onClose();
     };
 
-    const titles = { draft: 'Draft Unranked Player', roster: 'Add Player', postdraft: 'Sign Player' };
+    const titles = { draft: 'Draft Unranked Player', roster: 'Add Player', postdraft: 'Sign Player', candidate: 'Add Candidate' };
 
     return (
         <div className="modal-overlay" onClick={onClose}>
@@ -61,28 +68,35 @@ const UnrankedModal = ({ isOpen, onClose, onDraft, mode = 'draft', initialPlayer
                         <input type="text" value={position} onChange={e => setPosition(e.target.value)}
                             placeholder="e.g. LB" className="text-input" />
                     </div>
-                    {mode === 'postdraft' && (
-                        <div className="form-group">
-                            <label>Team</label>
-                            <input type="text" value={team} onChange={e => setTeam(e.target.value)}
-                                placeholder="e.g. KC" className="text-input" />
-                        </div>
-                    )}
-                    {/* A signing or a trade comes FROM somewhere; a draft pick
-                        and a UDFA do not. */}
-                    {(mode === 'roster' || mode === 'postdraft') && (
-                        <div className="form-group">
-                            <label>Previous Team</label>
-                            <input type="text" value={previousTeam}
-                                onChange={e => setPreviousTeam(e.target.value)}
-                                placeholder="e.g. LV — for a signing or trade" className="text-input" />
-                        </div>
+                    {/* A signing or a trade comes FROM somewhere and goes TO
+                        somewhere. A draft pick and a UDFA are entering the
+                        league, so neither applies. */}
+                    {mode !== 'draft' && (
+                        <>
+                            <div className="form-group">
+                                <label>Previous Team</label>
+                                <input type="text" value={previousTeam}
+                                    onChange={e => setPreviousTeam(e.target.value)}
+                                    placeholder="e.g. LV — where he came from" className="text-input" />
+                            </div>
+                            <div className="form-group">
+                                <label>New Team</label>
+                                <input type="text" value={team} onChange={e => setTeam(e.target.value)}
+                                    placeholder="e.g. KC" className="text-input" />
+                            </div>
+                        </>
                     )}
                     <div className="modal-actions" style={{ marginTop: 20 }}>
                         {mode === 'draft' && (
                             <div style={{ display: 'flex', gap: 10 }}>
                                 <button type="button" className="action-button secondary" style={{ flex: 1 }} onClick={onClose}>Cancel</button>
                                 <button type="submit" className="action-button primary" style={{ flex: 1 }} disabled={disabled}>Draft</button>
+                            </div>
+                        )}
+                        {mode === 'candidate' && (
+                            <div style={{ display: 'flex', gap: 10 }}>
+                                <button type="button" className="action-button secondary" style={{ flex: 1 }} onClick={onClose}>Cancel</button>
+                                <button type="submit" className="action-button primary" style={{ flex: 1 }} disabled={disabled}>Add Candidate</button>
                             </div>
                         )}
                         {mode === 'roster' && (

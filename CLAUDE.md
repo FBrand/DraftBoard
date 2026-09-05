@@ -63,6 +63,32 @@ Stage notes:
   `utils/scoutingState.js` + `utils/boardRanking.js`. See the ranking model
   below — it's the part most easily broken by a well-meaning change.
 
+### The data layer (`src/data/`)
+
+Everything stored goes through `repository` — documents in named collections,
+addressed by id, with `where`/`orderBy`/`limit` over them. The interface is
+Firestore's, narrowed to what this app does, so swapping stores should be a
+change of adapter.
+
+**Reads are synchronous, writes are not.** That is not a compromise, it is how
+a client with a live document store behaves: subscribe once, keep a local copy,
+render from it. A board ranks 328 players on a keystroke and cannot await
+anything. So a collection loads asynchronously and is then served from memory;
+writes update memory first, notify subscribers, and go to the adapter after.
+The honest limitation is that a failed write has already been shown as
+succeeded — with localStorage that needs a full quota, with a network it will
+happen for real, and that is where rollback belongs.
+
+`localAdapter.loadSync` is the one local-only affordance: the roster import
+resolves players *while parsing*, before any `ready()` could finish, and
+without it would see an empty registry and mint a duplicate for every player.
+**A remote adapter must not implement it** — its absence is what forces callers
+onto `ready()` instead of silently reading nothing.
+
+Collections live under `db_<name>` in localStorage. Anything added to
+`OWNED_KEYS` for a wipe must also call `repository.invalidate()`, or the
+in-memory copy simply restores what was deleted.
+
 ### The player registry (`utils/playerRegistry.js`) — start here
 
 **A player is a record with a stable id, not a name.** Until recently a player
@@ -72,7 +98,7 @@ a name, a rename that had to be hand-migrated across three boards and the
 matrix store, two analysts labelling one player at different positions. Each
 was the same missing thing: nothing to point at.
 
-`player_registry_v1` holds one record per player: `{ id, name, position,
+The `players` collection holds **one document per player**: `{ id, name, position,
 school, aliases[], hidden }`. Ids are opaque and permanent — they survive a
 rename, which any key derived from the name cannot.
 

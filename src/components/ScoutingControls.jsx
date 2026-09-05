@@ -4,7 +4,7 @@ import useEscapeKey from '../hooks/useEscapeKey';
 import { getAthleticMatrixUrl } from '../utils/appLinks';
 import { PLAYER_TAGS } from '../utils/playerTags';
 import * as athleticMatrix from '../utils/athleticMatrix';
-import { factsFor } from '../utils/playerRegistry';
+import { factsFor, setFacts, resolve as resolvePlayer } from '../utils/playerRegistry';
 
 // Shared with the board markers so a tag looks the same wherever it appears.
 const TAGS = PLAYER_TAGS.map(t => ({ id: t.id, label: `${t.symbol} ${t.label}` }));
@@ -23,7 +23,7 @@ const NUMBER_FIELDS = [
 // record and read the same on every board. League entry settles once; team and
 // previous team say where he is and where he came from.
 const FACT_FIELDS = [
-    { key: 'draftYear', label: 'Draft Year', type: 'number', placeholder: '????' },
+    { key: 'draftYear', label: 'Draft Year', type: 'number', placeholder: '????', min: 1936 },
     { key: 'draftRound', label: 'Round', type: 'number', placeholder: '???' },
     { key: 'draftPick', label: 'Pick', type: 'number', placeholder: '???' },
     { key: 'team', label: 'Team', type: 'text', placeholder: '???' },
@@ -161,11 +161,28 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
     });
     const [baseError, setBaseError] = useState('');
     const [confirmRemove, setConfirmRemove] = useState(false);
-    // Facts about the player — shown here, never edited here. A prospect has
-    // not entered the league, so a draft year or a team means nothing while a
-    // board is being built. They are set by the draft itself, by import, and
-    // by the sign/trade modal.
-    const facts = factsFor(player?.id);
+    // Which half of the card is editable depends on where it was opened.
+    //
+    // Scouting edits OPINIONS — tier, tag, remarks — and doesn't show facts at
+    // all: a prospect has not entered the league, so a draft year or a team
+    // means nothing while a board is being built.
+    //
+    // The card opened from Roster or Free Agency is the other way round. There
+    // a player is somebody's actual player, so his facts are what you want to
+    // correct, and the opinions are three analysts' and not yours to edit from
+    // here.
+    //
+    // A roster slot carries a name, not an id, so it is resolved — without
+    // creating anything, because opening a card must not invent a player.
+    const playerId = player?.id
+        ?? (player?.name ? resolvePlayer({ name: player.name, position: player.position }, { create: false }) : null);
+    const [facts, setFactsState] = useState(() => factsFor(playerId));
+
+    const commitFact = (key, raw) => {
+        if (!playerId) return;
+        setFacts(playerId, { [key]: raw });
+        setFactsState(factsFor(playerId));
+    };
     // Only the modal presentation is dismissable — the panel variant is a
     // permanent column, not something Escape should blank out.
     useEscapeKey(onClose, variant === 'modal' && !!player);
@@ -222,20 +239,6 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
     // Facts hang off the player's record, so they are written once and read
     // the same on every board — unlike a tier or a tag, which belong to the
     // analyst who set them.
-    const knownFacts = (() => {
-        if (!readOnly) return [];
-        const out = [];
-        if (facts.isUdfa === true) out.push({ label: 'Entered', value: `UDFA${facts.draftYear ? ` ${facts.draftYear}` : ''}` });
-        else if (facts.draftYear || facts.draftPick || facts.draftRound) {
-            const round = facts.draftRound ? `Rd ${facts.draftRound}` : null;
-            const pick = facts.draftPick ? `Pick ${facts.draftPick}` : null;
-            out.push({ label: 'Drafted', value: [facts.draftYear, round, pick].filter(Boolean).join(' · ') });
-        }
-        if (facts.team) out.push({ label: 'Team', value: facts.team });
-        if (facts.previousTeam) out.push({ label: 'Previously', value: facts.previousTeam });
-        return out;
-    })();
-
     const commitGroup = (r, t) => {
         const round = String(r ?? '').trim();
         const tier = String(t ?? '').trim();
@@ -421,6 +424,7 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
                                     {f.editable ? (
                                         <input
                                             type="number"
+                                            min="1"
                                             value={numbers[f.key]}
                                             placeholder={f.derived ? '???' : ''}
                                             onChange={e => setNumbers(n => ({ ...n, [f.key]: e.target.value }))}
@@ -450,14 +454,37 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
                     </a>
                 )}
 
-                {readOnly && knownFacts.length > 0 && (
-                    <div className="scouting-fact-readout">
-                        {knownFacts.map(f => (
-                            <div key={f.label} className="scouting-readonly-field">
-                                <span className="scouting-readonly-label">{f.label}</span>
-                                <span className="scouting-readonly-value">{f.value}</span>
-                            </div>
-                        ))}
+                {readOnly && playerId && (
+                    <div className="scouting-fact-grid">
+                        <div className="scouting-fact-header">
+                            Facts
+                            <label className="scouting-udfa-toggle">
+                                <input
+                                    type="checkbox"
+                                    checked={facts.isUdfa === true}
+                                    onChange={e => commitFact('isUdfa', e.target.checked || null)}
+                                />
+                                Undrafted
+                            </label>
+                        </div>
+                        {FACT_FIELDS.map(f => {
+                            // An undrafted player has a year but no round and
+                            // no pick — nothing to type, so nothing to show.
+                            if (facts.isUdfa === true && (f.key === 'draftRound' || f.key === 'draftPick')) return null;
+                            return (
+                                <label key={f.key} className="scouting-fact-field">
+                                    <span>{f.label}</span>
+                                    <input
+                                        type={f.type}
+                                        min={f.type === 'number' ? f.min ?? 1 : undefined}
+                                        value={facts[f.key] ?? ''}
+                                        placeholder={f.placeholder}
+                                        onChange={e => setFactsState(v => ({ ...v, [f.key]: e.target.value }))}
+                                        onBlur={e => commitFact(f.key, e.target.value)}
+                                    />
+                                </label>
+                            );
+                        })}
                     </div>
                 )}
 

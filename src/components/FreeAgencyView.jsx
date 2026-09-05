@@ -6,47 +6,8 @@ import DepthChartGrid from './DepthChartGrid';
 import { TextPromptDialog } from './Dialogs';
 import Menu from './Menu';
 import useUndoableState from '../hooks/useUndoableState';
-import useEscapeKey from '../hooks/useEscapeKey';
-
-// ── Small quick-add modal — Name + Position only. The shared depth-chart
-// shape (makeSlot: {name, zone}) has no room for free-text notes without
-// rippling into DepthChartGrid's rendering and the CSV format, so this
-// deliberately matches UnrankedModal's simplest fields rather than the
-// richer {name, position, notes} shape floated earlier in planning.
-function AddCandidateModal({ isOpen, onClose, onAdd }) {
-    const [name, setName] = useState('');
-    const [position, setPosition] = useState('');
-    useEscapeKey(onClose, isOpen);
-    if (!isOpen) return null;
-    const submit = (e) => {
-        e.preventDefault();
-        if (!name.trim() || !position.trim()) return;
-        onAdd(name.trim(), position.trim().toUpperCase());
-        setName(''); setPosition('');
-        onClose();
-    };
-    return (
-        <div className="modal-overlay" onClick={onClose}>
-            <div className="modal-content" onClick={e => e.stopPropagation()}>
-                <div className="modal-header">
-                    <h2>Add Candidate</h2>
-                    <button className="close-button" onClick={onClose}>&times;</button>
-                </div>
-                <form onSubmit={submit} className="picks-form">
-                    <div className="form-group">
-                        <label>Player Name</label>
-                        <input type="text" value={name} onChange={e => setName(e.target.value)} autoFocus />
-                    </div>
-                    <div className="form-group">
-                        <label>Position</label>
-                        <input type="text" value={position} onChange={e => setPosition(e.target.value)} />
-                    </div>
-                    <button type="submit" className="save-pill" disabled={!name.trim() || !position.trim()}>Add</button>
-                </form>
-            </div>
-        </div>
-    );
-}
+import UnrankedModal from './UnrankedModal';
+import { resolve as resolvePlayer, setFacts } from '../utils/playerRegistry';
 
 // Needs + candidates snapshot — not a signing tracker (see faState.js).
 // Renders the same DepthChartGrid Roster uses, against FA's own candidate
@@ -185,7 +146,14 @@ export default function FreeAgencyView({ masterPlayers, draftedPlayers, onInfoOp
         });
     };
 
-    const handleAddCandidate = (name, position) => {
+    const handleAddCandidate = ({ name, position, team, previousTeam }) => {
+        // Where a candidate plays now is a fact about him, not about this
+        // shortlist, so it goes on his record the same way a signing's does.
+        if (team || previousTeam) {
+            const id = resolvePlayer({ name, position });
+            if (id) setFacts(id, { ...(team ? { team } : {}), ...(previousTeam ? { previousTeam } : {}) });
+        }
+
         setState(prev => {
             let rowId = resolvePosition(position, prev.positionConfig, prev.depthChart);
             const next = { ...prev, positionConfig: { ...prev.positionConfig }, depthChart: { ...prev.depthChart } };
@@ -293,7 +261,13 @@ export default function FreeAgencyView({ masterPlayers, draftedPlayers, onInfoOp
                 onInfoOpen={onInfoOpen}
             />
 
-            <AddCandidateModal isOpen={isAddOpen} onClose={() => setIsAddOpen(false)} onAdd={handleAddCandidate} />
+            <UnrankedModal
+                key={`fa-add-${isAddOpen}`}
+                isOpen={isAddOpen}
+                onClose={() => setIsAddOpen(false)}
+                onDraft={handleAddCandidate}
+                mode="candidate"
+            />
 
             {addPositionPhase && (
                 <TextPromptDialog

@@ -3,7 +3,7 @@ import { parseRankings } from '../utils/dataParser';
 import * as scoutingState from '../utils/scoutingState';
 import { applyProspects } from '../utils/prospects';
 import { identityKey, nameKey } from '../utils/nameMatcher';
-import { resolveAll } from '../utils/playerRegistry';
+import { resolveAll, openRegistry } from '../utils/playerRegistry';
 import { migrateLegacyScores } from '../utils/athleticMatrix';
 
 const { BOARDS, BOARD_RANKINGS } = scoutingState;
@@ -91,7 +91,7 @@ function unionOfFiles(files, keyOf) {
 }
 
 function loadPools() {
-    return loadFiles().then(files => {
+    return Promise.all([loadFiles(), openRegistry()]).then(([files]) => {
         // Base data edited in-app — players added, corrected, or removed — is
         // shared by every board, so it is applied before anything ranks,
         // places, tags or exports. From here down there is no such thing as an

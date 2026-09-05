@@ -95,7 +95,7 @@ test.describe('undo', () => {
         await page.getByRole('button', { name: '+ Add Candidate' }).click();
         await page.locator('.modal-content input').first().fill('Freddy Agent');
         await page.locator('.modal-content input').nth(1).fill('WR');
-        await page.locator('.modal-content button.save-pill').click();
+        await page.getByRole('button', { name: 'Add Candidate', exact: true }).click();
         await page.waitForTimeout(500);
 
         expect(await slotNames(page)).toContain('Freddy Agent');

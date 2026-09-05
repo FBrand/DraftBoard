@@ -18,40 +18,45 @@
  * is what makes that move a change of adapter rather than a rewrite.
  */
 import { buildNameIndex, findMatchingIndex } from './nameMatcher';
+import { repository } from '../data/repository';
 
-const STORAGE_KEY = 'player_registry_v1';
+/** One document per player. See data/repository.js. */
+export const PLAYERS = 'players';
+
+const LEGACY_KEY = 'player_registry_v1';
 export const STATE_VERSION = 1;
 
-const EMPTY = () => ({ version: STATE_VERSION, players: [] });
+/**
+ * Loads the collection, carrying across the single-array store the registry
+ * used before players were documents. Awaited once at startup; every read
+ * after that is synchronous, off the repository's in-memory copy.
+ */
+export async function openRegistry() {
+    await repository.ready(PLAYERS);
+    if (repository.all(PLAYERS).length) return;
 
-// The registry is read on every facts lookup, and a depth chart asks about
-// ninety players in a render. Parsing the whole store ninety times a frame is
-// the kind of cost that only shows up once the data is real, so the parsed
-// value is cached and dropped on write.
-let cache = null;
-
-function read() {
-    if (cache) return cache;
+    let legacy = [];
     try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (!raw) return EMPTY();
-        const parsed = JSON.parse(raw);
-        if (typeof parsed?.version === 'number' && parsed.version > STATE_VERSION) return EMPTY();
-        cache = {
-            version: STATE_VERSION,
-            players: Array.isArray(parsed?.players) ? parsed.players : [],
-        };
-        return cache;
-    } catch {
-        return EMPTY();
-    }
+        const raw = localStorage.getItem(LEGACY_KEY);
+        const parsed = raw ? JSON.parse(raw) : null;
+        legacy = Array.isArray(parsed?.players) ? parsed.players : [];
+    } catch { /* nothing to carry across */ }
+
+    if (!legacy.length) return;
+    await repository.commit(PLAYERS, legacy.filter(p => p?.id).map(p => ({ id: p.id, doc: p })));
+    try { localStorage.removeItem(LEGACY_KEY); } catch { /* ignore */ }
 }
 
-function write(state) {
-    cache = null;
-    try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...state, version: STATE_VERSION }));
-    } catch { /* ignore */ }
+// The rest of this module reads and writes through the repository but keeps a
+// synchronous surface: a board ranks 328 players on every keystroke and cannot
+// await anything. Writes are fire-and-forget — the in-memory copy is updated
+// before the promise settles, so the UI is already correct.
+function writeOne(record) {
+    repository.set(PLAYERS, record.id, record);
+}
+
+function writeMany(records) {
+    repository.commit(PLAYERS, records.map(r => ({ id: r.id, doc: r })));
 }
 
 let nextFallbackId = 0;
@@ -131,11 +136,11 @@ function lookupRows(players) {
 }
 
 export function loadRegistry() {
-    return read().players;
+    return repository.all(PLAYERS);
 }
 
 export function byId(id) {
-    return read().players.find(p => p.id === id) ?? null;
+    return repository.get(PLAYERS, id);
 }
 
 /**
@@ -147,11 +152,11 @@ export function byId(id) {
  * Returns ids positionally matching `candidates`.
  */
 export function resolveAll(candidates, { create = true } = {}) {
-    const state = read();
-    const rows = lookupRows(state.players);
+    const players = repository.all(PLAYERS);
+    const rows = lookupRows(players);
     const index = buildNameIndex(rows);
     const ids = [];
-    let changed = false;
+    const created = [];
 
     (candidates ?? []).forEach(c => {
         const name = clean(c?.name);
@@ -171,16 +176,17 @@ export function resolveAll(candidates, { create = true } = {}) {
             ...BLANK_FACTS,
             createdAt: new Date().toISOString(),
         };
-        state.players.push(record);
+        created.push(record);
         // Extend the index in step so a later candidate matches this record
         // instead of creating a second one for the same player.
         rows.push({ id: record.id, name: record.name, position: record.position, school: record.school });
         index.push(...buildNameIndex([rows[rows.length - 1]]).map(e => ({ ...e, index: rows.length - 1 })));
         ids.push(record.id);
-        changed = true;
     });
 
-    if (changed) write(state);
+    // One commit for the whole batch: seeding a board resolves 328 players,
+    // and that should be one write, not 328.
+    if (created.length) writeMany(created);
     return ids;
 }
 
@@ -196,11 +202,9 @@ export function resolve(candidate, options) {
  * load.
  */
 export function rename(id, patch) {
-    const state = read();
-    const at = state.players.findIndex(p => p.id === id);
-    if (at === -1) return false;
+    const before = repository.get(PLAYERS, id);
+    if (!before) return false;
 
-    const before = state.players[at];
     const next = {
         ...before,
         name: clean(patch.name ?? before.name),
@@ -220,14 +224,13 @@ export function rename(id, patch) {
     }
     next.aliases = aliases;
 
-    state.players[at] = next;
-    write(state);
+    writeOne(next);
     return true;
 }
 
 /** The facts recorded for a player, with nulls for the ones nobody has. */
 export function factsFor(id) {
-    const record = id ? read().players.find(p => p.id === id) : null;
+    const record = id ? repository.get(PLAYERS, id) : null;
     if (!record) return { ...BLANK_FACTS };
     return Object.fromEntries(FACT_FIELDS.map(f => [f, record[f] ?? null]));
 }
@@ -238,11 +241,10 @@ export function factsFor(id) {
  * null or '' for a field clears it.
  */
 export function setFacts(id, patch) {
-    const state = read();
-    const at = state.players.findIndex(p => p.id === id);
-    if (at === -1) return false;
+    const record = repository.get(PLAYERS, id);
+    if (!record) return false;
 
-    const next = { ...state.players[at] };
+    const next = { ...record };
     let changed = false;
     FACT_FIELDS.forEach(f => {
         if (!(f in patch)) return;
@@ -254,17 +256,14 @@ export function setFacts(id, patch) {
     if (!changed) return false;
 
     next.updatedAt = new Date().toISOString();
-    state.players[at] = next;
-    write(state);
+    writeOne(next);
     return true;
 }
 
 export function setHidden(id, hidden) {
-    const state = read();
-    const at = state.players.findIndex(p => p.id === id);
-    if (at === -1) return false;
-    state.players[at] = { ...state.players[at], hidden: !!hidden };
-    write(state);
+    const record = repository.get(PLAYERS, id);
+    if (!record) return false;
+    writeOne({ ...record, hidden: !!hidden });
     return true;
 }
 
@@ -275,27 +274,30 @@ export function setHidden(id, hidden) {
  */
 export function merge(keepId, mergeId) {
     if (keepId === mergeId) return false;
-    const state = read();
-    const keep = state.players.find(p => p.id === keepId);
-    const loser = state.players.find(p => p.id === mergeId);
+    const keep = repository.get(PLAYERS, keepId);
+    const loser = repository.get(PLAYERS, mergeId);
     if (!keep || !loser) return false;
 
     const aliases = [...(keep.aliases ?? []), ...(loser.aliases ?? []),
         { name: loser.name, position: loser.position, school: loser.school }];
     const seen = new Set();
-    keep.aliases = aliases.filter(a => {
+    const deduped = aliases.filter(a => {
         const k = `${a.name}|${a.position}|${a.school}`;
         if (seen.has(k)) return false;
         seen.add(k);
         return true;
     });
 
-    state.players = state.players.filter(p => p.id !== mergeId);
-    write(state);
+    // One commit: the survivor gains the aliases and the loser goes, and
+    // neither half of that should ever be visible without the other.
+    repository.commit(PLAYERS, [
+        { id: keepId, doc: { ...keep, aliases: deduped } },
+        { id: mergeId, doc: null },
+    ]);
     return true;
 }
 
 /** Test/reset hook — drops every record. */
 export function clearRegistry() {
-    write(EMPTY());
+    return repository.clear(PLAYERS);
 }

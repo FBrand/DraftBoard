@@ -13,10 +13,14 @@ test.describe('player info card', () => {
         const box = page.locator('.scouting-modal-box');
         await expect(box).toBeVisible();
 
-        // Read-only: no inputs at all, and Round.Group is not shown here
-        // (it's a board-building control, not a scouting read-out).
-        await expect(box.locator('input')).toHaveCount(0);
+        // The scouting half is read-only — no tier control, no rank or remark
+        // inputs. Facts are a different matter: this card is where a player
+        // already in the league gets his draft info and team corrected, so
+        // those fields ARE editable and live in their own grid.
         await expect(box.locator('.scouting-group-field')).toHaveCount(0);
+        await expect(box.locator('.scouting-number-grid input')).toHaveCount(0);
+        await expect(box.locator('.scouting-list-add input')).toHaveCount(0);
+        await expect(box.locator('.scouting-fact-grid input').first()).toBeVisible();
 
         // Four numeric fields, always shown. Total Rank is the board's own
         // overallRank, so an un-scouted player still has one; the other three
@@ -87,12 +91,12 @@ test.describe('player info card', () => {
         await page.getByRole('button', { name: '+ Add Candidate' }).click();
         await page.locator('.modal-content input').first().fill('Freddy Agent');
         await page.locator('.modal-content input').nth(1).fill('WR');
-        await page.locator('.modal-content button.save-pill').click();
+        await page.getByRole('button', { name: 'Add Candidate', exact: true }).click();
         await page.waitForTimeout(400);
 
         await page.locator('.rv-slot.filled').first().click();
         await expect(page.locator('.scouting-modal-box')).toBeVisible();
-        await expect(page.locator('.scouting-modal-box input')).toHaveCount(0);
+        await expect(page.locator('.scouting-modal-box .scouting-number-grid input')).toHaveCount(0);
         expect(errors).toEqual([]);
     });
 });

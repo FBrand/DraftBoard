@@ -4,11 +4,12 @@ import { openApp, gotoTab } from './helpers.js';
 // A player is a record with a stable id, not a name. These guard the property
 // that makes that worth having: the id survives things the name does not.
 
-const REGISTRY = 'player_registry_v1';
+// One document per player, in the repository's collection layout.
+const REGISTRY = 'db_players';
 
 const registry = (page) => page.evaluate((key) => {
-    const r = JSON.parse(localStorage.getItem(key) || '{}');
-    return r.players || [];
+    const docs = JSON.parse(localStorage.getItem(key) || '{}');
+    return Object.values(docs);
 }, REGISTRY);
 
 const openScouting = async (page) => {
@@ -75,8 +76,8 @@ test.describe('player identity', () => {
             .toHaveText(['Follows the rename']);
 
         const idBefore = await page.evaluate((name) => {
-            const r = JSON.parse(localStorage.getItem('player_registry_v1') || '{}');
-            return (r.players || []).find(p => p.name === name)?.id;
+            const docs = JSON.parse(localStorage.getItem('db_players') || '{}');
+            return Object.values(docs).find(p => p.name === name)?.id;
         }, original);
         expect(idBefore).toBeTruthy();
 

@@ -24,6 +24,10 @@
 
 const MODE_KEY = 'draftboard_init_mode';
 
+import { collectionKey } from '../data/localAdapter';
+import { repository } from '../data/repository';
+import { PLAYERS } from './playerRegistry';
+
 export const INIT_SEEDED = 'seeded';
 export const INIT_CLEAN = 'clean';
 
@@ -65,7 +69,8 @@ const OWNED_KEYS = [
     // app has seen. The registry re-derives itself from the rankings files on
     // the next load, so clearing it loses nothing that wasn't entered by hand.
     'prospects_v1',
-    'player_registry_v1',
+    'player_registry_v1',              // the registry's shape before players were documents
+    collectionKey(PLAYERS),            // and where it lives now
 ];
 
 /**
@@ -76,5 +81,9 @@ export function resetTo(mode) {
     OWNED_KEYS.forEach(k => {
         try { localStorage.removeItem(k); } catch { /* ignore */ }
     });
+    // The repository keeps an in-memory copy, so clearing the keys underneath
+    // it is not enough — without this the wiped collections would come
+    // straight back from memory.
+    repository.invalidate();
     setInitMode(mode);
 }

@@ -333,7 +333,13 @@ export default function ScoutingView({ players, columnOrder }) {
 
         // Only a clash with an identical identity blocks — a namesake at
         // another position or school is a different man, not a duplicate.
-        const others = boardPlayers.filter(p => p !== previous);
+        //
+        // Excluded by id, not by object identity: rankBoard returns fresh
+        // objects, so `p !== previous` was true for the player himself and
+        // every rename collided with the player being renamed.
+        const others = boardPlayers.filter(p => (previous.id
+            ? p.id !== previous.id
+            : !(p.name === previous.name && p.position === previous.position)));
         const hit = classify(name, others, { position, school });
         if (hit.match) {
             return `${hit.match.name}${hit.match.position ? ` (${hit.match.position})` : ''} is already on the board.`;

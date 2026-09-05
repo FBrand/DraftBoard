@@ -257,7 +257,7 @@ export default function AddProspectsModal({ isOpen, onClose, existingPlayers = [
                                             {NUMBERS.map(f => (
                                                 <label key={f.key} className="ap-num">
                                                     <span>{f.label}</span>
-                                                    <input type="number" className="text-input" value={r[f.key]}
+                                                    <input type="number" min="1" className="text-input" value={r[f.key]}
                                                         onChange={e => setRow(i, { [f.key]: e.target.value })} />
                                                 </label>
                                             ))}
