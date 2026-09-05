@@ -20,6 +20,11 @@ test.describe('player info card', () => {
         await expect(box.locator('.scouting-group-field')).toHaveCount(0);
         await expect(box.locator('.scouting-number-grid input')).toHaveCount(0);
         await expect(box.locator('.scouting-list-add input')).toHaveCount(0);
+        // Facts read as text until the pencil is used — these cards are looked
+        // at far more often than they are corrected.
+        await expect(box.locator('.scouting-fact-grid input')).toHaveCount(0);
+        await expect(box.locator('.scouting-fact-value').first()).toBeVisible();
+        await box.locator('.scouting-edit-btn').click();
         await expect(box.locator('.scouting-fact-grid input').first()).toBeVisible();
 
         // Four numeric fields, always shown. Total Rank is the board's own

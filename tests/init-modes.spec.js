@@ -28,7 +28,12 @@ test.describe('initial state', () => {
     test('roster cards show how each player arrived', async ({ page }) => {
         await openApp(page);
         await gotoTab(page, 'roster');
-        await page.waitForTimeout(2000);
+
+        // The roster loads asynchronously; wait for the condition rather than
+        // for a fixed moment, which under a loaded machine arrives first.
+        await expect.poll(() => page.$$eval('.rv-slot-tag',
+            els => [...new Set(els.map(e => e.textContent.trim()).filter(Boolean))]),
+        { timeout: 30000 }).not.toHaveLength(0);
 
         const tags = await page.$$eval('.rv-slot-tag',
             els => [...new Set(els.map(e => e.textContent.trim()).filter(Boolean))]);

@@ -4,7 +4,8 @@ import useEscapeKey from '../hooks/useEscapeKey';
 import { getAthleticMatrixUrl } from '../utils/appLinks';
 import { PLAYER_TAGS } from '../utils/playerTags';
 import * as athleticMatrix from '../utils/athleticMatrix';
-import { factsFor, setFacts, resolve as resolvePlayer } from '../utils/playerRegistry';
+import { factsFor, setFacts, resolve as resolvePlayer, rename as renamePlayer, byId } from '../utils/playerRegistry';
+import { savePlayerEdit } from '../utils/prospects';
 
 // Shared with the board markers so a tag looks the same wherever it appears.
 const TAGS = PLAYER_TAGS.map(t => ({ id: t.id, label: `${t.symbol} ${t.label}` }));
@@ -156,9 +157,7 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
     // be permanent. Rankings-file players have no such controls: their base
     // data comes from the file, and this app is not that file's editor.
     const [editingBase, setEditingBase] = useState(false);
-    const [base, setBase] = useState({
-        name: player?.name ?? '', position: player?.position ?? '', school: player?.school ?? '',
-    });
+    const [base, setBase] = useState({ name: player?.name ?? '', position: '', school: '' });
     const [baseError, setBaseError] = useState('');
     const [confirmRemove, setConfirmRemove] = useState(false);
     // Which half of the card is editable depends on where it was opened.
@@ -177,6 +176,13 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
     const playerId = player?.id
         ?? (player?.name ? resolvePlayer({ name: player.name, position: player.position }, { create: false }) : null);
     const [facts, setFactsState] = useState(() => factsFor(playerId));
+
+    // A roster slot knows a name and not much else — no school, and a position
+    // that is the depth-chart row rather than the player's own. The record
+    // fills in what the caller couldn't say.
+    const record = playerId ? byId(playerId) : null;
+    const shownPosition = player?.position || record?.position || '';
+    const shownSchool = player?.school || record?.school || '';
 
     const commitFact = (key, raw) => {
         if (!playerId) return;
@@ -217,7 +223,12 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
     // Every player is editable, not only the ones added in the app — a name
     // misspelt in a rankings file is just as wrong as one misheard on air, and
     // the analyst shouldn't have to know where a player came from to fix him.
-    const canEditBase = !readOnly && !!onPlayerSave;
+    // The pencil unlocks whichever half of the card this view owns: opinions
+    // in Scouting, facts in Roster and Free Agency. Both start read-only —
+    // these cards are looked at far more often than they are corrected, and a
+    // grid of live inputs invites a stray keystroke during a broadcast.
+    const canEditBase = readOnly ? !!playerId : !!onPlayerSave;
+    const factsLocked = readOnly && !editingBase;
 
     // The name is the identity key everywhere in this app, so a rename is a
     // migration, not a field write — the caller moves the board entries and
@@ -225,13 +236,22 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
     const saveBase = () => {
         const name = base.name.trim();
         if (!name) return setBaseError('A player needs a name.');
-        const error = onPlayerSave?.({
-            previous: player,
+        const patch = {
             name,
             position: base.position.trim().toUpperCase(),
             school: base.school.trim(),
-        });
-        if (error) return setBaseError(error);
+        };
+
+        if (onPlayerSave) {
+            const error = onPlayerSave({ previous: player, ...patch });
+            if (error) return setBaseError(error);
+        } else {
+            // Outside Scouting there is no board to migrate: entries are keyed
+            // by the registry id, which a rename does not change, so they
+            // follow on their own.
+            savePlayerEdit(player, patch);
+            if (playerId) renamePlayer(playerId, patch);
+        }
         setBaseError('');
         setEditingBase(false);
     };
@@ -304,7 +324,7 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
                             onChange={e => setBase(b => ({ ...b, school: e.target.value }))} />
                         <button type="button" className="ap-link" onClick={saveBase}>Save</button>
                         <button type="button" className="ap-link" onClick={() => {
-                            setBase({ name: player.name, position: player.position, school: player.school ?? '' });
+                            setBase({ name: player.name, position: shownPosition, school: shownSchool });
                             setBaseError('');
                             setEditingBase(false);
                         }}>Cancel</button>
@@ -316,17 +336,20 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
                     <div className="scouting-controls-identity">
                         <strong className="scouting-controls-name">{player.name}</strong>
                         <div className="scouting-controls-meta">
-                            {player.position && <span className="scouting-controls-pos">{player.position}</span>}
-                            {player.school && <span className="scouting-controls-school">{player.school}</span>}
+                            {shownPosition && <span className="scouting-controls-pos">{shownPosition}</span>}
+                            {shownSchool && <span className="scouting-controls-school">{shownSchool}</span>}
                         </div>
                     </div>
                 )}
                 <div className="scouting-header-actions">
                     {canEditBase && !editingBase && (
                         <button type="button" className="scouting-edit-btn"
-                            title="Edit name, position and school"
+                            title={readOnly ? 'Edit this player\u2019s details' : 'Edit name, position and school'}
                             aria-label="Edit name, position and school"
-                            onClick={() => setEditingBase(true)}>✎</button>
+                            onClick={() => {
+                                setBase({ name: player.name, position: shownPosition, school: shownSchool });
+                                setEditingBase(true);
+                            }}>✎</button>
                     )}
                     <button className="close-btn" onClick={onClose}>&times;</button>
                 </div>
@@ -458,30 +481,41 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
                     <div className="scouting-fact-grid">
                         <div className="scouting-fact-header">
                             Facts
-                            <label className="scouting-udfa-toggle">
-                                <input
-                                    type="checkbox"
-                                    checked={facts.isUdfa === true}
-                                    onChange={e => commitFact('isUdfa', e.target.checked || null)}
-                                />
-                                Undrafted
-                            </label>
+                            {factsLocked ? (
+                                facts.isUdfa === true && <span className="scouting-fact-badge">Undrafted</span>
+                            ) : (
+                                <label className="scouting-udfa-toggle">
+                                    <input
+                                        type="checkbox"
+                                        checked={facts.isUdfa === true}
+                                        onChange={e => commitFact('isUdfa', e.target.checked || null)}
+                                    />
+                                    Undrafted
+                                </label>
+                            )}
                         </div>
                         {FACT_FIELDS.map(f => {
                             // An undrafted player has a year but no round and
                             // no pick — nothing to type, so nothing to show.
                             if (facts.isUdfa === true && (f.key === 'draftRound' || f.key === 'draftPick')) return null;
+                            const value = facts[f.key];
                             return (
                                 <label key={f.key} className="scouting-fact-field">
                                     <span>{f.label}</span>
-                                    <input
-                                        type={f.type}
-                                        min={f.type === 'number' ? f.min ?? 1 : undefined}
-                                        value={facts[f.key] ?? ''}
-                                        placeholder={f.placeholder}
-                                        onChange={e => setFactsState(v => ({ ...v, [f.key]: e.target.value }))}
-                                        onBlur={e => commitFact(f.key, e.target.value)}
-                                    />
+                                    {factsLocked ? (
+                                        <span className={`scouting-fact-value${value == null || value === '' ? ' unset' : ''}`}>
+                                            {value == null || value === '' ? f.placeholder : value}
+                                        </span>
+                                    ) : (
+                                        <input
+                                            type={f.type}
+                                            min={f.type === 'number' ? f.min ?? 1 : undefined}
+                                            value={value ?? ''}
+                                            placeholder={f.placeholder}
+                                            onChange={e => setFactsState(v => ({ ...v, [f.key]: e.target.value }))}
+                                            onBlur={e => commitFact(f.key, e.target.value)}
+                                        />
+                                    )}
                                 </label>
                             );
                         })}

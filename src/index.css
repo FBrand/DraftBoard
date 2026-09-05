@@ -3286,3 +3286,30 @@ body.export-mode .card-glow {
 }
 
 .settings-reset { align-self: flex-start; }
+
+/* Facts read as text until the pencil is used. These cards are looked at far
+   more than they are corrected, and a grid of live inputs invites a stray
+   keystroke mid-broadcast. */
+.scouting-fact-value {
+  color: var(--text-main);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+  padding: 6px 0;
+}
+
+.scouting-fact-value.unset {
+  color: var(--text-dim);
+  font-weight: 400;
+}
+
+.scouting-fact-badge {
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--chiefs-gold);
+  border: 1px solid rgba(255, 184, 28, 0.4);
+  border-radius: 4px;
+  padding: 1px 6px;
+}

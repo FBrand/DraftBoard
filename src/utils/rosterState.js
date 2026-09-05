@@ -4,6 +4,7 @@
  */
 import { parseCsvLine, csvField } from './csvUtils';
 import { parseAcquisition } from './draftPhase';
+import { basePosition } from './boardRanking';
 import { DRAFT_YEAR } from '../constants';
 import { resolve as resolvePlayer, setFacts } from './playerRegistry';
 
@@ -78,15 +79,20 @@ export function makeSlot(name, zone = '53', arrival = null) {
  * the player on his registry record along the way. The file keeps its format;
  * the app stores a plain name and a tag.
  */
-function slotFromImport(raw, zone) {
+function slotFromImport(raw, zone, position = '') {
     const { name, facts } = parseAcquisition(raw, DRAFT_YEAR);
     if (!name) return null;
     const arrival = String(raw ?? '').trim().slice(name.length + 1).trim() || null;
 
-    if (Object.keys(facts).length) {
-        const id = resolvePlayer({ name });
-        if (id) setFacts(id, facts);
-    }
+    // Every player on a roster gets a record, not only the ones whose suffix
+    // says something. Registering only the suffixed ones left most of the
+    // roster — the veterans, who carry no suffix at all — with nothing to hang
+    // a fact on, so their cards had no facts to show.
+    // The row label is an alignment ("WR.Z", "LB.O"); the player plays "WR".
+    // The alignment belongs to the depth chart, not to him.
+    const id = resolvePlayer({ name, position: basePosition(position) });
+    if (id && Object.keys(facts).length) setFacts(id, facts);
+
     return makeSlot(name, zone, arrival);
 }
 
@@ -217,7 +223,7 @@ export function parseCSV(csvText) {
             else if (v.toUpperCase().startsWith('R:')) zone = 'r';
             else if (rIndex >= limit53) zone = 'r';
 
-            const slot = slotFromImport(v.replace(/^(PS:|IR:|R:)/i, '').trim(), zone);
+            const slot = slotFromImport(v.replace(/^(PS:|IR:|R:)/i, '').trim(), zone, pos);
             if (!slot) return;
 
             if (zone === 'ps') {
