@@ -84,16 +84,79 @@ export function buildNameIndex(playersList) {
         const norm = normalizeString(p.name);
         const noSuffix = stripSuffix(norm);
         const nick = applyNickname(noSuffix);
-        return { index: idx, name: p.name, norm, noSuffix, nick };
+        return { index: idx, name: p.name, position: p.position, school: p.school, norm, noSuffix, nick };
     });
+}
+
+// "WR.3" -> "WR". Positions carry a depth suffix in some of the app's data.
+function basePos(position) {
+    return String(position ?? '').split('.', 1)[0].trim().toUpperCase();
+}
+
+function normSchool(school) {
+    return normalizeString(school).replace(/\b(university|college|state|of|the)\b/g, '').replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * A cheap, exact key for the same identity: normalised name (punctuation,
+ * case, suffix and nickname folded) plus base position.
+ *
+ * This is for grouping large lists — joining three rankings files into one
+ * pool, say — where the fuzzy cascade below would mean a Levenshtein pass per
+ * player against every player seen so far. It catches the differences that
+ * actually occur between files built by the same pipeline (punctuation, "Jr",
+ * casing) and deliberately not the ones that need judgement.
+ */
+export function nameKey(name) {
+    return applyNickname(stripSuffix(normalizeString(name)));
+}
+
+export function identityKey(name, position) {
+    return `${nameKey(name)}|${basePos(position)}`;
+}
+
+/**
+ * A player's identity is his name, position and school together — any one of
+ * the three differing makes him a different player. Two people really do turn
+ * up in one draft class with the same name, and a board that silently merged
+ * them would put one man's tape under the other man's tier.
+ *
+ * Only fields BOTH sides declare can tell two players apart. Rankings files
+ * carry no school column and some sources spell positions their own way, so a
+ * field that is missing on either side is not evidence of a difference — it
+ * simply can't discriminate, and the name still decides.
+ */
+function discriminates(entry, qualifier) {
+    if (qualifier.position && entry.position
+        && basePos(entry.position) !== basePos(qualifier.position)) return true;
+    if (qualifier.school && entry.school
+        && normSchool(entry.school) !== normSchool(qualifier.school)) return true;
+    return false;
 }
 
 /**
  * Finds the index of a player in a pre-built name index (see buildNameIndex),
  * using a cascade of matching strategies.
+ *
+ * `qualifier` is optional — a player-ish `{ position, school }`, or a bare
+ * position string. When given, the name is a *qualified* key rather than the
+ * whole identity: the search only ever matches players it can't tell apart
+ * from this one, and reports "not found" rather than merging two people.
+ * Callers that know nothing beyond the name pass nothing and get the original
+ * name-only behaviour.
  */
-export function findMatchingIndex(targetName, mappedList) {
+export function findMatchingIndex(targetName, mappedList, qualifier = null) {
     if (!targetName || !mappedList || mappedList.length === 0) return -1;
+
+    if (qualifier) {
+        const q = typeof qualifier === 'string' ? { position: qualifier } : qualifier;
+        if (q.position || q.school) {
+            const scoped = mappedList.filter(p => !discriminates(p, q));
+            if (scoped.length !== mappedList.length) {
+                return scoped.length ? findMatchingIndex(targetName, scoped) : -1;
+            }
+        }
+    }
 
     // Normalizations for the target
     const targetNorm = normalizeString(targetName);

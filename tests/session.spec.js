@@ -66,7 +66,7 @@ test.describe('full app session', () => {
         await page.waitForSelector('.scouting-layout');
         await page.locator('.center-board-container .player-card').first().click();
         await expect(page.locator('.scouting-controls-header strong')).toHaveText(player);
-        await expect(page.locator('.scouting-list-field').nth(2).locator('.scouting-bullet-list li span'))
+        await expect(page.locator('.scouting-list-field').nth(2).locator('.scouting-bullet-list li .scouting-remark-text'))
             .toHaveText(['SESSION MARKER']);
 
         expect(errors).toEqual([]);

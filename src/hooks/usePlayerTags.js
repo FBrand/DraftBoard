@@ -23,7 +23,8 @@ export function boardForCurrentRankings() {
 }
 
 /**
- * Returns `tagFor(name)` — the scouting tag for a player on the given board,
+ * Returns `tagFor(name, player)` — the scouting tag for a player on the given
+ * board,
  * so the draft board can draw the same markers Scouting does. Read-only; the
  * board is loaded once rather than watched, since tags are edited in Scouting
  * and this only needs to be right as of mount.
@@ -38,9 +39,9 @@ export default function usePlayerTags(board = null) {
         return { entries, index: buildNameIndex(entries) };
     }, [key]);
 
-    return useCallback((name) => {
+    return useCallback((name, qualifier) => {
         if (!loaded.entries.length) return null;
-        const i = findMatchingIndex(name, loaded.index);
+        const i = findMatchingIndex(name, loaded.index, qualifier);
         return i !== -1 ? loaded.entries[i].tag ?? null : null;
     }, [loaded]);
 }

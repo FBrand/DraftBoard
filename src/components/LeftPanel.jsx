@@ -36,7 +36,7 @@ const LeftPanel = ({ players, onDraft, onDraftUnranked, onInfoOpen, tagFor }) =>
                         {remaining.length > 0 ? (
                             remaining.map(player => (
                                 <div key={player.name} onClick={() => onDraft(player)} style={{ cursor: 'pointer' }}>
-                                    <PlayerCard player={player} onInfoOpen={onInfoOpen} tag={tagFor?.(player.name)} />
+                                    <PlayerCard player={player} onInfoOpen={onInfoOpen} tag={tagFor?.(player.name, player)} />
                                 </div>
                             ))
                         ) : (
@@ -58,7 +58,7 @@ const LeftPanel = ({ players, onDraft, onDraftUnranked, onInfoOpen, tagFor }) =>
                                 <div className="rankings-list">
                                     {roundPlayers.map(player => (
                                         <div key={player.name} onClick={() => onDraft(player)} style={{ cursor: 'pointer' }}>
-                                            <PlayerCard player={player} onInfoOpen={onInfoOpen} tag={tagFor?.(player.name)} />
+                                            <PlayerCard player={player} onInfoOpen={onInfoOpen} tag={tagFor?.(player.name, player)} />
                                         </div>
                                     ))}
                                 </div>

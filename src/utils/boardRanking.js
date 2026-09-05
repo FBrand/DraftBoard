@@ -58,12 +58,14 @@ export function compareGroups(a, b) {
  * stamps the derived `overallRank` (total) and `positionRank` onto each
  * player. Returns a new array; never mutates the input.
  *
- * `entryFor(name)` supplies the analyst's overrides for a player:
+ * `entryFor(name, player)` supplies the analyst's overrides for a player. The
+ * player is passed alongside the name because a name alone is not an identity:
+ * two players can share one as long as their position or school differs.
  * `{ group, withinGroup }` — both optional.
  */
 export function rankBoard(players, entryFor) {
     const withOverrides = players.map(p => {
-        const e = entryFor(p.name);
+        const e = entryFor(p.name, p);
         return {
             player: p,
             group: e?.group ?? p.group,
@@ -90,15 +92,25 @@ export function rankBoard(players, entryFor) {
             || String(a.player.name).localeCompare(String(b.player.name));
     });
 
+    // An unranked player has no rank — not "the worst rank". Nobody has placed
+    // him in a tier, so numbering him last would assert a judgement no analyst
+    // made, and would move every other player's number the moment a name was
+    // jotted down mid-game. He sorts to the bottom of the list and his ranks
+    // read as unknown until someone tiers him.
     const perPosition = new Map();
-    return withOverrides.map((row, i) => {
+    let ranked = 0;
+    return withOverrides.map(row => {
+        if (row.group == null) {
+            return { ...row.player, group: null, overallRank: null, positionRank: null };
+        }
         const base = basePosition(row.player.position);
         const nextPosRank = (perPosition.get(base) ?? 0) + 1;
         perPosition.set(base, nextPosRank);
+        ranked += 1;
         return {
             ...row.player,
             group: row.group,
-            overallRank: i + 1,
+            overallRank: ranked,
             positionRank: nextPosRank,
         };
     });

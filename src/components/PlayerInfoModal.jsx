@@ -28,8 +28,8 @@ export default function PlayerInfoModal({ player, players = [], onClose }) {
     // it, re-ranking the whole pool on every render.
     const entries = useMemo(() => boards[activeBoard]?.entries ?? [], [boards, activeBoard]);
     const entryIndex = useMemo(() => buildNameIndex(entries), [entries]);
-    const entryFor = useCallback((name) => {
-        const i = findMatchingIndex(name, entryIndex);
+    const entryFor = useCallback((name, qualifier) => {
+        const i = findMatchingIndex(name, entryIndex, qualifier);
         return i !== -1 ? entries[i] : null;
     }, [entries, entryIndex]);
 
@@ -46,7 +46,7 @@ export default function PlayerInfoModal({ player, players = [], onClose }) {
 
     const resolved = useMemo(() => {
         if (!player) return null;
-        const i = findMatchingIndex(player.name, rankedIndex);
+        const i = findMatchingIndex(player.name, rankedIndex, player);
         // Fall back to whatever the caller handed us — a roster slot can hold
         // someone who isn't in the rankings at all (an UDFA, a veteran).
         return i !== -1 ? ranked[i] : player;
@@ -77,7 +77,7 @@ export default function PlayerInfoModal({ player, players = [], onClose }) {
             variant="modal"
             readOnly
             player={resolved}
-            entry={entryFor(player.name)}
+            entry={entryFor(player.name, player)}
             allBoardNotes={allBoardNotes}
             onClose={onClose}
             boardLabel={BOARD_LABELS[activeBoard]}

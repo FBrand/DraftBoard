@@ -31,7 +31,7 @@ test.describe('player info card', () => {
         const shownRank = (await card.locator('.player-rank').innerText()).replace('#', '').trim();
         expect(values[0]).toBe(shownRank);
         expect(values[1]).toMatch(/^\d+$/);
-        expect(values.slice(2)).toEqual(['?', '?']);
+        expect(values.slice(2)).toEqual(['???', '???']);
 
         // Opening the card must not draft the player.
         if (wasAvailable) {

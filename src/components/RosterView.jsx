@@ -11,6 +11,7 @@ import { TextPromptDialog, ConfirmDialog } from './Dialogs';
 import Toast from './Toast';
 import Menu from './Menu';
 import { shouldSeed } from '../utils/appInit';
+import { isDraftComplete, isDraftPick, isUndraftedSigning } from '../utils/draftPhase';
 import useUndoableState from '../hooks/useUndoableState';
 
 function CounterBox({ label, val, max, status, isLast, maxLabel }) {
@@ -26,7 +27,7 @@ function CounterBox({ label, val, max, status, isLast, maxLabel }) {
 // Owns roster state/persistence/CSV/bootstrap; the grid itself (drag-and-drop,
 // slots, specialists, IR, cuts) is DepthChartGrid.jsx, shared with Free Agency.
 export default function RosterView({ masterPlayers, draftedPlayers, currentPick, onInfoOpen }) {
-    const isDraftComplete = (currentPick || 1) > 257;
+    const draftIsComplete = isDraftComplete(currentPick);
     // Roster initialises like every other phase — silently, with no screen of
     // its own to get past. Seeded mode loads the real post-offseason roster;
     // clean mode loads last season's position structure with the slots empty,
@@ -317,8 +318,8 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
     // own state (read-only via faState.loadState()).
     const handleSyncFromStages = () => {
         const fa = faState.loadState();
-        const ourPicks = (draftedPlayers || []).filter(p => p.draftedByUs && (p.pickNumber || 0) <= 257);
-        const udfaSignings = (draftedPlayers || []).filter(p => (p.pickNumber || 0) > 257);
+        const ourPicks = (draftedPlayers || []).filter(p => p.draftedByUs && isDraftPick(p));
+        const udfaSignings = (draftedPlayers || []).filter(isUndraftedSigning);
 
         // Computed from `state` directly and applied as a plain value, NOT
         // inside a setState updater: the updater is deferred to the render
@@ -517,7 +518,7 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
                 onInfoOpen={onInfoOpen}
             />
 
-            <UnrankedModal key={`sign-${isSignModalOpen}`} isOpen={isSignModalOpen} onClose={() => setIsSignModalOpen(false)} onDraft={handleSignPlayer} mode={isDraftComplete ? 'postdraft' : 'roster'} />
+            <UnrankedModal key={`sign-${isSignModalOpen}`} isOpen={isSignModalOpen} onClose={() => setIsSignModalOpen(false)} onDraft={handleSignPlayer} mode={draftIsComplete ? 'postdraft' : 'roster'} />
 
             {addPositionPhase && (
                 <TextPromptDialog

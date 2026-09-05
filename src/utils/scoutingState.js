@@ -43,9 +43,13 @@ export const BOARD_RANKINGS = {
 
 const storageKey = (board) => `scouting_overlay_v1__${board}`;
 
-export function makeEntry(name, position) {
+export function makeEntry(name, position, school = '') {
     return {
-        name, position, tag: null,
+        // Name, position and school together are the player's identity — any
+        // one differing makes him a different player (see nameMatcher). The
+        // school is carried here so an entry can be told apart from a
+        // namesake's at the same position.
+        name, position, school, tag: null,
         // group mirrors rankings.csv's own `group` column (e.g. "1.3" —
         // round 1, tier 3; CenterBoard reads the leading digits as the
         // round and treats the whole string as the tier-row key) so an
@@ -137,13 +141,14 @@ export function parseCSV(csvText) {
 
     const entries = lines.map(line => {
         const [
-            name, position, group, tag, withinGroup,
+            name, position, school, group, tag, withinGroup,
             athleticMatrixTotal, athleticMatrixPosition,
             strengths, weaknesses, notes, updatedAt,
         ] = parseCsvLine(line);
         return {
             name: (name ?? '').trim(),
             position: (position ?? '').trim(),
+            school: (school ?? '').trim(),
             group: group && group.trim() ? group.trim() : null,
             tag: tag && tag.trim() ? tag.trim() : null,
             withinGroup: toIntOrNull(withinGroup),
@@ -164,14 +169,14 @@ export function exportCSV(state) {
         '# Scouting Overlay Export',
         `# Exported: ${new Date().toISOString()}`,
         [
-            'name', 'position', 'group', 'tag', 'withinGroup',
+            'name', 'position', 'school', 'group', 'tag', 'withinGroup',
             'athleticMatrixTotal', 'athleticMatrixPosition',
             'strengths', 'weaknesses', 'notes', 'updatedAt',
         ].map(csvField).join(','),
     ];
     state.entries.forEach(e => {
         rows.push([
-            e.name, e.position, e.group ?? '', e.tag ?? '', e.withinGroup ?? '',
+            e.name, e.position, e.school ?? '', e.group ?? '', e.tag ?? '', e.withinGroup ?? '',
             e.athleticMatrixTotal ?? '', e.athleticMatrixPosition ?? '',
             JSON.stringify(e.strengths ?? []), JSON.stringify(e.weaknesses ?? []), JSON.stringify(e.notes ?? []),
             e.updatedAt,

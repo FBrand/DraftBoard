@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import CenterBoard from './CenterBoard';
 import UnrankedModal from './UnrankedModal';
 import usePlayerTags from '../hooks/usePlayerTags';
+import { isDraftComplete, isUndraftedSigning } from '../utils/draftPhase';
 
 // UDFA reuses the exact board-grid Draft uses (see CenterBoard.jsx) — "who's
 // left" is already what its default Normal view (isFocusMode=false) shows,
@@ -14,13 +15,13 @@ import usePlayerTags from '../hooks/usePlayerTags';
 export default function UdfaView({ players, draftedPlayers, columnOrder, signUndrafted, currentPick, onInfoOpen }) {
     const [isUnrankedOpen, setIsUnrankedOpen] = useState(false);
     const tagFor = usePlayerTags();
-    const udfaCount = draftedPlayers.filter(p => (p.pickNumber || 0) > 257).length;
+    const udfaCount = draftedPlayers.filter(isUndraftedSigning).length;
 
     // A player is undrafted only once the draft is over, so signing is held
     // back until then. The board stays visible and browsable in the meantime —
     // seeing who is likely to go undrafted is exactly what you want beforehand
     // — but clicking a card can't record a signing.
-    const draftComplete = (currentPick || 1) > 257;
+    const draftComplete = isDraftComplete(currentPick);
 
     const updateRankingsParam = (newPath) => {
         const params = new URLSearchParams(window.location.search);

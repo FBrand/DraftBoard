@@ -10,19 +10,17 @@ test.describe('initial state', () => {
         await openApp(page);
 
         await gotoTab(page, 'roster');
-        await page.waitForTimeout(2000);
-
         // No "initialize roster" wall — it loads the shipped roster itself.
         await expect(page.locator('.roster-bootstrap')).toHaveCount(0);
         await expect(page.locator('.roster-grid').first()).toBeVisible();
-        expect(await page.locator('.rv-slot.filled').count()).toBeGreaterThan(50);
+        await expect.poll(() => page.locator('.rv-slot.filled').count(), { timeout: 30000 })
+            .toBeGreaterThan(50);
 
         // The draft is complete rather than empty.
-        const drafted = await page.evaluate(() => {
+        await expect.poll(() => page.evaluate(() => {
             const s = JSON.parse(localStorage.getItem('nfl_draft_board_state') || '{}');
             return (s.draftedPlayers || []).length;
-        });
-        expect(drafted).toBeGreaterThan(200);
+        }), { timeout: 30000 }).toBeGreaterThan(200);
 
         expect(errors).toEqual([]);
     });
@@ -86,14 +84,13 @@ test.describe('re-initialising', () => {
         await chooseSession(page, /Load Current State/);
 
         await gotoTab(page, 'roster');
-        await page.waitForTimeout(2000);
-        expect(await page.locator('.rv-slot.filled').count()).toBeGreaterThan(50);
+        await expect.poll(() => page.locator('.rv-slot.filled').count(), { timeout: 30000 })
+            .toBeGreaterThan(50);
 
-        const drafted = await page.evaluate(() => {
+        await expect.poll(() => page.evaluate(() => {
             const s = JSON.parse(localStorage.getItem('nfl_draft_board_state') || '{}');
             return (s.draftedPlayers || []).length;
-        });
-        expect(drafted).toBeGreaterThan(200);
+        }), { timeout: 30000 }).toBeGreaterThan(200);
     });
 });
 
@@ -246,5 +243,29 @@ test.describe('signing never consumes draft picks', () => {
         const after = await page.evaluate(() =>
             JSON.parse(localStorage.getItem('nfl_draft_board_state') || '{}').currentPick);
         expect(after).toBe(before);
+    });
+
+    // Regression: DraftBoard_Picks.csv records undrafted signings with the
+    // literal 'UDFA' in the pick column. Seeding the pick counter took a
+    // Math.max over every pick number, one NaN poisoned the whole reduction,
+    // and 'currentPick' came out NaN — which read as 'draft not started', so a
+    // finished draft with hundreds of UDFAs already signed locked the UDFA
+    // stage and counted zero of them.
+    test('a seeded, completed draft leaves UDFA open, not locked', async ({ page }) => {
+        await openApp(page);
+
+        await expect.poll(() => page.evaluate(() =>
+            JSON.parse(localStorage.getItem('nfl_draft_board_state') || '{}').currentPick
+        ), { timeout: 30000 }).toBeGreaterThan(257);
+
+        await gotoTab(page, 'udfa');
+
+        await expect(page.locator('.udfa-locked-note')).toHaveCount(0);
+        await expect(page.getByRole('button', { name: /Sign Unranked Player/ })).toBeEnabled();
+
+        // The signings in the shipped file are counted, not silently skipped
+        // by a comparison against a non-numeric pick label.
+        await expect.poll(() => page.locator('.roster-counter-value').first().textContent(),
+            { timeout: 15000 }).not.toBe('0');
     });
 });

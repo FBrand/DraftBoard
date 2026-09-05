@@ -38,7 +38,7 @@ test.describe('scouting', () => {
         // Back again: the original note is intact.
         await page.getByRole('button', { name: 'Previous board' }).click();
         await page.waitForTimeout(300);
-        await expect(page.locator('.scouting-list-field').nth(2).locator('.scouting-bullet-list li span'))
+        await expect(page.locator('.scouting-list-field').nth(2).locator('.scouting-bullet-list li .scouting-remark-text'))
             .toHaveText(['Consensus note']);
     });
 

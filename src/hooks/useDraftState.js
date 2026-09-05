@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { parseRankings, parsePicks } from '../utils/dataParser';
 import { shouldSeed } from '../utils/appInit';
+import { highestDraftPick, isUndraftedSigning, LAST_DRAFT_PICK } from '../utils/draftPhase';
 import { TEAM_CONFIG } from '../constants';
 import { findMatchingPlayerIndex, buildNameIndex, findMatchingIndex } from '../utils/nameMatcher';
 
@@ -186,10 +187,14 @@ export const useDraftState = () => {
 
                         setRemotePicks(savedState && Array.isArray(parsedState.remotePicks) ? parsedState.remotePicks : []);
 
-                        // Seed current pick explicitly from highest historically recorded pick + 1 for Preloads
+                        // Seed the current pick from the highest recorded one.
+                        // UDFA rows carry the literal 'UDFA' rather than a
+                        // number and are skipped — one of them in a Math.max
+                        // used to turn currentPick into NaN, which read as
+                        // 'draft not started' and locked the UDFA stage on a
+                        // completed draft (see utils/draftPhase.js).
                         if (!savedState && enrichedDrafted.length > 0) {
-                            const lastPick = enrichedDrafted.reduce((max, p) => Math.max(max, p.pickNumber), 0);
-                            setCurrentPick(lastPick + 1);
+                            setCurrentPick(highestDraftPick(enrichedDrafted) + 1);
                         }
                     } catch {
                         console.warn("Corrupted localStorage, using fresh data");
@@ -271,10 +276,15 @@ export const useDraftState = () => {
         if (player.drafted) return;
         saveHistory();
 
-        const lastUdfaPick = draftedPlayers.reduce(
-            (max, p) => Math.max(max, (p.pickNumber || 0) > 257 ? p.pickNumber : 257),
-            257,
-        );
+        // Signings are numbered on from the end of the draft. UDFA rows read
+        // from the CSV carry a label instead of a number and contribute
+        // nothing to the count, which is fine — the number only has to be
+        // unique and after the draft.
+        const lastUdfaPick = draftedPlayers.reduce((max, p) => {
+            if (!isUndraftedSigning(p)) return max;
+            const n = Number(p.pickNumber);
+            return Number.isFinite(n) ? Math.max(max, n) : max;
+        }, LAST_DRAFT_PICK);
         const pickNumber = lastUdfaPick + 1;
         const signed = { ...player, drafted: true, pickNumber, draftedByUs: true, team: TEAM_CONFIG.abbreviation };
 

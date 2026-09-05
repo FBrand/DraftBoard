@@ -38,16 +38,20 @@ const CenterBoard = ({ players, onAction, columnOrder = [], isFocusMode = false,
     const activeGroupsSet = new Set(visiblePlayers.map(p => p.group));
     const allGroups = masterGroups.filter(g => activeGroupsSet.has(g));
 
+    // A player with no group is UNRANKED — nobody has placed him in a tier.
+    // He gets his own row after every round rather than falling into round 1,
+    // which is where an unlabelled group used to land.
+    const UNRANKED_ROUND = 99;
     const getRoundFromGroup = (group) => {
-        if (!group) return 1;
+        if (group == null || group === '') return UNRANKED_ROUND;
         const match = group.toString().match(/^(\d+)/);
-        return match ? parseInt(match[1], 10) : 1;
+        return match ? parseInt(match[1], 10) : UNRANKED_ROUND;
     };
 
     // Group our rows (groups) into rounds for the sidebar labels
     const roundConfig = [];
     let currentRow = 2; // Row 1 is header
-    [1, 2, 3, 4, 5, 6, 7, 8].forEach(r => {
+    [1, 2, 3, 4, 5, 6, 7, 8, UNRANKED_ROUND].forEach(r => {
         const groupsInRound = allGroups.filter(g => getRoundFromGroup(g) === r);
         if (groupsInRound.length > 0) {
             roundConfig.push({
@@ -98,7 +102,7 @@ const CenterBoard = ({ players, onAction, columnOrder = [], isFocusMode = false,
                             zIndex: 80
                         }}
                     >
-                        {rc.round < 8 ? rc.round : ''}
+                        {rc.round === UNRANKED_ROUND ? 'UR' : rc.round < 8 ? rc.round : ''}
                     </div>
                 ))}
 
@@ -108,7 +112,7 @@ const CenterBoard = ({ players, onAction, columnOrder = [], isFocusMode = false,
                         getRoundFromGroup(allGroups[groupIdx + 1]) !== getRoundFromGroup(group);
 
                     return (
-                        <div key={group} className={`board-row ${isLastInRound ? 'round-row-end' : 'subgroup-row-end'}`}>
+                        <div key={String(group)} className={`board-row ${isLastInRound ? 'round-row-end' : 'subgroup-row-end'}`}>
                             {positions.map(pos => {
                                 const roundPlayers = visiblePlayers.filter(p => p.position.split('.', 1)[0] === pos && p.group === group);
 
@@ -126,7 +130,7 @@ const CenterBoard = ({ players, onAction, columnOrder = [], isFocusMode = false,
                                                     alwaysClickable={alwaysClickable}
                                                     hideDraftedStyle={hideDraftedStyle}
                                                     onInfoOpen={onInfoOpen}
-                                                    tag={tagFor?.(player.name)}
+                                                    tag={tagFor?.(player.name, player)}
                                                 />
                                             );
                                         })}

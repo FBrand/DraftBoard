@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import useEscapeKey from '../hooks/useEscapeKey';
+
 import { getAthleticMatrixUrl } from '../utils/appLinks';
 import { PLAYER_TAGS } from '../utils/playerTags';
 import * as athleticMatrix from '../utils/athleticMatrix';
@@ -56,7 +57,7 @@ function BoardNotes({ boards }) {
 // renders the bullets as plain text (and nothing at all when empty) rather
 // than showing disabled inputs, which would be visual noise in a card whose
 // whole job is to be read.
-function BulletListEditor({ label, items, onChange, readOnly }) {
+function BulletListEditor({ label, symbol, cls, items, onChange, readOnly }) {
     const [draft, setDraft] = useState('');
 
     const add = () => {
@@ -69,13 +70,14 @@ function BulletListEditor({ label, items, onChange, readOnly }) {
     if (readOnly && !items?.length) return null;
 
     return (
-        <div className="scouting-list-field">
+        <div className={`scouting-list-field ${cls ?? ''}`}>
             <div className="scouting-list-label">{label}</div>
             {items?.length > 0 && (
                 <ul className="scouting-bullet-list">
                     {items.map((item, i) => (
                         <li key={i}>
-                            <span>{item}</span>
+                            <span className="scouting-remark-symbol" aria-hidden="true">{symbol}</span>
+                            <span className="scouting-remark-text">{item}</span>
                             {!readOnly && (
                                 <button type="button" onClick={() => onChange(items.filter((_, x) => x !== i))} aria-label={`Remove ${label.toLowerCase()} item`}>&times;</button>
                             )}
@@ -112,7 +114,7 @@ function BulletListEditor({ label, items, onChange, readOnly }) {
 // changes — the caller renders this with `key={player.name}` so React
 // remounts it on selection change rather than syncing state via an effect
 // (see https://react.dev/learn/you-might-not-need-an-effect).
-export default function ScoutingControls({ player, entry, onChange, onClose, boardLabel, onPrevBoard, onNextBoard, variant = 'panel', readOnly = false, allBoardNotes }) {
+export default function ScoutingControls({ player, entry, onChange, onClose, boardLabel, onPrevBoard, onNextBoard, variant = 'panel', readOnly = false, allBoardNotes, onPlayerSave, onPlayerDelete }) {
     // Total Rank, Position Rank and Round.Group are the board's own
     // parameters, so they show the player's current values rather than blank
     // boxes — you're adjusting the real thing, not a field that merely sits
@@ -126,7 +128,7 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
     // shared store, and the card has to re-render off that new value — the
     // Athletic Matrix credit line keys off it, and previously only appeared
     // after a remount.
-    const [matrix, setMatrix] = useState(() => athleticMatrix.getScores(player?.name));
+    const [matrix, setMatrix] = useState(() => athleticMatrix.getScores(player?.name, player));
     const [numbers, setNumbers] = useState({
         personalRank: player?.overallRank ?? '',
         positionRank: player?.positionRank ?? '',
@@ -138,6 +140,16 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
     const [round, tier] = String(entry?.group ?? player?.group ?? '').split('.');
     const [roundVal, setRoundVal] = useState(round ?? '');
     const [tierVal, setTierVal] = useState(tier ?? '');
+    // Base data for a player added in-app — correctable and removable, since a
+    // name taken down live on air is often a guess, and a typo would otherwise
+    // be permanent. Rankings-file players have no such controls: their base
+    // data comes from the file, and this app is not that file's editor.
+    const [editingBase, setEditingBase] = useState(false);
+    const [base, setBase] = useState({
+        name: player?.name ?? '', position: player?.position ?? '', school: player?.school ?? '',
+    });
+    const [baseError, setBaseError] = useState('');
+    const [confirmRemove, setConfirmRemove] = useState(false);
     // Only the modal presentation is dismissable — the panel variant is a
     // permanent column, not something Escape should blank out.
     useEscapeKey(onClose, variant === 'modal' && !!player);
@@ -160,14 +172,36 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
     const commitNumber = (field, raw) => {
         const value = raw === '' ? null : parseInt(raw, 10);
         if (field.key === 'athleticMatrixTotal') {
-            athleticMatrix.setScore(player.name, 'total', value);
+            athleticMatrix.setScore(player.name, 'total', value, player);
             setMatrix(m => ({ ...m, total: value }));
         } else if (field.key === 'athleticMatrixPosition') {
-            athleticMatrix.setScore(player.name, 'position', value);
+            athleticMatrix.setScore(player.name, 'position', value, player);
             setMatrix(m => ({ ...m, position: value }));
         } else {
             commit({ [field.key]: value });
         }
+    };
+
+    // Every player is editable, not only the ones added in the app — a name
+    // misspelt in a rankings file is just as wrong as one misheard on air, and
+    // the analyst shouldn't have to know where a player came from to fix him.
+    const canEditBase = !readOnly && !!onPlayerSave;
+
+    // The name is the identity key everywhere in this app, so a rename is a
+    // migration, not a field write — the caller moves the board entries and
+    // matrix scores across and reports back anything that blocks it.
+    const saveBase = () => {
+        const name = base.name.trim();
+        if (!name) return setBaseError('A player needs a name.');
+        const error = onPlayerSave?.({
+            previous: player,
+            name,
+            position: base.position.trim().toUpperCase(),
+            school: base.school.trim(),
+        });
+        if (error) return setBaseError(error);
+        setBaseError('');
+        setEditingBase(false);
     };
 
     const commitGroup = (r, t) => {
@@ -221,12 +255,47 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
     const content = (
         <div className={variant === 'modal' ? 'side-panel right-panel scouting-modal-box' : 'side-panel right-panel'}>
             <div className="scouting-controls-header">
-                <div>
-                    <strong>{player.name}</strong>
-                    <span className="scouting-controls-pos"> — {player.position}</span>
+                {editingBase ? (
+                    <div className="scouting-base-edit">
+                        <input className="text-input" value={base.name} autoFocus
+                            aria-label="Name"
+                            onChange={e => setBase(b => ({ ...b, name: e.target.value }))} />
+                        <input className="text-input" value={base.position}
+                            aria-label="Position"
+                            onChange={e => setBase(b => ({ ...b, position: e.target.value }))} />
+                        <input className="text-input" value={base.school}
+                            aria-label="School"
+                            onChange={e => setBase(b => ({ ...b, school: e.target.value }))} />
+                        <button type="button" className="ap-link" onClick={saveBase}>Save</button>
+                        <button type="button" className="ap-link" onClick={() => {
+                            setBase({ name: player.name, position: player.position, school: player.school ?? '' });
+                            setBaseError('');
+                            setEditingBase(false);
+                        }}>Cancel</button>
+                    </div>
+                ) : (
+                    // Name on its own line, the rest of the identity under it.
+                    // Strung out on one row it read as a run-on: a name, a
+                    // dash, a position, a school and a pencil all competing.
+                    <div className="scouting-controls-identity">
+                        <strong className="scouting-controls-name">{player.name}</strong>
+                        <div className="scouting-controls-meta">
+                            {player.position && <span className="scouting-controls-pos">{player.position}</span>}
+                            {player.school && <span className="scouting-controls-school">{player.school}</span>}
+                        </div>
+                    </div>
+                )}
+                <div className="scouting-header-actions">
+                    {canEditBase && !editingBase && (
+                        <button type="button" className="scouting-edit-btn"
+                            title="Edit name, position and school"
+                            aria-label="Edit name, position and school"
+                            onClick={() => setEditingBase(true)}>✎</button>
+                    )}
+                    <button className="close-btn" onClick={onClose}>&times;</button>
                 </div>
-                <button className="close-btn" onClick={onClose}>&times;</button>
             </div>
+            {baseError && <div className="scouting-base-error">{baseError}</div>}
 
             {boardLabel && (
                 <div className="scouting-board-pager">
@@ -266,9 +335,9 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
                     <div className="scouting-readonly-grid">
                         {NUMBER_FIELDS.map(f => {
                             // Total and position rank are derived from the
-                            // board's ordering, so every player on a board has
-                            // both; only the athletic-matrix numbers can be
-                            // genuinely unset.
+                            // board's ordering, so a player nobody has tiered
+                            // has neither — they read as unknown rather than
+                            // as the worst rank on the board.
                             const val = f.derived
                                 ? player[f.derived]
                                 : f.key === 'athleticMatrixTotal' ? matrix.total
@@ -279,7 +348,7 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
                                 <div key={f.key} className="scouting-readonly-field">
                                     <span className="scouting-readonly-label">{f.label}</span>
                                     <span className={`scouting-readonly-value${isSet ? '' : ' unset'}`}>
-                                        {isSet ? val : '?'}
+                                        {isSet ? val : '???'}
                                     </span>
                                 </div>
                             );
@@ -294,7 +363,7 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
                                     type="number"
                                     min="1"
                                     value={roundVal}
-                                    placeholder="1"
+                                    placeholder="???"
                                     onChange={e => setRoundVal(e.target.value)}
                                     onBlur={() => commitGroup(roundVal, tierVal)}
                                 />
@@ -305,7 +374,7 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
                                     type="number"
                                     min="1"
                                     value={tierVal}
-                                    placeholder="3"
+                                    placeholder="???"
                                     onChange={e => setTierVal(e.target.value)}
                                     onBlur={() => commitGroup(roundVal, tierVal)}
                                 />
@@ -320,6 +389,7 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
                                         <input
                                             type="number"
                                             value={numbers[f.key]}
+                                            placeholder={f.derived ? '???' : ''}
                                             onChange={e => setNumbers(n => ({ ...n, [f.key]: e.target.value }))}
                                             onBlur={() => commitNumber(f, numbers[f.key])}
                                         />
@@ -327,7 +397,7 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
                                         // Position rank is purely derived from the
                                         // board's ordering — there's nothing to type.
                                         <span className="scouting-derived-value" title="Derived from this board's order">
-                                            {player[f.derived] ?? '—'}
+                                            {player[f.derived] ?? '???'}
                                         </span>
                                     )}
                                 </label>
@@ -351,11 +421,34 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
                     <BulletListEditor
                         key={f.key}
                         label={f.label}
+                        symbol={f.symbol}
+                        cls={f.cls}
                         items={entry?.[f.key] ?? []}
                         onChange={items => commit({ [f.key]: items })}
                         readOnly={readOnly}
                     />
                 ))}
+
+                {canEditBase && (
+                    <div className="scouting-prospect-admin">
+                        {confirmRemove ? (
+                            <>
+                                <span className="scouting-prospect-note">Remove from every board?</span>
+                                <div className="scouting-prospect-confirm">
+                                    <button type="button" className="ap-link" onClick={() => setConfirmRemove(false)}>Keep</button>
+                                    <button type="button" className="scouting-prospect-remove"
+                                        onClick={() => onPlayerDelete?.(player)}>Remove</button>
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                <span className="scouting-prospect-note">Base data</span>
+                                <button type="button" className="scouting-prospect-remove"
+                                    onClick={() => setConfirmRemove(true)}>Remove player</button>
+                            </>
+                        )}
+                    </div>
+                )}
 
                 {readOnly && !hasAnyContent && (
                     <div className="scouting-empty">

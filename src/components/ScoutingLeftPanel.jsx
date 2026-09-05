@@ -24,7 +24,7 @@ function Row({ player, rank, group, onSelect, isSelected }) {
             className={`scouting-rank-row ${isDragging ? 'dragging-source' : ''} ${isOver ? 'drag-over' : ''} ${isSelected ? 'selected' : ''}`}
         >
             <div className="scouting-rank-handle" {...listeners} {...attributes} style={{ cursor: 'grab' }}>⠿</div>
-            <div className="scouting-rank-num">{rank}</div>
+            <div className={`scouting-rank-num ${rank == null ? 'unranked' : ''}`}>{rank ?? '???'}</div>
             {group && <div className="scouting-rank-group">{group}</div>}
             <div className="scouting-rank-card" onClick={() => onSelect(player)}>
                 <PlayerCard player={player} alwaysClickable hideDraftedStyle noStrikethrough />
@@ -99,11 +99,11 @@ export default function ScoutingLeftPanel({ orderedPlayers, selectedName, onSele
                 <div className="panel-content scroll-container">
                     {visible.length > 0 ? (
                         <div className="scouting-rank-list">
-                            {visible.map((player, i) => (
+                            {visible.map(player => (
                                 <Row
-                                    key={player.name}
+                                    key={`${player.name}|${player.position}`}
                                     player={player}
-                                    rank={searchTerm ? (orderedPlayers.indexOf(player) + 1) : (i + 1)}
+                                    rank={player.overallRank ?? null}
                                     group={player.group}
                                     onSelect={onSelect}
                                     isSelected={player.name === selectedName}

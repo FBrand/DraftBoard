@@ -63,6 +63,94 @@ Stage notes:
   `utils/scoutingState.js` + `utils/boardRanking.js`. See the ranking model
   below — it's the part most easily broken by a well-meaning change.
 
+### Player identity: name + position + school (`utils/nameMatcher.js`)
+
+**A name is not an identity.** Two players really do turn up in one draft class
+with the same name, and a board that merged them would put one man's tape under
+the other man's tier. Identity is name, position and school **together** — any
+one of the three differing makes it a different player.
+
+`findMatchingIndex(name, index, qualifier)` takes an optional third argument —
+a player-ish `{ position, school }`, or a bare position string. When given, the
+search only matches players it cannot tell apart from this one, and returns
+"not found" rather than merging two people. **Only fields both sides declare
+can discriminate**: rankings files carry no school column and some sources
+spell positions their own way, so a field missing on either side is not
+evidence of a difference.
+
+Callers that know nothing beyond the name (scraped roster data, ESPN sync) pass
+nothing and get the original name-only behaviour — do not "fix" those by
+forcing a qualifier through, or legitimate matches across inconsistent sources
+will start failing. The scouting/prospect/matrix paths all pass the player.
+
+**But joining the rankings files is a different question**, and reusing the
+identity rule there was a real bug. "Are these two different people?" is not
+"is this the same man in two analysts' files": analysts label the same player
+DL and EDGE all the time, so joining on position split one player into two,
+which then collided as duplicate React keys and leaked list rows on every board
+switch. `useBoardRankings.joinKeyFor()` joins on the **name**, except for a
+name that appears more than once inside a *single* file — there the analyst
+deliberately listed two people and position is doing real work.
+
+Anything rendering a player list keys on name **and** position, never name
+alone, since two players may legitimately share one.
+
+### Every board carries every player
+
+A player one analyst has ranked and another hasn't is **unranked** on the
+second board, not missing from it — otherwise there is nowhere to disagree.
+`useBoardRankings` builds the union of all three files (plus in-app additions)
+and gives each board that whole pool, overlaying only its own file's `group`,
+`overallRank` and favourite flag.
+
+An unranked player has **no rank at all**, not the worst one. `rankBoard`
+returns `overallRank: null` / `positionRank: null` for anyone with no tier, and
+the UI shows `???`. Numbering him last would assert a judgement nobody made,
+and would renumber the whole board the moment a name was jotted down mid-game.
+`CenterBoard` gives them a `UR` row after the numbered rounds, and Scouting has
+an `Unranked` filter (a separate axis from the tag filters — a player can be
+liked *and* unplaced).
+
+### Pick numbers are not always numbers (`utils/draftPhase.js`)
+
+`DraftBoard_Picks.csv` records undrafted signings with the literal `UDFA` in
+the pick column, and the card prints that where a drafted player prints
+`PK 41`. So arithmetic on `pickNumber` is a trap, and it sprang: seeding the
+pick counter did `Math.max(max, p.pickNumber)` across every signing, one
+`Math.max(257, "UDFA")` returned `NaN`, `NaN` swallowed the rest, and
+`(NaN || 1) > 257` reported a completed draft as not started — locking the UDFA
+stage and counting zero UDFAs. Nothing outside `draftPhase.js` compares a raw
+`pickNumber` against a number; use `isDraftPick`, `isUndraftedSigning`,
+`isDraftComplete`, `highestDraftPick`.
+
+### Adding and editing players (`utils/prospects.js` + `AddProspectsModal.jsx`)
+
+The rankings CSVs are a snapshot; players declare late, rise late, or get
+missed. `+ Add Players` in Scouting is the only in-app way to add a player who
+isn't in any rankings file — every other "unranked player" button *disposes* of
+a player (drafts/signs/rosters him) rather than creating one.
+
+The split that matters: **name, position and school are base data**, stored in
+`prospects_v1` and applied to every board's pool by `useBoardRankings` via
+`applyProspects()`. Tier, tag, remarks and within-tier order stay per board in
+`scoutingState`. The athletic matrix is global, because it measures the player
+rather than an opinion of him.
+
+**An added player is not a special kind of player.** He arrives *unranked*
+(`group: null`, so he sorts last until someone places him) and carries no flag
+marking his origin. Edit and delete work on every player, whoever he came from:
+an in-app player is changed in place, while a rankings-file player gets an
+**override** (`edits`) or a **hide** (`hidden`) recorded instead — the file is
+re-read on every load and is not ours to rewrite. Corrected file players keep a
+`sourceIdentity` pointing at the file's own identity, so a second correction
+updates the same override rather than stacking a new one.
+
+Both entry paths (typed rows, CSV import) land in the same verification step,
+and **nothing is written until that step is submitted** — an import is a
+proposal, not a bulk write. Collisions block submit and always offer the
+already-existing player's card rather than dead-ending; filling in a different
+position or school is itself a resolution.
+
 ### The board ranking model (read before touching ranks or groups)
 
 Scouting's "Total Rank", "Position Rank" and "Round.Group" are **not** a

@@ -6,6 +6,7 @@ import RightPanel from './RightPanel';
 import BottomPanel from './BottomPanel';
 import PicksModal from './PicksModal';
 import UnrankedModal from './UnrankedModal';
+import { isDraftComplete } from '../utils/draftPhase';
 import usePlayerTags from '../hooks/usePlayerTags';
 
 // Owns all Draft-view-local UI state (focus mode, sidebar toggles, modals) —
@@ -25,7 +26,7 @@ export default function DraftView({
     // phantom pick at 258. UnrankedModal has supported `initialPlayer` for a
     // long time; nothing had ever passed it.
     const [signPlayer, setSignPlayer] = useState(null);
-    const draftComplete = (currentPick || 1) > 257;
+    const draftComplete = isDraftComplete(currentPick);
     const [isFocusMode, setIsFocusMode] = useState(() => {
         const saved = localStorage.getItem('draft_board_focus');
         return saved === 'true';

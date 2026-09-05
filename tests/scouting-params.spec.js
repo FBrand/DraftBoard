@@ -342,17 +342,23 @@ test.describe('each board has its own player pool', () => {
         const top = () => page.$$eval('.scouting-rank-row',
             rows => rows.slice(0, 10).map(r => r.querySelector('.player-name')?.textContent.trim()));
         const count = () => page.locator('.scouting-rank-row').count();
+        const unranked = () => page.locator('.scouting-rank-num.unranked').count();
 
         const consensus = await top();
         const consensusCount = await count();
+        const consensusUnranked = await unranked();
 
         await page.locator('.board-switcher .switcher-btn', { hasText: 'Dan' }).click();
         await page.waitForTimeout(800);
         const dan = await top();
 
         expect(dan).not.toEqual(consensus);
-        // Different files hold different numbers of players, too.
-        expect(await count()).not.toBe(consensusCount);
+
+        // Every board carries every player — a player one analyst has ranked
+        // and another hasn't is unranked on the second board, not missing from
+        // it. What differs between boards is how many are still unplaced.
+        expect(await count()).toBe(consensusCount);
+        expect(await unranked()).not.toBe(consensusUnranked);
     });
 
     test('shared players rank differently on each board, with no edits', async ({ page }) => {
