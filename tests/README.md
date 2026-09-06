@@ -30,8 +30,17 @@ npm run test:docker -- --trace on              # traces are off by default (see 
 npm run test:docker -- --workers=1             # serialise, e.g. to debug a flake
 ```
 
-The full suite takes roughly 9 minutes. Individual tests take 20–60s, almost
-all of it a full app boot per test.
+The full suite takes roughly 9 minutes on an unloaded machine, and individual
+tests 20–60s — almost all of it a full app boot per test.
+
+**It is very sensitive to how busy the host is.** This box has under 2 GB of
+RAM, and with other work on it the browsers start swapping: a test doing
+nothing but a page load has been measured at 2 minutes, at which point the
+120s per-test timeout fires and *everything* fails on
+`waitForSelector('.view-tabbar')`. That failure looks alarming and identical
+across all 82 tests, and it says nothing about the code. Before believing it,
+check `free -m` and time a trivial spec; if the machine is loaded, run with
+`--workers=1 --timeout=600000` instead.
 
 ## Layout
 

@@ -63,6 +63,50 @@ Stage notes:
   `utils/scoutingState.js` + `utils/boardRanking.js`. See the ranking model
   below — it's the part most easily broken by a well-meaning change.
 
+### Boards, authors and seasons (`utils/boardRegistry.js`)
+
+A board used to BE its name — `BOARDS = ['consensus','dan','ryan']`, keyed in
+storage as `scouting_overlay_v1__dan`. Rename an analyst or replace one and
+the work is stranded under a dead key, or reattributed to whoever inherits the
+name. The player-identity mistake, one level up.
+
+    seasons/{id}   { id, year, status: 'current' | 'archived' }
+    authors/{id}   { id, name }
+    boards/{id}    { id, slug, label, authorId|null, seasonId, rankingsFile, order }
+
+An **author** is a person and persists across seasons. A **board** belongs to
+one season and usually one author; its `label` renames freely because nothing
+keys on it, while its `slug` is stable purely so `?board=dan` survives the
+rename. Storage keys on the board id; the old per-name key is migrated on first
+read.
+
+**Consensus has no author** — it is derived rather than written by a person,
+and inventing somebody called Consensus to own it would make "who said this" a
+lie. Anything reading `board.authorId` must handle null.
+
+**A season makes a board an artifact.** `startSeason()` archives the outgoing
+season and gives each author a fresh, EMPTY board: a draft class is entirely
+new players, so carrying placements forward would assert judgements about
+people nobody has watched. Archived boards freeze their **placements** —
+`isFrozen()` — but not their **evaluations**: what you know about a player
+keeps growing after the board that ranked him is done. The player card reads
+`allBoards()` rather than the current season, so it reaches back into past
+scouting.
+
+### Pick numbers, rounds and the session team
+
+`constants.DRAFT_ROUND_ENDS` states the last overall pick of each round,
+because a round cannot be divided out of a pick number — compensatory picks
+make `ceil(pick / 32)` wrong from the third round on. **The shipped values are
+the standard modern layout and are not verified against any particular year's
+order.** Check them per season; anything past the last boundary gets no round
+rather than a guessed one.
+
+`appSettings.getSessionTeam()` is whose offseason this is, defaulting to
+`TEAM_CONFIG.abbreviation`. Everyone imported onto the roster gets it as a
+fact — being on the roster *is* the fact that he plays there — and the draft
+records it on every pick.
+
 ### The data layer (`src/data/`)
 
 Everything stored goes through `repository` — documents in named collections,
