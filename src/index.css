@@ -3454,3 +3454,10 @@ body.export-mode .card-glow {
 }
 
 .import-summary span { flex: 1; }
+
+/* Two short fields side by side — a draft year and a round belong together. */
+.form-row-pair { display: flex; gap: 10px; }
+.form-row-pair .form-group { flex: 1; }
+
+/* Free agency has no practice squad, so its grid is one column narrower. */
+.roster-grid.no-ps { grid-template-columns: 85px 1fr 1fr; }

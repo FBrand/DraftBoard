@@ -27,6 +27,12 @@ const UnrankedModal = ({ isOpen, onClose, onDraft, mode = 'draft', initialPlayer
     // Where he came from. Only means anything for a move between clubs — a
     // draft pick and a UDFA are entering the league, not leaving somewhere.
     const [previousTeam, setPreviousTeam] = useState(() => initialPlayer?.previousTeam || '');
+    // How he entered the league. A player you sign or trade for got here some
+    // other year, and nothing else can tell us which: the roster file carries
+    // it for players already on the roster, but somebody added by hand has no
+    // suffix to read it from, so his card said "????" for good.
+    const [draftYear, setDraftYear] = useState(() => initialPlayer?.draftYear || '');
+    const [draftRound, setDraftRound] = useState(() => initialPlayer?.draftRound || '');
     useEscapeKey(onClose, isOpen);
 
     if (!isOpen) return null;
@@ -49,6 +55,8 @@ const UnrankedModal = ({ isOpen, onClose, onDraft, mode = 'draft', initialPlayer
             ...(MOVED_CLUBS.has(suffix) && previousTeam.trim()
                 ? { previousTeam: previousTeam.trim().toUpperCase() }
                 : {}),
+            ...(draftYear ? { draftYear: parseInt(draftYear, 10) } : {}),
+            ...(draftRound ? { draftRound: parseInt(draftRound, 10) } : {}),
             overallRank: 999,
             round: null,
             tier: null,
@@ -82,6 +90,22 @@ const UnrankedModal = ({ isOpen, onClose, onDraft, mode = 'draft', initialPlayer
                         <input type="text" value={school} onChange={e => setSchool(e.target.value)}
                             placeholder="e.g. Indiana" className="text-input" />
                     </div>
+                    {(mode === 'roster' || mode === 'candidate') && (
+                        <div className="form-row-pair">
+                            <div className="form-group">
+                                <label>Draft Year</label>
+                                <input type="number" min="1936" value={draftYear}
+                                    onChange={e => setDraftYear(e.target.value)}
+                                    placeholder="e.g. 2024" className="text-input" />
+                            </div>
+                            <div className="form-group">
+                                <label>Round</label>
+                                <input type="number" min="1" value={draftRound}
+                                    onChange={e => setDraftRound(e.target.value)}
+                                    placeholder="e.g. 3 — blank if undrafted" className="text-input" />
+                            </div>
+                        </div>
+                    )}
                     {/* A signing or a trade comes FROM somewhere and goes TO
                         somewhere. A draft pick and a UDFA are entering the
                         league, so neither applies. */}

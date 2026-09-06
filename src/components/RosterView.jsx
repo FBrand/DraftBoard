@@ -136,15 +136,20 @@ export default function RosterView({ masterPlayers, draftedPlayers, onInfoOpen }
     // touches draft state; the arrival tag beside the name records how they
     // arrived, the same thing roster.csv encodes in its suffix.
     const handleSignPlayer = (customPlayer) => {
-        const { name, position, arrival = null, team, previousTeam } = customPlayer;
+        const { name, position, arrival = null, team, previousTeam, draftYear, draftRound } = customPlayer;
         const displayName = String(name).split(':')[0];
 
         // Team and previous team are facts about the player, so they go on his
         // record. How he arrived HERE is a fact about this roster, so it stays
         // on the slot.
-        if (team || previousTeam) {
+        if (team || previousTeam || draftYear || draftRound) {
             const id = resolvePlayer({ name: displayName, position });
-            if (id) setFacts(id, { ...(team ? { team } : {}), ...(previousTeam ? { previousTeam } : {}) });
+            if (id) setFacts(id, {
+                ...(team ? { team } : {}),
+                ...(previousTeam ? { previousTeam } : {}),
+                ...(draftYear ? { draftYear } : {}),
+                ...(draftRound ? { draftRound, isUdfa: false } : {}),
+            });
         }
 
         // Computed outside setState: an updater is deferred to the render

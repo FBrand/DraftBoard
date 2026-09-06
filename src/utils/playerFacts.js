@@ -12,7 +12,7 @@
  * the app wins, so this only ever FILLS BLANKS and never overwrites.
  */
 import { parseCsvLine } from './csvUtils';
-import { resolveAll, fillMany } from './playerRegistry';
+import { loadRegistry, fillMany } from './playerRegistry';
 
 const FILE = 'player_facts_2026.csv';
 
@@ -57,25 +57,56 @@ function loadRows() {
  * Running again is cheap and safe: it fills blanks only, and commits once for
  * the whole batch, so a pass with nothing to do writes nothing at all.
  */
+/**
+ * Names as a key, matched the way the builder wrote them.
+ *
+ * Deliberately a hash lookup and NOT the fuzzy resolver. The seed covers the
+ * whole league now — 2,474 players, because a veteran needs a school too — and
+ * resolving that list through resolveAll meant fuzzy-matching every row
+ * against the registry on each pass. That blocked the main thread for
+ * fourteen seconds: the page rendered one frame in two, every Playwright
+ * actionability check timed out against an element that was plainly visible,
+ * and the renderer eventually ran out of memory.
+ *
+ * The direction was the mistake. We do not need to find a record for every
+ * row in the file; we need a row for the few hundred records we actually
+ * hold. Walking the registry and looking each player up by name is one pass
+ * over the records and a hash hit per player.
+ */
+const norm = (s) => String(s ?? '').toLowerCase()
+    .replace(/\b(jr|sr|ii|iii|iv|v)\b\.?/g, '')
+    .replace(/[.,'`’-]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+let byName = null;
+
+function index(rows) {
+    if (byName) return byName;
+    byName = new Map();
+    rows.forEach(r => {
+        const key = norm(r.name);
+        if (key && !byName.has(key)) byName.set(key, r);
+    });
+    return byName;
+}
+
 export async function applyPlayerFacts() {
     const rows = await loadRows();
     if (!rows.length) return false;
 
-    // Resolved with the school included, so a namesake at a different school
-    // is not handed the wrong record.
-    const ids = resolveAll(
-        rows.map(r => ({ name: r.name, position: r.position, school: r.school })),
-        { create: false },
-    );
+    const lookup = index(rows);
 
-    // One commit, not one per player: the per-player calls each rewrite the
-    // whole collection, and 257 rows of seed data crashed the renderer.
+    // Only players we hold, and only the ones still missing something — a
+    // record that already has its school and its draft outcome is not worth a
+    // lookup, and this runs again whenever new players are registered.
     const updates = [];
-    rows.forEach((row, i) => {
-        const id = ids[i];
-        if (!id) return;                 // not on any board — nothing to fill
+    loadRegistry().forEach(record => {
+        if (record.school && record.team && (record.draftPick != null || record.isUdfa != null)) return;
+        const row = lookup.get(norm(record.name));
+        if (!row) return;
         updates.push({
-            id,
+            id: record.id,
             base: { school: row.school },
             facts: {
                 draftYear: num(row.draftYear),

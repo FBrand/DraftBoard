@@ -341,7 +341,7 @@ export const useDraftState = () => {
             return Number.isFinite(n) ? Math.max(max, n) : max;
         }, lastDraftPick());
         const pickNumber = lastUdfaPick + 1;
-        const signed = { ...player, drafted: true, pickNumber, draftedByUs: true, team: TEAM_CONFIG.abbreviation };
+        const signed = { ...player, drafted: true, pickNumber, draftedByUs: true, team: sessionTeam() };
 
         const matchIdx = findMatchingPlayerIndex(player.name, players);
         setPlayers(prev => prev.map((p, idx) => (idx === matchIdx ? { ...p, ...signed } : p)));
@@ -349,7 +349,7 @@ export const useDraftState = () => {
 
         // Going undrafted is just as much a league-entry fact as being picked.
         const id = resolvePlayer({ name: player.name, position: player.position, school: player.school });
-        if (id) setFacts(id, { isUdfa: true, draftYear: DRAFT_YEAR, draftPick: null, draftRound: null, team: TEAM_CONFIG.abbreviation });
+        if (id) setFacts(id, { isUdfa: true, draftYear: DRAFT_YEAR, draftPick: null, draftRound: null, team: sessionTeam() });
     }, [draftedPlayers, players, saveHistory]);
 
     const undoAction = useCallback(() => {

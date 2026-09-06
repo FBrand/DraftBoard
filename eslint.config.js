@@ -28,7 +28,7 @@ export default defineConfig([
   },
   // Playwright specs and config run in Node, not the browser.
   {
-    files: ['tests/**/*.js', 'playwright.config.js'],
+    files: ['tests/**/*.js', 'playwright.config.js', 'playwright.fast.config.js'],
     languageOptions: {
       globals: { ...globals.node },
     },

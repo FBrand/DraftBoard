@@ -143,12 +143,18 @@ function SlotCell({ slot, zone, posId, slotIdx, targetZone, onInfoOpen, masterPl
     );
 }
 
-// ── Single row — 4 grid cells: [pos+ctrl | 53-man | PS | Reserve] ────────────
+// ── Single row — [pos+ctrl | 53-man | (PS) | Reserve] ───────────────────────
+//
+// Free agency has no practice squad. A candidate is somebody you might
+// acquire; where he would eventually sit is a roster question, and offering a
+// PS column there asked it a stage too early. The column is HIDDEN rather than
+// removed from the model — the slot indices stay where they are, so the same
+// state can be read by Roster, which does have one.
 // The row-header cell is a drop target for reordering, but only its position
 // label is a drag handle — keeping the delete/±count buttons outside the
 // drag listeners avoids any pointerdown conflict between "click a button"
 // and "start dragging the row".
-function DepthRow({ posConfig, slots, idx, phase, onConfigChange, onDeletePosition, masterPlayers, draftedPlayers, onInfoOpen }) {
+function DepthRow({ posConfig, slots, idx, phase, onConfigChange, onDeletePosition, masterPlayers, draftedPlayers, onInfoOpen, showPracticeSquad = true }) {
     const { id, label, slots53 } = posConfig;
     const rowParity = idx % 2 === 0 ? 'odd' : '';
     const rowId = `${phase}::${idx}`;
@@ -232,12 +238,14 @@ function DepthRow({ posConfig, slots, idx, phase, onConfigChange, onDeletePositi
                 ))}
             </div>
 
-            {/* Col 3: Practice Squad */}
+            {/* Col 3: Practice Squad — absent in free agency */}
+            {showPracticeSquad && (
             <div className={`rv-row-cell ${rowParity}`}>
                 {psItems.map(item => (
-                    <SlotCell key={item.idx} slot={item.slot} zone={item.zone} posId={id} slotIdx={item.idx} targetZone="ps" masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} onInfoOpen={onInfoOpen} />
+                    <SlotCell key={item.idx} slot={item.slot} zone={item.zone} posId={id} slotIdx={item.idx} targetZone="ps" masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} onInfoOpen={onInfoOpen} showPracticeSquad={showPracticeSquad} />
                 ))}
             </div>
+            )}
 
             {/* Col 4: Reserve */}
             <div className={`rv-row-cell last ${rowParity}`}>
@@ -337,12 +345,12 @@ function IRDropZone({ reserve, masterPlayers, draftedPlayers, onInfoOpen }) {
 }
 
 // DepthHeader — 4 cells matching the row grid
-function DepthHeader() {
+function DepthHeader({ showPracticeSquad = true }) {
     return (
         <React.Fragment>
             <div className="rv-h">Pos</div>
             <div className="rv-h" style={{ textAlign: 'left', paddingLeft: 10 }}>53-Man</div>
-            <div className="rv-h" style={{ textAlign: 'left', paddingLeft: 10 }}>Practice Squad</div>
+            {showPracticeSquad && <div className="rv-h" style={{ textAlign: 'left', paddingLeft: 10 }}>Practice Squad</div>}
             <div className="rv-h" style={{ textAlign: 'left', paddingLeft: 10 }}>Reserve</div>
         </React.Fragment>
     );
@@ -366,7 +374,7 @@ export default function DepthChartGrid({
     masterPlayers, draftedPlayers,
     onMove, onRowMove, onDeletePosition, onSlotsChange, onAddPosition,
     onSignClick, signButtonLabel = '+ SIGN PLAYER',
-    zoomLevel = 1, showNeeds = true, onInfoOpen,
+    zoomLevel = 1, showNeeds = true, onInfoOpen, showPracticeSquad = true,
 }) {
     const sensors = useSensors(
         useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
@@ -419,10 +427,10 @@ export default function DepthChartGrid({
                         <div className="roster-section-count">{oCount}</div>
                         <button onClick={() => onAddPosition('offense')} className="action-pill">+ Add Position</button>
                     </div>
-                    <div className="roster-grid">
-                        <DepthHeader />
+                    <div className={`roster-grid${showPracticeSquad ? '' : ' no-ps'}`}>
+                        <DepthHeader showPracticeSquad={showPracticeSquad} />
                         {positionConfig.offense.map((p, idx) => (
-                            <DepthRow key={p.id} idx={idx} phase="offense" posConfig={p} slots={depthChart[p.id] ?? []} onConfigChange={val => onSlotsChange(p.id, val)} onDeletePosition={() => onDeletePosition('offense', p.id)} masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} onInfoOpen={onInfoOpen} />
+                            <DepthRow key={p.id} idx={idx} phase="offense" posConfig={p} slots={depthChart[p.id] ?? []} onConfigChange={val => onSlotsChange(p.id, val)} onDeletePosition={() => onDeletePosition('offense', p.id)} masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} onInfoOpen={onInfoOpen} showPracticeSquad={showPracticeSquad} />
                         ))}
                     </div>
 
@@ -431,10 +439,10 @@ export default function DepthChartGrid({
                         <div className="roster-section-count">{dCount}</div>
                         <button onClick={() => onAddPosition('defense')} className="action-pill">+ Add Position</button>
                     </div>
-                    <div className="roster-grid">
-                        <DepthHeader />
+                    <div className={`roster-grid${showPracticeSquad ? '' : ' no-ps'}`}>
+                        <DepthHeader showPracticeSquad={showPracticeSquad} />
                         {positionConfig.defense.map((p, idx) => (
-                            <DepthRow key={p.id} idx={idx} phase="defense" posConfig={p} slots={depthChart[p.id] ?? []} onConfigChange={val => onSlotsChange(p.id, val)} onDeletePosition={() => onDeletePosition('defense', p.id)} masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} onInfoOpen={onInfoOpen} />
+                            <DepthRow key={p.id} idx={idx} phase="defense" posConfig={p} slots={depthChart[p.id] ?? []} onConfigChange={val => onSlotsChange(p.id, val)} onDeletePosition={() => onDeletePosition('defense', p.id)} masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} onInfoOpen={onInfoOpen} showPracticeSquad={showPracticeSquad} />
                         ))}
                     </div>
 
@@ -449,10 +457,10 @@ export default function DepthChartGrid({
                     </div>
 
                     {/* IR — bottom */}
-                    <IRDropZone reserve={reserve} masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} onInfoOpen={onInfoOpen} />
+                    <IRDropZone reserve={reserve} masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} onInfoOpen={onInfoOpen} showPracticeSquad={showPracticeSquad} />
                 </div>
 
-                <RosterSidebar cuts={cuts} onSign={onSignClick} signLabel={signButtonLabel} masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} onInfoOpen={onInfoOpen} />
+                <RosterSidebar cuts={cuts} onSign={onSignClick} signLabel={signButtonLabel} masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} onInfoOpen={onInfoOpen} showPracticeSquad={showPracticeSquad} />
             </div>
 
             <DragOverlay dropAnimation={null}>

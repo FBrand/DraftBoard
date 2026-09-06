@@ -146,12 +146,17 @@ export default function FreeAgencyView({ masterPlayers, draftedPlayers, onInfoOp
         });
     };
 
-    const handleAddCandidate = ({ name, position, team, previousTeam }) => {
+    const handleAddCandidate = ({ name, position, team, previousTeam, draftYear, draftRound }) => {
         // Where a candidate plays now is a fact about him, not about this
         // shortlist, so it goes on his record the same way a signing's does.
-        if (team || previousTeam) {
+        if (team || previousTeam || draftYear || draftRound) {
             const id = resolvePlayer({ name, position });
-            if (id) setFacts(id, { ...(team ? { team } : {}), ...(previousTeam ? { previousTeam } : {}) });
+            if (id) setFacts(id, {
+                ...(team ? { team } : {}),
+                ...(previousTeam ? { previousTeam } : {}),
+                ...(draftYear ? { draftYear } : {}),
+                ...(draftRound ? { draftRound, isUdfa: false } : {}),
+            });
         }
 
         setState(prev => {
@@ -245,6 +250,7 @@ export default function FreeAgencyView({ masterPlayers, draftedPlayers, onInfoOp
             </div>
 
             <DepthChartGrid
+                showPracticeSquad={false}
                 positionConfig={state.positionConfig}
                 depthChart={state.depthChart}
                 reserve={state.reserve}
