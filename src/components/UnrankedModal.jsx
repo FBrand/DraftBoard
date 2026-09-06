@@ -7,14 +7,22 @@ import useEscapeKey from '../hooks/useEscapeKey';
 //               by signing or by trade. Signing a UDFA belongs to the UDFA
 //               stage; offering it here made the roster modal look like that
 //               stage rather than this one.
-// 'postdraft' → draft board once the draft is over: Sign FA / Sign UDFA / Invite
-// 'candidate' → free agency: the same fields as 'roster', because a candidate
-//               is a player you might acquire and the same things are worth
-//               knowing about him. The verb differs — FA records who you are
-//               considering, it does not sign anybody.
+// 'postdraft' → the UDFA stage: Sign UDFA / Invite. Deliberately NOT "Sign
+//               FA" — this is the undrafted stage, and a veteran free agent
+//               signed here would be recorded as though he had just come out
+//               of college. Signing a veteran belongs to Roster, which has it.
+// 'candidate' → free agency: a player you might acquire, and HOW you would
+//               acquire him, because that is the whole question at this stage
+//               — a free agent costs money and a trade costs picks. The verb
+//               differs from 'roster': FA records who you are considering, it
+//               does not sign anybody.
 const UnrankedModal = ({ isOpen, onClose, onDraft, mode = 'draft', initialPlayer = null }) => {
     const [name, setName] = useState(() => initialPlayer?.name || '');
     const [position, setPosition] = useState(() => initialPlayer?.position || '');
+    // School is part of the identity — two players sharing a name are told
+    // apart by position OR school (see nameMatcher). Collecting it here is
+    // also the only chance: nothing downstream can infer where he played.
+    const [school, setSchool] = useState(() => initialPlayer?.school || '');
     const [team, setTeam] = useState(() => initialPlayer?.team || 'KC');
     // Where he came from. Only means anything for a move between clubs — a
     // draft pick and a UDFA are entering the league, not leaving somewhere.
@@ -35,6 +43,7 @@ const UnrankedModal = ({ isOpen, onClose, onDraft, mode = 'draft', initialPlayer
         onDraft({
             name: name.trim(),
             position: position.toUpperCase(),
+            ...(school.trim() ? { school: school.trim() } : {}),
             arrival: suffix || null,
             ...(team.trim() ? { team: team.trim().toUpperCase() } : {}),
             ...(MOVED_CLUBS.has(suffix) && previousTeam.trim()
@@ -68,6 +77,11 @@ const UnrankedModal = ({ isOpen, onClose, onDraft, mode = 'draft', initialPlayer
                         <input type="text" value={position} onChange={e => setPosition(e.target.value)}
                             placeholder="e.g. LB" className="text-input" />
                     </div>
+                    <div className="form-group">
+                        <label>School</label>
+                        <input type="text" value={school} onChange={e => setSchool(e.target.value)}
+                            placeholder="e.g. Indiana" className="text-input" />
+                    </div>
                     {/* A signing or a trade comes FROM somewhere and goes TO
                         somewhere. A draft pick and a UDFA are entering the
                         league, so neither applies. */}
@@ -95,8 +109,8 @@ const UnrankedModal = ({ isOpen, onClose, onDraft, mode = 'draft', initialPlayer
                         )}
                         {mode === 'candidate' && (
                             <div style={{ display: 'flex', gap: 10 }}>
-                                <button type="button" className="action-button secondary" style={{ flex: 1 }} onClick={onClose}>Cancel</button>
-                                <button type="submit" className="action-button primary" style={{ flex: 1 }} disabled={disabled}>Add Candidate</button>
+                                <button type="button" className="action-button primary" style={{ flex: 1 }} disabled={disabled} onClick={() => submit('FA')}>Add as FA Target</button>
+                                <button type="button" className="action-button secondary" style={{ flex: 1 }} disabled={disabled} onClick={() => submit('TR')}>Add as Trade Target</button>
                             </div>
                         )}
                         {mode === 'roster' && (
@@ -107,9 +121,8 @@ const UnrankedModal = ({ isOpen, onClose, onDraft, mode = 'draft', initialPlayer
                         )}
                         {mode === 'postdraft' && (
                             <div style={{ display: 'flex', gap: 10 }}>
-                                <button type="button" className="action-button primary" style={{ flex: 1 }} disabled={disabled} onClick={() => submit('FA')}>Sign FA</button>
                                 <button type="button" className="action-button primary" style={{ flex: 1, background: 'var(--chiefs-gold)', color: '#000' }} disabled={disabled} onClick={() => submit('UDFA')}>Sign UDFA</button>
-                                <button type="button" className="action-button secondary" style={{ flex: 1 }} disabled={disabled} onClick={() => submit('INV')}>Invite</button>
+                                <button type="button" className="action-button secondary" style={{ flex: 1 }} disabled={disabled} onClick={() => submit('INV')}>Minicamp Invite</button>
                             </div>
                         )}
                     </div>

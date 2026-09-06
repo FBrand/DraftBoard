@@ -5,13 +5,34 @@ import { buildNameIndex, findMatchingIndex } from '../utils/nameMatcher';
 import { rankBoard } from '../utils/boardRanking';
 import useBoardRankings from '../hooks/useBoardRankings';
 
-import { allBoards, boardById } from '../utils/boardRegistry';
+import { allBoards, boardById, currentSeason, listSeasons } from '../utils/boardRegistry';
+import { ownerIdFor, remarksFor, addRemark, removeRemark } from '../utils/evaluations';
+import { resolve as resolvePlayer } from '../utils/playerRegistry';
 
-// Read-only player info card, opened by right-click / long-press on a player
-// anywhere OUTSIDE Scouting — the draft board, UDFA, and the Roster/FA depth
-// charts. Scouting is where evaluations get written; everywhere else this is
-// a reference card you glance at mid-draft, so it never edits (an accidental
-// long-press on air shouldn't be able to change a ranking).
+// The player card, opened by right-click / long-press on a player anywhere
+// OUTSIDE Scouting — the draft board, UDFA, and the Roster/FA depth charts.
+//
+// What it can edit is the point of the split. A board opinion — round, tier,
+// order, tag — belongs to an analyst working through a class, and that work
+// happens in Scouting, where the rest of the board is on screen to judge it
+// against. Standing in the Roster or Free Agency with one player out of
+// context, the useful correction is the opposite kind: his school is wrong,
+// he was a fourth-rounder not a third, he came from Tennessee. Those are
+// facts — true on everybody's board.
+//
+// So this card edits FACTS and never opinions. Passing no onEntryChange is
+// what removes the opinion pencil: the Roster and Free Agency were offering
+// to re-rank a player on somebody's draft board, which is not a thing you do
+// from a depth chart, while the facts you actually wanted sat behind a
+// different pencil.
+//
+// EVALUATIONS are the exception, and they are not an inconsistency. A remark
+// is not a placement: it belongs to the author rather than the board, it is
+// stamped with the season it was made in, and it goes on growing after the
+// board that ranked the player is frozen. It is also the only way to say
+// anything at all about a veteran, who was never in a draft class anybody
+// here ranked — so +/-/• can be written from this card, on any player, while
+// round and tier cannot.
 //
 // `player` may be a full player object (Draft/UDFA cards) or just
 // `{ name, position }` (roster slots hold names, not player records).
@@ -25,7 +46,10 @@ export default function PlayerInfoModal({ player, players = [], onClose }) {
     // Every board ever, not just this season's: a player card reaching back
     // into past scouting is the point of keeping old boards at all.
     const [boardList] = useState(() => allBoards());
-    const [boards, setBoards] = useState(() => Object.fromEntries(boardList.map(b => [b.id, scoutingState.loadState(b.id)])));
+    const [boards] = useState(() => Object.fromEntries(boardList.map(b => [b.id, scoutingState.loadState(b.id)])));
+    // Bumped when a remark is written, so the list re-reads. Remarks live in
+    // their own collection, not in this component's state.
+    const [remarkTick, setRemarkTick] = useState(0);
 
 
     // Memoised: a fresh `?? []` each render would invalidate everything below
@@ -43,7 +67,9 @@ export default function PlayerInfoModal({ player, players = [], onClose }) {
             const hit = entryById.get(qualifier.id);
             if (hit) return hit;
         }
-        const i = findMatchingIndex(name, entryIndex, qualifier);
+        // Name only — see the note on `resolved`. An entry records the
+        // position THAT board gave him, which is exactly what may differ.
+        const i = findMatchingIndex(name, entryIndex);
         return i !== -1 ? entries[i] : null;
     }, [entries, entryIndex, entryById]);
 
@@ -60,7 +86,26 @@ export default function PlayerInfoModal({ player, players = [], onClose }) {
 
     const resolved = useMemo(() => {
         if (!player) return null;
-        const i = findMatchingIndex(player.name, rankedIndex, player);
+
+        // The id is the identity, so use it when both sides have one — an
+        // exact hit, no fuzziness to get wrong.
+        if (player.id) {
+            const hit = ranked.find(p => p.id === player.id);
+            if (hit) return hit;
+        }
+
+        // Otherwise match on the NAME ALONE. Position deliberately does not
+        // qualify here: a player is labelled differently by different
+        // analysts — Rueben Bain Jr is DL.3T on consensus and EDGE on both
+        // personal boards — and passing him as a qualifier made the lookup
+        // fail against any board that disagreed. The card then fell back to
+        // the raw player, who carries no derived ranks, so his position rank
+        // read "???" on a board that had in fact ranked him.
+        //
+        // This is the same rule useBoardRankings.joinKeyFor uses, and for the
+        // same reason: "are these two different men" is not the question here,
+        // "is this the same man on another analyst's board" is.
+        const i = findMatchingIndex(player.name, rankedIndex);
         // Fall back to whatever the caller handed us — a roster slot can hold
         // someone who isn't in the rankings at all (an UDFA, a veteran).
         return i !== -1 ? ranked[i] : player;
@@ -78,36 +123,36 @@ export default function PlayerInfoModal({ player, players = [], onClose }) {
         });
     }, [boards, boardList, player]);
 
-    /**
-     * Writes a correction to the board being paged to.
-     *
-     * Placement here is round and tier only. A rank is a position in an
-     * ordering, and this card is showing one player out of context — moving
-     * him by number would need the whole board, which Scouting has and this
-     * does not.
-     */
-    const saveEntry = useCallback((updated) => {
-        if (!activeBoard || !resolved) return;
-        const board = scoutingState.loadState(activeBoard);
-        const entries = [...board.entries];
 
-        const target = resolved;
-        let at = target.id ? entries.findIndex(e => e.playerId === target.id) : -1;
-        if (at === -1) at = findMatchingIndex(target.name, buildNameIndex(entries), target);
+    // A veteran opened from the roster arrives as a bare { name, position } —
+    // no id, because a depth-chart slot holds a name. He IS registered, so
+    // resolving without creating finds him; a player genuinely unknown to the
+    // registry simply gets no remarks rather than a new record minted behind
+    // somebody's back.
+    const playerId = resolved?.id
+        ?? (resolved ? resolvePlayer({ name: resolved.name, position: resolved.position, school: resolved.school }, { create: false }) : null);
 
-        const { personalRank: _drop, ...persisted } = updated;
-        if (at !== -1) entries[at] = { ...entries[at], ...persisted };
-        else {
-            entries.push({
-                ...scoutingState.makeEntry(target.name, target.position, target.school ?? '', target.id ?? null),
-                ...persisted,
-            });
-        }
+    const ownerId = ownerIdFor(boardById(activeBoard));
+    const remarks = useMemo(
+        () => (ownerId && playerId ? remarksFor(ownerId, playerId) : []),
+        // remarkTick is the dependency that matters — the store changed.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [ownerId, playerId, remarkTick],
+    );
 
-        const next = { ...board, entries };
-        scoutingState.saveState(activeBoard, next);
-        setBoards(prev => ({ ...prev, [activeBoard]: next }));
-    }, [activeBoard, resolved]);
+    const handleAddRemark = useCallback((kind, text) => {
+        if (!ownerId || !playerId) return;
+        // Stamped with the CURRENT season, not the season of the board being
+        // looked at: a note written today is a note from today.
+        addRemark(ownerId, playerId, kind, text, currentSeason()?.id ?? null);
+        setRemarkTick(t => t + 1);
+    }, [ownerId, playerId]);
+
+    const handleRemoveRemark = useCallback((remarkId) => {
+        if (!ownerId || !playerId) return;
+        removeRemark(ownerId, playerId, remarkId);
+        setRemarkTick(t => t + 1);
+    }, [ownerId, playerId]);
 
     if (!player) return null;
 
@@ -124,12 +169,15 @@ export default function PlayerInfoModal({ player, players = [], onClose }) {
             readOnly
             player={resolved}
             entry={entryFor(player.name, player)}
-            allBoardNotes={allBoardNotes}
+            allBoardNotes={allBoardNotes.filter(b => b.board !== activeBoard)}
             onClose={onClose}
             boardLabel={boardById(activeBoard)?.label ?? ''}
             onPrevBoard={() => cycleBoard(-1)}
             onNextBoard={() => cycleBoard(1)}
-            onEntryChange={saveEntry}
+            remarks={remarks}
+            seasons={listSeasons()}
+            onAddRemark={playerId ? handleAddRemark : undefined}
+            onRemoveRemark={playerId ? handleRemoveRemark : undefined}
         />
     );
 }

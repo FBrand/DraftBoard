@@ -284,6 +284,7 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
     const factsLocked = readOnly && !editingBase;
     // Scouting is always live; elsewhere the pencil decides.
     const opinionsLive = !readOnly || (editingOpinions && !!onEntryChange);
+    const canWriteRemarks = !!onAddRemark;
     const canEditOpinions = readOnly && !!onEntryChange;
 
     // The name is the identity key everywhere in this app, so a rename is a
@@ -477,6 +478,13 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
                                 : f.key === 'athleticMatrixPosition' ? matrix.position
                                 : entry?.[f.key];
                             const isSet = val != null && val !== '' && val !== '-';
+                            // A matrix score is a measurement somebody took.
+                            // Nobody having taken it is not a missing value to
+                            // be chased — most players are never tested — so an
+                            // empty matrix row is dropped rather than printing
+                            // "???" twice on every card. The ranks stay, because
+                            // an unranked player IS a fact about this board.
+                            if (!isSet && f.key.startsWith('athleticMatrix')) return null;
                             return (
                                 <div key={f.key} className="scouting-readonly-field">
                                     <span className="scouting-readonly-label">{f.label}</span>
@@ -573,6 +581,13 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
                             // no pick — nothing to type, so nothing to show.
                             if (facts.isUdfa === true && (f.key === 'draftRound' || f.key === 'draftPick')) return null;
                             const value = facts[f.key];
+                            // "Previous Team" empty is not a gap in the record,
+                            // it is the normal case: a player who has never
+                            // moved clubs has no previous team, and printing
+                            // "???" against him implies something is missing.
+                            // Only hidden while locked — unlocking is how you
+                            // record that he did move.
+                            if (factsLocked && f.key === 'previousTeam' && (value == null || value === '')) return null;
                             return (
                                 <label key={f.key} className="scouting-fact-field">
                                     <span>{f.label}</span>
@@ -596,7 +611,14 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
                     </div>
                 )}
 
-                {!opinionsLive ? <BoardNotes boards={allBoardNotes} seasons={seasons} /> : LIST_FIELDS.map(f => (
+                {/* Writing a remark is not the same permission as re-ranking a
+                    player. Remarks belong to the author, not the board, and a
+                    veteran who was never in a draft class has no placement to
+                    edit but plenty worth saying about him — so the lists are
+                    editable whenever there is a handler, whatever the opinion
+                    lock is doing. Without a handler they stay a read-only
+                    summary of what every board has said. */}
+                {!canWriteRemarks ? <BoardNotes boards={allBoardNotes} seasons={seasons} /> : LIST_FIELDS.map(f => (
                     <RemarkList
                         key={f.kind}
                         kind={f.kind}
@@ -610,6 +632,10 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
                         readOnly={!onAddRemark}
                     />
                 ))}
+
+                {canWriteRemarks && allBoardNotes?.length ? (
+                    <BoardNotes boards={allBoardNotes} seasons={seasons} />
+                ) : null}
 
                 {canEditBase && (
                     <div className="scouting-prospect-admin">
