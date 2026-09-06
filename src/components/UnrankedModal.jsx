@@ -107,9 +107,16 @@ const UnrankedModal = ({ isOpen, onClose, onDraft, mode = 'draft', initialPlayer
                         </div>
                     )}
                     {/* A signing or a trade comes FROM somewhere and goes TO
-                        somewhere. A draft pick and a UDFA are entering the
-                        league, so neither applies. */}
-                    {mode !== 'draft' && (
+                        somewhere. A draft pick and a UDFA are ENTERING the
+                        league: there is no prior club to have come from, and
+                        the club he joins is the session team either way. His
+                        college is `school`, which is a different question.
+
+                        This condition used to read `mode !== 'draft'`, which
+                        excluded the draft and nothing else — so the UDFA stage
+                        asked for a previous team the player cannot have, while
+                        the comment right here said it shouldn't. */}
+                    {(mode === 'roster' || mode === 'candidate') && (
                         <>
                             <div className="form-group">
                                 <label>Previous Team</label>
