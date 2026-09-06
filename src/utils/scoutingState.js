@@ -28,6 +28,7 @@ import { parseCsvLine, csvField } from './csvUtils';
 import { buildNameIndex, findMatchingIndex } from './nameMatcher';
 import { parseTier, tierLabel, spaceEvenly } from './boardRanking';
 import { boardById } from './boardRegistry';
+import { ownerIdFor, remarksFor, REMARK_KINDS } from './evaluations';
 
 // Each analyst has their own rankings file, and they are genuinely different
 // boards — different players, different tiers, different order (Kevin
@@ -78,7 +79,6 @@ export function makeEntry(name, position, school = '', playerId = null) {
         // boardRanking.js, so they can never collide or contradict the board.
         withinGroup: null,
         athleticMatrixTotal: null, athleticMatrixPosition: null,
-        strengths: [], weaknesses: [], notes: [],
         updatedAt: new Date().toISOString(),
     };
 }
@@ -292,7 +292,13 @@ export function parseCSV(csvText) {
     return { version: 1, seeded: true, entries };
 }
 
-export function exportCSV(state) {
+/**
+ * The overlay export keeps its three remark columns, because the file is an
+ * interchange format and hand-editable. They are filled from the evaluations
+ * store rather than from the entry — remarks moved off boards, and reading
+ * them from the entry silently exported nothing.
+ */
+export function exportCSV(state, board) {
     const rows = [
         '# Scouting Overlay Export',
         `# Exported: ${new Date().toISOString()}`,
@@ -302,11 +308,16 @@ export function exportCSV(state) {
             'strengths', 'weaknesses', 'notes', 'updatedAt',
         ].map(csvField).join(','),
     ];
+    const ownerId = ownerIdFor(board);
     state.entries.forEach(e => {
         rows.push([
             e.name, e.position, e.school ?? '', tierLabel(e.round, e.tier), e.tag ?? '', e.withinGroup ?? '',
             e.athleticMatrixTotal ?? '', e.athleticMatrixPosition ?? '',
-            JSON.stringify(e.strengths ?? []), JSON.stringify(e.weaknesses ?? []), JSON.stringify(e.notes ?? []),
+            ...REMARK_KINDS.map(kind => JSON.stringify(
+                (ownerId && e.playerId ? remarksFor(ownerId, e.playerId) : [])
+                    .filter(r => r.kind === kind)
+                    .map(r => r.text),
+            )),
             e.updatedAt,
         ].map(csvField).join(','));
     });

@@ -6,6 +6,7 @@ import { PLAYER_TAGS } from '../utils/playerTags';
 import * as athleticMatrix from '../utils/athleticMatrix';
 import { factsFor, setFacts, resolve as resolvePlayer, rename as renamePlayer, byId } from '../utils/playerRegistry';
 import { savePlayerEdit } from '../utils/prospects';
+import { REMARK_KINDS } from '../utils/evaluations';
 
 // Shared with the board markers so a tag looks the same wherever it appears.
 const TAGS = PLAYER_TAGS.map(t => ({ id: t.id, label: `${t.symbol} ${t.label}` }));
@@ -32,18 +33,49 @@ const FACT_FIELDS = [
 ];
 
 const LIST_FIELDS = [
-    { key: 'strengths', label: 'Strengths', symbol: '+', cls: 'strength' },
-    { key: 'weaknesses', label: 'Weaknesses', symbol: '−', cls: 'weakness' },
-    { key: 'notes', label: 'Notes', symbol: '•', cls: 'note' },
+    { kind: 'strength', label: 'Strengths', symbol: '+', cls: 'strength' },
+    { kind: 'weakness', label: 'Weaknesses', symbol: '−', cls: 'weakness' },
+    { kind: 'note', label: 'Notes', symbol: '•', cls: 'note' },
 ];
 
-// Read-only cards show every board's notes at once, headed by the analyst's
-// name rather than by field name — what matters when you glance at a player
+const KIND_META = Object.fromEntries(LIST_FIELDS.map(f => [f.kind, f]));
+
+/**
+ * Groups remarks by the season they were written in, newest first.
+ *
+ * Undated remarks — anything written before remarks carried a season — go last
+ * under no heading, because guessing a season for them would be inventing a
+ * record rather than showing one.
+ */
+function bySeason(remarks, seasons) {
+    const order = new Map(seasons.map((s, i) => [s.id, i]));
+    const groups = new Map();
+    (remarks ?? []).forEach(r => {
+        const key = r.seasonId ?? '';
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(r);
+    });
+    return [...groups.entries()]
+        .sort(([a], [b]) => {
+            if (!a) return 1;
+            if (!b) return -1;
+            return (order.get(a) ?? 99) - (order.get(b) ?? 99);
+        })
+        .map(([seasonId, items]) => ({
+            seasonId,
+            label: seasons.find(x => x.id === seasonId)?.year ?? null,
+            items,
+        }));
+}
+
+// Read-only cards show every voice's remarks at once, headed by whose they
+// are rather than by field name — what matters when you glance at a player
 // mid-draft is who said it, and the +/−/• symbol already says which kind of
-// remark it is. Boards with nothing to say are omitted entirely.
-function BoardNotes({ boards }) {
-    const withContent = (boards ?? []).filter(b =>
-        LIST_FIELDS.some(f => b.entry?.[f.key]?.length));
+// remark it is. Each carries the season it was written in, so a remark from
+// two years ago cannot be mistaken for a current read. Voices with nothing to
+// say are omitted entirely.
+function BoardNotes({ boards, seasons }) {
+    const withContent = (boards ?? []).filter(b => b.remarks?.length);
     if (!withContent.length) return null;
 
     return (
@@ -51,53 +83,69 @@ function BoardNotes({ boards }) {
             {withContent.map(b => (
                 <div key={b.board} className="scouting-board-notes-group">
                     <div className="scouting-board-notes-header">{b.label}</div>
-                    <ul className="scouting-bullet-list">
-                        {LIST_FIELDS.flatMap(f => (b.entry[f.key] ?? []).map((item, i) => (
-                            <li key={`${f.key}-${i}`} className={`scouting-remark ${f.cls}`}>
-                                <span className="scouting-remark-symbol" aria-label={f.label}>{f.symbol}</span>
-                                <span>{item}</span>
-                            </li>
-                        )))}
-                    </ul>
+                    {bySeason(b.remarks, seasons).map(group => (
+                        <div key={group.seasonId || 'undated'} className="scouting-season-group">
+                            {group.label && <div className="scouting-season-label">{group.label}</div>}
+                            <ul className="scouting-bullet-list">
+                                {group.items.map(r => {
+                                    const meta = KIND_META[r.kind] ?? KIND_META.note;
+                                    return (
+                                        <li key={r.id} className={`scouting-remark ${meta.cls}`}>
+                                            <span className="scouting-remark-symbol" aria-label={meta.label}>{meta.symbol}</span>
+                                            <span>{r.text}</span>
+                                        </li>
+                                    );
+                                })}
+                            </ul>
+                        </div>
+                    ))}
                 </div>
             ))}
         </div>
     );
 }
 
-// Small "add a bullet, remove a bullet" list editor — used for
-// strengths/weaknesses/notes, which are all the same shape. When readOnly,
-// renders the bullets as plain text (and nothing at all when empty) rather
-// than showing disabled inputs, which would be visual noise in a card whose
-// whole job is to be read.
-function BulletListEditor({ label, symbol, cls, items, onChange, readOnly }) {
+/**
+ * One kind of remark — strengths, weaknesses or notes — as a running log
+ * rather than a list.
+ *
+ * Remarks accumulate across seasons and are grouped by the one they were
+ * written in. Adding always stamps the CURRENT season, even while an old
+ * board is on screen: a note written today is a note from today.
+ */
+function RemarkList({ label, symbol, cls, kind, remarks, seasons, onAdd, onRemove, readOnly }) {
     const [draft, setDraft] = useState('');
+    const mine = (remarks ?? []).filter(r => r.kind === kind);
 
     const add = () => {
         const v = draft.trim();
         if (!v) return;
-        onChange([...(items ?? []), v]);
+        onAdd(kind, v);
         setDraft('');
     };
 
-    if (readOnly && !items?.length) return null;
+    if (readOnly && !mine.length) return null;
 
     return (
         <div className={`scouting-list-field ${cls ?? ''}`}>
             <div className="scouting-list-label">{label}</div>
-            {items?.length > 0 && (
-                <ul className="scouting-bullet-list">
-                    {items.map((item, i) => (
-                        <li key={i}>
-                            <span className="scouting-remark-symbol" aria-hidden="true">{symbol}</span>
-                            <span className="scouting-remark-text">{item}</span>
-                            {!readOnly && (
-                                <button type="button" onClick={() => onChange(items.filter((_, x) => x !== i))} aria-label={`Remove ${label.toLowerCase()} item`}>&times;</button>
-                            )}
-                        </li>
-                    ))}
-                </ul>
-            )}
+            {bySeason(mine, seasons).map(group => (
+                <div key={group.seasonId || 'undated'} className="scouting-season-group">
+                    {group.label && <div className="scouting-season-label">{group.label}</div>}
+                    <ul className="scouting-bullet-list">
+                        {group.items.map(r => (
+                            <li key={r.id}>
+                                <span className="scouting-remark-symbol" aria-hidden="true">{symbol}</span>
+                                <span className="scouting-remark-text">{r.text}</span>
+                                {!readOnly && (
+                                    <button type="button" onClick={() => onRemove(r.id)}
+                                        aria-label={`Remove ${label.toLowerCase()} item`}>&times;</button>
+                                )}
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            ))}
             {!readOnly && (
                 <div className="scouting-list-add">
                     <input
@@ -127,7 +175,7 @@ function BulletListEditor({ label, symbol, cls, items, onChange, readOnly }) {
 // changes — the caller renders this with `key={player.name}` so React
 // remounts it on selection change rather than syncing state via an effect
 // (see https://react.dev/learn/you-might-not-need-an-effect).
-export default function ScoutingControls({ player, entry, onChange, onClose, boardLabel, onPrevBoard, onNextBoard, variant = 'panel', readOnly = false, allBoardNotes, onPlayerSave, onPlayerDelete, onEntryChange }) {
+export default function ScoutingControls({ player, entry, onChange, onClose, boardLabel, onPrevBoard, onNextBoard, variant = 'panel', readOnly = false, allBoardNotes, onPlayerSave, onPlayerDelete, onEntryChange, remarks = [], seasons = [], onAddRemark, onRemoveRemark }) {
     // Total Rank, Position Rank and Round.Group are the board's own
     // parameters, so they show the player's current values rather than blank
     // boxes — you're adjusting the real thing, not a field that merely sits
@@ -308,15 +356,14 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
     // them and they say nothing about whether anyone has looked at this player.
     // Read-only cards pull remarks from every board, so "nothing here yet"
     // has to account for all of them, not just the one being paged to.
-    const anyBoardHasNotes = (allBoardNotes ?? []).some(b =>
-        LIST_FIELDS.some(f => b.entry?.[f.key]?.length));
+    const anyBoardHasNotes = (allBoardNotes ?? []).some(b => b.remarks?.length);
 
     const hasAnyContent = !!(
         anyBoardHasNotes || (entry && (
             entry.tag ||
             entry.athleticMatrixTotal != null ||
             entry.athleticMatrixPosition != null ||
-            LIST_FIELDS.some(f => entry[f.key]?.length)
+            remarks.length
         ))
     );
 
@@ -549,15 +596,18 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
                     </div>
                 )}
 
-                {!opinionsLive ? <BoardNotes boards={allBoardNotes} /> : LIST_FIELDS.map(f => (
-                    <BulletListEditor
-                        key={f.key}
+                {!opinionsLive ? <BoardNotes boards={allBoardNotes} seasons={seasons} /> : LIST_FIELDS.map(f => (
+                    <RemarkList
+                        key={f.kind}
+                        kind={f.kind}
                         label={f.label}
                         symbol={f.symbol}
                         cls={f.cls}
-                        items={entry?.[f.key] ?? []}
-                        onChange={items => commit({ [f.key]: items })}
-                        readOnly={false}
+                        remarks={remarks}
+                        seasons={seasons}
+                        onAdd={onAddRemark}
+                        onRemove={onRemoveRemark}
+                        readOnly={!onAddRemark}
                     />
                 ))}
 

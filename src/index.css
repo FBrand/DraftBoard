@@ -3358,3 +3358,18 @@ body.export-mode .card-glow {
   border-color: var(--chiefs-gold);
   color: #000;
 }
+
+/* Remarks accumulate across seasons, so each group is headed by the season it
+   was written in. A remark from two years ago must not read as a current
+   take — and showing the year is what makes a quiet rewrite visible. */
+.scouting-season-group {
+  margin-bottom: 6px;
+}
+
+.scouting-season-label {
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+  color: var(--text-dim);
+  margin-bottom: 3px;
+}

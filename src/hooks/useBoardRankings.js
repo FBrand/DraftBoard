@@ -7,7 +7,8 @@ import { resolveAll, openRegistry } from '../utils/playerRegistry';
 
 import { migrateLegacyScores } from '../utils/athleticMatrix';
 
-import { openBoards, listBoards } from '../utils/boardRegistry';
+import { openBoards, listBoards, boardById } from '../utils/boardRegistry';
+import { openEvaluations, migrateBoardRemarks } from '../utils/evaluations';
 
 /**
  * Loads every analyst's rankings file once, so Scouting can show each board's
@@ -94,7 +95,7 @@ function unionOfFiles(files, keyOf) {
 
 function loadPools() {
     return openBoards()
-        .then(() => Promise.all([loadFiles(), openRegistry()]))
+        .then(() => Promise.all([loadFiles(), openRegistry(), openEvaluations()]))
         .then(([files]) => {
         // Base data edited in-app — players added, corrected, or removed — is
         // shared by every board, so it is applied before anything ranks,
@@ -152,6 +153,14 @@ function loadPools() {
             // player once, here, rather than by name on every read.
             scoutingState.attachPlayerIds(board, pools[board]);
             scoutingState.seedFavourites(board, pools[board]);
+
+            // Remarks used to be three arrays of strings on each entry, which
+            // meant they froze with the board. They move to the person who
+            // wrote them; see utils/evaluations.js. After attachPlayerIds, so
+            // there is an id to hang each one on.
+            const state = scoutingState.loadState(board);
+            const carried = migrateBoardRemarks(boardById(board), state.entries);
+            if (carried) scoutingState.saveState(board, { ...state, entries: carried });
         });
         return pools;
     });

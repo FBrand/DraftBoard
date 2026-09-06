@@ -17,7 +17,8 @@ import { addProspect, savePlayerEdit, deletePlayer, restorePlayer, hiddenPlayers
 import * as athleticMatrix from '../utils/athleticMatrix';
 import * as playerRegistry from '../utils/playerRegistry';
 
-import { listBoards, boardBySlug, boardById, renameBoard } from '../utils/boardRegistry';
+import { listBoards, boardBySlug, boardById, renameBoard, listSeasons, currentSeason } from '../utils/boardRegistry';
+import { ownerIdFor, remarksFor, addRemark, removeRemark } from '../utils/evaluations';
 
 const TAG_FILTERS = [
     { id: 'all', label: 'All' },
@@ -88,6 +89,7 @@ export default function ScoutingView({ players, columnOrder }) {
     }, [pools]);
 
     const state = boards[activeBoard] ?? { version: 1, entries: [] };
+
     const entryIndex = useMemo(() => buildNameIndex(state.entries), [state.entries]);
 
     // Entries are joined to players by registry id. The name path below is a
@@ -124,6 +126,34 @@ export default function ScoutingView({ players, columnOrder }) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
         [boardPlayers, entryIndex],
     );
+
+    // Remarks belong to whoever wrote them, not to the board — so they survive
+    // the board freezing, and one man's view of a player runs across every
+    // season he watches him. See utils/evaluations.js.
+    const [remarkTick, setRemarkTick] = useState(0);
+    const seasons = listSeasons();
+    const ownerId = ownerIdFor(boardById(activeBoard));
+    const selectedRemarks = useMemo(
+        () => (ownerId && selectedName ? remarksFor(ownerId, effectivePlayers.find(p => p.name === selectedName)?.id) : []),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [ownerId, selectedName, effectivePlayers, remarkTick],
+    );
+
+    const handleAddRemark = (kind, text) => {
+        const id = effectivePlayers.find(p => p.name === selectedName)?.id;
+        if (!ownerId || !id) return;
+        // Stamped with the CURRENT season, not the board's: a note written
+        // today is a note from today, even while an old board is on screen.
+        addRemark(ownerId, id, kind, text, currentSeason()?.id ?? null);
+        setRemarkTick(t => t + 1);
+    };
+
+    const handleRemoveRemark = (remarkId) => {
+        const id = effectivePlayers.find(p => p.name === selectedName)?.id;
+        if (!ownerId || !id) return;
+        removeRemark(ownerId, id, remarkId);
+        setRemarkTick(t => t + 1);
+    };
 
     const visiblePlayers = useMemo(() => {
         return effectivePlayers.filter(p => {
@@ -420,7 +450,9 @@ export default function ScoutingView({ players, columnOrder }) {
     };
 
     const handleExport = () => {
-        const csv = scoutingState.exportCSV(state);
+        // The board is needed to know whose remarks these are — they belong
+        // to the author, not to the board.
+        const csv = scoutingState.exportCSV(state, boardById(activeBoard));
         const blob = new Blob([csv], { type: 'text/csv' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -437,6 +469,13 @@ export default function ScoutingView({ players, columnOrder }) {
         scoutingState.saveState(activeBoard, imported);
         past.current[activeBoard] = []; recordDepth(activeBoard); // importing replaces the board
         setBoards(prev => ({ ...prev, [activeBoard]: imported }));
+
+        // An imported file carries its remarks in the three legacy columns.
+        // Reloading the pools runs attachPlayerIds and then the migration,
+        // which moves them onto the author — the same path a board written by
+        // an older build takes.
+        invalidatePools();
+        setRemarkTick(t => t + 1);
     };
 
     // group,name,position — ready to drop into public/ or load via
@@ -562,7 +601,15 @@ export default function ScoutingView({ players, columnOrder }) {
                         boardLabel={selectedPlayer ? boardById(activeBoard)?.label ?? '' : null}
                         onPrevBoard={() => cycleBoard(-1)}
                         onNextBoard={() => cycleBoard(1)}
-                        onPlayerSave={handlePlayerSave}
+                        remarks={selectedRemarks}
+                        seasons={seasons}
+                        onAddRemark={handleAddRemark}
+                        onRemoveRemark={handleRemoveRemark}
+                        remarks={selectedRemarks}
+                    seasons={seasons}
+                    onAddRemark={handleAddRemark}
+                    onRemoveRemark={handleRemoveRemark}
+                    onPlayerSave={handlePlayerSave}
                         onPlayerDelete={handlePlayerDelete}
                     />
                 )}
@@ -614,6 +661,10 @@ export default function ScoutingView({ players, columnOrder }) {
                     boardLabel={boardById(activeBoard)?.label ?? ''}
                     onPrevBoard={() => cycleBoard(-1)}
                     onNextBoard={() => cycleBoard(1)}
+                    remarks={selectedRemarks}
+                    seasons={seasons}
+                    onAddRemark={handleAddRemark}
+                    onRemoveRemark={handleRemoveRemark}
                     onPlayerSave={handlePlayerSave}
                     onPlayerDelete={handlePlayerDelete}
                 />
