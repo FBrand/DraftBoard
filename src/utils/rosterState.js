@@ -7,7 +7,7 @@ import { parseAcquisition } from './draftPhase';
 import { basePosition } from './boardRanking';
 import { getSessionTeam } from './appSettings';
 import { DRAFT_YEAR } from '../constants';
-import { resolve as resolvePlayer, setFacts } from './playerRegistry';
+import { resolve as resolvePlayer, setFactsMany } from './playerRegistry';
 import { applyPlayerFacts } from './playerFacts';
 
 // Reasonable 53-man slot defaults by major position
@@ -81,6 +81,11 @@ export function makeSlot(name, zone = '53', arrival = null) {
  * the player on his registry record along the way. The file keeps its format;
  * the app stores a plain name and a tag.
  */
+// Filled while a file is being parsed and flushed once at the end — see
+// setFactsMany. Module-scoped because parseCSV threads slotFromImport through
+// several loops and passing a collector down all of them is noise.
+let pendingFacts = null;
+
 function slotFromImport(raw, zone, position = '') {
     const { name, facts } = parseAcquisition(raw, DRAFT_YEAR);
     if (!name) return null;
@@ -94,7 +99,7 @@ function slotFromImport(raw, zone, position = '') {
     // The alignment belongs to the depth chart, not to him.
     const id = resolvePlayer({ name, position: basePosition(position) });
     // Being on the roster IS the fact that he plays for this team.
-    if (id) setFacts(id, { team: getSessionTeam(), ...facts });
+    if (id) pendingFacts?.push({ id, patch: { team: getSessionTeam(), ...facts } });
 
     return makeSlot(name, zone, arrival);
 }
@@ -151,6 +156,7 @@ export function saveState(state) {
 // ---------------------------------------------------------------------------
 
 export function parseCSV(csvText) {
+    pendingFacts = [];
     const lines = csvText
         .trim()
         .split('\n')
@@ -251,6 +257,10 @@ export function parseCSV(csvText) {
         if (phase === 'O') offense.push(chip);
         else if (phase === 'D') defense.push(chip);
     }
+
+    // One write for every player on the roster, not one each.
+    setFactsMany(pendingFacts);
+    pendingFacts = null;
 
     // The roster registers players the boards never saw — veterans, and the
     // fringe of the depth chart. Seed data is applied again so they get their

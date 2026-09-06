@@ -13,7 +13,7 @@
  * rows written while the scores had a store of their own.
  */
 import { buildNameIndex, findMatchingIndex } from './nameMatcher';
-import { factsFor, setFacts, resolve, loadRegistry } from './playerRegistry';
+import { factsFor, setFacts, resolve, loadRegistry, setFactsMany } from './playerRegistry';
 
 const LEGACY_KEY = 'athletic_matrix_v1';
 export const STATE_VERSION = 1;
@@ -49,6 +49,9 @@ export function migrateLegacyScores() {
     const unplaced = [];
     let moved = 0;
 
+    // Batched: this runs on every load until the legacy store is empty, and
+    // singly it rewrote the whole collection once per migrated row.
+    const updates = [];
     rows.forEach(row => {
         let id = row.playerId ?? null;
         if (!id) {
@@ -56,9 +59,10 @@ export function migrateLegacyScores() {
             id = at === -1 ? null : registry[at].id;
         }
         if (!id) { unplaced.push(row); return; }
-        setFacts(id, { athleticMatrixTotal: row.total, athleticMatrixPosition: row.position });
+        updates.push({ id, patch: { athleticMatrixTotal: row.total, athleticMatrixPosition: row.position } });
         moved += 1;
     });
+    setFactsMany(updates);
 
     try {
         if (unplaced.length) {

@@ -261,6 +261,43 @@ export function setFacts(id, patch) {
 }
 
 /**
+ * setFacts for many players in ONE write.
+ *
+ * Same semantics as setFacts — the fields passed are set, others untouched —
+ * but the collection is serialised once instead of once per player. Seeding a
+ * completed draft calls this for 639 players and importing a roster for 91;
+ * done singly that was ~730 rewrites of a 700-record collection, which pinned
+ * the main thread for fourteen seconds on a cold start. Nothing rendered, and
+ * every browser-test wait timed out against elements that were plainly there.
+ */
+export function setFactsMany(updates) {
+    const changes = [];
+
+    (updates ?? []).forEach(({ id, patch }) => {
+        const record = repository.get(PLAYERS, id);
+        if (!record || !patch) return;
+
+        const next = { ...record };
+        let changed = false;
+        FACT_FIELDS.forEach(f => {
+            if (!(f in patch)) return;
+            const value = cleanFact(f, patch[f]);
+            if (next[f] === value) return;
+            next[f] = value;
+            changed = true;
+        });
+
+        if (changed) {
+            next.updatedAt = new Date().toISOString();
+            changes.push({ id, doc: next });
+        }
+    });
+
+    if (changes.length) repository.commit(PLAYERS, changes);
+    return changes.length;
+}
+
+/**
  * Applies base data and facts to many players in ONE write.
  *
  * The per-player calls each rewrite the whole collection, which is fine for a

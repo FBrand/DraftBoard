@@ -3,7 +3,7 @@ import { parseRankings, parsePicks } from '../utils/dataParser';
 import { shouldSeed } from '../utils/appInit';
 import { highestDraftPick, isUndraftedSigning, roundForPick, lastDraftPick } from '../utils/draftPhase';
 import { TEAM_CONFIG, DRAFT_YEAR } from '../constants';
-import { resolve as resolvePlayer, resolveAll, setFacts } from '../utils/playerRegistry';
+import { resolve as resolvePlayer, resolveAll, setFacts, setFactsMany } from '../utils/playerRegistry';
 import { getSessionTeam as sessionTeam } from '../utils/appSettings';
 
 /**
@@ -18,25 +18,32 @@ function recordDraftFacts(drafted) {
     if (!drafted?.length) return;
     const ids = resolveAll(drafted.map(p => ({ name: p.name, position: p.position, school: p.school })));
 
+    // One write for the whole draft. Per player, this was 639 serialisations
+    // of the entire players collection on every cold start.
+    const updates = [];
     drafted.forEach((p, i) => {
         const id = ids[i];
         if (!id) return;
 
         if (isUndraftedSigning(p)) {
-            setFacts(id, { isUdfa: true, draftYear: DRAFT_YEAR, team: p.team || null });
+            updates.push({ id, patch: { isUdfa: true, draftYear: DRAFT_YEAR, team: p.team || null } });
             return;
         }
 
         const pick = Number(p.pickNumber);
         if (!Number.isFinite(pick)) return;
-        setFacts(id, {
-            isUdfa: false,
-            draftYear: DRAFT_YEAR,
-            draftPick: pick,
-            draftRound: roundForPick(pick),
-            team: p.team || null,
+        updates.push({
+            id,
+            patch: {
+                isUdfa: false,
+                draftYear: DRAFT_YEAR,
+                draftPick: pick,
+                draftRound: roundForPick(pick),
+                team: p.team || null,
+            },
         });
     });
+    setFactsMany(updates);
 }
 import { findMatchingPlayerIndex, buildNameIndex, findMatchingIndex } from '../utils/nameMatcher';
 
