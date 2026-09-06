@@ -15,6 +15,10 @@ const BASE_URL = process.env.BASE_URL ?? `http://localhost:${PORT}`;
 
 export default defineConfig({
     testDir: './tests',
+    // The browser suite is *.spec.js. Unit tests live in tests/unit as
+    // *.test.js and belong to Vitest — Playwright's default match would
+    // otherwise pick them up and die on the vitest import.
+    testMatch: '**/*.spec.js',
     // Playwright gives every test its own browser context, and localStorage is
     // per-context — so the specs that deliberately wipe and restore all app
     // state cannot reach each other, and the suite parallelises safely. (This
