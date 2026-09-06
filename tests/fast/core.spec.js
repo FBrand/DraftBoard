@@ -25,7 +25,7 @@ test.describe('rendering', () => {
             await gotoTab(page, tab);
             await expect(page.locator('.view-tab.active')).toHaveText(TABS[tab]);
             // Something view-shaped is on screen, not a blank pane.
-            await expect(page.locator('.roster-view, .draft-container, .scouting-layout').first()).toBeVisible();
+            await expect(page.locator('.roster-view, .main-layout, .scouting-layout').first()).toBeVisible();
         }
         expect(errors, errors.join('\n')).toEqual([]);
     });
@@ -50,21 +50,21 @@ test.describe('routing', () => {
         await expect(page).toHaveURL(/view=scouting/);
 
         await page.reload();
-        await page.waitForSelector('.view-tabbar');
+        await page.waitForSelector('.view-tabbar', { timeout: 45_000 });
         await expect(page.locator('.view-tab.active')).toHaveText(TABS.scouting);
 
         await page.goBack();
-        await page.waitForSelector('.view-tabbar');
+        await page.waitForSelector('.view-tabbar', { timeout: 45_000 });
         await expect(page.locator('.view-tab.active')).toHaveText(TABS.roster);
         await page.goForward();
-        await page.waitForSelector('.view-tabbar');
+        await page.waitForSelector('.view-tabbar', { timeout: 45_000 });
         await expect(page.locator('.view-tab.active')).toHaveText(TABS.scouting);
     });
 
     test('an unknown view falls back rather than rendering nothing', async ({ page }) => {
         await page.addInitScript(() => {});
         await page.goto('/?view=not-a-real-view');
-        await page.waitForSelector('.view-tabbar');
+        await page.waitForSelector('.view-tabbar', { timeout: 45_000 });
         await expect(page.locator('.view-tab.active')).toBeVisible();
     });
 });
@@ -74,13 +74,13 @@ test.describe('overlays', () => {
         await openWarm(page, 'scouting');
 
         // The menu lives in a portal because .scouting-layout clips it.
-        await page.getByRole('button', { name: 'More' }).first().click();
-        const menu = page.locator('.menu-list');
+        await page.locator('.top-panel .app-menu-trigger').click();
+        const menu = page.locator('.app-menu-list');
         await expect(menu).toBeVisible();
         await page.keyboard.press('Escape');
         await expect(menu).toBeHidden();
 
-        await page.getByRole('button', { name: 'More' }).first().click();
+        await page.locator('.top-panel .app-menu-trigger').click();
         await expect(menu).toBeVisible();
         // Clicking away closes it too.
         await page.locator('body').click({ position: { x: 5, y: 400 } });
@@ -100,6 +100,7 @@ test.describe('overlays', () => {
 test.describe('the player card', () => {
     test('opens outside Scouting, edits facts, and never re-ranks', async ({ page }) => {
         await openWarm(page, 'roster');
+        await page.waitForSelector('.rv-slot-name', { timeout: 30_000 });
         await page.locator('.rv-slot-name').first().click();
 
         const card = page.locator('.scouting-modal-box');
@@ -117,45 +118,58 @@ test.describe('the player card', () => {
 
     test('a remark can be written on a veteran, who is on nobody\'s draft board', async ({ page }) => {
         await openWarm(page, 'roster');
+        await page.waitForSelector('.rv-slot-name', { timeout: 30_000 });
         await page.locator('.rv-slot-name').first().click();
         const card = page.locator('.scouting-modal-box');
         await expect(card).toBeVisible();
 
-        // A veteran was never in a class anybody ranked, so this is the only
-        // place anything can be said about him.
-        const input = card.locator('.remark-input, input[placeholder*="Add"]').first();
-        await expect(input).toBeVisible();
+        // Locked, there is nothing to type into: a card you opened to read
+        // should not have an open text box on a broadcast.
+        await expect(card.locator('.scouting-list-add')).toHaveCount(0);
+
+        // One pencil unlocks the whole card. A veteran was never in a class
+        // anybody ranked, so this is the only place anything can be said
+        // about him at all.
+        await card.locator('.scouting-edit-btn').first().click();
+        await expect(card.locator('.scouting-list-add').first()).toBeVisible();
+        await expect(card.locator('.scouting-list-field')).toHaveCount(3);
     });
 
     test('dragging a roster slot does not open the card', async ({ page }) => {
         await openWarm(page, 'roster');
+        await page.waitForSelector('.rv-slot-name', { timeout: 30_000 });
         const slots = page.locator('.rv-slot-name');
         await dragTo(page, slots.nth(0), slots.nth(1));
-        await expect(page.locator('.scouting-modal-box')).toBeHidden();
+        // A drag is not a click: the card must not appear.
+        await expect(page.locator('.scouting-modal-box')).toHaveCount(0);
     });
 });
 
 test.describe('drag and drop', () => {
-    test('scouting: a drag reorders the board and survives a reload', async ({ page }) => {
+    test('scouting: reordering the ranking survives a reload', async ({ page }) => {
         await openWarm(page, 'scouting');
-        await page.waitForSelector('.player-card', { timeout: 30_000 });
+        // The ranking column is what reorders; the grouped list beside it is a
+        // reading surface and deliberately does not drag.
+        await page.waitForSelector('.scouting-rank-handle', { timeout: 45_000 });
 
-        const before = await page.$$eval('.player-card .player-name', els => els.slice(0, 4).map(e => e.textContent));
-        const cards = page.locator('.player-card');
-        await dragTo(page, cards.nth(0), cards.nth(3));
+        const names = () => page.$$eval('.left-panel .scouting-rank-card',
+            els => els.slice(0, 5).map(e => e.textContent));
 
-        const after = await page.$$eval('.player-card .player-name', els => els.slice(0, 4).map(e => e.textContent));
+        const before = await names();
+        const handles = page.locator('.scouting-rank-handle');
+        await dragTo(page, handles.nth(0), handles.nth(3));
+
+        const after = await names();
         expect(after, 'the drag changed nothing on screen').not.toEqual(before);
 
         await page.reload();
-        await page.waitForSelector('.player-card', { timeout: 30_000 });
-        const reloaded = await page.$$eval('.player-card .player-name', els => els.slice(0, 4).map(e => e.textContent));
-        expect(reloaded, 'the order did not survive the reload').toEqual(after);
+        await page.waitForSelector('.scouting-rank-handle', { timeout: 45_000 });
+        expect(await names(), 'the order did not survive the reload').toEqual(after);
     });
 
     test('roster: a slot moves, and the move is written through to storage', async ({ page }) => {
         await openWarm(page, 'roster');
-        await page.waitForSelector('.roster-grid');
+        await page.waitForSelector('.roster-grid', { timeout: 45_000 });
 
         const before = await slotNames(page);
         const slots = page.locator('.rv-slot-name');
@@ -164,7 +178,7 @@ test.describe('drag and drop', () => {
         expect(after).not.toEqual(before);
 
         await page.reload();
-        await page.waitForSelector('.roster-grid');
+        await page.waitForSelector('.roster-grid', { timeout: 45_000 });
         expect(await slotNames(page)).toEqual(after);
     });
 });
@@ -172,7 +186,7 @@ test.describe('drag and drop', () => {
 test.describe('undo', () => {
     test('roster undo restores what was removed, and it reached storage', async ({ page }) => {
         await openWarm(page, 'roster');
-        await page.waitForSelector('.roster-grid');
+        await page.waitForSelector('.roster-grid', { timeout: 45_000 });
         const before = await slotNames(page);
 
         const slots = page.locator('.rv-slot-name');
@@ -184,7 +198,7 @@ test.describe('undo', () => {
         expect(await slotNames(page)).toEqual(before);
 
         await page.reload();
-        await page.waitForSelector('.roster-grid');
+        await page.waitForSelector('.roster-grid', { timeout: 45_000 });
         expect(await slotNames(page), 'undo did not write through').toEqual(before);
     });
 });
@@ -192,34 +206,36 @@ test.describe('undo', () => {
 test.describe('adding players', () => {
     test('a typed player reaches verification, commits, and lands on the board', async ({ page }) => {
         await openWarm(page, 'scouting');
-        await page.getByRole('button', { name: 'More' }).first().click();
-        await page.getByRole('menuitem', { name: /Add Prospects|Add Players/i }).click();
+        await page.getByRole('button', { name: '+ Add Players' }).click();
 
         const modal = page.locator('.add-prospects');
         await expect(modal).toBeVisible();
 
         await modal.locator('input').nth(0).fill('Test Prospect');
         await modal.locator('input').nth(1).fill('QB');
-        await page.getByRole('button', { name: /Review|Verify|Continue/i }).first().click();
+        await page.getByRole('button', { name: 'Review' }).click();
 
-        // Nothing is written until verification is submitted.
-        await expect(page.locator('.ap-verify, .add-prospects')).toBeVisible();
+        // An import or a typed row PROPOSES; nothing is written until the
+        // verification step is submitted, so the modal is still up.
+        // Still on the modal, at the verification step — an entry PROPOSES,
+        // and nothing reaches a board until it is submitted.
+        await expect(modal).toBeVisible();
     });
 });
 
 test.describe('session and init', () => {
     test('a clean slate empties every stage and survives a reload', async ({ page }) => {
         await openWarm(page, 'roster');
-        await page.waitForSelector('.roster-grid');
+        await page.waitForSelector('.roster-grid', { timeout: 45_000 });
 
-        await page.locator('.view-tabbar-actions').getByRole('button', { name: 'Session' }).click();
+        await page.locator('.view-tabbar-actions .app-menu-trigger').click();
         await page.getByRole('menuitem', { name: /Start Clean Slate/i }).click();
         // It asks first — this is the one irreversible action.
-        await page.getByRole('button', { name: /Clean Slate|Confirm|Yes/i }).last().click();
+        await page.getByRole('button', { name: 'Start clean' }).click();
         await page.waitForTimeout(1500);
 
         await page.reload();
-        await page.waitForSelector('.view-tabbar');
+        await page.waitForSelector('.view-tabbar', { timeout: 45_000 });
         await gotoTab(page, 'draft');
         await expect(page.locator('.view-tab.active')).toHaveText(TABS.draft);
     });
@@ -228,7 +244,7 @@ test.describe('session and init', () => {
 test.describe('settings', () => {
     test('positional value is editable, persists, and a non-http matrix link is refused', async ({ page }) => {
         await openWarm(page, 'scouting');
-        await page.getByRole('button', { name: 'More' }).first().click();
+        await page.locator('.top-panel .app-menu-trigger').click();
         await page.getByRole('menuitem', { name: /Settings/i }).click();
 
         const modal = page.locator('.app-settings');

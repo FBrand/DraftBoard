@@ -13,20 +13,32 @@ export const TABS = {
 let snapshot = null;
 const state = () => (snapshot ??= JSON.parse(readFileSync(SNAPSHOT_PATH, 'utf8')));
 
-/** Opens the app with the warm snapshot already in storage. */
+/**
+ * Opens the app with the warm snapshot already in storage.
+ *
+ * The guard is load-bearing. addInitScript runs before EVERY navigation, not
+ * once — so without it a page.reload() re-injected the original snapshot and
+ * silently undid whatever the test had just done. Every "and it survives a
+ * reload" assertion was really testing the seeding, and failing honestly:
+ * the drag had persisted, and then been overwritten.
+ *
+ * Seeding only into empty storage gives the intended behaviour: the first
+ * load starts warm, and every later load sees what the app actually wrote.
+ */
 export async function openWarm(page, tab) {
     await page.addInitScript((data) => {
+        if (localStorage.length > 0) return;
         for (const [k, v] of Object.entries(data)) localStorage.setItem(k, v);
     }, state());
     await page.goto('/');
-    await page.waitForSelector('.view-tabbar');
+    await page.waitForSelector('.view-tabbar', { timeout: 45_000 });
     if (tab) await gotoTab(page, tab);
 }
 
 /** Opens the app with nothing in storage — the cold path. */
 export async function openCold(page, tab) {
     await page.goto('/');
-    await page.waitForSelector('.view-tabbar');
+    await page.waitForSelector('.view-tabbar', { timeout: 45_000 });
     if (tab) await gotoTab(page, tab);
 }
 

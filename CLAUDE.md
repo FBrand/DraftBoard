@@ -432,21 +432,34 @@ more, rather than adding a Markdown dependency.
 
 ## Testing
 
-Two suites, split by what they can actually catch:
-
 - **Vitest** (`npm run test:unit`, `tests/unit/*.test.js`) — pure logic:
-  ranking, phase detection, name matching. 46 tests in ~9s, node environment,
-  no jsdom. Most bugs found in this project have been logic bugs, so this is
-  the loop to stay in while working.
-- **Playwright** (`npm run test:docker`, `tests/*.spec.js`) — rendering,
-  drag-and-drop and persistence, against a production build in the official
-  Docker image. ~50 minutes.
+  ranking, grouping, phase detection, name matching, CSV round-trips, the
+  registry. 77 tests in ~9s, node environment, no jsdom. Most bugs here have
+  been logic bugs, so this is the loop to stay in while working.
+- **Playwright fast** (`npm run test:fast`, `tests/fast/`) — 15 tests in
+  ~3.5 minutes, covering only what a browser can answer: rendering, routing,
+  drag and drop, persistence across a reload, modal flows.
+- `tests/*.spec.js` is the OLD 87-test suite (~50 min). Superseded by the two
+  above; kept for reference, not part of the loop.
 
-`playwright.config.js` sets `testMatch: '**/*.spec.js'` so it leaves the
-Vitest files alone. `tests/README.md` records how to run the browser suite
-against a frozen `dist-test/` snapshot on its own port — **verify the port
-answers 200 before launching**, and never rebuild into a directory a running
-suite is serving from. Both mistakes have voided full runs here.
+Two things make the fast suite fast. `tests/fast/globalSetup.js` boots the app
+ONCE and snapshots the state it settles on, so no test pays the cold bootstrap;
+and the worker count comes from the machine rather than from CI being set —
+the old config dropped to two workers under `CI=1`, which ran a browser suite
+on a quarter of an 8-core box.
+
+Traps, all of which have cost real runs here:
+
+- **Never rebuild into a directory a running suite is serving from**, and
+  verify the port answers before launching.
+- `addInitScript` runs before EVERY navigation, not once. Seeding storage
+  there without a `localStorage.length` guard means every `page.reload()`
+  restores the seed and silently undoes what the test just did — every
+  "survives a reload" assertion was really testing the seeding.
+- If an actionability wait (`waitForSelector`, `click`) hangs on an element
+  that is plainly visible, the main thread is blocked; `waitForFunction` still
+  works because it is a plain evaluation. Profile before blaming the harness.
+  See the note on repository writes below.
 
 ## Architecture
 

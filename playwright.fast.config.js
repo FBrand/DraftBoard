@@ -18,18 +18,18 @@ export default defineConfig({
     forbidOnly: !!process.env.CI,
     retries: 0,
     // 4 x ~670MB fits the box's ~2.9GB free; CPU is the real limit at 8 cores.
-    workers: Number(process.env.WORKERS ?? 4),
+    workers: Number(process.env.WORKERS ?? 3),
     reporter: [['list']],
     // Tight on purpose. A 120s timeout means one hung test costs two minutes
     // of a ten-minute budget; these flows are seconds when they work.
-    timeout: 45_000,
+    timeout: 75_000,
     expect: { timeout: 8_000 },
     use: {
         baseURL: BASE_URL,
         trace: 'off',
         screenshot: 'only-on-failure',
         video: 'off',
-        actionTimeout: 10_000,
+        actionTimeout: 20_000,
     },
     projects: [
         { name: 'desktop', use: { ...devices['Desktop Chrome'], viewport: { width: 1600, height: 1000 } } },

@@ -288,12 +288,35 @@ export default function ScoutingView({ players }) {
     };
 
     const handleReorder = (newOrderedNames) => {
-        // Exactly one player moved; find him and the two he landed between.
-        const at = newOrderedNames.findIndex((n, i) => effectivePlayers[i]?.name !== n);
+        // Exactly one player moved; find HIM, and the two he landed between.
+        //
+        // Which end of the change he is at depends on the direction, and this
+        // used to take the first difference either way. Moving a player UP
+        // does make him the first difference. Moving him DOWN does not —
+        // everyone he passed shifts up by one, so the first difference is the
+        // player he displaced, and the placement got computed for that man
+        // instead. It landed him exactly where he already was, so dragging a
+        // player DOWN the ranking did nothing whatsoever.
+        //
+        // The moved player is at one end of the changed span: if the new
+        // ordering's first changed name is the old ordering's last changed
+        // name, he came up; otherwise he went down.
+        const oldNames = effectivePlayers.map(p => p.name);
+        let first = 0;
+        while (first < oldNames.length && oldNames[first] === newOrderedNames[first]) first += 1;
+        if (first === oldNames.length) return;   // nothing actually moved
+
+        let last = oldNames.length - 1;
+        while (last > first && oldNames[last] === newOrderedNames[last]) last -= 1;
+
+        const movedName = newOrderedNames[first] === oldNames[last]
+            ? newOrderedNames[first]
+            : newOrderedNames[last];
+        const at = newOrderedNames.indexOf(movedName);
         if (at === -1) return;
 
         const byName = new Map(effectivePlayers.map(p => [p.name, p]));
-        const moved = byName.get(newOrderedNames[at]);
+        const moved = byName.get(movedName);
         if (!moved) return;
 
         const before = byName.get(newOrderedNames[at - 1]) ?? null;
