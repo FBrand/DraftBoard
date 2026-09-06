@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { repository } from '../../src/data/repository';
-import { openBoards, boardById, listBoards } from '../../src/utils/boardRegistry';
+import { openBoards, listBoards } from '../../src/utils/boardRegistry';
 import { openRegistry, clearRegistry, byId } from '../../src/utils/playerRegistry';
 import { openEvaluations, ownerIdFor, remarksFor } from '../../src/utils/evaluations';
 import * as scoutingState from '../../src/utils/scoutingState';

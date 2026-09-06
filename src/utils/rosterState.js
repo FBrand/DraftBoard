@@ -8,6 +8,7 @@ import { basePosition } from './boardRanking';
 import { getSessionTeam } from './appSettings';
 import { DRAFT_YEAR } from '../constants';
 import { resolve as resolvePlayer, setFacts } from './playerRegistry';
+import { applyPlayerFacts } from './playerFacts';
 
 // Reasonable 53-man slot defaults by major position
 const DEFAULT_SLOTS53 = {
@@ -202,7 +203,11 @@ export function parseCSV(csvText) {
 
         if (phase === 'S' && SPECIALIST_IDS.includes(pos)) {
             const name = rawSlots.find(s => s.trim())?.trim();
-            depthChart[pos] = name ? [makeSlot(name, '53')] : [];
+            // Through slotFromImport like everyone else. Calling makeSlot
+            // directly skipped registration, which made the kicker, punter and
+            // long snapper the only players on the roster with no record — and
+            // so the only ones whose card could never show a school.
+            depthChart[pos] = name ? [slotFromImport(name, '53', pos)].filter(Boolean) : [];
             continue;
         }
 
@@ -246,6 +251,12 @@ export function parseCSV(csvText) {
         if (phase === 'O') offense.push(chip);
         else if (phase === 'D') defense.push(chip);
     }
+
+    // The roster registers players the boards never saw — veterans, and the
+    // fringe of the depth chart. Seed data is applied again so they get their
+    // school too; it fills blanks only and writes nothing when there is
+    // nothing to fill. Not awaited: a school is a nicety, the roster is not.
+    applyPlayerFacts();
 
     return { positionConfig: { offense, defense }, depthChart, reserve, cuts };
 }

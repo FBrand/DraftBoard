@@ -1,53 +1,97 @@
 /**
- * Turns a completed ESPN draft file into seed data for the app.
+ * Seed data the rankings files cannot carry: school, and the draft outcome.
  *
- * The rankings CSVs carry `group,name,position,favourite` and nothing else —
- * no school, no draft outcome. Both exist in the draft file, so rather than
- * hand-editing three curated rankings files, this derives a separate seed the
- * app applies on load. Regenerate it when the source updates; do not hand-edit
- * the output.
+ * Three sources, because no one of them covers the people on screen:
  *
- *   node scripts/build-player-facts.mjs <draft.json> > public/player_facts_2026.csv
+ *   draft2026.json          the 2026 class and where each went. Authoritative
+ *                           for the draft outcome; a school for only ~71%.
+ *   rankings_sttm_source    a school for every RANKED prospect, drafted or not.
+ *   data/nfl_schools.json   a school for everyone under contract in the
+ *                           league — see fetch-nfl-schools.mjs.
  *
- * Note on the source: `athlete.team` is the COLLEGE, not the NFL club. The
- * drafting club is `teamId`, resolved against the file's own `teams` list.
+ * The third exists because seeding from the draft file alone left every
+ * veteran blank: 81 of the 91 players on the roster had no school, so the card
+ * was empty for exactly the players the audience already knows. Rookies had a
+ * school and Mahomes did not.
+ *
+ * Draft facts for veterans are NOT sought here. roster.csv already records how
+ * every player arrived, in the suffix on his name, and parseAcquisition reads
+ * it on import — a second source for the same fact could only disagree with it.
+ *
+ *   node scripts/build-player-facts.mjs > public/player_facts_2026.csv
+ *
+ * Regenerate when a source updates; do not hand-edit the output.
  */
 import { readFileSync } from 'node:fs';
 
-const source = process.argv[2];
-if (!source) {
-    console.error('usage: build-player-facts.mjs <draft.json>');
-    process.exit(1);
-}
+const DRAFT = '/srv/dev/DraftBoard/Knowledgebase/draft2026.json';
+const STTM = '/srv/dev/DraftBoard/rankings/rankings_sttm_source.csv';
+const LEAGUE = new URL('../data/nfl_schools.json', import.meta.url);
 
-const draft = JSON.parse(readFileSync(source, 'utf8'));
-const teams = new Map((draft.teams ?? []).map(t => [String(t.id), t.abbreviation]));
+// Names arrive from three sources that punctuate and capitalise differently.
+const norm = (s) => String(s ?? '').toLowerCase()
+    .replace(/\b(jr|sr|ii|iii|iv|v)\b\.?/g, '')
+    .replace(/[.,'`’-]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const rows = new Map();   // normalised name -> row
+const put = (name, patch) => {
+    const key = norm(name);
+    if (!key) return;
+    const existing = rows.get(key) ?? {
+        name, position: '', school: '', draftYear: '', draftRound: '', draftPick: '', team: '',
+    };
+    // Never overwrite something an earlier, more authoritative source set.
+    Object.entries(patch).forEach(([k, v]) => {
+        if (v !== '' && v != null && !existing[k]) existing[k] = v;
+    });
+    rows.set(key, existing);
+};
+
+// 1. The draft. Authoritative for the outcome, so it goes first.
+const draft = JSON.parse(readFileSync(DRAFT, 'utf8'));
+const clubs = new Map((draft.teams ?? []).map(t => [String(t.id), t.abbreviation]));
 const positions = new Map((draft.positions ?? []).map(p => [String(p.id), p.abbreviation]));
 
-// The rounds are uneven — compensatory picks — so the round comes from the
-// file rather than from dividing the pick number.
+for (const pick of draft.picks ?? []) {
+    const a = pick.athlete;
+    if (!a?.displayName) continue;
+    put(a.displayName, {
+        // `athlete.team` is the COLLEGE here, not the NFL club — the club is
+        // `teamId`, resolved against the file's own team list.
+        position: positions.get(String(a.position?.id)) ?? '',
+        school: a.team?.shortDisplayName ?? a.team?.location ?? '',
+        draftYear: draft.year ?? '',
+        draftRound: pick.round ?? '',
+        draftPick: pick.overall ?? '',
+        team: clubs.get(String(pick.teamId)) ?? '',
+    });
+}
+
+// 2. Ranked prospects, drafted or not.
+const sttm = readFileSync(STTM, 'utf8').split('\n').slice(1).filter(l => l.trim());
+for (const line of sttm) {
+    const c = line.split(',');
+    if (!c[0]?.trim()) continue;
+    put(c[0].trim(), { position: (c[1] ?? '').trim(), school: (c[2] ?? '').trim() });
+}
+
+// 3. Everyone under contract. Last, so it only ever fills a blank.
+const league = JSON.parse(readFileSync(LEAGUE, 'utf8'));
+for (const p of league.players ?? []) {
+    put(p.name, { position: p.position, school: p.school, team: p.team });
+}
+
 const csvField = (v) => {
     const s = String(v ?? '');
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
 
-const rows = [['name', 'position', 'school', 'draftYear', 'draftRound', 'draftPick', 'team']];
+const COLUMNS = ['name', 'position', 'school', 'draftYear', 'draftRound', 'draftPick', 'team'];
+const out = [COLUMNS.join(',')];
+for (const row of rows.values()) out.push(COLUMNS.map(c => csvField(row[c])).join(','));
+process.stdout.write(out.join('\n') + '\n');
 
-for (const pick of draft.picks ?? []) {
-    const a = pick.athlete;
-    if (!a?.displayName) continue;
-    rows.push([
-        a.displayName,
-        positions.get(String(a.position?.id)) ?? '',
-        // shortDisplayName is what a broadcast says ("Indiana", not "Indiana
-        // Hoosiers" and not "IU").
-        a.team?.shortDisplayName ?? a.team?.location ?? '',
-        draft.year ?? '',
-        pick.round ?? '',
-        pick.overall ?? '',
-        teams.get(String(pick.teamId)) ?? '',
-    ]);
-}
-
-process.stdout.write(rows.map(r => r.map(csvField).join(',')).join('\n') + '\n');
-console.error(`${rows.length - 1} players written`);
+const all = [...rows.values()];
+console.error(`${all.length} players | ${all.filter(r => r.school).length} with a school | ${all.filter(r => r.draftPick).length} with a draft outcome`);

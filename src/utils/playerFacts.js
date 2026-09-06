@@ -16,7 +16,9 @@ import { resolveAll, fillMany } from './playerRegistry';
 
 const FILE = 'player_facts_2026.csv';
 
-let applied = false;
+// The file is static, so it is fetched once and reused. The APPLYING is not
+// once, though — see applyPlayerFacts.
+let rowsPromise = null;
 
 function parse(text) {
     const lines = String(text ?? '').split('\n').map(l => l.trim()).filter(Boolean);
@@ -33,22 +35,30 @@ const num = (v) => {
     return Number.isFinite(n) ? n : null;
 };
 
+function loadRows() {
+    if (rowsPromise) return rowsPromise;
+    rowsPromise = fetch(`${import.meta.env.BASE_URL}${FILE}`)
+        .then(res => (res.ok ? res.text() : ''))
+        .then(parse)
+        .catch(() => []);   // seed data is optional; the app works without it
+    return rowsPromise;
+}
+
 /**
- * Fills in what the rankings files don't say. Runs once per page load, after
- * the pool has been resolved so there are records to fill.
+ * Fills in what the rankings files don't say.
+ *
+ * Deliberately NOT once per page load. Players are registered by more than one
+ * path and at more than one moment: the boards register the draft class when
+ * the pool loads, and the roster registers its veterans separately, whenever
+ * that state is first parsed. A one-shot guard meant whichever ran second got
+ * nothing — which is why every veteran on the roster had a blank school while
+ * every rookie had one.
+ *
+ * Running again is cheap and safe: it fills blanks only, and commits once for
+ * the whole batch, so a pass with nothing to do writes nothing at all.
  */
 export async function applyPlayerFacts() {
-    if (applied) return false;
-    applied = true;
-
-    let rows;
-    try {
-        const res = await fetch(`${import.meta.env.BASE_URL}${FILE}`);
-        if (!res.ok) return false;
-        rows = parse(await res.text());
-    } catch {
-        return false;   // seed data is optional; the app works without it
-    }
+    const rows = await loadRows();
     if (!rows.length) return false;
 
     // Resolved with the school included, so a namesake at a different school
