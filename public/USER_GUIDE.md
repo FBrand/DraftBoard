@@ -76,8 +76,10 @@ Unranked is a separate thing from a tag — a player can be liked *and* unplaced
 
 ### Tags and remarks
 
-Click a player to tag him: **like**, **avoid** or **monitor**. The star in a
-rankings file becomes a `like`, so the two are one mechanic.
+Click a player to tag him — **Like** ★, **Avoid** ❗, **Monitor** 🔎 or
+**Injury** ✚. A star in a rankings file becomes a Like, so the star and the tag
+are one mechanic rather than two that can disagree. In a spreadsheet the tag
+column takes either the symbol or the word.
 
 Behind the ✏️ pencil on a player's card you can record **strengths (+)**,
 **weaknesses (−)** and **notes (•)**. These belong to the person who wrote
@@ -155,11 +157,17 @@ Both import and export CSV, so a roster can be bulk-edited in a spreadsheet.
 
 ## Working with spreadsheets
 
-Every tab imports and exports CSV, and the format is meant to be typed in
-Google Sheets by hand.
+Scouting, Free Agency, Roster and the Draft board each export CSV; Scouting
+and the two depth charts import it back. The formats below are meant to be
+typed in Google Sheets by hand — if a file only has to reach the app, that is
+all you need to write.
 
-**Rankings** are `round, tier, name, position, school, tag, evaluation`.
-The evaluation cell holds remarks, one per line, marked by the symbol:
+UDFA has no file of its own: its signings are part of the draft, and they come
+out in the draft export alongside the picks.
+
+**A board** is `round, tier, name, position, school, tag, evaluation` —
+Scouting's **Export Board for Sheets** and **Import Board from Sheets**. The
+evaluation cell holds remarks, one per line, marked by the symbol:
 
 ```
 Remarks:
@@ -170,7 +178,13 @@ Remarks:
 
 The `Remarks:` prefix on the first line matters: without it, a cell starting
 with `+` or `-` is treated as a formula by Sheets and Excel and the contents
-are mangled. Lines with no symbol are kept as notes.
+are mangled. Lines with no symbol are kept as notes, and any of the dashes a
+word processor might produce counts as a weakness.
+
+Importing a board **replaces that board's ranking** — a ranking is an ordering,
+and merging two produces an order nobody wrote. Players in the file that the
+app has never seen are created; remarks are added to what you already have,
+so re-importing a corrected file will not leave you with two copies of a note.
 
 **Roster** rows are `Phase, position, slots53, then the players in order`.
 `R:` in front of a name means a reserve/practice-squad slot. A suffix after a
