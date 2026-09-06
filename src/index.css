@@ -3329,3 +3329,32 @@ body.export-mode .card-glow {
   color: var(--chiefs-gold);
   border-color: rgba(255, 184, 28, 0.5);
 }
+
+/* Board edit mode. Only present while an analyst is rearranging — a live
+   draft board must not look draggable, because there a card is a thing you
+   press to draft somebody. */
+.board-draggable {
+  cursor: grab;
+}
+
+.board-draggable.dragging-source {
+  opacity: 0.35;
+}
+
+.board-cell-over {
+  outline: 2px dashed var(--chiefs-gold);
+  outline-offset: -2px;
+  background: rgba(255, 184, 28, 0.06);
+}
+
+.board-drag-overlay {
+  cursor: grabbing;
+  transform: rotate(-1.5deg);
+  filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.55));
+}
+
+.action-pill.active {
+  background: var(--chiefs-gold);
+  border-color: var(--chiefs-gold);
+  color: #000;
+}

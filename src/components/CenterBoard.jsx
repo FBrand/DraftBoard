@@ -1,13 +1,40 @@
 import React from 'react';
 import PlayerCard from './PlayerCard';
 import { tierKey, compareTiers } from '../utils/boardRanking';
+import { DndContext, DragOverlay, MouseSensor, TouchSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { DraggableCard, DroppableCell } from './BoardDnd';
 
 // Generalized board-grid primitive: position columns x round/tier rows,
 // derived purely from `players`' own position/group/drafted fields. Reused
 // across Draft (onAction = draft the player), UDFA (onAction = sign them),
 // and Scouting (onAction = open tag/rank/notes controls) — see
 // /home/dev/.claude/plans/structured-growing-cat.md.
-const CenterBoard = ({ players, onAction, columnOrder = [], isFocusMode = false, alwaysClickable = false, hideDraftedStyle = false, onInfoOpen, tagFor }) => {
+/**
+ * `editable` turns the grid into something an analyst can rearrange: cards
+ * become draggable and tier rows become drop targets, and `onPlace(player,
+ * tier)` is called with the row a card was dropped on.
+ *
+ * Off by default. During a live draft the board must not move under a
+ * mis-click, and a card there is a thing you press to draft somebody.
+ */
+const CenterBoard = ({ players, onAction, columnOrder = [], isFocusMode = false, alwaysClickable = false, hideDraftedStyle = false, onInfoOpen, tagFor, editable = false, onPlace }) => {
+    const [dragging, setDragging] = React.useState(null);
+    const sensors = useSensors(
+        // Same activation as the roster grid: 8px of movement, so a click to
+        // open a card is never mistaken for the start of a drag.
+        useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
+        useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
+    );
+
+    const handleDragEnd = ({ active, over }) => {
+        setDragging(null);
+        if (!over || !onPlace) return;
+        const player = active.data.current?.player;
+        const tier = over.data.current?.tier;
+        if (!player || !tier) return;
+        if (player.round === tier.round && player.tier === tier.tier) return;
+        onPlace(player, tier);
+    };
     const visiblePlayers = isFocusMode ? players : players.filter(p => !p.drafted);
 
     const rawPositions = [...new Set(players.map(p => p.position.split('.', 1)[0]))];
@@ -61,7 +88,7 @@ const CenterBoard = ({ players, onAction, columnOrder = [], isFocusMode = false,
         bestAvailable[pos] = players.find(p => p.position.split('.', 1)[0] === pos && !p.drafted);
     });
 
-    return (
+    const grid = (
         <div className="center-board-container" style={{ '--pos-count': positions.length }}>
             <div className="board-grid">
                 {/* Header Row */}
@@ -109,12 +136,17 @@ const CenterBoard = ({ players, onAction, columnOrder = [], isFocusMode = false,
                                 const roundPlayers = visiblePlayers.filter(p => p.position.split('.', 1)[0] === pos && tierKey(p.round, p.tier) === group.key);
 
                                 return (
-                                    <div key={pos} className="slot-cell">
+                                    <DroppableCell
+                                        key={pos}
+                                        id={`cell-${group.key}-${pos}`}
+                                        data={{ tier: { round: group.round, tier: group.tier } }}
+                                        disabled={!editable}
+                                        className="slot-cell"
+                                    >
                                         {roundPlayers.map(player => {
                                             const isBest = bestAvailable[pos]?.name === player.name;
-                                            return (
+                                            const card = (
                                                 <PlayerCard
-                                                    key={`${player.name}-${player.position}`}
                                                     player={player}
                                                     isBest={isBest}
                                                     onClick={onAction}
@@ -125,8 +157,16 @@ const CenterBoard = ({ players, onAction, columnOrder = [], isFocusMode = false,
                                                     tag={tagFor?.(player.name, player)}
                                                 />
                                             );
+                                            return (
+                                                <DraggableCard
+                                                    key={`${player.name}-${player.position}`}
+                                                    id={`card-${player.name}-${player.position}`}
+                                                    data={{ player }}
+                                                    disabled={!editable}
+                                                >{card}</DraggableCard>
+                                            );
                                         })}
-                                    </div>
+                                    </DroppableCell>
                                 );
                             })}
                         </div>
@@ -134,6 +174,29 @@ const CenterBoard = ({ players, onAction, columnOrder = [], isFocusMode = false,
                 })}
             </div>
         </div>
+    );
+
+    // No DndContext unless the board is editable: it installs document-level
+    // listeners and an auto-scroller, which a board nobody is rearranging has
+    // no use for.
+    if (!editable) return grid;
+
+    return (
+        <DndContext
+            sensors={sensors}
+            onDragStart={({ active }) => setDragging(active.data.current?.player ?? null)}
+            onDragEnd={handleDragEnd}
+            onDragCancel={() => setDragging(null)}
+        >
+            {grid}
+            <DragOverlay dropAnimation={null}>
+                {dragging && (
+                    <div className="board-drag-overlay">
+                        <PlayerCard player={dragging} slim alwaysClickable hideDraftedStyle />
+                    </div>
+                )}
+            </DragOverlay>
+        </DndContext>
     );
 };
 
