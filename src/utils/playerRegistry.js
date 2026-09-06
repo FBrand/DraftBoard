@@ -260,6 +260,51 @@ export function setFacts(id, patch) {
     return true;
 }
 
+/**
+ * Applies base data and facts to many players in ONE write.
+ *
+ * The per-player calls each rewrite the whole collection, which is fine for a
+ * correction somebody types and ruinous in a loop: seeding 257 players ran up
+ * to 514 full-collection writes on every page load, each serialising ~686
+ * records, and crashed the renderer.
+ *
+ * Only fills what a record does not already have — a value somebody entered
+ * in the app is a deliberate act and outranks a seed.
+ */
+export function fillMany(updates) {
+    const changes = [];
+
+    (updates ?? []).forEach(({ id, base, facts }) => {
+        const record = repository.get(PLAYERS, id);
+        if (!record) return;
+
+        const next = { ...record };
+        let changed = false;
+
+        if (base?.school && !next.school) {
+            next.school = clean(base.school);
+            changed = true;
+        }
+
+        FACT_FIELDS.forEach(f => {
+            if (!facts || !(f in facts)) return;
+            if (next[f] != null) return;              // already known — leave it
+            const value = cleanFact(f, facts[f]);
+            if (value === null || next[f] === value) return;
+            next[f] = value;
+            changed = true;
+        });
+
+        if (changed) {
+            next.updatedAt = new Date().toISOString();
+            changes.push({ id, doc: next });
+        }
+    });
+
+    if (changes.length) repository.commit(PLAYERS, changes);
+    return changes.length;
+}
+
 export function setHidden(id, hidden) {
     const record = repository.get(PLAYERS, id);
     if (!record) return false;

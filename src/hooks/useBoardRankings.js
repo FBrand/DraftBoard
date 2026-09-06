@@ -9,6 +9,7 @@ import { migrateLegacyScores } from '../utils/athleticMatrix';
 
 import { openBoards, listBoards, boardById } from '../utils/boardRegistry';
 import { openEvaluations, migrateBoardRemarks } from '../utils/evaluations';
+import { applyPlayerFacts } from '../utils/playerFacts';
 
 /**
  * Loads every analyst's rankings file once, so Scouting can show each board's
@@ -116,6 +117,12 @@ function loadPools() {
         // player has a record to hang facts on, they move onto it — here,
         // because this is the first moment the records exist to move them to.
         migrateLegacyScores();
+
+        // School and the draft outcome are not in any rankings file, so they
+        // are seeded from the completed draft. Fills blanks only; anything
+        // corrected in the app outranks it. Deliberately not awaited — seed
+        // data is a nicety and must never hold up the board.
+        applyPlayerFacts();
 
         // A player one analyst has ranked and another hasn't is not missing
         // from the second board — he is UNRANKED on it. Dropping him meant a

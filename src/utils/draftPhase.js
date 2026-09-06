@@ -16,6 +16,12 @@
  *
  * So: nothing outside this module compares a raw `pickNumber` against a
  * number.
+ *
+ * NOTE the two argument conventions, which the names do not advertise:
+ * `roundForPick` and `isDraftComplete` take a NUMBER, while `isDraftPick`
+ * and `isUndraftedSigning` take a PLAYER. Passing a bare number to the
+ * latter silently returns false, because `pickNumberOf(20)` reads
+ * `(20).pickNumber` and finds nothing.
  */
 
 import { getRoundEnds, getLastDraftPick } from './appSettings';

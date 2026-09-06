@@ -25,21 +25,23 @@ export function hasSavedState() {
 }
 
 /**
- * Free agency starts from where last season ended — the roster you actually
- * carry into it, minus everyone acquired since. That file is derived from
- * roster.csv's own provenance suffixes (:FA, :UDFA and bare 2026 round
- * numbers mark 2026 acquisitions; :YY/R and unsuffixed names are holdovers),
- * so it stays consistent with the roster it came from rather than being a
- * separately maintained list.
+ * The roster as it stood the day before the draft — holdovers plus everyone
+ * signed in free agency. That is what Free Agency looks like once it is done,
+ * and it is the state the app seeds: this is the 2026 offseason as it actually
+ * happened, not a blank slate to replay it from.
+ *
+ * Derived by `scripts/build-roster-snapshots.mjs` from roster.csv's own
+ * provenance suffixes rather than maintained by hand, so it cannot drift from
+ * the roster it came from. See that script for what each suffix means.
  */
 export async function fetchSeasonStartRoster() {
-    const res = await fetch(`${import.meta.env.BASE_URL}roster_2025_end.csv`);
-    if (!res.ok) throw new Error(`Could not load last season's roster (HTTP ${res.status})`);
+    const res = await fetch(`${import.meta.env.BASE_URL}roster_predraft.csv`);
+    if (!res.ok) throw new Error(`Could not load the pre-draft roster (HTTP ${res.status})`);
     return parseCSV(await res.text());
 }
 
 /**
- * Writes the season-start roster into free agency if nothing is saved yet, and
+ * Writes the pre-draft roster into free agency if nothing is saved yet, and
  * resolves with whatever FA should now hold.
  *
  * Called at app start rather than only when the Free Agency tab is opened:
