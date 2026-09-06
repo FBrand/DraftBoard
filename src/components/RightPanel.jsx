@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import PlayerCard from './PlayerCard';
 import Toast from './Toast';
 import { serializeDraftState, deserializeDraftState, getExportFilename } from '../utils/sessionSerializer';
+import Menu from './Menu';
 
 const RightPanel = ({ remotePicks, draftedPlayers, currentPick, ourPicksLeft, onImport }) => {
     const scrollRef = useRef(null);
@@ -120,13 +121,19 @@ const RightPanel = ({ remotePicks, draftedPlayers, currentPick, ourPicksLeft, on
                 </div>
             </div>
 
+            {/* "Save Session" here only ever meant the PICKS. The tab bar has
+                a Session menu that covers every stage, so two things called a
+                session did two different jobs a metre apart. Named for what it
+                is, and moved into a menu like every other occasional action. */}
             <div className="panel-actions">
-                <button className="action-button secondary" onClick={handleExport}>
-                    Save Session
-                </button>
-                <button className="action-button primary" onClick={handleImportClick}>
-                    Load Session
-                </button>
+                <Menu
+                    label="Picks"
+                    align="left"
+                    items={[
+                        { label: 'Save Picks…', onClick: handleExport, title: 'This draft\'s picks and UDFA signings, as CSV' },
+                        { label: 'Load Picks…', onClick: handleImportClick, title: 'Replaces the picks made so far' },
+                    ]}
+                />
                 <input
                     type="file"
                     ref={fileInputRef}

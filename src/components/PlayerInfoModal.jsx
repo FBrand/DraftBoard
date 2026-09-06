@@ -12,19 +12,20 @@ import { resolve as resolvePlayer } from '../utils/playerRegistry';
 // The player card, opened by right-click / long-press on a player anywhere
 // OUTSIDE Scouting — the draft board, UDFA, and the Roster/FA depth charts.
 //
-// What it can edit is the point of the split. A board opinion — round, tier,
-// order, tag — belongs to an analyst working through a class, and that work
-// happens in Scouting, where the rest of the board is on screen to judge it
-// against. Standing in the Roster or Free Agency with one player out of
-// context, the useful correction is the opposite kind: his school is wrong,
-// he was a fourth-rounder not a third, he came from Tennessee. Those are
-// facts — true on everybody's board.
+// What it can edit depends on the STAGE it was opened from, because the two
+// kinds of correction belong to different stages.
 //
-// So this card edits FACTS and never opinions. Passing no onEntryChange is
-// what removes the opinion pencil: the Roster and Free Agency were offering
-// to re-rank a player on somebody's draft board, which is not a thing you do
-// from a depth chart, while the facts you actually wanted sat behind a
-// different pencil.
+// On Draft and UDFA you are working the class: the board is the subject, so a
+// round, a tier or a tag is exactly the thing you reach for, and `editsOpinions`
+// is set. On the Roster and in Free Agency you are looking at one player out
+// of context, where re-ranking him on somebody's draft board is not a thing
+// you do from a depth chart — there the useful correction is a fact: his
+// school is wrong, he was a fourth-rounder not a third, he came from
+// Tennessee. Facts are editable on every stage; opinions only where a board
+// is what you are looking at.
+//
+// Scouting does not use this card at all — it has the whole board on screen
+// and edits opinions in its own docked panel.
 //
 // EVALUATIONS are the exception, and they are not an inconsistency. A remark
 // is not a placement: it belongs to the author rather than the board, it is
@@ -41,12 +42,12 @@ import { resolve as resolvePlayer } from '../utils/playerRegistry';
 // another analyst's board has to re-rank the whole pool under that board's
 // tiers and ordering, or the card would keep showing the loaded rankings'
 // numbers no matter which board you were looking at.
-export default function PlayerInfoModal({ player, players = [], onClose }) {
+export default function PlayerInfoModal({ player, players = [], onClose, editsOpinions = false }) {
     const [activeBoard, setActiveBoard] = useState(() => allBoards()[0]?.id ?? null);
     // Every board ever, not just this season's: a player card reaching back
     // into past scouting is the point of keeping old boards at all.
     const [boardList] = useState(() => allBoards());
-    const [boards] = useState(() => Object.fromEntries(boardList.map(b => [b.id, scoutingState.loadState(b.id)])));
+    const [boards, setBoards] = useState(() => Object.fromEntries(boardList.map(b => [b.id, scoutingState.loadState(b.id)])));
     // Bumped when a remark is written, so the list re-reads. Remarks live in
     // their own collection, not in this component's state.
     const [remarkTick, setRemarkTick] = useState(0);
@@ -124,6 +125,37 @@ export default function PlayerInfoModal({ player, players = [], onClose }) {
     }, [boards, boardList, player]);
 
 
+    /**
+     * Writes a correction to the board being paged to. Only reachable where
+     * `editsOpinions` is set — see the note at the top.
+     *
+     * Placement here is round and tier only. A rank is a position in an
+     * ordering, and this card shows one player out of context; moving him by
+     * number would need the whole board, which Scouting has and this does not.
+     */
+    const saveEntry = useCallback((updated) => {
+        if (!activeBoard || !resolved) return;
+        const board = scoutingState.loadState(activeBoard);
+        const entries = [...board.entries];
+
+        const target = resolved;
+        let at = target.id ? entries.findIndex(e => e.playerId === target.id) : -1;
+        if (at === -1) at = findMatchingIndex(target.name, buildNameIndex(entries));
+
+        const { personalRank: _drop, ...persisted } = updated;
+        if (at !== -1) entries[at] = { ...entries[at], ...persisted };
+        else {
+            entries.push({
+                ...scoutingState.makeEntry(target.name, target.position, target.school ?? '', target.id ?? null),
+                ...persisted,
+            });
+        }
+
+        const next = { ...board, entries };
+        scoutingState.saveState(activeBoard, next);
+        setBoards(prev => ({ ...prev, [activeBoard]: next }));
+    }, [activeBoard, resolved]);
+
     // A veteran opened from the roster arrives as a bare { name, position } —
     // no id, because a depth-chart slot holds a name. He IS registered, so
     // resolving without creating finds him; a player genuinely unknown to the
@@ -181,6 +213,7 @@ export default function PlayerInfoModal({ player, players = [], onClose }) {
             boardLabel={boardById(activeBoard)?.label ?? ''}
             onPrevBoard={() => cycleBoard(-1)}
             onNextBoard={() => cycleBoard(1)}
+            onEntryChange={editsOpinions ? saveEntry : undefined}
             remarks={remarks}
             seasons={listSeasons()}
             onAddRemark={playerId ? handleAddRemark : undefined}

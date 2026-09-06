@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
+import { CSV_TEMPLATE } from '../utils/rosterState';
 import {
     loadState, saveState, defaultState,
     parseCSV, exportCSV, makeSlot, resolvePosition,
@@ -312,6 +313,14 @@ export default function RosterView({ masterPlayers, draftedPlayers, onInfoOpen }
             setToast({ message: 'Failed to load default roster: ' + err.message, tone: 'error' });
         }
     };
+    const downloadTemplate = () => {
+        const url = URL.createObjectURL(new Blob([CSV_TEMPLATE], { type: 'text/csv' }));
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'roster_template.csv';
+        a.click();
+    };
+
 
     const handleExport = () => {
         const csv = exportCSV(state);
@@ -500,6 +509,7 @@ export default function RosterView({ masterPlayers, draftedPlayers, onInfoOpen }
                         className="action-pill undo-pill"
                         title="Undo the last change"
                     >Undo</button>
+                    <button onClick={() => setIsSignModalOpen(true)} className="action-pill">+ Sign Player</button>
                     <button onClick={handleSyncFromStages} className="action-pill" title="Fill empty slots from FA candidates, draft picks, and UDFA signings — never overwrites">Sync from FA/Draft/UDFA</button>
                     <Menu items={[
                         // The load/import options that used to be a blocking
@@ -508,6 +518,7 @@ export default function RosterView({ masterPlayers, draftedPlayers, onInfoOpen }
                         { label: 'Load Default Roster', onClick: handleFetchLocal, title: 'The shipped post-offseason roster' },
                         { label: 'Paste Depth Chart Source…', onClick: () => setIsPasting(true) },
                         { label: 'Import Roster CSV…', file: { accept: '.csv', onFile: handleBootstrap } },
+                        { label: 'Download CSV Template…', onClick: downloadTemplate, title: 'The columns, with worked rows showing the slot prefixes and arrival suffixes' },
                         { label: 'Export Roster CSV…', onClick: handleExport },
                         { label: 'Clear Roster…', onClick: () => setShowResetConfirm(true), tone: 'danger' },
                     ]} />
@@ -526,7 +537,6 @@ export default function RosterView({ masterPlayers, draftedPlayers, onInfoOpen }
                 onDeletePosition={handleDeletePosition}
                 onSlotsChange={handleSlotsChange}
                 onAddPosition={setAddPositionPhase}
-                onSignClick={() => setIsSignModalOpen(true)}
                 zoomLevel={zoomLevel}
                 onInfoOpen={onInfoOpen}
             />

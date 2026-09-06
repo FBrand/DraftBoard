@@ -210,6 +210,10 @@ function App() {
       <PlayerInfoModal
         key={infoPlayer?.name ?? 'none'}
         player={infoPlayer}
+        // Draft and UDFA are stages where the BOARD is the subject, so the
+        // card edits opinions there. Roster and Free Agency look at one player
+        // out of context and edit facts only.
+        editsOpinions={view === 'draft' || view === 'udfa'}
         players={players}
         onClose={() => setInfoPlayer(null)}
       />

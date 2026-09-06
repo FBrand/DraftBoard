@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import CenterBoard from './CenterBoard';
+import PlayerCard from './PlayerCard';
 import UnrankedModal from './UnrankedModal';
 import Menu from './Menu';
 import usePlayerTags from '../hooks/usePlayerTags';
@@ -17,6 +18,11 @@ import { csvField, parseCsvLine } from '../utils/csvUtils';
 // pick and recorded the signing in draft order.
 export default function UdfaView({ players, draftedPlayers, columnOrder, signUndrafted, currentPick, onInfoOpen }) {
     const [isUnrankedOpen, setIsUnrankedOpen] = useState(false);
+    // Clicking a card used to sign him outright. A signing records a team and
+    // a league-entry fact, and doing that on one click — during a broadcast,
+    // on a board you are scrolling — is a keystroke away from a signing
+    // nobody meant. It opens the same modal Draft uses, prefilled.
+    const [signPlayer, setSignPlayer] = useState(null);
     const tagFor = usePlayerTags();
     const team = getSessionTeam();
 
@@ -137,7 +143,7 @@ export default function UdfaView({ players, draftedPlayers, columnOrder, signUnd
             <div className="udfa-body">
             <CenterBoard
                 players={players}
-                onAction={draftComplete ? signUndrafted : undefined}
+                onAction={draftComplete ? setSignPlayer : undefined}
                 columnOrder={columnOrder}
                 isFocusMode={false}
                 onInfoOpen={onInfoOpen}
@@ -154,19 +160,31 @@ export default function UdfaView({ players, draftedPlayers, columnOrder, signUnd
                     {signed.length === 0
                         ? <div className="scouting-empty">Nobody signed yet.</div>
                         : signed.map(p => (
-                            <button
-                                key={`${p.name}|${p.position}`}
-                                type="button"
-                                className="sg-row"
-                                onClick={() => onInfoOpen?.(p)}
-                            >
-                                <span className="sg-name">{p.name}</span>
-                                <span className="sg-meta">{p.position}</span>
-                            </button>
+                            <div key={`${p.name}|${p.position}`} className="udfa-signed-card">
+                                <PlayerCard
+                                    player={p}
+                                    onClick={() => onInfoOpen?.(p)}
+                                    onInfoOpen={onInfoOpen}
+                                    tag={tagFor?.(p.name, p) ?? null}
+                                    alwaysClickable
+                                    hideDraftedStyle
+                                    noStrikethrough
+                                    slim
+                                />
+                            </div>
                         ))}
                 </div>
             </div>
             </div>
+
+            <UnrankedModal
+                key={`udfa-sign-${signPlayer?.name ?? 'none'}`}
+                isOpen={!!signPlayer}
+                onClose={() => setSignPlayer(null)}
+                onDraft={signUndrafted}
+                mode="postdraft"
+                initialPlayer={signPlayer}
+            />
 
             <UnrankedModal
                 key={`udfa-unranked-${isUnrankedOpen}`}

@@ -824,11 +824,29 @@ body {
   gap: 1rem;
   flex: 1;
   /* Without this a flex child refuses to shrink below its content, so it
-     never overflows and never scrolls. This is the whole bug. */
+     never overflows and never scrolls. */
   min-width: 0;
   overflow-x: auto;
-  padding-bottom: 4px;
+  /* Explicit, and not just tidiness: setting one axis to auto computes the
+     other to auto as well, and a box that could scroll vertically does not
+     translate a vertical wheel into horizontal movement. With this, a plain
+     mouse wheel over the picks scrolls them — which is the only way most
+     people will try. */
+  overflow-y: hidden;
+  padding-bottom: 6px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-color) transparent;
 }
+
+/* And a scrollbar you can actually see, so it looks scrollable before you
+   try. The default overlay bar on a dark panel is close to invisible. */
+.bp-picks-row::-webkit-scrollbar { height: 8px; }
+.bp-picks-row::-webkit-scrollbar-track { background: transparent; }
+.bp-picks-row::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 4px;
+}
+.bp-picks-row::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
 
 .bp-pick { flex: 0 0 auto; }
 
@@ -3659,3 +3677,8 @@ body.export-mode .card-glow {
 }
 
 @media (max-width: 820px) { .udfa-signed-panel { display: none; } }
+
+/* Signed UDFAs are shown as the same cards the board uses, so a player reads
+   the same wherever he appears. */
+.udfa-signed-card { margin-bottom: 6px; }
+.udfa-signed-card .player-card { width: 100%; cursor: pointer; }

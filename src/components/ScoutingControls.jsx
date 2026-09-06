@@ -281,9 +281,13 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
     // these cards are looked at far more often than they are corrected, and a
     // grid of live inputs invites a stray keystroke during a broadcast.
     const canEditBase = readOnly ? !!playerId : !!onPlayerSave;
+    const canEditOpinions = readOnly && !!onEntryChange && !canEditBase;
     const factsLocked = readOnly && !editingBase && !editingOpinions;
     // Scouting is always live; elsewhere the pencil decides.
-    const opinionsLive = !readOnly || (editingOpinions && !!onEntryChange);
+    // One pencil unlocks whatever this stage lets you change. On Draft and
+    // UDFA that is the opinions too; on the Roster there are none to unlock,
+    // so the same gesture just opens the facts and the remarks.
+    const opinionsLive = !readOnly || (editingBase || editingOpinions) && !!onEntryChange;
     // Remarks are writable, but not by default on a card you opened to look
     // something up. The Roster and Free Agency cards are read first and
     // written to rarely, and a text box sitting open on a broadcast is one
@@ -295,7 +299,9 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
     // stubbornly read-only. Whichever is showing now unlocks the whole card.
     const cardEditing = editingBase || editingOpinions;
     const canWriteRemarks = !!onAddRemark && (!readOnly || cardEditing);
-    const canEditOpinions = readOnly && !!onEntryChange;
+    // Only when there is no base pencil to do the job — two identical ✎
+    // glyphs governing different halves of one card is how this went wrong
+    // the first time.
 
     // The name is the identity key everywhere in this app, so a rename is a
     // migration, not a field write — the caller moves the board entries and

@@ -6,7 +6,7 @@ import RightPanel from './RightPanel';
 import BottomPanel from './BottomPanel';
 import PicksModal from './PicksModal';
 import UnrankedModal from './UnrankedModal';
-import { isDraftComplete } from '../utils/draftPhase';
+import { isDraftComplete, isUndraftedSigning } from '../utils/draftPhase';
 import usePlayerTags from '../hooks/usePlayerTags';
 
 // Owns all Draft-view-local UI state (focus mode, sidebar toggles, modals) —
@@ -112,7 +112,9 @@ export default function DraftView({
                 </div>
             </div>
 
-            {!isFocusMode && <BottomPanel yourPicks={yourPicks} />}
+            {/* Picks only. A UDFA is a signing and belongs to the UDFA stage,
+                which has its own panel for them. */}
+            {!isFocusMode && <BottomPanel yourPicks={yourPicks.filter(p => !isUndraftedSigning(p))} />}
 
             <PicksModal
                 key={`picks-${isModalOpen}`}

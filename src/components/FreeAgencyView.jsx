@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import * as faState from '../utils/faState';
 import * as rosterState from '../utils/rosterState';
+import { CSV_TEMPLATE } from '../utils/rosterState';
 import { makeSlot, resolvePosition } from '../utils/rosterState';
 import DepthChartGrid from './DepthChartGrid';
 import { TextPromptDialog } from './Dialogs';
@@ -187,6 +188,14 @@ export default function FreeAgencyView({ masterPlayers, draftedPlayers, onInfoOp
         a.download = 'fa_candidates.csv';
         a.click();
     };
+    const downloadTemplate = () => {
+        const url = URL.createObjectURL(new Blob([CSV_TEMPLATE], { type: 'text/csv' }));
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'fa_candidates_template.csv';
+        a.click();
+    };
+
 
     const handleImport = async (e) => {
         const file = e.target.files[0];
@@ -245,6 +254,7 @@ export default function FreeAgencyView({ masterPlayers, draftedPlayers, onInfoOp
                         { label: 'Import Positions from Roster', onClick: handleSyncPositionsFromRoster, title: 'Adds any position row Roster has that FA doesn\'t' },
                         { label: 'Export Candidates CSV…', onClick: handleExport },
                         { label: 'Import Candidates CSV…', file: { accept: '.csv', onFile: handleImport } },
+                        { label: 'Download CSV Template…', onClick: downloadTemplate, title: 'The columns, with worked rows showing the slot prefixes and arrival suffixes' },
                     ]} />
                 </div>
             </div>

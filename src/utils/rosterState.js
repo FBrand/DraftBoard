@@ -155,6 +155,23 @@ export function saveState(state) {
 // CSV Import
 // ---------------------------------------------------------------------------
 
+/**
+ * A starting file for somebody building a depth chart in a spreadsheet.
+ *
+ * Worked rows rather than a bare header: the header alone does not show that
+ * `R:` marks a reserve slot or that `:24/1` records how a player arrived, and
+ * those are exactly the two things nobody guesses.
+ */
+export const CSV_TEMPLATE = [
+    'Phase,pos,slots53,slot1,slot2,slot3',
+    '# Phase is O (offense), D (defense), S (specialist) or IR',
+    '# slots53 = how many of the leading slots are the active roster',
+    '# R: before a name = reserve/practice squad',
+    '# :24/1 drafted 2024 rd 1  ·  :5 drafted this year rd 5  ·  :UDFA  ·  :FA  ·  :TR',
+    'O,QB,2,Patrick Mahomes:17/1,Some Backup:FA,R:A Practice Squadder',
+    'D,EDGE,2,A Starter:22/1,A Rotational Guy:UDFA,',
+].join('\n') + '\n';
+
 export function parseCSV(csvText) {
     pendingFacts = [];
     const lines = csvText

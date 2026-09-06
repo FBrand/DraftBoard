@@ -51,7 +51,10 @@ const UnrankedModal = ({ isOpen, onClose, onDraft, mode = 'draft', initialPlayer
             position: position.toUpperCase(),
             ...(school.trim() ? { school: school.trim() } : {}),
             arrival: suffix || null,
-            ...(team.trim() ? { team: team.trim().toUpperCase() } : {}),
+            // Blank is meaningful in the UDFA stage: signed, but not yet
+            // assigned to a club. Passing '' says that; omitting the key
+            // would let the caller fall back to the session team.
+            ...(team.trim() ? { team: team.trim().toUpperCase() } : (mode === 'postdraft' ? { team: '' } : {})),
             ...(MOVED_CLUBS.has(suffix) && previousTeam.trim()
                 ? { previousTeam: previousTeam.trim().toUpperCase() }
                 : {}),
@@ -116,6 +119,14 @@ const UnrankedModal = ({ isOpen, onClose, onDraft, mode = 'draft', initialPlayer
                         excluded the draft and nothing else — so the UDFA stage
                         asked for a previous team the player cannot have, while
                         the comment right here said it shouldn't. */}
+                    {mode === 'postdraft' && (
+                        <div className="form-group">
+                            <label>Team</label>
+                            <input type="text" value={team} onChange={e => setTeam(e.target.value)}
+                                placeholder="KC — or leave blank: signed, no team yet"
+                                className="text-input" />
+                        </div>
+                    )}
                     {(mode === 'roster' || mode === 'candidate') && (
                         <>
                             <div className="form-group">

@@ -349,7 +349,10 @@ export const useDraftState = () => {
             return Number.isFinite(n) ? Math.max(max, n) : max;
         }, lastDraftPick());
         const pickNumber = lastUdfaPick + 1;
-        const signed = { ...player, drafted: true, pickNumber, draftedByUs: true, team: sessionTeam() };
+        // An explicitly empty team is "signed, no club yet" and must survive;
+        // only an absent key falls back to whose offseason this is.
+        const club = player.team === undefined ? sessionTeam() : (player.team || null);
+        const signed = { ...player, drafted: true, pickNumber, draftedByUs: club === sessionTeam(), team: club };
 
         const matchIdx = findMatchingPlayerIndex(player.name, players);
         setPlayers(prev => prev.map((p, idx) => (idx === matchIdx ? { ...p, ...signed } : p)));
@@ -357,7 +360,7 @@ export const useDraftState = () => {
 
         // Going undrafted is just as much a league-entry fact as being picked.
         const id = resolvePlayer({ name: player.name, position: player.position, school: player.school });
-        if (id) setFacts(id, { isUdfa: true, draftYear: DRAFT_YEAR, draftPick: null, draftRound: null, team: sessionTeam() });
+        if (id) setFacts(id, { isUdfa: true, draftYear: DRAFT_YEAR, draftPick: null, draftRound: null, team: club });
     }, [draftedPlayers, players, saveHistory]);
 
     const undoAction = useCallback(() => {
