@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import CenterBoard from './CenterBoard';
+import ScoutingGroupedList, { UnmatchedList } from './ScoutingGroupedList';
+import { GROUPINGS } from '../utils/grouping';
 import ScoutingControls from './ScoutingControls';
 import ScoutingLeftPanel from './ScoutingLeftPanel';
 import * as scoutingState from '../utils/scoutingState';
@@ -41,7 +42,7 @@ const TAG_FILTERS = [
 // takes on the same player without losing the current selection. "My
 // Board" (ScoutingLeftPanel) always reflects the currently active board's
 // in-progress personal order.
-export default function ScoutingView({ players, columnOrder }) {
+export default function ScoutingView({ players }) {
     // Which boards exist comes from the registry and is only known once it has
     // loaded, which happens alongside the pools.
     const [boardList, setBoardList] = useState(() => listBoards());
@@ -70,7 +71,6 @@ export default function ScoutingView({ players, columnOrder }) {
     // reads as "nothing happened" when the file was wrong.
     const [importSummary, setImportSummary] = useState(null);
     const [renaming, setRenaming] = useState(null);
-    const [boardEditable, setBoardEditable] = useState(false);
     // Removing a rankings-file player only HIDES him — the file still has him —
     // so there has to be a way back. Undo doesn't cover base data: it is shared
     // by every board, and rewinding one board's history must not silently
@@ -80,6 +80,9 @@ export default function ScoutingView({ players, columnOrder }) {
     // the board — tapping a player looked like it did nothing. Present it as
     // a modal there instead. Still fully editable: this is Scouting.
     const isMobile = useIsMobile();
+    // How the middle column is grouped. A view preference, not board data —
+    // it changes how the same players are read, never where they sit.
+    const [groupBy, setGroupBy] = useState('position');
 
     // The boards are read once at mount, which is before the pools have
     // loaded — and loading them is what SEEDS a board from its rankings file.
@@ -282,24 +285,6 @@ export default function ScoutingView({ players, columnOrder }) {
         }
 
         commitBoard(entries);
-    };
-
-    // Drag-and-drop reorder from ScoutingLeftPanel. Dropping a player among a
-    // different tier's players moves them into that tier, same as typing the
-    // rank would.
-    // Dropping a card on a tier row moves that player into the tier. Only the
-    // tier: rows are tiers and columns are positions, so a drop into another
-    // column would say he has changed position, which is a fact about him
-    // rather than a judgement about where he belongs.
-    const handlePlace = (player, tier) => {
-        const last = [...effectivePlayers]
-            .filter(p => p.round === tier.round && p.tier === tier.tier)
-            .pop() ?? null;
-        commitBoard(placeOne(boards[activeBoard].entries, player, {
-            round: tier.round,
-            tier: tier.tier,
-            withinGroup: between(last, null, tier.round, tier.tier),
-        }));
     };
 
     const handleReorder = (newOrderedNames) => {
@@ -525,6 +510,16 @@ export default function ScoutingView({ players, columnOrder }) {
                         >{f.label}</button>
                     ))}
                     <span className="scouting-filter-divider" />
+                    {GROUPINGS.map(g => (
+                        <button
+                            key={g.id}
+                            onClick={() => setGroupBy(g.id)}
+                            className={`rv-ctrl-btn ${groupBy === g.id ? 'active' : ''}`}
+                            style={{ width: 'auto', padding: '2px 8px' }}
+                            title={`Group the board by ${g.label.toLowerCase()}`}
+                        >{g.label}</button>
+                    ))}
+                    <span className="scouting-filter-divider" />
                     <button
                         onClick={() => setUnrankedOnly(v => !v)}
                         className={`rv-ctrl-btn ${unrankedOnly ? 'active' : ''}`}
@@ -536,11 +531,6 @@ export default function ScoutingView({ players, columnOrder }) {
                 <div style={{ flex: 1 }} />
 
                 <div className="top-actions">
-                    <button
-                        onClick={() => setBoardEditable(v => !v)}
-                        className={`action-pill ${boardEditable ? 'active' : ''}`}
-                        title="Drag cards between tiers on the board"
-                    >{boardEditable ? '✓ Editing' : '✎ Edit Board'}</button>
                     <button
                         onClick={() => setAddOpen(true)}
                         className="action-pill add-pill"
@@ -565,24 +555,35 @@ export default function ScoutingView({ players, columnOrder }) {
             </div>
 
             <div className="scouting-layout">
+                {!isMobile && (
                 <ScoutingLeftPanel
                     orderedPlayers={orderedPlayers}
                     selectedName={selectedName}
                     onSelect={(p) => setSelectedName(p.name)}
                     onReorder={handleReorder}
                 />
+                )}
 
-                <CenterBoard
+                <ScoutingGroupedList
                     players={visiblePlayers}
-                    onAction={(p) => setSelectedName(p.name)}
-                    columnOrder={columnOrder}
-                    isFocusMode={true}
-                    editable={boardEditable}
-                    onPlace={handlePlace}
+                    groupBy={groupBy}
+                    selectedName={selectedName}
+                    onSelect={(p) => setSelectedName(p.name)}
                     tagFor={(name, qualifier) => entryFor(name, qualifier)?.tag ?? null}
-                    alwaysClickable={true}
-                    hideDraftedStyle={true}
+                    // On a phone this is the only column, so the players the
+                    // grouping cannot place go at the bottom of it.
+                    unmatchedInline={isMobile}
                 />
+
+                {!isMobile && (
+                    <UnmatchedList
+                        players={visiblePlayers}
+                        groupBy={groupBy}
+                        selectedName={selectedName}
+                        onSelect={(p) => setSelectedName(p.name)}
+                        tagFor={(name, qualifier) => entryFor(name, qualifier)?.tag ?? null}
+                    />
+                )}
 
                 {!isMobile && (
                     <ScoutingControls

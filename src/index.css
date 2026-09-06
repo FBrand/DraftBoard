@@ -3461,3 +3461,122 @@ body.export-mode .card-glow {
 
 /* Free agency has no practice squad, so its grid is one column narrower. */
 .roster-grid.no-ps { grid-template-columns: 85px 1fr 1fr; }
+
+/* ---- Scouting grouped list ----------------------------------------------
+   Desktop reads left to right: the ranking, the same players grouped, the
+   ones the grouping can't place, then whoever is selected. On a phone only
+   the grouped list survives, with the unmatched at the bottom of it. */
+.sg-list {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 6px 0 24px;
+}
+
+.sg-group { border-bottom: 1px solid var(--border-color); }
+
+.sg-group-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 0;
+  color: var(--text-color, inherit);
+  font: inherit;
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.sg-group-header.static { cursor: default; }
+.sg-group-header:hover:not(.static) { background: rgba(255, 255, 255, 0.08); }
+.sg-chevron { width: 12px; flex-shrink: 0; }
+.sg-group-label { flex: 1; text-align: left; font-weight: 600; }
+
+.sg-group-count {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.6;
+  font-size: 0.72rem;
+}
+
+.sg-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 5px 12px 5px 32px;
+  background: none;
+  border: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  color: inherit;
+  font: inherit;
+  font-size: 0.85rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sg-row:hover { background: rgba(255, 255, 255, 0.06); }
+.sg-row.selected { background: rgba(255, 215, 0, 0.14); }
+
+.sg-rank {
+  width: 34px;
+  flex-shrink: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.65;
+  font-size: 0.78rem;
+}
+
+.sg-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sg-tag { flex-shrink: 0; }
+
+.sg-meta {
+  flex-shrink: 0;
+  opacity: 0.6;
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.sg-missing { color: var(--chiefs-red, #c8102e); opacity: 0.9; }
+
+/* The unmatched column: a worklist, not an error list. */
+.sg-unmatched-panel {
+  width: 240px;
+  flex-shrink: 0;
+  border-left: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.sg-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px 2px;
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.sg-panel-hint {
+  padding: 0 12px 8px;
+  font-size: 0.7rem;
+  opacity: 0.55;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.sg-panel-body { overflow-y: auto; padding-bottom: 20px; }
+.sg-unmatched-panel .sg-row { padding-left: 12px; }
+
+@media (max-width: 820px) {
+  .sg-unmatched-panel { display: none; }
+  .sg-unmatched .sg-group-header { background: rgba(200, 16, 46, 0.14); }
+}
