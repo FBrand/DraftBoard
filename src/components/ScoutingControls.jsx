@@ -281,7 +281,7 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
     // these cards are looked at far more often than they are corrected, and a
     // grid of live inputs invites a stray keystroke during a broadcast.
     const canEditBase = readOnly ? !!playerId : !!onPlayerSave;
-    const factsLocked = readOnly && !editingBase;
+    const factsLocked = readOnly && !editingBase && !editingOpinions;
     // Scouting is always live; elsewhere the pencil decides.
     const opinionsLive = !readOnly || (editingOpinions && !!onEntryChange);
     // Remarks are writable, but not by default on a card you opened to look
@@ -289,8 +289,13 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
     // written to rarely, and a text box sitting open on a broadcast is one
     // stray click away from a note nobody meant to leave. The pencil is the
     // same gesture that unlocks everything else here.
-    const canWriteRemarks = !!onAddRemark && (!readOnly || editingOpinions);
-    const canEditOpinions = readOnly && (!!onEntryChange || !!onAddRemark);
+    // ONE edit mode on this card. There were two pencils — one by the name for
+    // facts, one further down for the take — and they looked identical, so
+    // clicking the obvious one unlocked the facts and left the evaluations
+    // stubbornly read-only. Whichever is showing now unlocks the whole card.
+    const cardEditing = editingBase || editingOpinions;
+    const canWriteRemarks = !!onAddRemark && (!readOnly || cardEditing);
+    const canEditOpinions = readOnly && !!onEntryChange;
 
     // The name is the identity key everywhere in this app, so a rename is a
     // migration, not a field write — the caller moves the board entries and
@@ -409,7 +414,7 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
                 <div className="scouting-header-actions">
                     {canEditBase && !editingBase && (
                         <button type="button" className="scouting-edit-btn"
-                            title={readOnly ? 'Edit this player\u2019s details' : 'Edit name, position and school'}
+                            title={readOnly ? 'Edit this player\u2019s details and evaluation' : 'Edit name, position and school'}
                             aria-label="Edit name, position and school"
                             onClick={() => {
                                 setBase({ name: player.name, position: shownPosition, school: shownSchool });
