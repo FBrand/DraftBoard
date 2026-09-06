@@ -3,7 +3,7 @@ import { parseRankings } from '../utils/dataParser';
 import * as scoutingState from '../utils/scoutingState';
 import { applyProspects } from '../utils/prospects';
 import { identityKey, nameKey } from '../utils/nameMatcher';
-import { resolveAll, openRegistry } from '../utils/playerRegistry';
+import { resolveAll, openRegistry, byId } from '../utils/playerRegistry';
 
 import { migrateLegacyScores } from '../utils/athleticMatrix';
 
@@ -111,18 +111,41 @@ function loadPools() {
         // batch: the name index is built once for the whole pool rather than
         // once per player.
         const ids = resolveAll(union);
-        const everyone = union.map((p, i) => (ids[i] ? { ...p, id: ids[i] } : p));
 
         // Matrix scores used to have a store of their own. Now that every
         // player has a record to hang facts on, they move onto it — here,
         // because this is the first moment the records exist to move them to.
         migrateLegacyScores();
 
-        // School and the draft outcome are not in any rankings file, so they
-        // are seeded from the completed draft. Fills blanks only; anything
-        // corrected in the app outranks it. Deliberately not awaited — seed
-        // data is a nicety and must never hold up the board.
-        applyPlayerFacts();
+        // School and the draft outcome are in no rankings file, so they are
+        // seeded onto the records here. AWAITED, unlike before: the pool is
+        // built from those records on the very next line, and seeding after
+        // the fact meant the first load produced a pool with no schools at
+        // all — which is what made "group by school" put every player in
+        // unmatched. It is one fetch of a file the browser then caches.
+        return applyPlayerFacts().then(() => ({ files, keyOf, union, ids }));
+    })
+        .then(({ files, keyOf, union, ids }) => {
+        // Facts come off the record, not out of the rankings file, which
+        // carries an ordering and nothing else. School in particular: it is
+        // seeded onto the record (see playerFacts.js) and was never copied
+        // onto the pool, so anything reading player.school saw nothing —
+        // grouping the board by school put all 328 players in "unmatched",
+        // and the card had no school to show for anyone in the class.
+        //
+        // The pool's own value wins where it has one: a correction made in the
+        // app is on the player object already.
+        const everyone = union.map((p, i) => {
+            if (!ids[i]) return p;
+            const record = byId(ids[i]);
+            return {
+                ...p,
+                id: ids[i],
+                school: p.school || record?.school || '',
+                athleticMatrixTotal: p.athleticMatrixTotal ?? record?.athleticMatrixTotal ?? null,
+                athleticMatrixPosition: p.athleticMatrixPosition ?? record?.athleticMatrixPosition ?? null,
+            };
+        });
 
         // A player one analyst has ranked and another hasn't is not missing
         // from the second board — he is UNRANKED on it. Dropping him meant a
