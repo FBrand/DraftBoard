@@ -95,12 +95,13 @@ scouting.
 
 ### Pick numbers, rounds and the session team
 
-`constants.DRAFT_ROUND_ENDS` states the last overall pick of each round,
-because a round cannot be divided out of a pick number — compensatory picks
-make `ceil(pick / 32)` wrong from the third round on. **The shipped values are
-the standard modern layout and are not verified against any particular year's
-order.** Check them per season; anything past the last boundary gets no round
-rather than a guessed one.
+How many picks each round has is something an expert states, not something
+derived: compensatory picks make `ceil(pick / 32)` wrong from the third round
+on. `constants.DEFAULT_ROUND_SIZES` is `[32, 32, 36, 40, 41, 35, 41]` — the
+**real 2026 order**, read off the completed draft file, not a generic layout —
+and `appSettings.getRoundSizes()` makes it editable per season from Scouting →
+Settings. `draftPhase.getRoundEnds()` turns sizes into boundaries; anything
+past the last one gets no round rather than a guessed one.
 
 `appSettings.getSessionTeam()` is whose offseason this is, defaulting to
 `TEAM_CONFIG.abbreviation`. Everyone imported onto the roster gets it as a
@@ -384,6 +385,68 @@ and real-time sync on top:
   Phase 6 (board CRUD abstractions, player-card data shape, session
   serialization robustness) is medium priority, (3) pure cleanup/lint is low
   priority unless it threatens broadcast stability.
+
+### Seed data: one offseason, as it actually happened
+
+`Session → Load Current State` loads the real 2026 offseason. The files in
+`public/` are not four independent snapshots — three of them are **derived**,
+because separately maintained lists drift and then disagree about who was on
+the team:
+
+    rankings_*.csv        the player pool: each analyst's board (consensus, dan, ryan)
+    player_facts_2026.csv school + draft outcome per player      <- built, see below
+    roster.csv            the roster the day before cutdown (91)  <- hand-edited source
+    roster_predraft.csv   the day before the draft (64)           <- derived
+    roster_2025_end.csv   last season's roster, holdovers (50)    <- derived
+    DraftBoard_Picks.csv  the completed draft: 257 picks + UDFAs + MCIs
+
+`roster.csv` is the one hand-edited roster, and it already records how every
+player arrived in the suffix on his name. `scripts/build-roster-snapshots.mjs`
+reads those suffixes backwards to produce the two earlier states — strip 2026
+draft picks and UDFAs for the pre-draft roster, strip `:FA` as well for last
+season's. The chain reconciles: 50 holdovers + 14 FA = 64 pre-draft, + 7 KC
+picks + 20 UDFAs = 91. Free Agency seeds from `roster_predraft.csv` (free
+agency is *done* by the day before the draft), Roster from `roster.csv`.
+
+`scripts/build-player-facts.mjs` builds the facts file from two sources,
+because neither alone is enough: `Knowledgebase/draft2026.json` has the draft
+outcome but a school for only ~71% of players, while
+`rankings/rankings_sttm_source.csv` carries a school for every ranked player.
+The result is 348 players, **100% with a school**, 257 with a draft outcome.
+
+`utils/playerFacts.js` applies it on load and **fills blanks only** — anything
+corrected in the app outranks a seed. It commits **once** for the whole file:
+the per-player `rename()`/`setFacts()` calls each rewrite the entire
+collection, so seeding this way was up to 514 full-collection writes per page
+load and crashed the renderer. Use `playerRegistry.fillMany()` for anything
+bulk.
+
+### The user guide
+
+`public/USER_GUIDE.md` is written for the analysts, not for developers. It is
+one file serving two readers: GitHub renders it, and `HelpModal.jsx` fetches
+and renders it behind the **? Help** button in the tab bar, so there is no
+second copy to fall out of date. The small Markdown renderer in that component
+covers only the subset the guide uses — extend it there if the guide needs
+more, rather than adding a Markdown dependency.
+
+## Testing
+
+Two suites, split by what they can actually catch:
+
+- **Vitest** (`npm run test:unit`, `tests/unit/*.test.js`) — pure logic:
+  ranking, phase detection, name matching. 46 tests in ~9s, node environment,
+  no jsdom. Most bugs found in this project have been logic bugs, so this is
+  the loop to stay in while working.
+- **Playwright** (`npm run test:docker`, `tests/*.spec.js`) — rendering,
+  drag-and-drop and persistence, against a production build in the official
+  Docker image. ~50 minutes.
+
+`playwright.config.js` sets `testMatch: '**/*.spec.js'` so it leaves the
+Vitest files alone. `tests/README.md` records how to run the browser suite
+against a frozen `dist-test/` snapshot on its own port — **verify the port
+answers 200 before launching**, and never rebuild into a directory a running
+suite is serving from. Both mistakes have voided full runs here.
 
 ## Architecture
 

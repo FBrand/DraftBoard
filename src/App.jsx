@@ -7,6 +7,7 @@ import FreeAgencyView from './components/FreeAgencyView';
 import RosterView from './components/RosterView';
 import PlayerInfoModal from './components/PlayerInfoModal';
 import Menu from './components/Menu';
+import HelpModal from './components/HelpModal';
 import Toast from './components/Toast';
 import { ConfirmDialog } from './components/Dialogs';
 import { exportSession, importSession, sessionFilename } from './utils/appSession';
@@ -46,6 +47,8 @@ function App() {
   // The active stage lives in the URL so a view can be linked to. localStorage
   // is only the fallback for "where was I last time", used when the URL says
   // nothing — a shared link always wins over the recipient's last session.
+  const [helpOpen, setHelpOpen] = useState(false);
+
   const [view, setViewParam] = useUrlParam(
     'view',
     localStorage.getItem('draft_board_view') || 'draft',
@@ -127,6 +130,15 @@ function App() {
             spans all five stages, so it doesn't belong to any of them. The
             per-view CSV exports remain untouched in their own toolbars. */}
         <div className="view-tabbar-actions">
+          {/* Next to Session rather than inside it: the guide is the one thing
+              somebody reaches for when they do not yet know where anything is,
+              so it should not be behind a menu. */}
+          <button
+            type="button"
+            className="view-tab help-tab"
+            onClick={() => setHelpOpen(true)}
+            title="How this app works"
+          >? Help</button>
           <Menu
             label="Session"
             items={[
@@ -225,6 +237,8 @@ function App() {
       )}
 
       <Toast message={toast?.message} tone={toast?.tone} onDismiss={dismissToast} />
+      <HelpModal isOpen={helpOpen} onClose={() => setHelpOpen(false)} />
+
     </div>
   );
 }
