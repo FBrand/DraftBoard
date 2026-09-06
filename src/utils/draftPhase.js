@@ -18,16 +18,22 @@
  * number.
  */
 
-import { DRAFT_ROUND_ENDS } from '../constants';
+import { getRoundEnds, getLastDraftPick } from './appSettings';
 
-/** The last pick of a seven-round draft. Anything after it is a signing. */
-export const LAST_DRAFT_PICK = 257;
+/**
+ * The last pick of the draft. A function, not a constant: how many picks each
+ * round has is something an expert states (see appSettings.getRoundSizes),
+ * because compensatory picks move it year to year.
+ */
+export function lastDraftPick() {
+    return getLastDraftPick();
+}
 
 /** The round an overall pick falls in, or null when it is past the draft. */
-export function roundForPick(pick, boundaries = DRAFT_ROUND_ENDS) {
+export function roundForPick(pick, boundaries = null) {
     const n = Number(pick);
     if (!Number.isFinite(n) || n < 1) return null;
-    const at = boundaries.findIndex(end => n <= end);
+    const at = (boundaries ?? getRoundEnds()).findIndex(end => n <= end);
     return at === -1 ? null : at + 1;
 }
 
@@ -44,19 +50,19 @@ export function pickNumberOf(player) {
 export function isUndraftedSigning(player) {
     if (player?.pickNumber == null || player.pickNumber === '') return false;
     const n = pickNumberOf(player);
-    return n === null || n > LAST_DRAFT_PICK;
+    return n === null || n > lastDraftPick();
 }
 
 /** True for a real draft selection — rounds one through seven. */
 export function isDraftPick(player) {
     const n = pickNumberOf(player);
-    return n !== null && n > 0 && n <= LAST_DRAFT_PICK;
+    return n !== null && n > 0 && n <= lastDraftPick();
 }
 
 /** The draft is over once the pick counter has passed the final selection. */
 export function isDraftComplete(currentPick) {
     const n = Number(currentPick);
-    return Number.isFinite(n) && n > LAST_DRAFT_PICK;
+    return Number.isFinite(n) && n > lastDraftPick();
 }
 
 /**

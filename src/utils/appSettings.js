@@ -14,10 +14,11 @@
  * their untouched boards differ for reasons neither of them chose.
  */
 import { safeHttpUrl, ATHLETIC_MATRIX_URL_KEY } from './appLinks';
-import { TEAM_CONFIG } from '../constants';
+import { TEAM_CONFIG, DEFAULT_ROUND_SIZES } from '../constants';
 
 const POSITION_VALUE_KEY = 'position_value_v1';
 const TEAM_KEY = 'session_team_v1';
+const ROUND_SIZES_KEY = 'round_sizes_v1';
 
 /** The order shipped with the app, most valuable first. */
 export const DEFAULT_POSITION_VALUE = [
@@ -65,6 +66,48 @@ export function setPositionValue(value) {
 
 export function isPositionValueCustom() {
     return getPositionValue() !== DEFAULT_POSITION_VALUE;
+}
+
+/**
+ * How many picks each round of this draft has.
+ *
+ * Compensatory picks make the rounds uneven and move them year to year, so
+ * this is something an expert states rather than something the app derives.
+ * Everything about rounds — which round a pick belongs to, where the draft
+ * ends, whether a signing is undrafted — is read off it.
+ */
+export function getRoundSizes() {
+    try {
+        const stored = JSON.parse(localStorage.getItem(ROUND_SIZES_KEY) || 'null');
+        if (Array.isArray(stored) && stored.length && stored.every(n => Number.isFinite(n) && n > 0)) {
+            return stored;
+        }
+    } catch { /* ignore */ }
+    return DEFAULT_ROUND_SIZES;
+}
+
+/** Accepts a list or a comma/space separated string. Empty resets. */
+export function setRoundSizes(value) {
+    const list = (Array.isArray(value) ? value : String(value ?? '').split(/[\s,]+/))
+        .map(n => parseInt(n, 10))
+        .filter(n => Number.isFinite(n) && n > 0);
+    try {
+        if (!list.length) localStorage.removeItem(ROUND_SIZES_KEY);
+        else localStorage.setItem(ROUND_SIZES_KEY, JSON.stringify(list));
+    } catch { /* ignore */ }
+    return getRoundSizes();
+}
+
+/** The last overall pick of each round — the running total of the sizes. */
+export function getRoundEnds() {
+    let total = 0;
+    return getRoundSizes().map(n => (total += n));
+}
+
+/** The final pick of the draft. Anything after it is a signing. */
+export function getLastDraftPick() {
+    const ends = getRoundEnds();
+    return ends[ends.length - 1] ?? 0;
 }
 
 /**

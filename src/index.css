@@ -3313,3 +3313,19 @@ body.export-mode .card-glow {
   border-radius: 4px;
   padding: 1px 6px;
 }
+
+/* The pencil that unlocks one analyst's take on a card opened outside
+   Scouting. Sits with the take it edits, not with the player's own details —
+   they are different things to correct and belong to different people. */
+.scouting-opinion-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.scouting-edit-btn.active {
+  color: var(--chiefs-gold);
+  border-color: rgba(255, 184, 28, 0.5);
+}

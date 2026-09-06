@@ -25,7 +25,8 @@ export default function PlayerInfoModal({ player, players = [], onClose }) {
     // Every board ever, not just this season's: a player card reaching back
     // into past scouting is the point of keeping old boards at all.
     const [boardList] = useState(() => allBoards());
-    const [boards] = useState(() => Object.fromEntries(boardList.map(b => [b.id, scoutingState.loadState(b.id)])));
+    const [boards, setBoards] = useState(() => Object.fromEntries(boardList.map(b => [b.id, scoutingState.loadState(b.id)])));
+
 
     // Memoised: a fresh `?? []` each render would invalidate everything below
     // it, re-ranking the whole pool on every render.
@@ -77,6 +78,37 @@ export default function PlayerInfoModal({ player, players = [], onClose }) {
         });
     }, [boards, boardList, player]);
 
+    /**
+     * Writes a correction to the board being paged to.
+     *
+     * Placement here is round and tier only. A rank is a position in an
+     * ordering, and this card is showing one player out of context — moving
+     * him by number would need the whole board, which Scouting has and this
+     * does not.
+     */
+    const saveEntry = useCallback((updated) => {
+        if (!activeBoard || !resolved) return;
+        const board = scoutingState.loadState(activeBoard);
+        const entries = [...board.entries];
+
+        const target = resolved;
+        let at = target.id ? entries.findIndex(e => e.playerId === target.id) : -1;
+        if (at === -1) at = findMatchingIndex(target.name, buildNameIndex(entries), target);
+
+        const { personalRank: _drop, ...persisted } = updated;
+        if (at !== -1) entries[at] = { ...entries[at], ...persisted };
+        else {
+            entries.push({
+                ...scoutingState.makeEntry(target.name, target.position, target.school ?? '', target.id ?? null),
+                ...persisted,
+            });
+        }
+
+        const next = { ...board, entries };
+        scoutingState.saveState(activeBoard, next);
+        setBoards(prev => ({ ...prev, [activeBoard]: next }));
+    }, [activeBoard, resolved]);
+
     if (!player) return null;
 
     const cycleBoard = (dir) => {
@@ -97,6 +129,7 @@ export default function PlayerInfoModal({ player, players = [], onClose }) {
             boardLabel={boardById(activeBoard)?.label ?? ''}
             onPrevBoard={() => cycleBoard(-1)}
             onNextBoard={() => cycleBoard(1)}
+            onEntryChange={saveEntry}
         />
     );
 }

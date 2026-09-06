@@ -127,7 +127,7 @@ function BulletListEditor({ label, symbol, cls, items, onChange, readOnly }) {
 // changes — the caller renders this with `key={player.name}` so React
 // remounts it on selection change rather than syncing state via an effect
 // (see https://react.dev/learn/you-might-not-need-an-effect).
-export default function ScoutingControls({ player, entry, onChange, onClose, boardLabel, onPrevBoard, onNextBoard, variant = 'panel', readOnly = false, allBoardNotes, onPlayerSave, onPlayerDelete }) {
+export default function ScoutingControls({ player, entry, onChange, onClose, boardLabel, onPrevBoard, onNextBoard, variant = 'panel', readOnly = false, allBoardNotes, onPlayerSave, onPlayerDelete, onEntryChange }) {
     // Total Rank, Position Rank and Round.Group are the board's own
     // parameters, so they show the player's current values rather than blank
     // boxes — you're adjusting the real thing, not a field that merely sits
@@ -160,6 +160,11 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
     const [base, setBase] = useState({ name: player?.name ?? '', position: '', school: '' });
     const [baseError, setBaseError] = useState('');
     const [confirmRemove, setConfirmRemove] = useState(false);
+    // The card opened outside Scouting shows one analyst's take at a time and
+    // starts locked. A pencil beside the pager unlocks THAT board's opinions,
+    // so a correction can be made where the player is being looked at rather
+    // than only where boards are built.
+    const [editingOpinions, setEditingOpinions] = useState(false);
     // Which half of the card is editable depends on where it was opened.
     //
     // Scouting edits OPINIONS — tier, tag, remarks — and doesn't show facts at
@@ -229,6 +234,9 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
     // grid of live inputs invites a stray keystroke during a broadcast.
     const canEditBase = readOnly ? !!playerId : !!onPlayerSave;
     const factsLocked = readOnly && !editingBase;
+    // Scouting is always live; elsewhere the pencil decides.
+    const opinionsLive = !readOnly || (editingOpinions && !!onEntryChange);
+    const canEditOpinions = readOnly && !!onEntryChange;
 
     // The name is the identity key everywhere in this app, so a rename is a
     // migration, not a field write — the caller moves the board entries and
@@ -266,8 +274,12 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
         commit({ round: parseInt(round, 10), tier: tier ? parseInt(tier, 10) : null });
     };
 
+    // Scouting hands this to its own saveEntry, which can also move a player
+    // by rank. The card opened elsewhere writes straight to the board it is
+    // paged to — no rank moves there, because a rank is a position in an
+    // ordering and the card is only showing one player.
     const commit = (patch) => {
-        onChange({
+        (onEntryChange ?? onChange)({
             name: player.name,
             position: player.position,
             tag: entry?.tag ?? null,
@@ -365,7 +377,22 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
             )}
 
             <div className="panel-content scroll-container">
-                {readOnly ? (
+                {canEditOpinions && (
+                    <div className="scouting-opinion-toolbar">
+                        <span className="scouting-prospect-note">
+                            {boardLabel ? `${boardLabel}'s take` : 'Evaluation'}
+                        </span>
+                        <button
+                            type="button"
+                            className={`scouting-edit-btn ${editingOpinions ? 'active' : ''}`}
+                            title={editingOpinions ? 'Done editing this take' : 'Edit this take'}
+                            aria-label="Edit this take"
+                            onClick={() => setEditingOpinions(v => !v)}
+                        >{editingOpinions ? '✓' : '✎'}</button>
+                    </div>
+                )}
+
+                {!opinionsLive ? (
                     entry?.tag && (
                         <div className="scouting-controls-tags">
                             <span className="scouting-tag-btn active scouting-tag-static">
@@ -385,9 +412,9 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
                     </div>
                 )}
 
-                {readOnly ? (
-                    // Round.Group is omitted here — it's a board-building
-                    // control, not a scouting read-out. The four numbers
+                {!opinionsLive ? (
+                    // Round.Group is omitted when locked — it's a
+                    // board-building control, not a read-out. The four numbers
                     // always show, falling back to "?" so an unevaluated
                     // player reads as "not rated yet" rather than silently
                     // dropping the field.
@@ -522,7 +549,7 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
                     </div>
                 )}
 
-                {readOnly ? <BoardNotes boards={allBoardNotes} /> : LIST_FIELDS.map(f => (
+                {!opinionsLive ? <BoardNotes boards={allBoardNotes} /> : LIST_FIELDS.map(f => (
                     <BulletListEditor
                         key={f.key}
                         label={f.label}
@@ -530,7 +557,7 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
                         cls={f.cls}
                         items={entry?.[f.key] ?? []}
                         onChange={items => commit({ [f.key]: items })}
-                        readOnly={readOnly}
+                        readOnly={false}
                     />
                 ))}
 

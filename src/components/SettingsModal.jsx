@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import useEscapeKey from '../hooks/useEscapeKey';
 import {
     DEFAULT_POSITION_VALUE, getPositionValue, setPositionValue, setAthleticMatrixUrl,
-    getSessionTeam, setSessionTeam,
+    getSessionTeam, setSessionTeam, getRoundSizes, setRoundSizes,
 } from '../utils/appSettings';
 import { getAthleticMatrixUrl } from '../utils/appLinks';
 
@@ -19,6 +19,7 @@ export default function SettingsModal({ isOpen, onClose, onChanged }) {
     const [positions, setPositions] = useState(() => getPositionValue().join(', '));
     const [matrixUrl, setMatrixUrl] = useState(() => getAthleticMatrixUrl());
     const [team, setTeam] = useState(() => getSessionTeam());
+    const [rounds, setRounds] = useState(() => getRoundSizes().join(', '));
     const [error, setError] = useState('');
 
     useEscapeKey(onClose, isOpen);
@@ -31,6 +32,7 @@ export default function SettingsModal({ isOpen, onClose, onChanged }) {
         }
         setPositionValue(positions);
         setSessionTeam(team);
+        setRoundSizes(rounds);
         setError('');
         onChanged?.();
         onClose();
@@ -63,6 +65,32 @@ export default function SettingsModal({ isOpen, onClose, onChanged }) {
                             placeholder="KC"
                             onChange={e => setTeam(e.target.value)}
                         />
+                    </label>
+
+                    <label className="settings-field">
+                        <span className="settings-label">Picks per round</span>
+                        <span className="settings-hint">
+                            One number per round. Compensatory picks make the rounds uneven
+                            and move them every year, so a round cannot be worked out from a
+                            pick number — this is what says which round a pick belongs to,
+                            and where the draft ends.
+                        </span>
+                        <input
+                            type="text"
+                            className="text-input"
+                            value={rounds}
+                            placeholder="32, 32, 36, 40, 41, 35, 41"
+                            onChange={e => setRounds(e.target.value)}
+                        />
+                        <span className="settings-hint">
+                            {(() => {
+                                const list = rounds.split(/[\s,]+/).map(n => parseInt(n, 10)).filter(Boolean);
+                                const total = list.reduce((a, b) => a + b, 0);
+                                return list.length
+                                    ? `${list.length} rounds, ${total} picks — the draft ends at ${total}.`
+                                    : 'Empty resets to the shipped order.';
+                            })()}
+                        </span>
                     </label>
 
                     <label className="settings-field">

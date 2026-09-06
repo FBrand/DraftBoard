@@ -10,15 +10,20 @@
 export const DRAFT_YEAR = 2026;
 
 /**
- * The last overall pick of each round.
+ * How many picks each round has.
  *
  * A round cannot be divided out of a pick number: compensatory picks make the
  * rounds uneven from the third on, so `ceil(pick / 32)` is wrong for most of
- * a draft. These are the standard modern boundaries and are worth checking
- * against the actual order each year — a wrong round is worse than none, so
- * anything past the last boundary gets no round rather than a guessed one.
+ * a draft. Stated as counts rather than cumulative boundaries because counts
+ * are what a draft order is published as, and what somebody would type in.
+ *
+ * These are the ACTUAL 2026 order, taken from the completed draft rather than
+ * assumed — a generic [32, 32, 38, 37, 38, 39, 41] was wrong from the third
+ * round on and would have called pick 101 a third-rounder. They move every
+ * year as compensatory picks are awarded, so experts set them in Settings; see
+ * appSettings.getRoundSizes().
  */
-export const DRAFT_ROUND_ENDS = [32, 64, 102, 139, 177, 216, 257];
+export const DEFAULT_ROUND_SIZES = [32, 32, 36, 40, 41, 35, 41];
 
 export const TEAM_CONFIG = {
     name: "Kansas City Chiefs",

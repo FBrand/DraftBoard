@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { parseRankings, parsePicks } from '../utils/dataParser';
 import { shouldSeed } from '../utils/appInit';
-import { highestDraftPick, isUndraftedSigning, roundForPick, LAST_DRAFT_PICK } from '../utils/draftPhase';
+import { highestDraftPick, isUndraftedSigning, roundForPick, lastDraftPick } from '../utils/draftPhase';
 import { TEAM_CONFIG, DRAFT_YEAR } from '../constants';
 import { resolve as resolvePlayer, resolveAll, setFacts } from '../utils/playerRegistry';
 
@@ -339,7 +339,7 @@ export const useDraftState = () => {
             if (!isUndraftedSigning(p)) return max;
             const n = Number(p.pickNumber);
             return Number.isFinite(n) ? Math.max(max, n) : max;
-        }, LAST_DRAFT_PICK);
+        }, lastDraftPick());
         const pickNumber = lastUdfaPick + 1;
         const signed = { ...player, drafted: true, pickNumber, draftedByUs: true, team: TEAM_CONFIG.abbreviation };
 
