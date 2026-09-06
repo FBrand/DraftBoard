@@ -80,7 +80,13 @@ for (const line of sttm) {
 // 3. Everyone under contract. Last, so it only ever fills a blank.
 const league = JSON.parse(readFileSync(LEAGUE, 'utf8'));
 for (const p of league.players ?? []) {
-    put(p.name, { position: p.position, school: p.school, team: p.team });
+    put(p.name, {
+        position: p.position, school: p.school, team: p.team,
+        // Draft history for the roster's veterans — see
+        // fetch-draft-history.mjs. Absent for most of the league, which is
+        // fine: put() only ever fills a blank.
+        draftYear: p.draftYear, draftRound: p.draftRound, draftPick: p.draftPick,
+    });
 }
 
 const csvField = (v) => {

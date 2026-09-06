@@ -1309,62 +1309,62 @@ Kahlil Benson,OT,Indiana,,,,KC
 Jake Briningstool,TE,Clemson,,,,KC
 Mike Caliendo,G,Western Michigan,,,,KC
 Joshua Ezeudu,G,North Carolina,,,,KC
-Justin Fields,QB,Ohio State,,,,KC
-Noah Gray,TE,Duke,,,,KC
-Creed Humphrey,C,Oklahoma,,,,KC
-Travis Kelce,TE,Cincinnati,,,,KC
-Patrick Mahomes,QB,Texas Tech,,,,KC
-Jaylon Moore,OT,Western Michigan,,,,KC
-Hunter Nourzad,C,Penn State,,,,KC
+Justin Fields,QB,Ohio State,2021,1,11,KC
+Noah Gray,TE,Duke,2021,5,162,KC
+Creed Humphrey,C,Oklahoma,2021,2,63,KC
+Travis Kelce,TE,Cincinnati,2013,3,63,KC
+Patrick Mahomes,QB,Texas Tech,2017,1,10,KC
+Jaylon Moore,OT,Western Michigan,2021,5,155,KC
+Hunter Nourzad,C,Penn State,2024,5,159,KC
 Thomas Odukoya,TE,Eastern Michigan,,,,KC
 Nikko Remigio,WR,Fresno State,,,,KC
-Rashee Rice,WR,SMU,,,,KC
-Jalen Royals,WR,Utah State,,,,KC
-Josh Simmons,OT,Ohio State,,,,KC
-Brashard Smith,RB,SMU,,,,KC
-Trey Smith,G,Tennessee,,,,KC
-Kingsley Suamataia,OT,BYU,,,,KC
-Tyquan Thornton,WR,Baylor,,,,KC
-Kenneth Walker III,RB,Michigan State,,,,KC
-Jared Wiley,TE,TCU,,,,KC
-Xavier Worthy,WR,Texas,,,,KC
-Felix Anudike-Uzomah,DE,Kansas State,,,,KC
-Jeffrey Bassa,LB,Oregon,,,,KC
-Nick Bolton,LB,Missouri,,,,KC
+Rashee Rice,WR,SMU,2023,2,55,KC
+Jalen Royals,WR,Utah State,2025,4,133,KC
+Josh Simmons,OT,Ohio State,2025,1,32,KC
+Brashard Smith,RB,SMU,2025,7,228,KC
+Trey Smith,G,Tennessee,2021,6,226,KC
+Kingsley Suamataia,OT,BYU,2024,2,63,KC
+Tyquan Thornton,WR,Baylor,2022,2,50,KC
+Kenneth Walker III,RB,Michigan State,2022,2,41,KC
+Jared Wiley,TE,TCU,2024,4,131,KC
+Xavier Worthy,WR,Texas,2024,1,28,KC
+Felix Anudike-Uzomah,DE,Kansas State,2023,1,31,KC
+Jeffrey Bassa,LB,Oregon,2025,5,156,KC
+Nick Bolton,LB,Missouri,2021,2,58,KC
 Jack Cochrane,LB,South Dakota,,,,KC
-Chamarri Conner,S,Virginia Tech,,,,KC
-Kristian Fulton,CB,LSU,,,,KC
-Ashton Gillotte,DE,Louisville,,,,KC
-Alohi Gilman,S,Notre Dame,,,,KC
-Jaden Hicks,S,Washington State,,,,KC
-Chris Jones,DT,Mississippi State,,,,KC
-George Karlaftis,DE,Purdue,,,,KC
+Chamarri Conner,S,Virginia Tech,2023,4,119,KC
+Kristian Fulton,CB,LSU,2020,2,61,KC
+Ashton Gillotte,DE,Louisville,2025,3,66,KC
+Alohi Gilman,S,Notre Dame,2020,6,186,KC
+Jaden Hicks,S,Washington State,2024,4,133,KC
+Chris Jones,DT,Mississippi State,2016,2,37,KC
+George Karlaftis,DE,Purdue,2022,1,30,KC
 Cooper McDonald,LB,TCU,,,,KC
 Chris Roland-Wallace,CB,USC,,,,KC
-L'Jarius Sneed,CB,Louisiana Tech,,,,KC
-Khyiris Tonga,DT,BYU,,,,KC
-Drue Tranquill,LB,Notre Dame,,,,KC
-Nohl Williams,CB,California,,,,KC
-Matt Araiza,P,San Diego State,,,,KC
-Harrison Butker,PK,Georgia Tech,,,,KC
+L'Jarius Sneed,CB,Louisiana Tech,2020,4,138,KC
+Khyiris Tonga,DT,BYU,2021,7,250,KC
+Drue Tranquill,LB,Notre Dame,2019,4,130,KC
+Nohl Williams,CB,California,2025,3,85,KC
+Matt Araiza,P,San Diego State,2022,6,180,KC
+Harrison Butker,PK,Georgia Tech,2017,7,233,KC
 James Winchester,LS,Oklahoma,,,,KC
 Ethan Downs,LB,Oklahoma,,,,KC
 Jimmy Holiday,WR,Louisiana Tech,,,,KC
-Omarr Norman-Lott,DT,Tennessee,,,,KC
+Omarr Norman-Lott,DT,Tennessee,2025,2,63,KC
 Matt Waletzko,OT,North Dakota,,,,KC
 Andrew Armstrong,WR,Arkansas,,,,KC
 Nathan Carter,RB,Michigan State,,,,KC
 Cole Christiansen,LB,Army,,,,KC
 Ethan Driskell,OT,Marshall,,,,KC
 Omari Evans,WR,Washington,,,,KC
-Marcus Harris,DT,Auburn,,,,KC
+Marcus Harris,DT,Auburn,2025,6,183,KC
 Cam Jones,LB,Indiana,,,,KC
 Kader Kohou,CB,East Texas A&M,,,,KC
 Tanner McCalister,S,Ohio State,,,,KC
 Pete Nygra,OT,Louisville,,,,KC
-Emmanuel Ogbah,DE,Oklahoma State,,,,KC
+Emmanuel Ogbah,DE,Oklahoma State,2016,2,32,KC
 D'Arco Perkins-McAllister,CB,UL Monroe,,,,KC
-Tyreke Smith,DE,Ohio State,,,,KC
+Tyreke Smith,DE,Ohio State,2022,5,158,KC
 Ben VanSumeren,FB,Michigan State,,,,KC
 Jack Bech,WR,TCU,,,,LV
 Brock Bowers,TE,Georgia,,,,LV
@@ -1485,7 +1485,7 @@ Branson Taylor,G,Pittsburgh,,,,LAC
 Andre Carter II,LB,Army,,,,LAC
 Junior Colson,LB,Michigan,,,,LAC
 Greg Desrosiers Jr.,RB,Memphis,,,,LAC
-Kaiir Elam,CB,Florida,,,,LAC
+Kaiir Elam,CB,Florida,2022,1,23,LAC
 Patrick Herbert,TE,Oregon,,,,LAC
 Jordan Jefferson,DT,LSU,,,,LAC
 Gary Jennings,WR,West Virginia,,,,LAC
@@ -2463,7 +2463,7 @@ Jeff Weimer,WR,West Virginia,,,,
 Jacob De Jesus,WR,California,,,,
 Kellen Diesch,OT,Arizona State,,,,
 Mason Pline,TE,Furman,,,,
-Chris Oladokun,QB,South Dakota State,,,,
+Chris Oladokun,QB,South Dakota State,2022,7,241,
 EJ Smith,RB,Texas A&M,,,,
 Niles King,DE,San Diego State,,,,
 Damon Payne,DT,Michigan,,,,

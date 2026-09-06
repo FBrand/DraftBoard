@@ -1,5 +1,5 @@
 {
- "fetchedAt": "2026-09-06T20:13:10.603Z",
+ "fetchedAt": "2026-09-06T21:46:47.016Z",
  "source": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams",
  "players": [
   {
@@ -525,7 +525,8 @@
    "position": "G",
    "school": "LSU",
    "team": "ATL",
-   "experience": 0
+   "experience": 0,
+   "isUdfa": true
   },
   {
    "name": "Bralen Trice",
@@ -3822,7 +3823,8 @@
    "position": "RB",
    "school": "TCU",
    "team": "DAL",
-   "experience": 4
+   "experience": 4,
+   "isUdfa": true
   },
   {
    "name": "Jake Ferguson",
@@ -7609,28 +7611,34 @@
    "position": "WR",
    "school": "Cincinnati",
    "team": "KC",
-   "experience": 0
+   "experience": 0,
+   "draftYear": 2026,
+   "draftRound": 5,
+   "draftPick": 176
   },
   {
    "name": "Kahlil Benson",
    "position": "OT",
    "school": "Indiana",
    "team": "KC",
-   "experience": 0
+   "experience": 0,
+   "isUdfa": true
   },
   {
    "name": "Jake Briningstool",
    "position": "TE",
    "school": "Clemson",
    "team": "KC",
-   "experience": 2
+   "experience": 2,
+   "isUdfa": true
   },
   {
    "name": "Mike Caliendo",
    "position": "G",
    "school": "Western Michigan",
    "team": "KC",
-   "experience": 4
+   "experience": 4,
+   "isUdfa": true
   },
   {
    "name": "Joshua Ezeudu",
@@ -7644,63 +7652,90 @@
    "position": "QB",
    "school": "Ohio State",
    "team": "KC",
-   "experience": 6
+   "experience": 6,
+   "draftYear": 2021,
+   "draftRound": 1,
+   "draftPick": 11
   },
   {
    "name": "Noah Gray",
    "position": "TE",
    "school": "Duke",
    "team": "KC",
-   "experience": 6
+   "experience": 6,
+   "draftYear": 2021,
+   "draftRound": 5,
+   "draftPick": 162
   },
   {
    "name": "Creed Humphrey",
    "position": "C",
    "school": "Oklahoma",
    "team": "KC",
-   "experience": 6
+   "experience": 6,
+   "draftYear": 2021,
+   "draftRound": 2,
+   "draftPick": 63
   },
   {
    "name": "Emmett Johnson",
    "position": "RB",
    "school": "Nebraska",
    "team": "KC",
-   "experience": 0
+   "experience": 0,
+   "draftYear": 2026,
+   "draftRound": 5,
+   "draftPick": 161
   },
   {
    "name": "Travis Kelce",
    "position": "TE",
    "school": "Cincinnati",
    "team": "KC",
-   "experience": 14
+   "experience": 14,
+   "draftYear": 2013,
+   "draftRound": 3,
+   "draftPick": 63
   },
   {
    "name": "Patrick Mahomes",
    "position": "QB",
    "school": "Texas Tech",
    "team": "KC",
-   "experience": 10
+   "experience": 10,
+   "draftYear": 2017,
+   "draftRound": 1,
+   "draftPick": 10
   },
   {
    "name": "Jaylon Moore",
    "position": "OT",
    "school": "Western Michigan",
    "team": "KC",
-   "experience": 6
+   "experience": 6,
+   "draftYear": 2021,
+   "draftRound": 5,
+   "draftPick": 155
   },
   {
    "name": "Hunter Nourzad",
    "position": "C",
    "school": "Penn State",
    "team": "KC",
-   "experience": 3
+   "experience": 3,
+   "draftYear": 2024,
+   "draftRound": 5,
+   "draftPick": 159
   },
   {
    "name": "Garrett Nussmeier",
    "position": "QB",
    "school": "LSU",
    "team": "KC",
-   "experience": 0
+   "experience": 0,
+   "draftYear": 2026,
+   "draftRound": 7,
+   "draftPick": 249
   },
   {
    "name": "Thomas Odukoya",
@@ -7721,126 +7756,176 @@
    "position": "WR",
    "school": "Fresno State",
    "team": "KC",
-   "experience": 2
+   "experience": 2,
+   "isUdfa": true
   },
   {
    "name": "Rashee Rice",
    "position": "WR",
    "school": "SMU",
    "team": "KC",
-   "experience": 4
+   "experience": 4,
+   "draftYear": 2023,
+   "draftRound": 2,
+   "draftPick": 55
   },
   {
    "name": "Jalen Royals",
    "position": "WR",
    "school": "Utah State",
    "team": "KC",
-   "experience": 2
+   "experience": 2,
+   "draftYear": 2025,
+   "draftRound": 4,
+   "draftPick": 133
   },
   {
    "name": "Josh Simmons",
    "position": "OT",
    "school": "Ohio State",
    "team": "KC",
-   "experience": 2
+   "experience": 2,
+   "draftYear": 2025,
+   "draftRound": 1,
+   "draftPick": 32
   },
   {
    "name": "Brashard Smith",
    "position": "RB",
    "school": "SMU",
    "team": "KC",
-   "experience": 2
+   "experience": 2,
+   "draftYear": 2025,
+   "draftRound": 7,
+   "draftPick": 228
   },
   {
    "name": "Trey Smith",
    "position": "G",
    "school": "Tennessee",
    "team": "KC",
-   "experience": 6
+   "experience": 6,
+   "draftYear": 2021,
+   "draftRound": 6,
+   "draftPick": 226
   },
   {
    "name": "Kingsley Suamataia",
    "position": "OT",
    "school": "BYU",
    "team": "KC",
-   "experience": 3
+   "experience": 3,
+   "draftYear": 2024,
+   "draftRound": 2,
+   "draftPick": 63
   },
   {
    "name": "Tyquan Thornton",
    "position": "WR",
    "school": "Baylor",
    "team": "KC",
-   "experience": 5
+   "experience": 5,
+   "draftYear": 2022,
+   "draftRound": 2,
+   "draftPick": 50
   },
   {
    "name": "Kenneth Walker III",
    "position": "RB",
    "school": "Michigan State",
    "team": "KC",
-   "experience": 5
+   "experience": 5,
+   "draftYear": 2022,
+   "draftRound": 2,
+   "draftPick": 41
   },
   {
    "name": "Jared Wiley",
    "position": "TE",
    "school": "TCU",
    "team": "KC",
-   "experience": 3
+   "experience": 3,
+   "draftYear": 2024,
+   "draftRound": 4,
+   "draftPick": 131
   },
   {
    "name": "Xavier Worthy",
    "position": "WR",
    "school": "Texas",
    "team": "KC",
-   "experience": 3
+   "experience": 3,
+   "draftYear": 2024,
+   "draftRound": 1,
+   "draftPick": 28
   },
   {
    "name": "Felix Anudike-Uzomah",
    "position": "DE",
    "school": "Kansas State",
    "team": "KC",
-   "experience": 4
+   "experience": 4,
+   "draftYear": 2023,
+   "draftRound": 1,
+   "draftPick": 31
   },
   {
    "name": "Jeffrey Bassa",
    "position": "LB",
    "school": "Oregon",
    "team": "KC",
-   "experience": 2
+   "experience": 2,
+   "draftYear": 2025,
+   "draftRound": 5,
+   "draftPick": 156
   },
   {
    "name": "Nick Bolton",
    "position": "LB",
    "school": "Missouri",
    "team": "KC",
-   "experience": 6
+   "experience": 6,
+   "draftYear": 2021,
+   "draftRound": 2,
+   "draftPick": 58
   },
   {
    "name": "Jadon Canady",
    "position": "CB",
    "school": "Oregon",
    "team": "KC",
-   "experience": 0
+   "experience": 0,
+   "draftYear": 2026,
+   "draftRound": 4,
+   "draftPick": 109
   },
   {
    "name": "Jack Cochrane",
    "position": "LB",
    "school": "South Dakota",
    "team": "KC",
-   "experience": 5
+   "experience": 5,
+   "isUdfa": true
   },
   {
    "name": "Chamarri Conner",
    "position": "S",
    "school": "Virginia Tech",
    "team": "KC",
-   "experience": 4
+   "experience": 4,
+   "draftYear": 2023,
+   "draftRound": 4,
+   "draftPick": 119
   },
   {
    "name": "Mansoor Delane",
    "position": "CB",
    "school": "LSU",
    "team": "KC",
-   "experience": 0
+   "experience": 0,
+   "draftYear": 2026,
+   "draftRound": 1,
+   "draftPick": 6
   },
   {
    "name": "Bryson Eason",
@@ -7854,56 +7939,76 @@
    "position": "CB",
    "school": "LSU",
    "team": "KC",
-   "experience": 6
+   "experience": 6,
+   "draftYear": 2020,
+   "draftRound": 2,
+   "draftPick": 61
   },
   {
    "name": "Ashton Gillotte",
    "position": "DE",
    "school": "Louisville",
    "team": "KC",
-   "experience": 2
+   "experience": 2,
+   "draftYear": 2025,
+   "draftRound": 3,
+   "draftPick": 66
   },
   {
    "name": "Alohi Gilman",
    "position": "S",
    "school": "Notre Dame",
    "team": "KC",
-   "experience": 7
+   "experience": 7,
+   "draftYear": 2020,
+   "draftRound": 6,
+   "draftPick": 186
   },
   {
    "name": "Jaden Hicks",
    "position": "S",
    "school": "Washington State",
    "team": "KC",
-   "experience": 3
+   "experience": 3,
+   "draftYear": 2024,
+   "draftRound": 4,
+   "draftPick": 133
   },
   {
    "name": "Chris Jones",
    "position": "DT",
    "school": "Mississippi State",
    "team": "KC",
-   "experience": 11
+   "experience": 11,
+   "draftYear": 2016,
+   "draftRound": 2,
+   "draftPick": 37
   },
   {
    "name": "George Karlaftis",
    "position": "DE",
    "school": "Purdue",
    "team": "KC",
-   "experience": 5
+   "experience": 5,
+   "draftYear": 2022,
+   "draftRound": 1,
+   "draftPick": 30
   },
   {
    "name": "Cooper McDonald",
    "position": "LB",
    "school": "TCU",
    "team": "KC",
-   "experience": 2
+   "experience": 2,
+   "isUdfa": true
   },
   {
    "name": "Xavier Nwankpa",
    "position": "S",
    "school": "Iowa",
    "team": "KC",
-   "experience": 0
+   "experience": 0,
+   "isUdfa": true
   },
   {
    "name": "Jack Pyburn",
@@ -7917,70 +8022,96 @@
    "position": "CB",
    "school": "USC",
    "team": "KC",
-   "experience": 3
+   "experience": 3,
+   "isUdfa": true
   },
   {
    "name": "L'Jarius Sneed",
    "position": "CB",
    "school": "Louisiana Tech",
    "team": "KC",
-   "experience": 7
+   "experience": 7,
+   "draftYear": 2020,
+   "draftRound": 4,
+   "draftPick": 138
   },
   {
    "name": "R Mason Thomas",
    "position": "DE",
    "school": "Oklahoma",
    "team": "KC",
-   "experience": 0
+   "experience": 0,
+   "draftYear": 2026,
+   "draftRound": 2,
+   "draftPick": 40
   },
   {
    "name": "Khyiris Tonga",
    "position": "DT",
    "school": "BYU",
    "team": "KC",
-   "experience": 6
+   "experience": 6,
+   "draftYear": 2021,
+   "draftRound": 7,
+   "draftPick": 250
   },
   {
    "name": "Drue Tranquill",
    "position": "LB",
    "school": "Notre Dame",
    "team": "KC",
-   "experience": 8
+   "experience": 8,
+   "draftYear": 2019,
+   "draftRound": 4,
+   "draftPick": 130
   },
   {
    "name": "Nohl Williams",
    "position": "CB",
    "school": "California",
    "team": "KC",
-   "experience": 2
+   "experience": 2,
+   "draftYear": 2025,
+   "draftRound": 3,
+   "draftPick": 85
   },
   {
    "name": "Peter Woods",
    "position": "DT",
    "school": "Clemson",
    "team": "KC",
-   "experience": 0
+   "experience": 0,
+   "draftYear": 2026,
+   "draftRound": 1,
+   "draftPick": 29
   },
   {
    "name": "Matt Araiza",
    "position": "P",
    "school": "San Diego State",
    "team": "KC",
-   "experience": 3
+   "experience": 3,
+   "draftYear": 2022,
+   "draftRound": 6,
+   "draftPick": 180
   },
   {
    "name": "Harrison Butker",
    "position": "PK",
    "school": "Georgia Tech",
    "team": "KC",
-   "experience": 10
+   "experience": 10,
+   "draftYear": 2017,
+   "draftRound": 7,
+   "draftPick": 233
   },
   {
    "name": "James Winchester",
    "position": "LS",
    "school": "Oklahoma",
    "team": "KC",
-   "experience": 12
+   "experience": 12,
+   "isUdfa": true
   },
   {
    "name": "Jeff Caldwell",
@@ -8008,14 +8139,18 @@
    "position": "WR",
    "school": "Louisiana Tech",
    "team": "KC",
-   "experience": 1
+   "experience": 1,
+   "isUdfa": true
   },
   {
    "name": "Omarr Norman-Lott",
    "position": "DT",
    "school": "Tennessee",
    "team": "KC",
-   "experience": 2
+   "experience": 2,
+   "draftYear": 2025,
+   "draftRound": 2,
+   "draftPick": 63
   },
   {
    "name": "Matt Waletzko",
@@ -8029,7 +8164,8 @@
    "position": "WR",
    "school": "Arkansas",
    "team": "KC",
-   "experience": 1
+   "experience": 1,
+   "isUdfa": true
   },
   {
    "name": "Nathan Carter",
@@ -8050,14 +8186,16 @@
    "position": "OT",
    "school": "Marshall",
    "team": "KC",
-   "experience": 2
+   "experience": 2,
+   "isUdfa": true
   },
   {
    "name": "Omari Evans",
    "position": "WR",
    "school": "Washington",
    "team": "KC",
-   "experience": 0
+   "experience": 0,
+   "isUdfa": true
   },
   {
    "name": "Marcus Harris",
@@ -8071,63 +8209,76 @@
    "position": "LB",
    "school": "Indiana",
    "team": "KC",
-   "experience": 3
+   "experience": 3,
+   "isUdfa": true
   },
   {
    "name": "Kader Kohou",
    "position": "CB",
    "school": "East Texas A&M",
    "team": "KC",
-   "experience": 5
+   "experience": 5,
+   "isUdfa": true
   },
   {
    "name": "Tanner McCalister",
    "position": "S",
    "school": "Ohio State",
    "team": "KC",
-   "experience": 1
+   "experience": 1,
+   "isUdfa": true
   },
   {
    "name": "Pete Nygra",
    "position": "OT",
    "school": "Louisville",
    "team": "KC",
-   "experience": 0
+   "experience": 0,
+   "isUdfa": true
   },
   {
    "name": "Emmanuel Ogbah",
    "position": "DE",
    "school": "Oklahoma State",
    "team": "KC",
-   "experience": 11
+   "experience": 11,
+   "draftYear": 2016,
+   "draftRound": 2,
+   "draftPick": 32
   },
   {
    "name": "Jaydn Ott",
    "position": "RB",
    "school": "Oklahoma",
    "team": "KC",
-   "experience": 0
+   "experience": 0,
+   "isUdfa": true
   },
   {
    "name": "D'Arco Perkins-McAllister",
    "position": "CB",
    "school": "UL Monroe",
    "team": "KC",
-   "experience": 0
+   "experience": 0,
+   "isUdfa": true
   },
   {
    "name": "DeShon Singleton",
    "position": "S",
    "school": "Nebraska",
    "team": "KC",
-   "experience": 0
+   "experience": 0,
+   "isUdfa": true
   },
   {
    "name": "Tyreke Smith",
    "position": "DE",
    "school": "Ohio State",
    "team": "KC",
-   "experience": 3
+   "experience": 3,
+   "draftYear": 2022,
+   "draftRound": 5,
+   "draftPick": 158
   },
   {
    "name": "Ben VanSumeren",
@@ -9135,7 +9286,10 @@
    "position": "CB",
    "school": "Florida",
    "team": "LAC",
-   "experience": 5
+   "experience": 5,
+   "draftYear": 2022,
+   "draftRound": 1,
+   "draftPick": 23
   },
   {
    "name": "Patrick Herbert",
@@ -9828,7 +9982,8 @@
    "position": "OT",
    "school": "",
    "team": "MIA",
-   "experience": 1
+   "experience": 1,
+   "isUdfa": true
   },
   {
    "name": "Ollie Gordon II",
@@ -10304,7 +10459,8 @@
    "position": "TE",
    "school": "Texas A&M",
    "team": "MIA",
-   "experience": 1
+   "experience": 1,
+   "isUdfa": true
   },
   {
    "name": "Jordan Addison",
@@ -15484,7 +15640,8 @@
    "position": "CB",
    "school": "Florida State",
    "team": "TB",
-   "experience": 3
+   "experience": 3,
+   "isUdfa": true
   },
   {
    "name": "Zyon McCollum",
@@ -16002,7 +16159,10 @@
    "position": "CB",
    "school": "California",
    "team": "TEN",
-   "experience": 2
+   "experience": 2,
+   "draftYear": 2025,
+   "draftRound": 6,
+   "draftPick": 183
   },
   {
    "name": "Anthony Hill Jr.",
@@ -16079,7 +16239,8 @@
    "position": "CB",
    "school": "Southern Arkansas",
    "team": "TEN",
-   "experience": 1
+   "experience": 1,
+   "isUdfa": true
   },
   {
    "name": "Nazir Stackhouse",
@@ -16821,7 +16982,8 @@
    "position": "OT",
    "school": "Washington State",
    "team": "WSH",
-   "experience": 2
+   "experience": 2,
+   "isUdfa": true
   },
   {
    "name": "Craig Reynolds",
@@ -16877,112 +17039,130 @@
    "position": "WR",
    "school": "Southern Miss",
    "team": "",
-   "experience": 3
+   "experience": 3,
+   "isUdfa": true
   },
   {
    "name": "Xavier Loyd",
    "position": "WR",
    "school": "Missouri",
    "team": "",
-   "experience": 0
+   "experience": 0,
+   "isUdfa": true
   },
   {
    "name": "Jeff Weimer",
    "position": "WR",
    "school": "West Virginia",
    "team": "",
-   "experience": 0
+   "experience": 0,
+   "isUdfa": true
   },
   {
    "name": "Jacob De Jesus",
    "position": "WR",
    "school": "California",
    "team": "",
-   "experience": 0
+   "experience": 0,
+   "isUdfa": true
   },
   {
    "name": "Kellen Diesch",
    "position": "OT",
    "school": "Arizona State",
    "team": "",
-   "experience": null
+   "experience": null,
+   "isUdfa": true
   },
   {
    "name": "Mason Pline",
    "position": "TE",
    "school": "Furman",
    "team": "",
-   "experience": 2
+   "experience": 2,
+   "isUdfa": true
   },
   {
    "name": "Chris Oladokun",
    "position": "QB",
    "school": "South Dakota State",
    "team": "",
-   "experience": 1
+   "experience": 1,
+   "draftYear": 2022,
+   "draftRound": 7,
+   "draftPick": 241
   },
   {
    "name": "EJ Smith",
    "position": "RB",
    "school": "Texas A&M",
    "team": "",
-   "experience": 0
+   "experience": 0,
+   "isUdfa": true
   },
   {
    "name": "Niles King",
    "position": "DE",
    "school": "San Diego State",
    "team": "",
-   "experience": 0
+   "experience": 0,
+   "isUdfa": true
   },
   {
    "name": "Damon Payne",
    "position": "DT",
    "school": "Michigan",
    "team": "",
-   "experience": 0
+   "experience": 0,
+   "isUdfa": true
   },
   {
    "name": "Cole Brevard",
    "position": "DT",
    "school": "Texas",
    "team": "",
-   "experience": 0
+   "experience": 0,
+   "isUdfa": true
   },
   {
    "name": "Amari McNeill",
    "position": "DT",
    "school": "Colorado",
    "team": "",
-   "experience": 0
+   "experience": 0,
+   "isUdfa": true
   },
   {
    "name": "Ethan Hurkett",
    "position": "DE",
    "school": "Iowa",
    "team": "",
-   "experience": 0
+   "experience": 0,
+   "isUdfa": true
   },
   {
    "name": "Wesley Bissainthe",
    "position": "LB",
    "school": "Miami",
    "team": "",
-   "experience": 0
+   "experience": 0,
+   "isUdfa": true
   },
   {
    "name": "Kam Arnold",
    "position": "LB",
    "school": "Boston College",
    "team": "",
-   "experience": 1
+   "experience": 1,
+   "isUdfa": true
   },
   {
    "name": "Zelmar Vedder",
    "position": "CB",
    "school": "Houston",
    "team": "",
-   "experience": 0
+   "experience": 0,
+   "isUdfa": true
   }
  ]
 }
