@@ -3,6 +3,7 @@ import {
     BOARD_CSV_COLUMNS, formatRemarksCell, parseRemarksCell,
     exportBoardCSV, parseBoardCSV,
 } from '../../src/utils/boardCsv';
+import { parseRankings } from '../../src/utils/dataParser';
 
 const remarks = [
     { kind: 'strength', text: 'Elite arm talent' },
@@ -73,16 +74,60 @@ describe('board CSV', () => {
     });
 
     it('assumes the documented order when there is no header', () => {
-        const rows = parseBoardCSV('2,3,Jermod McCoy,CB,Tennessee,,');
+        const rows = parseBoardCSV('Jermod McCoy,CB,Tennessee,,2,3');
         expect(rows[0]).toMatchObject({ round: 2, tier: 3, name: 'Jermod McCoy', position: 'CB' });
     });
 
     it('skips rows with no name instead of importing a blank player', () => {
-        expect(parseBoardCSV(`${BOARD_CSV_COLUMNS.join(',')}\n1,1,,QB,,,`)).toHaveLength(0);
+        expect(parseBoardCSV(`${BOARD_CSV_COLUMNS.join(',')}\n,QB,,,1,1`)).toHaveLength(0);
     });
 
     it('survives a name containing a comma', () => {
         const csv = exportBoardCSV([{ name: 'Smith, Jr., Bob', position: 'RB', round: 3, tier: 1 }]);
         expect(parseBoardCSV(csv)[0].name).toBe('Smith, Jr., Bob');
+    });
+});
+
+/**
+ * There is one board format now, not three. The seed file the app boots from
+ * and the file you edit in a spreadsheet are the same file — so whatever the
+ * board exports has to come back in through the front door.
+ */
+describe('one format, both directions', () => {
+    const players = [
+        { name: 'Fernando Mendoza', position: 'QB', school: 'Indiana', round: 1, tier: 1 },
+        { name: 'Rueben Bain Jr', position: 'EDGE', school: 'Miami', round: 1, tier: 2 },
+    ];
+
+    it('an exported board is readable as a rankings file', () => {
+        const csv = exportBoardCSV(players, {
+            entryFor: () => ({ tag: 'like', withinGroup: 100 }),
+            remarksFor: () => [{ kind: 'strength', text: 'Elite arm talent' }],
+        });
+
+        const seeded = parseRankings(csv);
+        expect(seeded).toHaveLength(2);
+        expect(seeded[0]).toMatchObject({
+            name: 'Fernando Mendoza', position: 'QB', school: 'Indiana', round: 1, tier: 1,
+        });
+        // The star and the `like` tag are one mechanic.
+        expect(seeded[0].isFavorite).toBe(true);
+        expect(seeded[0].remarks[0]).toEqual({ kind: 'strength', text: 'Elite arm talent' });
+    });
+
+    it('still reads the shipped three-column files, blank groups and all', () => {
+        const legacy = parseRankings([
+            'group,name,position,favourite',
+            '1,Fernando Mendoza,QB',
+            ',Arvell Reese,EDGE,*',
+            '2.1,Caleb Downs,S',
+        ].join('\n'));
+
+        expect(legacy).toHaveLength(3);
+        expect(legacy[0]).toMatchObject({ name: 'Fernando Mendoza', round: 1 });
+        // A blank group inherits the last one seen — that is what makes a
+        // hand-typed file bearable.
+        expect(legacy[1]).toMatchObject({ name: 'Arvell Reese', round: 1, isFavorite: true });
+        expect(legacy[2]).toMatchObject({ name: 'Caleb Downs', round: 2, tier: 1 });
     });
 });

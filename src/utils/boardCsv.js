@@ -26,7 +26,15 @@
 import { parseCsvLine, csvField } from './csvUtils';
 import { tagById, PLAYER_TAGS } from './playerTags';
 
-export const BOARD_CSV_COLUMNS = ['round', 'tier', 'name', 'position', 'school', 'tag', 'evaluation'];
+// THE board format — one file in, one file out. Matches prospects.CSV_COLUMNS
+// (what "+ Add Players" imports and its template hands you) and dataParser
+// reads it, so a board exported here can be dropped straight into public/ or
+// loaded with ?rankings=. There is no separate seed format any more: it was a
+// strict subset of this one carrying the same data in fewer columns.
+export const BOARD_CSV_COLUMNS = [
+    'name', 'position', 'school', 'tag', 'round', 'tier', 'rank',
+    'matrixTotal', 'matrixPosition', 'evaluation',
+];
 
 const REMARKS_PREFIX = 'Remarks:';
 
@@ -80,7 +88,7 @@ export function parseRemarksCell(cell) {
 
 const tagSymbol = (id) => tagById(id)?.symbol ?? '';
 
-const tagFromCell = (cell) => {
+export const tagFromCell = (cell) => {
     const v = String(cell ?? '').trim();
     if (!v) return null;
     const bySymbol = PLAYER_TAGS.find(t => t.symbol === v);
@@ -93,18 +101,32 @@ const tagFromCell = (cell) => {
  * One board, in rank order. `remarksFor(player)` supplies that board's voice;
  * pass nothing to export placement only.
  */
-export function exportBoardCSV(players, { entryFor, remarksFor } = {}) {
+/**
+ * One board, in rank order. `entryFor(player)` supplies that board's tag and
+ * placement, `remarksFor(player)` its voice; pass neither to export the pool
+ * alone.
+ */
+export function exportBoardCSV(players, { entryFor, remarksFor, matrixFor } = {}) {
     const rows = [BOARD_CSV_COLUMNS.join(',')];
 
     (players ?? []).filter(p => p?.name).forEach(p => {
         const entry = entryFor?.(p) ?? null;
+        // Matrix scores are facts on the player's record, not on the pool
+        // object the board renders, so the caller supplies them.
+        const matrix = matrixFor?.(p) ?? {};
         rows.push([
-            p.round ?? '',
-            p.tier ?? '',
             p.name,
             p.position ?? '',
             p.school ?? '',
             tagSymbol(entry?.tag ?? null),
+            p.round ?? '',
+            p.tier ?? '',
+            // Position within the tier — the stored ordering, not the derived
+            // total rank, which is counted off the board and would be a lie in
+            // a file that can be reordered by hand.
+            entry?.withinGroup ?? '',
+            matrix.total ?? p.athleticMatrixTotal ?? '',
+            matrix.position ?? p.athleticMatrixPosition ?? '',
             formatRemarksCell(remarksFor?.(p) ?? []),
         ].map(csvField).join(','));
     });

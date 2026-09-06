@@ -4,6 +4,7 @@ import { shouldSeed } from '../utils/appInit';
 import { highestDraftPick, isUndraftedSigning, roundForPick, lastDraftPick } from '../utils/draftPhase';
 import { TEAM_CONFIG, DRAFT_YEAR } from '../constants';
 import { resolve as resolvePlayer, resolveAll, setFacts } from '../utils/playerRegistry';
+import { getSessionTeam as sessionTeam } from '../utils/appSettings';
 
 /**
  * Writes what a completed draft says about the players in it.

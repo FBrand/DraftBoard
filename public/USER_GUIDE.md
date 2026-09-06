@@ -190,9 +190,11 @@ An import **adds to** the board rather than replacing it: players the app has
 never seen are created, and anyone already there has his tier, tag and remarks
 updated from the file. Players you leave out of the file are left alone.
 
-The two ways out are **Export Board for Sheets** — the same columns, so a board
-round-trips — and **Export Seed File**, which writes `group,name,position` for
-dropping into `public/` or loading with `?rankings=`.
+**Export Board CSV** writes the same columns back out, so a board round-trips.
+It is also a seed file: drop it into `public/` or load it with `?rankings=` and
+the app reads it. There is only one board format — the old three-column
+`group,name,position` files still load, because their columns are a subset of
+this one.
 
 **Roster** rows are `Phase, position, slots53, then the players in order`.
 `R:` in front of a name means a reserve/practice-squad slot. A suffix after a

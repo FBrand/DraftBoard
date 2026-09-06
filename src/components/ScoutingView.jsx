@@ -466,25 +466,13 @@ export default function ScoutingView({ players, columnOrder }) {
             // Remarks belong to the author rather than the board, so they are
             // read from the owner — which for consensus is the board itself.
             remarksFor: (p) => (ownerId && p.id ? remarksFor(ownerId, p.id) : []),
+            matrixFor: (p) => athleticMatrix.getScores(p.name, p),
         });
         const blob = new Blob([csv], { type: 'text/csv' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `board_${activeBoard}.csv`;
-        a.click();
-    };
-
-    // group,name,position — ready to drop into public/ or load via
-    // ?rankings=, unlike Export CSV above (which round-trips the full
-    // overlay: tags/notes/matrix numbers/etc. for re-import into Scouting).
-    const handleExportRankings = () => {
-        const csv = scoutingState.exportRankingsCSV(effectivePlayers);
-        const blob = new Blob([csv], { type: 'text/csv' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `rankings_${activeBoard}_scouting.csv`;
+        a.download = `rankings_${activeBoard}.csv`;
         a.click();
     };
 
@@ -565,9 +553,7 @@ export default function ScoutingView({ players, columnOrder }) {
                         title="Undo the last change on this board"
                     >Undo</button>
                     <Menu items={[
-                        { label: 'Add Players…', onClick: () => setAddOpen(true), title: 'Type players in, or import a CSV — the template is in the modal' },
-                        { label: 'Export Board for Sheets…', onClick: handleExportSpreadsheet, title: 'round, tier, name, position, school, tag, evaluation — editable in Google Sheets' },
-                        { label: 'Export Seed File…', onClick: handleExportRankings, title: 'group,name,position — the format public/ and ?rankings= read' },
+                        { label: 'Export Board CSV…', onClick: handleExportSpreadsheet, title: 'The whole board — editable in Sheets, and readable as a seed file in public/ or ?rankings=' },
                         { label: 'Settings…', onClick: () => setSettingsOpen(true), title: 'Positional value and the Athletic Matrix link — shared by every board' },
                         ...(hidden.length ? [{
                             label: `Restore ${hidden.length} Removed Player${hidden.length === 1 ? '' : 's'}`,

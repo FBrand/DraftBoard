@@ -334,12 +334,3 @@ export function exportCSV(state, board) {
 // overlay entries alone: the exported board is then exactly the board on
 // screen, including every player the analyst never explicitly touched. An
 // entries-only export silently dropped those.
-export function exportRankingsCSV(effectivePlayers) {
-    const rows = ['group,name,position'];
-    (effectivePlayers ?? [])
-        .filter(p => p?.name)
-        .forEach(p => {
-            rows.push([tierLabel(p.round, p.tier), p.name, p.position ?? ''].map(csvField).join(','));
-        });
-    return rows.join('\n');
-}

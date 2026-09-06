@@ -129,8 +129,14 @@ export default function PlayerInfoModal({ player, players = [], onClose }) {
     // resolving without creating finds him; a player genuinely unknown to the
     // registry simply gets no remarks rather than a new record minted behind
     // somebody's back.
+    // By NAME, not by name and position — same rule as `resolved` above, and
+    // it bites here for the same reason. A depth-chart row says "DL" while the
+    // rankings file that created the record said "DL.3T", so qualifying by
+    // position missed, the player had no id, and with no id there was no
+    // remark handler and therefore no pencil: the roster card silently lost
+    // the ability to write anything at all.
     const playerId = resolved?.id
-        ?? (resolved ? resolvePlayer({ name: resolved.name, position: resolved.position, school: resolved.school }, { create: false }) : null);
+        ?? (resolved ? resolvePlayer({ name: resolved.name }, { create: false }) : null);
 
     const ownerId = ownerIdFor(boardById(activeBoard));
     const remarks = useMemo(
