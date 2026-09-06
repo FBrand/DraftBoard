@@ -12,6 +12,8 @@
  * that he exists is a fact, where he belongs is an opinion.
  */
 import { buildNameIndex, findMatchingIndex } from './nameMatcher';
+import { parseRemarksCell, splitRecords } from './boardCsv';
+import { parseCsvLine } from './csvUtils';
 
 const STORAGE_KEY = 'prospects_v1';
 export const STATE_VERSION = 1;
@@ -218,19 +220,34 @@ export function applyProspects(filePlayers) {
 export const CSV_COLUMNS = [
     'name', 'position', 'school',
     'tag', 'round', 'tier', 'rank', 'matrixTotal', 'matrixPosition',
+    // What the analyst actually said about him. One cell, one remark per
+    // line, marked by its symbol — see boardCsv.formatRemarksCell for why it
+    // is prefixed "Remarks:" (a cell starting with + or - is read as a formula
+    // by Sheets and Excel, and the contents are mangled before you ever save).
+    'evaluation',
 ];
 
 export const CSV_TEMPLATE = `${CSV_COLUMNS.join(',')}\n`;
 
 export function parseProspectCSV(text) {
-    return String(text ?? '')
-        .split('\n')
-        .map(l => l.trim())
-        .filter(l => l && !l.startsWith('#'))
-        .filter(l => !/^name\s*,/i.test(l))
-        .map(line => {
-            const cells = line.split(',').map(s => (s ?? '').trim());
-            return Object.fromEntries(CSV_COLUMNS.map((col, i) => [col, cells[i] ?? '']));
-        })
-        .filter(r => r.name);
+    // Split on records rather than lines, and parse cells properly: the
+    // evaluation cell holds several lines inside one quoted field, and a
+    // player's name may contain a comma. Splitting on "," and "\n" turned
+    // both into gibberish.
+    const records = splitRecords(String(text ?? '').split(/\r?\n/))
+        .filter(l => l.trim() && !l.trim().startsWith('#'))
+        .filter(l => !/^name\s*,/i.test(l.trim()));
+
+    return records.map(record => {
+        const cells = parseCsvLine(record);
+        const row = Object.fromEntries(CSV_COLUMNS.map((col, i) => [col, (cells[i] ?? '').trim()]));
+
+        // Remarks arrive as one cell and are split back into the three lists
+        // the verification step and the board entry already speak.
+        const remarks = parseRemarksCell(row.evaluation);
+        row.strengths = remarks.filter(r => r.kind === 'strength').map(r => r.text);
+        row.weaknesses = remarks.filter(r => r.kind === 'weakness').map(r => r.text);
+        row.notes = remarks.filter(r => r.kind === 'note').map(r => r.text);
+        return row;
+    }).filter(r => r.name);
 }

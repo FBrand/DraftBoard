@@ -169,7 +169,8 @@ export default function PlayerInfoModal({ player, players = [], onClose }) {
             readOnly
             player={resolved}
             entry={entryFor(player.name, player)}
-            allBoardNotes={allBoardNotes.filter(b => b.board !== activeBoard)}
+            allBoardNotes={allBoardNotes}
+            activeBoardId={activeBoard}
             onClose={onClose}
             boardLabel={boardById(activeBoard)?.label ?? ''}
             onPrevBoard={() => cycleBoard(-1)}

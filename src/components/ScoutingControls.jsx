@@ -175,7 +175,7 @@ function RemarkList({ label, symbol, cls, kind, remarks, seasons, onAdd, onRemov
 // changes — the caller renders this with `key={player.name}` so React
 // remounts it on selection change rather than syncing state via an effect
 // (see https://react.dev/learn/you-might-not-need-an-effect).
-export default function ScoutingControls({ player, entry, onChange, onClose, boardLabel, onPrevBoard, onNextBoard, variant = 'panel', readOnly = false, allBoardNotes, onPlayerSave, onPlayerDelete, onEntryChange, remarks = [], seasons = [], onAddRemark, onRemoveRemark }) {
+export default function ScoutingControls({ player, entry, onChange, onClose, boardLabel, onPrevBoard, onNextBoard, variant = 'panel', readOnly = false, allBoardNotes, activeBoardId = null, onPlayerSave, onPlayerDelete, onEntryChange, remarks = [], seasons = [], onAddRemark, onRemoveRemark }) {
     // Total Rank, Position Rank and Round.Group are the board's own
     // parameters, so they show the player's current values rather than blank
     // boxes — you're adjusting the real thing, not a field that merely sits
@@ -284,8 +284,13 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
     const factsLocked = readOnly && !editingBase;
     // Scouting is always live; elsewhere the pencil decides.
     const opinionsLive = !readOnly || (editingOpinions && !!onEntryChange);
-    const canWriteRemarks = !!onAddRemark;
-    const canEditOpinions = readOnly && !!onEntryChange;
+    // Remarks are writable, but not by default on a card you opened to look
+    // something up. The Roster and Free Agency cards are read first and
+    // written to rarely, and a text box sitting open on a broadcast is one
+    // stray click away from a note nobody meant to leave. The pencil is the
+    // same gesture that unlocks everything else here.
+    const canWriteRemarks = !!onAddRemark && (!readOnly || editingOpinions);
+    const canEditOpinions = readOnly && (!!onEntryChange || !!onAddRemark);
 
     // The name is the identity key everywhere in this app, so a rename is a
     // migration, not a field write — the caller moves the board entries and
@@ -634,7 +639,10 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
                 ))}
 
                 {canWriteRemarks && allBoardNotes?.length ? (
-                    <BoardNotes boards={allBoardNotes} seasons={seasons} />
+                    <BoardNotes
+                        boards={allBoardNotes.filter(b => b.board !== activeBoardId)}
+                        seasons={seasons}
+                    />
                 ) : null}
 
                 {canEditBase && (

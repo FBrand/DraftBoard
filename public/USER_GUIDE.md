@@ -165,9 +165,14 @@ all you need to write.
 UDFA has no file of its own: its signings are part of the draft, and they come
 out in the draft export alongside the picks.
 
-**A board** is `round, tier, name, position, school, tag, evaluation` —
-Scouting's **Export Board for Sheets** and **Import Board from Sheets**. The
-evaluation cell holds remarks, one per line, marked by the symbol:
+Scouting has one way in and two ways out. **+ Add Players** is the way in: type
+players by hand, or import a CSV — the **Download template** button inside that
+modal gives you the exact columns. Whichever you use, you land on the same
+verification step, and **nothing is written until you submit it**.
+
+The columns are `name, position, school, tag, round, tier, rank, matrixTotal,
+matrixPosition, evaluation`. Only the name is required. The evaluation cell
+holds remarks, one per line, marked by the symbol:
 
 ```
 Remarks:
@@ -181,10 +186,13 @@ with `+` or `-` is treated as a formula by Sheets and Excel and the contents
 are mangled. Lines with no symbol are kept as notes, and any of the dashes a
 word processor might produce counts as a weakness.
 
-Importing a board **replaces that board's ranking** — a ranking is an ordering,
-and merging two produces an order nobody wrote. Players in the file that the
-app has never seen are created; remarks are added to what you already have,
-so re-importing a corrected file will not leave you with two copies of a note.
+An import **adds to** the board rather than replacing it: players the app has
+never seen are created, and anyone already there has his tier, tag and remarks
+updated from the file. Players you leave out of the file are left alone.
+
+The two ways out are **Export Board for Sheets** — the same columns, so a board
+round-trips — and **Export Seed File**, which writes `group,name,position` for
+dropping into `public/` or loading with `?rankings=`.
 
 **Roster** rows are `Phase, position, slots53, then the players in order`.
 `R:` in front of a name means a reserve/practice-squad slot. A suffix after a

@@ -151,7 +151,7 @@ export function parseBoardCSV(text) {
 }
 
 /** Rejoins lines that belong to one record, because a cell may contain them. */
-function splitRecords(lines) {
+export function splitRecords(lines) {
     const records = [];
     let current = '';
     let open = false;
