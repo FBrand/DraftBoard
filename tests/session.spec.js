@@ -39,7 +39,14 @@ test.describe('full app session', () => {
         expect(bundle.format).toBe('draftboard-session');
         expect(bundle.version).toBe(1);
         expect(Object.keys(bundle.data)).toEqual(
-            expect.arrayContaining([STORAGE_KEYS.roster, STORAGE_KEYS.scoutingConsensus]));
+            expect.arrayContaining([STORAGE_KEYS.roster]));
+
+        // A board's key contains its id, so no literal can name one — which is
+        // exactly how the bundle came to be written with no boards in it at
+        // all. The property to hold is that scouting is in there.
+        expect(Object.keys(bundle.data).some(k => k.startsWith(STORAGE_KEYS.scoutingBoardPrefix)))
+            .toBe(true);
+        expect(Object.keys(bundle.data)).toEqual(expect.arrayContaining(['db_boards', 'db_players']));
 
         // Wipe everything
         await page.evaluate(() => localStorage.clear());

@@ -8,12 +8,14 @@ export const TABS = {
     roster: '🏈 Roster',
 };
 
-// localStorage keys the app owns — kept in sync with src/utils/appSession.js.
+// localStorage keys the app owns — see src/utils/appStorage.js, which is now
+// the single definition. A board's key contains its id, so it is a prefix
+// here rather than a name: naming boards by analyst is exactly what rotted.
 export const STORAGE_KEYS = {
     draft: 'nfl_draft_board_state',
     roster: 'rosterState',
     fa: 'fa_state_v1',
-    scoutingConsensus: 'scouting_overlay_v1__consensus',
+    scoutingBoardPrefix: 'scouting_board_v1__',
     view: 'draft_board_view',
     focus: 'draft_board_focus',
 };

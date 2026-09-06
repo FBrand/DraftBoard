@@ -12,28 +12,17 @@
  * heterogeneous shapes, not a table anyone should hand-edit.
  */
 
-// Every localStorage key the app owns. Listed explicitly rather than dumping
-// all of localStorage so an import can never inject unrelated keys, and so
-// adding a stage is a deliberate one-line change here.
-const KEYS = [
-    'nfl_draft_board_state',   // useDraftState
-    'nfl_draft_live_sync',     // useDraftState's live-sync toggle
-    'rosterState',             // rosterState.js
-    'fa_state_v1',             // faState.js
-    'scouting_overlay_v1__consensus',
-    'scouting_overlay_v1__dan',
-    'scouting_overlay_v1__ryan',
-    'draft_board_view',        // last active tab
-    'draft_board_focus',       // Draft's focus-mode toggle
-    'athletic_matrix_url',     // configurable Athletic Matrix link (appLinks.js)
-    'athletic_matrix_v1',      // per-player matrix scores, shared across boards
-];
+// Which keys the app owns now lives in appStorage.js. It used to be a literal
+// list here, which quietly stopped naming the scouting boards the moment a
+// board's key became its id — so a session file was being written with no
+// boards in it at all.
+import { ownedKeys, isOwnedKey } from './appStorage';
 
 export const SESSION_VERSION = 1;
 
 export function exportSession() {
     const data = {};
-    KEYS.forEach(k => {
+    ownedKeys().forEach(k => {
         const raw = localStorage.getItem(k);
         if (raw !== null) data[k] = raw;
     });
@@ -79,15 +68,16 @@ export function importSession(text) {
     // can't leave the app half-restored.
     const toWrite = [];
     Object.entries(parsed.data).forEach(([k, v]) => {
-        if (!KEYS.includes(k)) return; // ignore unknown keys rather than trusting them
+        if (!isOwnedKey(k)) return; // ignore unknown keys rather than trusting them
         if (typeof v !== 'string') return;
         toWrite.push([k, v]);
     });
     if (!toWrite.length) throw new Error('Session file contained no recognizable DraftBoard data.');
 
     // Clear the app's own keys first so stages absent from the bundle don't
-    // linger from whatever was in the browser before.
-    KEYS.forEach(k => localStorage.removeItem(k));
+    // linger from whatever was in the browser before. Read before writing:
+    // ownedKeys() enumerates what is present, and the writes below add to it.
+    ownedKeys().forEach(k => localStorage.removeItem(k));
     toWrite.forEach(([k, v]) => localStorage.setItem(k, v));
 
     return { restored: toWrite.map(([k]) => k) };

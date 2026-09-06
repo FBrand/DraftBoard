@@ -24,9 +24,8 @@
 
 const MODE_KEY = 'draftboard_init_mode';
 
-import { collectionKey } from '../data/localAdapter';
 import { repository } from '../data/repository';
-import { PLAYERS } from './playerRegistry';
+import { ownedKeys } from './appStorage';
 
 export const INIT_SEEDED = 'seeded';
 export const INIT_CLEAN = 'clean';
@@ -52,33 +51,16 @@ export function setInitMode(mode) {
 
 // Everything the app owns, minus the init mode itself — which has to survive
 // the wipe, since it is what tells the reload which way to come back up.
-const OWNED_KEYS = [
-    'nfl_draft_board_state',
-    'nfl_draft_live_sync',
-    'rosterState',
-    'fa_state_v1',
-    'scouting_overlay_v1__consensus',
-    'scouting_overlay_v1__dan',
-    'scouting_overlay_v1__ryan',
-    'draft_board_view',
-    'draft_board_focus',
-    // Matrix scores are measurements of players, not offseason decisions — but
-    // a clean slate should still be clean, so they clear with everything else.
-    'athletic_matrix_v1',
-    // Players added in the app, and the identity record for every player the
-    // app has seen. The registry re-derives itself from the rankings files on
-    // the next load, so clearing it loses nothing that wasn't entered by hand.
-    'prospects_v1',
-    'player_registry_v1',              // the registry's shape before players were documents
-    collectionKey(PLAYERS),            // and where it lives now
-];
+// Shared with the session bundle — see appStorage.js. Keeping a second list
+// here is what let the two drift: this one went on naming boards by analyst
+// after their keys had become ids, so a clean slate left the boards behind.
 
 /**
  * Wipes all app data and comes back up in `mode`. Callers reload afterwards;
  * the stores read their files during that fresh load.
  */
 export function resetTo(mode) {
-    OWNED_KEYS.forEach(k => {
+    ownedKeys().forEach(k => {
         try { localStorage.removeItem(k); } catch { /* ignore */ }
     });
     // The repository keeps an in-memory copy, so clearing the keys underneath

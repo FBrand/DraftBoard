@@ -54,8 +54,14 @@ test.describe('player identity', () => {
         await page.waitForTimeout(500);
 
         const entry = await page.evaluate(() => {
-            const s = JSON.parse(localStorage.getItem('scouting_overlay_v1__consensus') || '{}');
-            return (s.entries || []).find(e => e.tag === 'like' && e.playerId);
+            // Boards are keyed by id, so they are found rather than named —
+            // and all of them are searched, since picking the first key found
+            // lands on whichever board localStorage happens to list first,
+            // not the one that was clicked.
+            return Object.keys(localStorage)
+                .filter(k => k.startsWith('scouting_board_v1__'))
+                .flatMap(k => JSON.parse(localStorage.getItem(k) || '{}').entries ?? [])
+                .find(e => e.tag === 'like' && e.playerId);
         });
         expect(entry?.playerId).toBeTruthy();
     });
