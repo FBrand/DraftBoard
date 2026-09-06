@@ -809,14 +809,28 @@ body {
 /* Side Panels */
 .bottom-panel {
   background: var(--panel-bg);
-  padding: 2rem 2rem;
+  padding: 1.25rem 2rem;
   border-top: 1px solid var(--border-color);
   display: flex;
   gap: 1rem;
-  overflow-x: auto;
+  /* The ROW scrolls, not the panel — otherwise the "Your Picks" heading
+     scrolls away with the cards. */
+  overflow: hidden;
   align-items: center;
-  /*height: 120px;*/
 }
+
+.bp-picks-row {
+  display: flex;
+  gap: 1rem;
+  flex: 1;
+  /* Without this a flex child refuses to shrink below its content, so it
+     never overflows and never scrolls. This is the whole bug. */
+  min-width: 0;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.bp-pick { flex: 0 0 auto; }
 
 /* Modal Styles */
 .modal-overlay {
@@ -3463,104 +3477,136 @@ body.export-mode .card-glow {
 .roster-grid.no-ps { grid-template-columns: 85px 1fr 1fr; }
 
 /* ---- Scouting grouped list ----------------------------------------------
-   Desktop reads left to right: the ranking, the same players grouped, the
-   ones the grouping can't place, then whoever is selected. On a phone only
-   the grouped list survives, with the unmatched at the bottom of it. */
+   A reading surface. The board grid was a table because a grid IS one; this
+   is a list, and it should look like something you scan rather than something
+   you query.
+
+   Two rules do most of the work. Rows carry no borders — separation comes
+   from rhythm and the group headers, because 328 hairlines is a cage. And a
+   group flows in COLUMNS, top to bottom then across, so a ranked list still
+   reads downwards; laying it out left-to-right put 21 beside 22 and made the
+   reading order ambiguous. */
 .sg-list {
   flex: 1;
   min-width: 0;
   overflow-y: auto;
-  padding: 6px 0 24px;
+  padding-bottom: 32px;
 }
 
-.sg-group { border-bottom: 1px solid var(--border-color); }
+.sg-group { padding-bottom: 10px; }
 
+/* A quiet label and a rule, not a black bar. Sticky and opaque, so rows pass
+   underneath it cleanly instead of showing through. */
 .sg-group-header {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  align-items: baseline;
+  gap: 10px;
   width: 100%;
-  padding: 7px 12px;
-  /* Opaque, not a wash: a sticky header over a scrolling list has rows
-     passing underneath it, and a translucent background let them show
-     through — group labels appeared printed over player names. */
-  background: var(--panel-bg);
-  box-shadow: inset 0 -1px 0 var(--border-color);
+  padding: 16px 16px 7px;
+  background: var(--bg-color);
   border: 0;
+  border-bottom: 1px solid var(--border-color);
   color: var(--text-main);
   font: inherit;
-  font-size: 0.78rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  text-align: left;
   cursor: pointer;
   position: sticky;
   top: 0;
-  z-index: 1;
+  z-index: 2;
 }
 
 .sg-group-header.static { cursor: default; }
-.sg-group-header:hover:not(.static) { background: #232323; }
-.sg-chevron { width: 12px; flex-shrink: 0; }
-.sg-group-label { flex: 1; text-align: left; font-weight: 600; }
+.sg-group-header:hover:not(.static) .sg-group-label { color: var(--chiefs-gold); }
 
-.sg-group-count {
-  font-variant-numeric: tabular-nums;
-  opacity: 0.6;
-  font-size: 0.72rem;
+.sg-chevron {
+  width: 10px;
+  flex-shrink: 0;
+  font-size: 0.6rem;
+  color: var(--text-dim);
 }
 
+.sg-group-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  transition: color 0.12s ease;
+}
+
+.sg-group-count {
+  margin-left: auto;
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Down, then across: the column count follows the width, and the browser
+   balances the group across them. */
 .sg-group-body {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 0 1px;
-  background: var(--border-color);
+  columns: 300px;
+  column-gap: 26px;
+  column-rule: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 4px 8px 0;
 }
 
 .sg-row {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: 10px;
   width: 100%;
-  min-height: 40px;
-  background: var(--bg-color);
-  padding: 7px 14px 7px 20px;
+  /* A row must not be split across a column boundary. */
+  break-inside: avoid;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 4px;
   background: none;
-  border: 0;
-  border: 0;
   color: inherit;
   font: inherit;
-  font-size: 0.92rem;
+  font-size: 0.9rem;
   text-align: left;
   cursor: pointer;
 }
 
-.sg-row:hover { background: rgba(255, 255, 255, 0.06); }
-.sg-row.selected { background: rgba(255, 215, 0, 0.14); }
+.sg-row:hover { background: rgba(255, 255, 255, 0.055); }
 
-.sg-rank {
-  width: 38px;
-  flex-shrink: 0;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  opacity: 0.7;
-  font-size: 0.84rem;
+.sg-row.selected {
+  background: rgba(255, 184, 28, 0.12);
+  box-shadow: inset 2px 0 0 var(--chiefs-gold);
 }
 
-.sg-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sg-tag { flex-shrink: 0; }
+.sg-rank {
+  width: 32px;
+  flex-shrink: 0;
+  text-align: right;
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+}
+
+.sg-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-main);
+}
+
+.sg-tag { flex-shrink: 0; font-size: 0.8rem; }
 
 .sg-meta {
   flex-shrink: 0;
-  opacity: 0.6;
-  font-size: 0.78rem;
+  font-size: 0.72rem;
+  color: var(--text-dim);
   font-variant-numeric: tabular-nums;
 }
 
-.sg-missing { color: var(--chiefs-red, #c8102e); opacity: 0.9; }
+.sg-missing { color: var(--chiefs-red); }
 
-/* The unmatched column: a worklist, not an error list. */
+/* The unmatched column is a worklist: narrow, single-file, and it should read
+   as a side note rather than compete with the board. */
 .sg-unmatched-panel {
-  width: 240px;
+  width: 232px;
   flex-shrink: 0;
   border-left: 1px solid var(--border-color);
   display: flex;
@@ -3570,28 +3616,46 @@ body.export-mode .card-glow {
 
 .sg-panel-header {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   justify-content: space-between;
-  padding: 8px 12px 2px;
-  font-size: 0.75rem;
-  letter-spacing: 0.06em;
+  padding: 16px 14px 2px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  font-weight: 600;
 }
 
 .sg-panel-hint {
-  padding: 0 12px 8px;
+  padding: 0 14px 10px;
   font-size: 0.7rem;
-  opacity: 0.55;
+  color: var(--text-dim);
   border-bottom: 1px solid var(--border-color);
 }
 
-.sg-panel-body { overflow-y: auto; padding-bottom: 20px; }
-.sg-unmatched-panel .sg-group-body,
-.sg-unmatched-panel .sg-panel-body { grid-template-columns: 1fr; }
-.sg-unmatched-panel .sg-row { padding-left: 12px; }
+.sg-panel-body { overflow-y: auto; padding: 6px 8px 24px; }
+.sg-unmatched-panel .sg-group-body { columns: auto; column-rule: 0; }
+
+.sg-list .scouting-empty { padding: 20px 16px; }
 
 @media (max-width: 820px) {
   .sg-unmatched-panel { display: none; }
-  .sg-unmatched .sg-group-header { background: rgba(200, 16, 46, 0.14); }
+  .sg-group-body { columns: auto; column-rule: 0; }
+  .sg-unmatched .sg-group-label { color: var(--chiefs-red); }
 }
+
+/* The UDFA board shows who is LEFT, so a signing disappears from it. The
+   panel is where they go — otherwise the one tab about signings never shows
+   one. */
+.udfa-body { display: flex; flex: 1; min-height: 0; overflow: hidden; }
+.udfa-body .center-board-container { flex: 1; min-width: 0; }
+
+.udfa-signed-panel {
+  width: 232px;
+  flex-shrink: 0;
+  border-left: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+@media (max-width: 820px) { .udfa-signed-panel { display: none; } }

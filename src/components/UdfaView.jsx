@@ -1,8 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import CenterBoard from './CenterBoard';
 import UnrankedModal from './UnrankedModal';
+import Menu from './Menu';
 import usePlayerTags from '../hooks/usePlayerTags';
 import { isDraftComplete, isUndraftedSigning } from '../utils/draftPhase';
+import { getSessionTeam } from '../utils/appSettings';
+import { csvField, parseCsvLine } from '../utils/csvUtils';
 
 // UDFA reuses the exact board-grid Draft uses (see CenterBoard.jsx) — "who's
 // left" is already what its default Normal view (isFocusMode=false) shows,
@@ -15,7 +18,54 @@ import { isDraftComplete, isUndraftedSigning } from '../utils/draftPhase';
 export default function UdfaView({ players, draftedPlayers, columnOrder, signUndrafted, currentPick, onInfoOpen }) {
     const [isUnrankedOpen, setIsUnrankedOpen] = useState(false);
     const tagFor = usePlayerTags();
-    const udfaCount = draftedPlayers.filter(isUndraftedSigning).length;
+    const team = getSessionTeam();
+
+    // OUR undrafted signings, not the league's. The counter read every team's,
+    // so it climbed while you signed nobody — and the players it was counting
+    // were nowhere on this screen, because the board shows who is LEFT.
+    const signed = useMemo(
+        () => draftedPlayers.filter(p => isUndraftedSigning(p) && (p.team ?? team) === team),
+        [draftedPlayers, team],
+    );
+
+    const exportSigned = () => {
+        const rows = [['name', 'position', 'school', 'team'].join(',')];
+        signed.forEach(p => rows.push(
+            [p.name, p.position ?? '', p.school ?? '', p.team ?? team].map(csvField).join(','),
+        ));
+        const url = URL.createObjectURL(new Blob([rows.join('\n')], { type: 'text/csv' }));
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `udfa_${team.toLowerCase()}.csv`;
+        a.click();
+    };
+
+    const importSigned = async (e) => {
+        const file = e.target.files[0];
+        if (!file || !signUndrafted) return;
+        const lines = (await file.text()).split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+        const header = parseCsvLine(lines[0]).map(h => h.trim().toLowerCase());
+        const hasHeader = header.includes('name');
+        const cols = hasHeader ? header : ['name', 'position', 'school', 'team'];
+
+        (hasHeader ? lines.slice(1) : lines).forEach(line => {
+            const cells = parseCsvLine(line);
+            const row = Object.fromEntries(cols.map((c, i) => [c, (cells[i] ?? '').trim()]));
+            if (!row.name) return;
+            // Straight through signUndrafted, the same path the button uses —
+            // so an imported signing records the same facts as a typed one.
+            signUndrafted({
+                name: row.name,
+                position: (row.position ?? '').toUpperCase(),
+                school: row.school ?? '',
+                arrival: 'UDFA',
+                overallRank: 999,
+                round: null,
+                tier: null,
+                isUnranked: true,
+            });
+        });
+    };
 
     // A player is undrafted only once the draft is over, so signing is held
     // back until then. The board stays visible and browsable in the meantime —
@@ -62,8 +112,8 @@ export default function UdfaView({ players, draftedPlayers, columnOrder, signUnd
 
                 <div className="roster-counters">
                     <div className="roster-counter">
-                        <div className="roster-counter-label">UDFA SIGNED</div>
-                        <div className="roster-counter-value">{udfaCount}</div>
+                        <div className="roster-counter-label">{team} UDFA SIGNED</div>
+                        <div className="roster-counter-value">{signed.length}</div>
                     </div>
                 </div>
 
@@ -78,8 +128,13 @@ export default function UdfaView({ players, draftedPlayers, columnOrder, signUnd
                         className="action-pill"
                         disabled={!draftComplete}
                     >+ Sign Unranked Player</button>
+                    <Menu items={[
+                        { label: 'Export Signed UDFAs…', onClick: exportSigned, title: 'name, position, school, team' },
+                        { label: 'Import Signed UDFAs…', file: { accept: '.csv', onFile: importSigned }, title: 'Signs everyone in the file, the same way the button does' },
+                    ]} />
                 </div>
             </div>
+            <div className="udfa-body">
             <CenterBoard
                 players={players}
                 onAction={draftComplete ? signUndrafted : undefined}
@@ -88,6 +143,30 @@ export default function UdfaView({ players, draftedPlayers, columnOrder, signUnd
                 onInfoOpen={onInfoOpen}
                 tagFor={tagFor}
             />
+
+            <div className="udfa-signed-panel">
+                <div className="sg-panel-header">
+                    <span>Signed</span>
+                    <span className="sg-group-count">{signed.length}</span>
+                </div>
+                <div className="sg-panel-hint">{team} · undrafted</div>
+                <div className="sg-panel-body scroll-container">
+                    {signed.length === 0
+                        ? <div className="scouting-empty">Nobody signed yet.</div>
+                        : signed.map(p => (
+                            <button
+                                key={`${p.name}|${p.position}`}
+                                type="button"
+                                className="sg-row"
+                                onClick={() => onInfoOpen?.(p)}
+                            >
+                                <span className="sg-name">{p.name}</span>
+                                <span className="sg-meta">{p.position}</span>
+                            </button>
+                        ))}
+                </div>
+            </div>
+            </div>
 
             <UnrankedModal
                 key={`udfa-unranked-${isUnrankedOpen}`}

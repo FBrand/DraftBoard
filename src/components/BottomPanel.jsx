@@ -1,14 +1,20 @@
 import React from 'react';
 
+// Your picks, left to right.
+//
+// This did not scroll. The row is a flex child with overflow-x:auto, and a
+// flex item's default min-width is auto — so instead of shrinking and
+// scrolling its own content, it grew to fit every card and pushed the panel
+// wide. min-width:0 is what lets a flex child actually be a scroll container.
 const BottomPanel = ({ yourPicks }) => {
     return (
         <div className="bottom-panel">
             <h3 className="panel-title" style={{ margin: 0, minWidth: '120px' }}>Your Picks</h3>
-            <div style={{ display: 'flex', gap: '1rem', overflowX: 'auto', flex: 1 }}>
+            <div className="bp-picks-row">
                 {yourPicks.map(player => (
                     <div
                         key={player.name}
-                        className="player-card ours"
+                        className="player-card ours bp-pick"
                         style={{
                             minWidth: '150px',
                             marginBottom: '0.5rem',
