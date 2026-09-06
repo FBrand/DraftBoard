@@ -6,6 +6,8 @@ import * as scoutingState from '../utils/scoutingState';
 import { buildNameIndex, findMatchingIndex } from '../utils/nameMatcher';
 import useIsMobile from '../hooks/useIsMobile';
 import Menu from './Menu';
+import { exportBoardCSV } from '../utils/boardCsv';
+import { importBoardCSV } from '../utils/boardImport';
 import { rankBoard, moveToRank, between } from '../utils/boardRanking';
 import useBoardRankings, { invalidatePools } from '../hooks/useBoardRankings';
 import useUrlParam from '../hooks/useUrlParam';
@@ -65,6 +67,9 @@ export default function ScoutingView({ players, columnOrder }) {
     const [unrankedOnly, setUnrankedOnly] = useState(false);
     const [addOpen, setAddOpen] = useState(false);
     const [settingsOpen, setSettingsOpen] = useState(false);
+    // An import that replaces a board should say what it did — silence here
+    // reads as "nothing happened" when the file was wrong.
+    const [importSummary, setImportSummary] = useState(null);
     const [renaming, setRenaming] = useState(null);
     const [boardEditable, setBoardEditable] = useState(false);
     // Removing a rankings-file player only HIDES him — the file still has him —
@@ -478,6 +483,45 @@ export default function ScoutingView({ players, columnOrder }) {
         setRemarkTick(t => t + 1);
     };
 
+    /**
+     * The spreadsheet format — round, tier, name, position, school, tag and
+     * an evaluation cell holding the +/-/• remarks. Unlike "Export Scouting
+     * CSV" this is meant to be READ and EDITED by a person in Google Sheets,
+     * and unlike "Export as Board CSV" it carries the analyst's evaluations
+     * rather than placement alone.
+     */
+    const handleExportSpreadsheet = () => {
+        const csv = exportBoardCSV(effectivePlayers, {
+            entryFor: (p) => entryFor(p.name, p),
+            // Remarks belong to the author rather than the board, so they are
+            // read from the owner — which for consensus is the board itself.
+            remarksFor: (p) => (ownerId && p.id ? remarksFor(ownerId, p.id) : []),
+        });
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `board_${activeBoard}.csv`;
+        a.click();
+    };
+
+    const handleImportSpreadsheet = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const board = boardById(activeBoard);
+        if (!board) return;
+
+        const summary = importBoardCSV(board, await file.text());
+        past.current[activeBoard] = []; recordDepth(activeBoard); // an import replaces the board
+        setBoards(prev => ({ ...prev, [activeBoard]: scoutingState.loadState(activeBoard) }));
+
+        // A new player is base data shared by every board, so every mounted
+        // pool has to be re-merged, not just this one.
+        invalidatePools();
+        setRemarkTick(t => t + 1);
+        setImportSummary(summary);
+    };
+
     // group,name,position — ready to drop into public/ or load via
     // ?rankings=, unlike Export CSV above (which round-trips the full
     // overlay: tags/notes/matrix numbers/etc. for re-import into Scouting).
@@ -493,6 +537,17 @@ export default function ScoutingView({ players, columnOrder }) {
 
     return (
         <div className="roster-view">
+            {importSummary && (
+                <div className="import-summary" role="status">
+                    <span>
+                        Imported <strong>{importSummary.placed}</strong> players
+                        {importSummary.created ? <> · <strong>{importSummary.created}</strong> new</> : null}
+                        {importSummary.remarks ? <> · <strong>{importSummary.remarks}</strong> remarks</> : null}
+                    </span>
+                    <button type="button" className="close-button" onClick={() => setImportSummary(null)}>&times;</button>
+                </div>
+            )}
+
             <div className="top-panel">
                 <div className="roster-brand">
                     <span className="roster-brand-name">SCOUTING</span>
@@ -560,6 +615,8 @@ export default function ScoutingView({ players, columnOrder }) {
                         { label: 'Export as Board CSV…', onClick: handleExportRankings, title: 'group,name,position — ready for public/ or ?rankings=' },
                         { label: 'Export Scouting CSV…', onClick: handleExport, title: 'Full overlay: tags, notes, matrix numbers' },
                         { label: 'Import Scouting CSV…', file: { accept: '.csv', onFile: handleImport } },
+                        { label: 'Export Board for Sheets…', onClick: handleExportSpreadsheet, title: 'round, tier, name, position, school, tag, evaluation — editable in Google Sheets' },
+                        { label: 'Import Board from Sheets…', file: { accept: '.csv', onFile: handleImportSpreadsheet }, title: 'Replaces this board\'s ranking; adds players and remarks it does not have' },
                         { label: 'Add Prospects…', onClick: () => setAddOpen(true), title: 'Type or import players missing from the rankings' },
                         { label: 'Settings…', onClick: () => setSettingsOpen(true), title: 'Positional value and the Athletic Matrix link — shared by every board' },
                         ...(hidden.length ? [{
