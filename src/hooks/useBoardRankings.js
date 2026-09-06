@@ -4,9 +4,10 @@ import * as scoutingState from '../utils/scoutingState';
 import { applyProspects } from '../utils/prospects';
 import { identityKey, nameKey } from '../utils/nameMatcher';
 import { resolveAll, openRegistry } from '../utils/playerRegistry';
+
 import { migrateLegacyScores } from '../utils/athleticMatrix';
 
-const { BOARDS, BOARD_RANKINGS } = scoutingState;
+import { openBoards, listBoards } from '../utils/boardRegistry';
 
 /**
  * Loads every analyst's rankings file once, so Scouting can show each board's
@@ -32,16 +33,17 @@ function loadFiles() {
     if (filesPromise) return filesPromise;
     const base = import.meta.env.BASE_URL;
 
-    filesPromise = Promise.all(BOARDS.map(async (board) => {
+    filesPromise = Promise.all(listBoards().map(async (board) => {
         try {
-            const res = await fetch(`${base}${BOARD_RANKINGS[board]}`);
+            if (!board.rankingsFile) return [board.id, null];
+            const res = await fetch(`${base}${board.rankingsFile}`);
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const players = parseRankings(await res.text()) || [];
-            return [board, players.filter(p => p?.name)];
+            return [board.id, players.filter(p => p?.name)];
         } catch {
             // Cached as null so a missing file falls back per caller rather
             // than being retried on every mount.
-            return [board, null];
+            return [board.id, null];
         }
     })).then(Object.fromEntries);
 
@@ -64,9 +66,9 @@ function loadFiles() {
  */
 function joinKeyFor(files) {
     const ambiguous = new Set();
-    BOARDS.forEach(board => {
+    Object.values(files).forEach(file => {
         const seenInFile = new Set();
-        (files[board] ?? []).forEach(p => {
+        (file ?? []).forEach(p => {
             const n = nameKey(p.name);
             if (seenInFile.has(n)) ambiguous.add(n);
             seenInFile.add(n);
@@ -81,8 +83,8 @@ function joinKeyFor(files) {
  */
 function unionOfFiles(files, keyOf) {
     const seen = new Map();
-    BOARDS.forEach(board => {
-        (files[board] ?? []).forEach(p => {
+    Object.values(files).forEach(file => {
+        (file ?? []).forEach(p => {
             const key = keyOf(p);
             if (!seen.has(key)) seen.set(key, p);
         });
@@ -91,7 +93,9 @@ function unionOfFiles(files, keyOf) {
 }
 
 function loadPools() {
-    return Promise.all([loadFiles(), openRegistry()]).then(([files]) => {
+    return openBoards()
+        .then(() => Promise.all([loadFiles(), openRegistry()]))
+        .then(([files]) => {
         // Base data edited in-app — players added, corrected, or removed — is
         // shared by every board, so it is applied before anything ranks,
         // places, tags or exports. From here down there is no such thing as an
@@ -117,12 +121,12 @@ function loadPools() {
         // player Ryan rated highly simply did not exist on Dan's board, so
         // there was nowhere to disagree. Every board carries every player;
         // what differs is where each one has been placed.
-        const pools = Object.fromEntries(BOARDS.map(board => {
-            const file = files[board];
-            if (!file?.length) return [board, file];
+        const pools = Object.fromEntries(Object.keys(files).map(boardId => {
+            const file = files[boardId];
+            if (!file?.length) return [boardId, file];
 
             const own = new Map(file.map(p => [keyOf(p), p]));
-            return [board, everyone.map(p => {
+            return [boardId, everyone.map(p => {
                 // A corrected player is looked up by the identity his file
                 // gives him, not the corrected one, or his own board would
                 // stop recognising him the moment his name was fixed.
@@ -138,7 +142,7 @@ function loadPools() {
         // the star and the tag are one mechanic rather than two that can
         // disagree. Only adds entries for players that don't have one, so it
         // can never overwrite an analyst's own tag.
-        BOARDS.forEach(board => {
+        Object.keys(pools).forEach(board => {
             if (!pools[board]?.length) return;
             // The file creates the initial state and then steps out of the
             // way: after this the board lives in storage and is read from
@@ -185,7 +189,7 @@ export default function useBoardRankings(fallback) {
     // the boards have been seeded and are worth re-reading — and a fresh
     // object every render would make that fire forever.
     const resolved = useMemo(
-        () => (pools ? Object.fromEntries(BOARDS.map(b => [b, pools[b]?.length ? pools[b] : fallback])) : null),
+        () => (pools ? Object.fromEntries(Object.keys(pools).map(b => [b, pools[b]?.length ? pools[b] : fallback])) : null),
         [pools, fallback],
     );
 

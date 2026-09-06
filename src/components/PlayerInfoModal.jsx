@@ -5,7 +5,7 @@ import { buildNameIndex, findMatchingIndex } from '../utils/nameMatcher';
 import { rankBoard } from '../utils/boardRanking';
 import useBoardRankings from '../hooks/useBoardRankings';
 
-const { BOARDS, BOARD_LABELS } = scoutingState;
+import { allBoards, boardById } from '../utils/boardRegistry';
 
 // Read-only player info card, opened by right-click / long-press on a player
 // anywhere OUTSIDE Scouting — the draft board, UDFA, and the Roster/FA depth
@@ -21,8 +21,11 @@ const { BOARDS, BOARD_LABELS } = scoutingState;
 // tiers and ordering, or the card would keep showing the loaded rankings'
 // numbers no matter which board you were looking at.
 export default function PlayerInfoModal({ player, players = [], onClose }) {
-    const [activeBoard, setActiveBoard] = useState('consensus');
-    const [boards] = useState(() => Object.fromEntries(BOARDS.map(b => [b, scoutingState.loadState(b)])));
+    const [activeBoard, setActiveBoard] = useState(() => allBoards()[0]?.id ?? null);
+    // Every board ever, not just this season's: a player card reaching back
+    // into past scouting is the point of keeping old boards at all.
+    const [boardList] = useState(() => allBoards());
+    const [boards] = useState(() => Object.fromEntries(boardList.map(b => [b.id, scoutingState.loadState(b.id)])));
 
     // Memoised: a fresh `?? []` each render would invalidate everything below
     // it, re-ranking the whole pool on every render.
@@ -67,18 +70,19 @@ export default function PlayerInfoModal({ player, players = [], onClose }) {
     // player is worth seeing all at once.
     const allBoardNotes = useMemo(() => {
         if (!player) return [];
-        return BOARDS.map(board => {
-            const list = boards[board]?.entries ?? [];
+        return boardList.map(board => {
+            const list = boards[board.id]?.entries ?? [];
             const i = findMatchingIndex(player.name, buildNameIndex(list));
-            return { board, label: BOARD_LABELS[board], entry: i !== -1 ? list[i] : null };
+            return { board: board.id, label: board.label, entry: i !== -1 ? list[i] : null };
         });
-    }, [boards, player]);
+    }, [boards, boardList, player]);
 
     if (!player) return null;
 
     const cycleBoard = (dir) => {
-        const i = BOARDS.indexOf(activeBoard);
-        setActiveBoard(BOARDS[(i + dir + BOARDS.length) % BOARDS.length]);
+        const ids = boardList.map(b => b.id);
+        const i = ids.indexOf(activeBoard);
+        setActiveBoard(ids[(i + dir + ids.length) % ids.length]);
     };
 
     return (
@@ -90,7 +94,7 @@ export default function PlayerInfoModal({ player, players = [], onClose }) {
             entry={entryFor(player.name, player)}
             allBoardNotes={allBoardNotes}
             onClose={onClose}
-            boardLabel={BOARD_LABELS[activeBoard]}
+            boardLabel={boardById(activeBoard)?.label ?? ''}
             onPrevBoard={() => cycleBoard(-1)}
             onNextBoard={() => cycleBoard(1)}
         />

@@ -18,8 +18,18 @@
  * number.
  */
 
+import { DRAFT_ROUND_ENDS } from '../constants';
+
 /** The last pick of a seven-round draft. Anything after it is a signing. */
 export const LAST_DRAFT_PICK = 257;
+
+/** The round an overall pick falls in, or null when it is past the draft. */
+export function roundForPick(pick, boundaries = DRAFT_ROUND_ENDS) {
+    const n = Number(pick);
+    if (!Number.isFinite(n) || n < 1) return null;
+    const at = boundaries.findIndex(end => n <= end);
+    return at === -1 ? null : at + 1;
+}
 
 /** A pick's numeric value, or null when it isn't one (a `UDFA` label). */
 export function pickNumberOf(player) {

@@ -12,11 +12,12 @@ import useUrlParam from '../hooks/useUrlParam';
 import { PLAYER_TAGS } from '../utils/playerTags';
 import AddProspectsModal from './AddProspectsModal';
 import SettingsModal from './SettingsModal';
+import { TextPromptDialog } from './Dialogs';
 import { addProspect, savePlayerEdit, deletePlayer, restorePlayer, hiddenPlayers, toPoolPlayer, classify } from '../utils/prospects';
 import * as athleticMatrix from '../utils/athleticMatrix';
 import * as playerRegistry from '../utils/playerRegistry';
 
-const { BOARDS, BOARD_LABELS } = scoutingState;
+import { listBoards, boardBySlug, boardById, renameBoard } from '../utils/boardRegistry';
 
 const TAG_FILTERS = [
     { id: 'all', label: 'All' },
@@ -39,10 +40,17 @@ const TAG_FILTERS = [
 // Board" (ScoutingLeftPanel) always reflects the currently active board's
 // in-progress personal order.
 export default function ScoutingView({ players, columnOrder }) {
-    const [boards, setBoards] = useState(() => Object.fromEntries(BOARDS.map(b => [b, scoutingState.loadState(b)])));
+    // Which boards exist comes from the registry and is only known once it has
+    // loaded, which happens alongside the pools.
+    const [boardList, setBoardList] = useState(() => listBoards());
+    const [boards, setBoards] = useState({});
     // Board and selected player live in the URL: "here's what Dan says about
     // this guy" is the thing you actually want to send someone.
-    const [activeBoard, setActiveBoard] = useUrlParam('board', 'consensus', BOARDS);
+    // The URL carries the board's slug, not its id: a link should survive an
+    // analyst being renamed, and an opaque id in an address bar helps nobody.
+    const [boardSlug, setBoardSlug] = useUrlParam('board', 'consensus');
+    const activeBoard = (boardBySlug(boardSlug) ?? boardList[0])?.id ?? null;
+    const setActiveBoard = (id) => setBoardSlug(boardById(id)?.slug ?? '');
     // Each analyst's own rankings file — switching board switches the actual
     // player pool, not just the overlay on top of one shared list.
     const { pools } = useBoardRankings(players);
@@ -56,6 +64,7 @@ export default function ScoutingView({ players, columnOrder }) {
     const [unrankedOnly, setUnrankedOnly] = useState(false);
     const [addOpen, setAddOpen] = useState(false);
     const [settingsOpen, setSettingsOpen] = useState(false);
+    const [renaming, setRenaming] = useState(null);
     // Removing a rankings-file player only HIDES him — the file still has him —
     // so there has to be a way back. Undo doesn't cover base data: it is shared
     // by every board, and rewinding one board's history must not silently
@@ -72,10 +81,12 @@ export default function ScoutingView({ players, columnOrder }) {
     // pre-seed state and saved over the seeded one.
     useEffect(() => {
         if (!pools) return;
-        setBoards(Object.fromEntries(BOARDS.map(b => [b, scoutingState.loadState(b)])));
+        const list = listBoards();
+        setBoardList(list);
+        setBoards(Object.fromEntries(list.map(b => [b.id, scoutingState.loadState(b.id)])));
     }, [pools]);
 
-    const state = boards[activeBoard];
+    const state = boards[activeBoard] ?? { version: 1, entries: [] };
     const entryIndex = useMemo(() => buildNameIndex(state.entries), [state.entries]);
 
     // Entries are joined to players by registry id. The name path below is a
@@ -354,7 +365,7 @@ export default function ScoutingView({ players, columnOrder }) {
         if (name !== previous.name) athleticMatrix.renameScores(previous.name, name, previous);
 
         const next = {};
-        BOARDS.forEach(b => {
+        boardList.forEach(({ id: b }) => {
             const board = scoutingState.loadState(b);
             const idx = findMatchingIndex(previous.name, buildNameIndex(board.entries), previous);
             if (idx !== -1) {
@@ -386,8 +397,10 @@ export default function ScoutingView({ players, columnOrder }) {
     };
 
     const cycleBoard = (dir) => {
-        const idx = BOARDS.indexOf(activeBoard);
-        setActiveBoard(BOARDS[(idx + dir + BOARDS.length) % BOARDS.length]);
+        const ids = boardList.map(b => b.id);
+        const idx = ids.indexOf(activeBoard);
+        if (idx === -1) return;
+        setActiveBoard(ids[(idx + dir + ids.length) % ids.length]);
     };
 
     const handleExport = () => {
@@ -436,12 +449,17 @@ export default function ScoutingView({ players, columnOrder }) {
                 <div className="board-switcher">
                     <span className="switcher-label">BOARD</span>
                     <div className="switcher-buttons">
-                        {BOARDS.map(b => (
+                        {boardList.map(b => (
                             <button
-                                key={b}
-                                className={`switcher-btn ${activeBoard === b ? 'active' : ''}`}
-                                onClick={() => setActiveBoard(b)}
-                            >{BOARD_LABELS[b]}</button>
+                                key={b.id}
+                                className={`switcher-btn ${activeBoard === b.id ? 'active' : ''}`}
+                                onClick={() => setActiveBoard(b.id)}
+                                // Double-click to rename: a board's label is
+                                // display text, and an analyst can be renamed
+                                // or replaced without the work moving.
+                                onDoubleClick={() => setRenaming(b.id)}
+                                title="Double-click to rename"
+                            >{b.label}</button>
                         ))}
                     </div>
                 </div>
@@ -518,7 +536,7 @@ export default function ScoutingView({ players, columnOrder }) {
                         entry={selectedPlayer ? entryFor(selectedPlayer.name, selectedPlayer) : null}
                         onChange={saveEntry}
                         onClose={() => setSelectedName(null)}
-                        boardLabel={selectedPlayer ? BOARD_LABELS[activeBoard] : null}
+                        boardLabel={selectedPlayer ? boardById(activeBoard)?.label ?? '' : null}
                         onPrevBoard={() => cycleBoard(-1)}
                         onNextBoard={() => cycleBoard(1)}
                         onPlayerSave={handlePlayerSave}
@@ -526,6 +544,20 @@ export default function ScoutingView({ players, columnOrder }) {
                     />
                 )}
             </div>
+
+            {renaming && (
+                <TextPromptDialog
+                    title="Rename board"
+                    submitLabel="Rename"
+                    initialValue={boardById(renaming)?.label ?? ''}
+                    onCancel={() => setRenaming(null)}
+                    onSubmit={(label) => {
+                        renameBoard(renaming, label);
+                        setBoardList(listBoards());
+                        setRenaming(null);
+                    }}
+                />
+            )}
 
             {settingsOpen && (
                 <SettingsModal
@@ -556,7 +588,7 @@ export default function ScoutingView({ players, columnOrder }) {
                     entry={entryFor(selectedPlayer.name, selectedPlayer)}
                     onChange={saveEntry}
                     onClose={() => setSelectedName(null)}
-                    boardLabel={BOARD_LABELS[activeBoard]}
+                    boardLabel={boardById(activeBoard)?.label ?? ''}
                     onPrevBoard={() => cycleBoard(-1)}
                     onNextBoard={() => cycleBoard(1)}
                     onPlayerSave={handlePlayerSave}

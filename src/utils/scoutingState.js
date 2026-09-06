@@ -27,22 +27,33 @@
 import { parseCsvLine, csvField } from './csvUtils';
 import { buildNameIndex, findMatchingIndex } from './nameMatcher';
 import { parseTier, tierLabel, spaceEvenly } from './boardRanking';
-
-export const BOARDS = ['consensus', 'dan', 'ryan'];
-export const BOARD_LABELS = { consensus: 'Consensus', dan: 'Dan', ryan: 'Ryan' };
+import { boardById } from './boardRegistry';
 
 // Each analyst has their own rankings file, and they are genuinely different
 // boards — different players, different tiers, different order (Kevin
 // Concepcion sits at 18 on consensus, 10 on Dan's, 28 on Ryan's). Switching
 // board in Scouting therefore has to switch the underlying player pool too,
 // not just the overlay of tags and notes laid on top of it.
-export const BOARD_RANKINGS = {
-    consensus: 'rankings_consensus.csv',
-    dan: 'rankings_dan.csv',
-    ryan: 'rankings_ryan.csv',
-};
+//
+// Which boards exist is no longer a constant here: see boardRegistry.js. A
+// board is a record with an id, so an analyst can be renamed or replaced
+// without the work moving.
+const storageKey = (boardId) => `scouting_board_v1__${boardId}`;
 
-const storageKey = (board) => `scouting_overlay_v1__${board}`;
+// What the key was when a board was its own name.
+const legacyKey = (slug) => `scouting_overlay_v1__${slug}`;
+
+function readKey(key) {
+    try {
+        const raw = localStorage.getItem(key);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (parsed?.version === 1 && Array.isArray(parsed.entries)) {
+            return { ...parsed, entries: unfuseGroups(parsed.entries) };
+        }
+    } catch { /* ignore */ }
+    return null;
+}
 
 export function makeEntry(name, position, school = '', playerId = null) {
     return {
@@ -107,16 +118,21 @@ function unfuseGroups(entries) {
     });
 }
 
-export function loadState(board) {
-    try {
-        const raw = localStorage.getItem(storageKey(board));
-        if (raw) {
-            const parsed = JSON.parse(raw);
-            if (parsed?.version === 1 && Array.isArray(parsed.entries)) {
-                return { ...parsed, entries: unfuseGroups(parsed.entries) };
-            }
-        }
-    } catch { /* ignore */ }
+export function loadState(boardId) {
+    const own = readKey(storageKey(boardId));
+    if (own) return own;
+
+    // A board written when the key was the analyst's name. Read once under the
+    // old key and saved under the new one, so the work moves with the board
+    // rather than being stranded by a rename.
+    const slug = boardById(boardId)?.slug;
+    const legacy = slug ? readKey(legacyKey(slug)) : null;
+    if (legacy) {
+        saveState(boardId, legacy);
+        try { localStorage.removeItem(legacyKey(slug)); } catch { /* ignore */ }
+        return legacy;
+    }
+
     return { version: 1, entries: [] };
 }
 
@@ -240,8 +256,8 @@ export function attachPlayerIds(board, players) {
     return changed;
 }
 
-export function saveState(board, state) {
-    localStorage.setItem(storageKey(board), JSON.stringify(state));
+export function saveState(boardId, state) {
+    localStorage.setItem(storageKey(boardId), JSON.stringify(state));
 }
 
 export function parseCSV(csvText) {

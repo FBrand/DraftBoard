@@ -2,7 +2,7 @@ import { useMemo, useCallback } from 'react';
 import * as scoutingState from '../utils/scoutingState';
 import { buildNameIndex, findMatchingIndex } from '../utils/nameMatcher';
 
-const { BOARDS, BOARD_RANKINGS } = scoutingState;
+import { listBoards } from '../utils/boardRegistry';
 
 /**
  * Which scouting board belongs to the rankings currently loaded.
@@ -13,12 +13,14 @@ const { BOARDS, BOARD_RANKINGS } = scoutingState;
  * than assuming consensus.
  */
 export function boardForCurrentRankings() {
+    const boards = listBoards();
+    const fallback = boards[0]?.id ?? null;
     try {
         const url = new URLSearchParams(window.location.search).get('rankings') ?? '';
-        const match = BOARDS.find(b => url.includes(BOARD_RANKINGS[b]));
-        return match ?? 'consensus';
+        const match = boards.find(b => b.rankingsFile && url.includes(b.rankingsFile));
+        return match?.id ?? fallback;
     } catch {
-        return 'consensus';
+        return fallback;
     }
 }
 
@@ -35,7 +37,7 @@ export default function usePlayerTags(board = null) {
     // Memoise the data, not a closure over it — a useMemo that returns a
     // function defeats the React compiler's memoisation checks.
     const loaded = useMemo(() => {
-        const entries = scoutingState.loadState(key)?.entries ?? [];
+        const entries = key ? scoutingState.loadState(key)?.entries ?? [] : [];
         return { entries, index: buildNameIndex(entries) };
     }, [key]);
 

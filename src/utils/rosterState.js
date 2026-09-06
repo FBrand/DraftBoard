@@ -5,6 +5,7 @@
 import { parseCsvLine, csvField } from './csvUtils';
 import { parseAcquisition } from './draftPhase';
 import { basePosition } from './boardRanking';
+import { getSessionTeam } from './appSettings';
 import { DRAFT_YEAR } from '../constants';
 import { resolve as resolvePlayer, setFacts } from './playerRegistry';
 
@@ -91,7 +92,8 @@ function slotFromImport(raw, zone, position = '') {
     // The row label is an alignment ("WR.Z", "LB.O"); the player plays "WR".
     // The alignment belongs to the depth chart, not to him.
     const id = resolvePlayer({ name, position: basePosition(position) });
-    if (id && Object.keys(facts).length) setFacts(id, facts);
+    // Being on the roster IS the fact that he plays for this team.
+    if (id) setFacts(id, { team: getSessionTeam(), ...facts });
 
     return makeSlot(name, zone, arrival);
 }

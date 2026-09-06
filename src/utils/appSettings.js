@@ -14,8 +14,10 @@
  * their untouched boards differ for reasons neither of them chose.
  */
 import { safeHttpUrl, ATHLETIC_MATRIX_URL_KEY } from './appLinks';
+import { TEAM_CONFIG } from '../constants';
 
 const POSITION_VALUE_KEY = 'position_value_v1';
+const TEAM_KEY = 'session_team_v1';
 
 /** The order shipped with the app, most valuable first. */
 export const DEFAULT_POSITION_VALUE = [
@@ -63,6 +65,32 @@ export function setPositionValue(value) {
 
 export function isPositionValueCustom() {
     return getPositionValue() !== DEFAULT_POSITION_VALUE;
+}
+
+/**
+ * Whose offseason this session is. Everyone on the roster plays for them,
+ * everyone drafted here is drafted by them, and a free-agent candidate is
+ * somebody they might sign.
+ *
+ * It defaults to the team the app is branded for, and is a setting rather than
+ * a constant because the tool is data-driven — the same build runs somebody
+ * else's offseason with a different rankings file and a different roster.
+ */
+export function getSessionTeam() {
+    try {
+        const stored = localStorage.getItem(TEAM_KEY);
+        if (stored && stored.trim()) return stored.trim().toUpperCase();
+    } catch { /* ignore */ }
+    return TEAM_CONFIG.abbreviation;
+}
+
+export function setSessionTeam(value) {
+    const team = String(value ?? '').trim().toUpperCase();
+    try {
+        if (!team) localStorage.removeItem(TEAM_KEY);
+        else localStorage.setItem(TEAM_KEY, team);
+    } catch { /* ignore */ }
+    return getSessionTeam();
 }
 
 /**

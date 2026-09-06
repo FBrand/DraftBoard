@@ -8,8 +8,10 @@ import useEscapeKey from '../hooks/useEscapeKey';
 // once Free Agency needed the same prompt, since it had been falling back to
 // a raw window.prompt.
 
-export function TextPromptDialog({ title, placeholder, submitLabel = 'Add', onSubmit, onCancel }) {
-    const [value, setValue] = useState('');
+export function TextPromptDialog({ title, placeholder, submitLabel = 'Add', initialValue = '', onSubmit, onCancel }) {
+    // Prefilled when the dialog is editing something that already has a value,
+    // like renaming a board — retyping a name to change one letter is a chore.
+    const [value, setValue] = useState(initialValue);
     useEscapeKey(onCancel);
     return (
         <div className="modal-overlay rv-inline-dialog" onClick={onCancel}>

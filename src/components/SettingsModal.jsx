@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import useEscapeKey from '../hooks/useEscapeKey';
 import {
     DEFAULT_POSITION_VALUE, getPositionValue, setPositionValue, setAthleticMatrixUrl,
+    getSessionTeam, setSessionTeam,
 } from '../utils/appSettings';
 import { getAthleticMatrixUrl } from '../utils/appLinks';
 
@@ -17,6 +18,7 @@ import { getAthleticMatrixUrl } from '../utils/appLinks';
 export default function SettingsModal({ isOpen, onClose, onChanged }) {
     const [positions, setPositions] = useState(() => getPositionValue().join(', '));
     const [matrixUrl, setMatrixUrl] = useState(() => getAthleticMatrixUrl());
+    const [team, setTeam] = useState(() => getSessionTeam());
     const [error, setError] = useState('');
 
     useEscapeKey(onClose, isOpen);
@@ -28,6 +30,7 @@ export default function SettingsModal({ isOpen, onClose, onChanged }) {
             return setError('That link needs to be a full http:// or https:// address.');
         }
         setPositionValue(positions);
+        setSessionTeam(team);
         setError('');
         onChanged?.();
         onClose();
@@ -46,6 +49,22 @@ export default function SettingsModal({ isOpen, onClose, onChanged }) {
                 {error && <div className="ap-error">{error}</div>}
 
                 <div className="settings-body">
+                    <label className="settings-field">
+                        <span className="settings-label">Team</span>
+                        <span className="settings-hint">
+                            Whose offseason this is. Everyone on the roster plays for them,
+                            everyone drafted here is drafted by them, and a free-agent
+                            candidate is somebody they might sign.
+                        </span>
+                        <input
+                            type="text"
+                            className="text-input"
+                            value={team}
+                            placeholder="KC"
+                            onChange={e => setTeam(e.target.value)}
+                        />
+                    </label>
+
                     <label className="settings-field">
                         <span className="settings-label">Positional value</span>
                         <span className="settings-hint">

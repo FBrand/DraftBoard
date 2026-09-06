@@ -9,6 +9,17 @@
  */
 export const DRAFT_YEAR = 2026;
 
+/**
+ * The last overall pick of each round.
+ *
+ * A round cannot be divided out of a pick number: compensatory picks make the
+ * rounds uneven from the third on, so `ceil(pick / 32)` is wrong for most of
+ * a draft. These are the standard modern boundaries and are worth checking
+ * against the actual order each year — a wrong round is worse than none, so
+ * anything past the last boundary gets no round rather than a guessed one.
+ */
+export const DRAFT_ROUND_ENDS = [32, 64, 102, 139, 177, 216, 257];
+
 export const TEAM_CONFIG = {
     name: "Kansas City Chiefs",
     abbreviation: "KC",

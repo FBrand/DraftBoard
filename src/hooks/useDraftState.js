@@ -1,9 +1,42 @@
 import { useState, useEffect, useCallback } from 'react';
 import { parseRankings, parsePicks } from '../utils/dataParser';
 import { shouldSeed } from '../utils/appInit';
-import { highestDraftPick, isUndraftedSigning, LAST_DRAFT_PICK } from '../utils/draftPhase';
+import { highestDraftPick, isUndraftedSigning, roundForPick, LAST_DRAFT_PICK } from '../utils/draftPhase';
 import { TEAM_CONFIG, DRAFT_YEAR } from '../constants';
-import { resolve as resolvePlayer, setFacts } from '../utils/playerRegistry';
+import { resolve as resolvePlayer, resolveAll, setFacts } from '../utils/playerRegistry';
+
+/**
+ * Writes what a completed draft says about the players in it.
+ *
+ * A draft read from DraftBoard_Picks.csv never passes through draftPlayer, so
+ * nothing recorded who took whom — the cards showed no team, no pick and no
+ * round even though the draft was over. Resolved in one batch, because this
+ * runs over every pick in the draft.
+ */
+function recordDraftFacts(drafted) {
+    if (!drafted?.length) return;
+    const ids = resolveAll(drafted.map(p => ({ name: p.name, position: p.position, school: p.school })));
+
+    drafted.forEach((p, i) => {
+        const id = ids[i];
+        if (!id) return;
+
+        if (isUndraftedSigning(p)) {
+            setFacts(id, { isUdfa: true, draftYear: DRAFT_YEAR, team: p.team || null });
+            return;
+        }
+
+        const pick = Number(p.pickNumber);
+        if (!Number.isFinite(pick)) return;
+        setFacts(id, {
+            isUdfa: false,
+            draftYear: DRAFT_YEAR,
+            draftPick: pick,
+            draftRound: roundForPick(pick),
+            team: p.team || null,
+        });
+    });
+}
 import { findMatchingPlayerIndex, buildNameIndex, findMatchingIndex } from '../utils/nameMatcher';
 
 const DRAFT_STORAGE_KEY = 'nfl_draft_board_state';
@@ -186,6 +219,12 @@ export const useDraftState = () => {
                         const enrichedYourPicks = enrichedDrafted.filter(p => p.draftedByUs);
                         setYourPicks(enrichedYourPicks);
 
+                        // A draft loaded from file never passed through
+                        // draftPlayer, so nothing had recorded what it says
+                        // about these players. Their cards showed no team, no
+                        // pick and no round despite the draft being complete.
+                        recordDraftFacts(enrichedDrafted);
+
                         setRemotePicks(savedState && Array.isArray(parsedState.remotePicks) ? parsedState.remotePicks : []);
 
                         // Seed the current pick from the highest recorded one.
@@ -263,11 +302,19 @@ export const useDraftState = () => {
         }
 
         // A pick is a fact about the player, not an opinion, so it goes on his
-        // record rather than only into this session's draft state. The round is
-        // left alone: compensatory picks mean it can't be divided out of the
-        // overall number, and a wrong round is worse than a missing one.
+        // record rather than only into this session's draft state. The round
+        // comes from the stated boundaries (constants.DRAFT_ROUND_ENDS), not
+        // from dividing the pick number, which compensatory picks break.
         const id = resolvePlayer({ name: player.name, position: player.position, school: player.school });
-        if (id) setFacts(id, { isUdfa: false, draftYear: DRAFT_YEAR, draftPick: pickNumber, team });
+        if (id) {
+            setFacts(id, {
+                isUdfa: false,
+                draftYear: DRAFT_YEAR,
+                draftPick: pickNumber,
+                draftRound: roundForPick(pickNumber),
+                team,
+            });
+        }
 
         triggerChime();
         setCurrentPick(prev => prev + 1);
