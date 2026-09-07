@@ -2147,6 +2147,9 @@ body.export-mode .card-glow {
   flex: 1;
   overflow: hidden;
   min-height: 0;
+  /* The player card floats over the unmatched column rather than sitting
+     beside it — see below. */
+  position: relative;
 }
 
 .scouting-layout .left-panel {
@@ -2160,10 +2163,20 @@ body.export-mode .card-glow {
   min-width: 0;
 }
 
+/* Selected player: floats over the unmatched column instead of taking a
+   column of its own. Nothing is selected most of the time, and a permanently
+   reserved 340px of "Select a player to view scouting notes" was the widest
+   thing on screen saying the least. */
 .scouting-layout .right-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
   width: 340px;
   flex-shrink: 0;
   border-left: 1px solid var(--border-color);
+  box-shadow: -14px 0 28px rgba(0, 0, 0, 0.55);
   padding: 14px 16px;
   box-sizing: border-box;
 }
@@ -3624,7 +3637,8 @@ body.export-mode .card-glow {
 /* The unmatched column is a worklist: narrow, single-file, and it should read
    as a side note rather than compete with the board. */
 .sg-unmatched-panel {
-  width: 232px;
+  /* Takes the space the player card used to reserve. */
+  width: 340px;
   flex-shrink: 0;
   border-left: 1px solid var(--border-color);
   display: flex;

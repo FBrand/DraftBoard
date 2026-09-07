@@ -604,7 +604,9 @@ export default function ScoutingView({ players }) {
                 <ScoutingLeftPanel
                     orderedPlayers={orderedPlayers}
                     selectedName={selectedName}
-                    onSelect={(p) => setSelectedName(p.name)}
+                    // Clicking the selected player again closes his card — the same
+                    // gesture that opened it, which is how a toggle should behave.
+                    onSelect={(p) => setSelectedName(prev => (prev === p.name ? null : p.name))}
                     onReorder={handleReorder}
                 />
                 )}
@@ -613,7 +615,9 @@ export default function ScoutingView({ players }) {
                     players={visiblePlayers}
                     groupBy={groupBy}
                     selectedName={selectedName}
-                    onSelect={(p) => setSelectedName(p.name)}
+                    // Clicking the selected player again closes his card — the same
+                    // gesture that opened it, which is how a toggle should behave.
+                    onSelect={(p) => setSelectedName(prev => (prev === p.name ? null : p.name))}
                     tagFor={(name, qualifier) => entryFor(name, qualifier)?.tag ?? null}
                     // On a phone this is the only column, so the players the
                     // grouping cannot place go at the bottom of it.
@@ -625,12 +629,18 @@ export default function ScoutingView({ players }) {
                         players={visiblePlayers}
                         groupBy={groupBy}
                         selectedName={selectedName}
-                        onSelect={(p) => setSelectedName(p.name)}
+                        // Clicking the selected player again closes his card — the same
+                    // gesture that opened it, which is how a toggle should behave.
+                    onSelect={(p) => setSelectedName(prev => (prev === p.name ? null : p.name))}
                         tagFor={(name, qualifier) => entryFor(name, qualifier)?.tag ?? null}
                     />
                 )}
 
-                {!isMobile && (
+                {/* Only when somebody is selected. The panel floats over the
+                    unmatched column, so rendering its "select a player"
+                    placeholder would hide that column permanently — which is
+                    the column you are looking at when nobody is selected. */}
+                {!isMobile && selectedPlayer && (
                     <ScoutingControls
                         key={`${selectedName || 'none'}-${activeBoard}`}
                         player={selectedPlayer}
