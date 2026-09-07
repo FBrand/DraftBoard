@@ -681,17 +681,29 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
                     />
                 ) : null}
 
-                {canEditBase && (
+                {/* Editing only. Removing a player, or wiping what you have
+                    said about him, is not something a card you opened to read
+                    should offer. */}
+                {canEditBase && (!readOnly || cardEditing) && (
                     <div className="scouting-prospect-admin">
                         {workedOn.length > 0 ? (
                             <>
                                 <span className="scouting-prospect-note">
                                     Ranked or evaluated on {workedOn.join(', ')} — clear those first
                                 </span>
-                                {onEntryChange && (
+                                {(onEntryChange || onChange) && (
                                     <button type="button" className="scouting-prospect-remove"
-                                        title="Removes this board's placement and tag for him, and nobody else's"
-                                        onClick={() => onEntryChange({ round: null, tier: null, withinGroup: null, tag: null })}>
+                                        title="Removes this board's placement, tag and remarks for him, and nobody else's"
+                                        onClick={() => {
+                                            // Through commit, not onEntryChange: Scouting's panel
+                                            // passes onChange instead, so calling the other one
+                                            // directly did nothing at all there.
+                                            commit({ round: null, tier: null, withinGroup: null, tag: null });
+                                            // Remarks are the other half of "my opinions" — leaving
+                                            // them behind meant the player still could not be
+                                            // deleted after clearing.
+                                            (remarks ?? []).forEach(r => onRemoveRemark?.(r.id));
+                                        }}>
                                         Clear my opinions
                                     </button>
                                 )}

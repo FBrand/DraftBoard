@@ -10,6 +10,7 @@ import { migrateLegacyScores } from '../utils/athleticMatrix';
 import { openBoards, listBoards, boardById } from '../utils/boardRegistry';
 import { openEvaluations, migrateBoardRemarks } from '../utils/evaluations';
 import { applyPlayerFacts } from '../utils/playerFacts';
+import { seedExampleEvaluations } from '../utils/exampleEvaluations';
 
 /**
  * Loads every analyst's rankings file once, so Scouting can show each board's
@@ -192,6 +193,11 @@ function loadPools() {
             const carried = migrateBoardRemarks(boardById(board), state.entries);
             if (carried) scoutingState.saveState(board, { ...state, entries: carried });
         });
+
+        // The shipped worked example — see exampleEvaluations.js. After the
+        // boards exist and their players have ids to hang remarks on, and
+        // never over anything already written.
+        seedExampleEvaluations();
         return pools;
     });
 }

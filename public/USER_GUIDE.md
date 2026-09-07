@@ -253,10 +253,11 @@ never seen are created; anyone already on the board arrives marked **"Updating
 a file of evaluations. You can undo that on any row, open the existing player's
 card, or drop the row. Players you leave out of the file are left alone.
 
-`evaluations_kc_2026.csv` ships as a worked example: the seven Chiefs picks
-from the 2026 draft with ten to fourteen remarks each, sourced from Bleacher
-Report's scouting reports. Import it through **+ Add Players** to see what a
-filled-in board looks like.
+A worked example is already loaded. The seven Chiefs picks from the 2026 draft
+carry ten to fourteen remarks each on the Consensus board, taken from Bleacher
+Report's scouting reports — open **Mansoor Delane** to see what a filled-in
+player looks like. The file behind it is `evaluations_kc_2026.csv`, which is
+also a plain example of the import format.
 
 **Export Board CSV** writes the same columns back out, so a board round-trips.
 It is also a seed file: drop it into `public/` or load it with `?rankings=` and
@@ -310,13 +311,7 @@ Everything lives in your **browser's storage** on the machine you are using.
 There is no account and no server, so nothing is uploaded and nothing syncs.
 It survives closing the tab, quitting the browser and restarting the computer.
 
-Three things will lose it, and they are worth knowing before a show:
-
-**The address matters.** Storage belongs to the exact address in the bar, so
-`localhost:4180` and `192.168.1.50:4180` are two different places with two
-different sets of boards — same app, same machine, same server. Open the app
-the same way every time. If your work has "vanished", check the address bar
-first: it is almost always this.
+Two things will lose it, and they are worth knowing before a show:
 
 **Clearing browsing data takes it with everything else**, and a private or
 incognito window throws it away when you close the window. Don't build a board
