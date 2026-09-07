@@ -149,21 +149,22 @@ test.describe('drag and drop', () => {
     test('scouting: reordering the ranking survives a reload', async ({ page }) => {
         await openWarm(page, 'scouting');
         // The ranking column is what reorders; the grouped list beside it is a
-        // reading surface and deliberately does not drag.
-        await page.waitForSelector('.scouting-rank-handle', { timeout: 45_000 });
+        // reading surface and deliberately does not drag. The whole ROW is the
+        // drag handle — there used to be a ⠿ grip, which nobody aimed at.
+        await page.waitForSelector('.scouting-rank-row', { timeout: 45_000 });
 
         const names = () => page.$$eval('.left-panel .scouting-rank-card',
             els => els.slice(0, 5).map(e => e.textContent));
 
         const before = await names();
-        const handles = page.locator('.scouting-rank-handle');
-        await dragTo(page, handles.nth(0), handles.nth(3));
+        const rows = page.locator('.left-panel .scouting-rank-row');
+        await dragTo(page, rows.nth(0), rows.nth(3));
 
         const after = await names();
         expect(after, 'the drag changed nothing on screen').not.toEqual(before);
 
         await page.reload();
-        await page.waitForSelector('.scouting-rank-handle', { timeout: 45_000 });
+        await page.waitForSelector('.scouting-rank-row', { timeout: 45_000 });
         expect(await names(), 'the order did not survive the reload').toEqual(after);
     });
 
