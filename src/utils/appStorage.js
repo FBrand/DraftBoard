@@ -64,3 +64,29 @@ export function ownedKeys() {
     } catch { /* ignore */ }
     return [...found];
 }
+
+/**
+ * Asks the browser not to evict this origin's data.
+ *
+ * localStorage survives a restart and a reboot, but by default a browser
+ * treats it as *evictable*: under disk pressure Chrome may clear it, without
+ * warning and without asking. For a tool whose entire state — every board,
+ * every evaluation, a whole offseason — lives in localStorage and nowhere
+ * else, that is the difference between a bad morning and a lost season.
+ *
+ * `persist()` asks for the "persistent" bucket instead, which a browser only
+ * clears when the user does. Chrome grants it silently for a site the user
+ * has engaged with; Firefox may prompt; Safari does not implement it. All
+ * three failure modes are fine — this is a best effort on top of a working
+ * app, so it never blocks startup and never reports anything.
+ *
+ * It is NOT a backup. Storage is per ORIGIN, so the same app served from
+ * localhost and from a LAN address keeps two entirely separate sets of data,
+ * and "clear browsing data" takes the lot either way. Session → Export Full
+ * Session is the only copy that survives the browser being wrong.
+ */
+export function requestPersistentStorage() {
+    try {
+        navigator.storage?.persist?.().catch(() => {});
+    } catch { /* not supported — the app works either way */ }
+}

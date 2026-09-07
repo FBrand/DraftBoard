@@ -301,3 +301,31 @@ and remarks are opinions and belong to whoever holds them.
 
 **If something looks wrong, export your session first.** A JSON export takes a
 second and gives you a point to come back to.
+
+---
+
+## Where your work is kept
+
+Everything lives in your **browser's storage** on the machine you are using.
+There is no account and no server, so nothing is uploaded and nothing syncs.
+It survives closing the tab, quitting the browser and restarting the computer.
+
+Three things will lose it, and they are worth knowing before a show:
+
+**The address matters.** Storage belongs to the exact address in the bar, so
+`localhost:4180` and `192.168.1.50:4180` are two different places with two
+different sets of boards — same app, same machine, same server. Open the app
+the same way every time. If your work has "vanished", check the address bar
+first: it is almost always this.
+
+**Clearing browsing data takes it with everything else**, and a private or
+incognito window throws it away when you close the window. Don't build a board
+in one.
+
+**A browser can evict it if the disk gets full.** The app asks to be exempt
+from that on startup, which most browsers grant silently — but it is a request,
+not a guarantee.
+
+So before anything that matters, use **Session → Export Full Session**. It is
+one file holding every stage, it takes a second, and it is the only copy that
+survives the browser being wrong. Keep the one from the night before a draft.
