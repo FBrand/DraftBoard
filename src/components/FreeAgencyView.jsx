@@ -48,8 +48,9 @@ export default function FreeAgencyView({ masterPlayers, draftedPlayers, onInfoOp
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [seeding]);
 
-    const rosterSnapshot = rosterState.loadState();
-    const needs = faState.computePositionNeed(rosterSnapshot);
+    // FA's own board — the roster as it stands going into the draft — not
+    // Roster's, which is where the draft has already been run.
+    const needs = faState.computePositionNeed(state);
     const openNeeds = Object.entries(needs).filter(([, n]) => n.stillNeed > 0);
 
     const performMove = useCallback((src, dst) => {
@@ -216,15 +217,19 @@ export default function FreeAgencyView({ masterPlayers, draftedPlayers, onInfoOp
 
                 <div style={{ flex: 1 }} />
 
-                {openNeeds.length > 0 && (
-                    <div className="roster-zoom-ctrl" style={{ gap: 6, flexWrap: 'wrap' }}>
-                        {openNeeds.map(([label, n]) => (
-                            <span key={label} className="rv-ctrl-btn" style={{ width: 'auto', padding: '2px 8px', cursor: 'default' }}>
+                {/* Always rendered. A view named "needs" that shows nothing
+                    when there are none is indistinguishable from one where
+                    the feature is broken — which is exactly how it read. */}
+                <div className="fa-needs" title="Positions where the roster is short of its own slot count">
+                    <span className="fa-needs-label">NEEDS</span>
+                    {openNeeds.length > 0
+                        ? openNeeds.map(([label, n]) => (
+                            <span key={label} className="rv-ctrl-btn fa-need" style={{ width: 'auto', padding: '2px 8px', cursor: 'default' }}>
                                 {label} ({n.stillNeed})
                             </span>
-                        ))}
-                    </div>
-                )}
+                        ))
+                        : <span className="fa-needs-none">roster is full at every position</span>}
+                </div>
 
                 <div style={{ flex: 1 }} />
 
@@ -272,7 +277,7 @@ export default function FreeAgencyView({ masterPlayers, draftedPlayers, onInfoOp
                 onDeletePosition={handleDeletePosition}
                 onSlotsChange={handleSlotsChange}
                 onAddPosition={setAddPositionPhase}
-                showNeeds={false}
+                showNeeds
                 zoomLevel={zoomLevel}
                 onInfoOpen={onInfoOpen}
             />

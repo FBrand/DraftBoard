@@ -3717,3 +3717,34 @@ body.export-mode .card-glow {
   border-style: dashed;
   font-style: italic;
 }
+
+/* Free agency's needs read-out. Always present, so "no needs" is visibly a
+   result rather than a missing feature — and it wraps on a phone instead of
+   being pushed off the bar. */
+.fa-needs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  /* Not min-width:0 — as a flex item in a crowded toolbar that let it shrink
+     to nothing while still wrapping, so on a phone it measured 0 wide and
+     267 tall: present in the DOM, invisible on screen. */
+  flex-shrink: 0;
+}
+
+/* On a phone the toolbar has no room beside the buttons, so the needs take a
+   line of their own rather than being squeezed out of existence. */
+@media (max-width: 820px) {
+  .top-panel:has(.fa-needs) { flex-wrap: wrap; }
+  .fa-needs { flex-basis: 100%; padding: 4px 0 2px; }
+}
+
+.fa-needs-label {
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+  color: var(--text-dim);
+  font-weight: 700;
+}
+
+.fa-need { border-color: var(--chiefs-red); }
+.fa-needs-none { font-size: 0.72rem; color: var(--text-dim); font-style: italic; }

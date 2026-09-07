@@ -99,11 +99,19 @@ export function saveState(state) {
  * rather than reading it internally, so it's pure and easy to test. Keyed
  * by label, not row id, since FA's own positionConfig rows are separate
  * from Roster's and won't share ids.
+ *
+ * Measure the board you are STANDING ON. This used to be handed Roster's
+ * depth chart, which sounds right — needs are holes in your roster — and is
+ * wrong by the calendar: free agency happens before the draft, and Roster
+ * holds the roster the draft produced. So Kansas City's two open corner
+ * slots read as filled, because Delane and Canady were sitting in them
+ * months early, and a view called "needs" reported none. Anything the draft
+ * has not happened yet cannot know about.
  */
-export function computePositionNeed(rosterSnapshot) {
+export function computePositionNeed(snapshot) {
     const needs = {};
-    if (!rosterSnapshot) return needs;
-    const { positionConfig, depthChart } = rosterSnapshot;
+    if (!snapshot) return needs;
+    const { positionConfig, depthChart } = snapshot;
     [...(positionConfig?.offense ?? []), ...(positionConfig?.defense ?? [])].forEach(p => {
         const slots = depthChart?.[p.id] ?? [];
         const s53 = Math.max(p.slots53, 1);
