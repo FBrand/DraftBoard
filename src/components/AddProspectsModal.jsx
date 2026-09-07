@@ -43,6 +43,9 @@ const blankRow = (seed = {}) => ({
     strengths: [], weaknesses: [], notes: [],
     // Set once the analyst has said a fuzzy match is a different player.
     keepDespiteMatch: false,
+    // Set once they have said the opposite: this IS the man already on the
+    // board, and the row should update him rather than create a second him.
+    updateExisting: false,
     ...seed,
 });
 
@@ -100,7 +103,11 @@ export default function AddProspectsModal({ isOpen, onClose, existingPlayers = [
             return setError('No players found in that file. Expected name,position,school on each line.');
         }
         // Straight to verification: an import proposes, it doesn't commit.
-        setRows(parsed.map(p => blankRow({ ...p, tag: seedTag(p.tag) })));
+        // A file is usually a board's worth of players who already exist —
+        // an evaluations export, say — so exact matches arrive proposed as
+        // updates. Still a proposal: the verification step shows every one and
+        // nothing is written until it is submitted.
+        setRows(parsed.map(p => blankRow({ ...p, tag: seedTag(p.tag), updateExisting: true })));
         setError('');
         setStep('verify');
     };
@@ -135,7 +142,8 @@ export default function AddProspectsModal({ isOpen, onClose, existingPlayers = [
     }, [rows, existingPlayers, step]);
 
     const blockedCount = verdicts.filter((v, i) => (
-        (v.kind === 'exact' || (v.kind === 'similar' && !rows[i].keepDespiteMatch))
+        (v.kind === 'exact' && !rows[i].updateExisting)
+        || (v.kind === 'similar' && !rows[i].keepDespiteMatch && !rows[i].updateExisting)
     )).length;
 
     const removeRow = (i) => setRows(prev => prev.filter((_, j) => j !== i));
@@ -153,6 +161,7 @@ export default function AddProspectsModal({ isOpen, onClose, existingPlayers = [
             name: r.name.trim(),
             position: r.position.trim().toUpperCase(),
             school: r.school.trim(),
+            updateExisting: !!r.updateExisting,
             strengths: r.strengths.map(s => s.trim()).filter(Boolean),
             weaknesses: r.weaknesses.map(s => s.trim()).filter(Boolean),
             notes: r.notes.map(s => s.trim()).filter(Boolean),
@@ -299,12 +308,23 @@ export default function AddProspectsModal({ isOpen, onClose, existingPlayers = [
                                                     different player.
                                                 </span>
                                                 <button type="button" className="ap-link"
+                                                    onClick={() => setRow(i, { updateExisting: true })}>
+                                                    Yes — update him
+                                                </button>
+                                                <button type="button" className="ap-link"
                                                     onClick={() => openExisting(v.match.name)}>Open his card</button>
                                                 <button type="button" className="ap-link"
                                                     onClick={() => removeRow(i)}>Drop this row</button>
                                             </div>
                                         )}
-                                        {v?.kind === 'similar' && !r.keepDespiteMatch && (
+                                        {v?.kind === 'exact' && r.updateExisting && (
+                                            <div className="ap-collision ap-updating">
+                                                <span>Updating <strong>{v.match.name}</strong> — his tier, tag and remarks come from this row.</span>
+                                                <button type="button" className="ap-link"
+                                                    onClick={() => setRow(i, { updateExisting: false })}>Undo</button>
+                                            </div>
+                                        )}
+                                        {v?.kind === 'similar' && !r.keepDespiteMatch && !r.updateExisting && (
                                             <div className="ap-collision">
                                                 <span>Looks like <strong>{v.match.name}</strong>{v.match.position ? ` (${v.match.position})` : ''}.</span>
                                                 <button type="button" className="ap-link"

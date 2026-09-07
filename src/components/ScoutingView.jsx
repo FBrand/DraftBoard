@@ -349,7 +349,11 @@ export default function ScoutingView({ players }) {
     // produced, so a batch that ranks several players lands as one undo step
     // rather than one per player.
     const handleAddProspects = (rows) => {
-        rows.forEach(r => addProspect({ name: r.name, position: r.position, school: r.school }));
+        // A row marked as an update is about somebody already on the board;
+        // adding him again would mint a second record for one man.
+        rows.forEach(r => {
+            if (!r.updateExisting) addProspect({ name: r.name, position: r.position, school: r.school });
+        });
 
         let entries = [...boards[activeBoard].entries];
         const index = buildNameIndex(entries);

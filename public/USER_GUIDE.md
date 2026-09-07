@@ -247,9 +247,16 @@ with `+` or `-` is treated as a formula by Sheets and Excel and the contents
 are mangled. Lines with no symbol are kept as notes, and any of the dashes a
 word processor might produce counts as a weakness.
 
-An import **adds to** the board rather than replacing it: players the app has
-never seen are created, and anyone already there has his tier, tag and remarks
-updated from the file. Players you leave out of the file are left alone.
+An import **adds to** the board rather than replacing it. Players the app has
+never seen are created; anyone already on the board arrives marked **"Updating
+— his tier, tag and remarks come from this row"**, which is the normal case for
+a file of evaluations. You can undo that on any row, open the existing player's
+card, or drop the row. Players you leave out of the file are left alone.
+
+`evaluations_kc_2026.csv` ships as a worked example: the seven Chiefs picks
+from the 2026 draft with ten to fourteen remarks each, sourced from Bleacher
+Report's scouting reports. Import it through **+ Add Players** to see what a
+filled-in board looks like.
 
 **Export Board CSV** writes the same columns back out, so a board round-trips.
 It is also a seed file: drop it into `public/` or load it with `?rankings=` and
