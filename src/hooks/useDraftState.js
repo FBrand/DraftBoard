@@ -132,16 +132,39 @@ export const useDraftState = () => {
             try {
                 const base = import.meta.env.BASE_URL;
                 const params = new URLSearchParams(window.location.search);
-                const rankingsUrl = params.get('rankings') || `${base}rankings_consensus.csv`;
+                // A ?rankings= link is the normal way to hand somebody a
+                // board, which means it is also the normal way to hand
+                // somebody a TYPO. One double-encoded link — %252F where %2F
+                // was meant — fetched a path that 404s, and because fetch does
+                // not throw on 404 the app parsed GitHub's error page as a
+                // rankings file, crashed on the first row, and rendered a
+                // white screen. Someone was told "it's fixed, try again",
+                // clicked that, and saw nothing twice.
+                const fallback = `${base}rankings_consensus.csv`;
+                const requested = params.get('rankings');
+                // A link is worth one retry with the extra encoding stripped:
+                // %252F is always a mistake, never a filename.
+                const candidates = [requested, requested && decodeURIComponent(requested), fallback]
+                    .filter(Boolean);
 
-                const [rankingsRes, picksRes, columnsRes, preloadRes] = await Promise.all([
-                    fetch(rankingsUrl),
+                // First candidate that actually answers. Falling back to the
+                // shipped board beats showing nothing: a wrong board is
+                // obvious and recoverable, a blank page looks broken.
+                let rankingsRes = null;
+                for (const url of candidates) {
+                    try {
+                        const res = await fetch(url);
+                        if (res.ok) { rankingsRes = res; break; }
+                    } catch { /* try the next one */ }
+                }
+
+                const [picksRes, columnsRes, preloadRes] = await Promise.all([
                     fetch(`${base}picks.txt`),
                     fetch(`${base}columns.txt`),
                     fetch(`${base}DraftBoard_Picks.csv`).catch(() => null)
                 ]);
 
-                const rankingsText = await rankingsRes.text();
+                const rankingsText = rankingsRes ? await rankingsRes.text() : '';
                 const picksText = await picksRes.text();
                 const columnsText = await columnsRes.text().catch(() => "");
                 const parsedPositions = columnsText.split(',').map(p => p.trim()).filter(p => p);
