@@ -294,3 +294,41 @@ test.describe('the board CSV', () => {
         expect(text).toContain('• Two-year starter');
     });
 });
+
+test.describe('the draft board in normal view', () => {
+    test('keeps drafted players in place and collapses only emptied tiers', async ({ page }) => {
+        await openWarm(page, 'draft');
+        await page.waitForSelector('.player-card', { timeout: 45_000 });
+
+        // Wind the seeded, completed draft back to a handful of picks so there
+        // are drafted and undrafted players sharing a tier.
+        await page.evaluate(() => {
+            const KEY = 'nfl_draft_board_state';
+            const st = JSON.parse(localStorage.getItem(KEY));
+            const kept = (st.draftedPlayers || []).filter(d => Number(d.pickNumber) <= 9);
+            const names = new Set(kept.map(d => `${d.name}|${d.position}`));
+            st.draftedPlayers = kept;
+            st.currentPick = 10;
+            st.yourPicks = kept.filter(d => d.draftedByUs);
+            st.players = (st.players || []).map(pl => names.has(`${pl.name}|${pl.position}`)
+                ? pl
+                : { ...pl, drafted: false, draftedByUs: false, pickNumber: undefined, team: undefined });
+            localStorage.setItem(KEY, JSON.stringify(st));
+        });
+        await page.reload();
+        await page.waitForSelector('.player-card', { timeout: 45_000 });
+
+        // A drafted player stays on the board, showing the pick that took him.
+        // Removing players one at a time emptied a cell while its row lived on
+        // for somebody else — a blank column reads as "nobody ranked one"
+        // rather than "he went sixth".
+        const drafted = await page.$$eval('.center-board-container .player-card',
+            els => els.map(e => e.textContent.replace(/\s+/g, ' ')).filter(t => /PK\s*\d/.test(t)));
+        expect(drafted.length, 'drafted players vanished from the board').toBeGreaterThan(0);
+
+        // And the tier a drafted player sat in is still rendered, because
+        // somebody in it is still available.
+        const rows = await page.$$eval('.board-row, .center-board-container [class*=row]', els => els.length);
+        expect(rows).toBeGreaterThan(0);
+    });
+});

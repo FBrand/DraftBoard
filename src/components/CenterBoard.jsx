@@ -44,7 +44,24 @@ const CenterBoard = ({ players, onAction, columnOrder = [], isFocusMode = false,
 
         onPlace(player, { ...target.tier, position: target.position, before });
     };
-    const visiblePlayers = isFocusMode ? players : players.filter(p => !p.drafted);
+    // Normal view collapses a TIER once everybody in it is gone. It does not
+    // remove players one at a time.
+    //
+    // It used to do exactly that — filter(!drafted) — and the difference shows
+    // up the moment a position thins out: Delane and Downs share tier 1.2, so
+    // taking Delane emptied the round-1 CB cell while the row itself stayed
+    // for Downs. What you saw was a blank column, which reads as "nobody
+    // ranked a corner" rather than "the corner went sixth". A drafted player
+    // is still information — he is where he was, struck through, and the run
+    // on a position is visible because his card is still sitting in it.
+    const visiblePlayers = players;
+
+    // Whether a ROW still earns its place: in normal view, only while somebody
+    // in it is undrafted.
+    const liveTiers = new Set(
+        (isFocusMode ? players : players.filter(p => !p.drafted))
+            .map(p => tierKey(p.round, p.tier)),
+    );
 
     const rawPositions = [...new Set(players.map(p => p.position.split('.', 1)[0]))];
 
@@ -67,9 +84,8 @@ const CenterBoard = ({ players, onAction, columnOrder = [], isFocusMode = false,
     });
     const masterGroups = [...tiers.values()].sort(compareTiers);
 
-    // Only rows that still have a visible player in them.
-    const activeGroupsSet = new Set(visiblePlayers.map(p => tierKey(p.round, p.tier)));
-    const allGroups = masterGroups.filter(g => activeGroupsSet.has(g.key));
+    // Only rows that still have someone left to take.
+    const allGroups = masterGroups.filter(g => liveTiers.has(g.key));
 
     // A player with no round is UNRANKED — nobody has placed him in a tier.
     // He gets his own row after every round rather than falling into round 1.
