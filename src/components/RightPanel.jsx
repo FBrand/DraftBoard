@@ -1,13 +1,11 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import PlayerCard from './PlayerCard';
 import Toast from './Toast';
-import { serializeDraftState, deserializeDraftState, getExportFilename } from '../utils/sessionSerializer';
 import Menu from './Menu';
 
-const RightPanel = ({ remotePicks, draftedPlayers, currentPick, ourPicksLeft, onImport }) => {
+const RightPanel = ({ remotePicks, draftedPlayers, currentPick }) => {
     const scrollRef = useRef(null);
     const currentPickRef = useRef(null);
-    const fileInputRef = useRef(null);
     const [toast, setToast] = useState(null);
     const dismissToast = useCallback(() => setToast(null), []);
 
@@ -29,50 +27,6 @@ const RightPanel = ({ remotePicks, draftedPlayers, currentPick, ourPicksLeft, on
             container.scrollTo({ top: container.scrollTop + delta, behavior: 'smooth' });
         }
     }, [currentPick, remotePicks.length]);
-
-    const handleExport = () => {
-        const csv = serializeDraftState(draftedPlayers, ourPicksLeft);
-        const blob = new Blob([csv], { type: 'text/csv' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = getExportFilename();
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    };
-
-    const handleImportClick = () => {
-        if (fileInputRef.current) {
-            fileInputRef.current.click();
-        }
-    };
-
-    const handleFileChange = (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            const text = event.target.result;
-            try {
-                const importedState = deserializeDraftState(text);
-                if (importedState.draftedPlayers.length > 0 || importedState.ourPicksLeft.length > 0) {
-                    onImport(importedState);
-                    setToast({ message: `Loaded session — ${importedState.draftedPlayers.length} picks.`, tone: 'success' });
-                } else {
-                    setToast({ message: 'No valid draft data found in that file.', tone: 'error' });
-                }
-            } catch (err) {
-                console.error("Parse error:", err);
-                setToast({ message: "Couldn't parse that draft file — expected a session CSV.", tone: 'error' });
-            }
-        };
-        reader.readAsText(file);
-        // Reset input
-        e.target.value = '';
-    };
 
     const renderPickCard = (p) => {
         const isCurrent = p.overall === currentPick;
@@ -125,23 +79,6 @@ const RightPanel = ({ remotePicks, draftedPlayers, currentPick, ourPicksLeft, on
                 a Session menu that covers every stage, so two things called a
                 session did two different jobs a metre apart. Named for what it
                 is, and moved into a menu like every other occasional action. */}
-            <div className="panel-actions">
-                <Menu
-                    label="Picks"
-                    align="left"
-                    items={[
-                        { label: 'Save Picks…', onClick: handleExport, title: 'This draft\'s picks and UDFA signings, as CSV' },
-                        { label: 'Load Picks…', onClick: handleImportClick, title: 'Replaces the picks made so far' },
-                    ]}
-                />
-                <input
-                    type="file"
-                    ref={fileInputRef}
-                    style={{ display: 'none' }}
-                    accept=".csv"
-                    onChange={handleFileChange}
-                />
-            </div>
 
             <Toast message={toast?.message} tone={toast?.tone} onDismiss={dismissToast} />
         </div>

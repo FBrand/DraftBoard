@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { parseRankings, parsePicks } from '../utils/dataParser';
+import { parseTier } from '../utils/boardRanking';
 import { shouldSeed } from '../utils/appInit';
 import { highestDraftPick, isUndraftedSigning, roundForPick, lastDraftPick } from '../utils/draftPhase';
 import { TEAM_CONFIG, DRAFT_YEAR } from '../constants';
@@ -605,6 +606,25 @@ export const useDraftState = () => {
         return () => clearInterval(interval);
     }, [isLiveSync, loading, draftedPlayers, yourPicks, ourPicksLeft, currentPick, triggerChime]);
 
+    /**
+     * Moves a player into a tier on the draft board.
+     *
+     * The board is editable during a draft for the same reason Scouting's is:
+     * a player rises or falls on Friday night and the board has to say so
+     * before you are on the clock. It writes round and tier on the pool, which
+     * the existing persistence effect saves — no separate store, so the board
+     * you edit is the board you drafted from.
+     */
+    const placePlayer = useCallback((player, tierLabel) => {
+        const { round, tier } = parseTier(tierLabel);
+        if (round == null) return;
+        setPlayers(prev => prev.map(p => (
+            p.name === player.name && p.position === player.position
+                ? { ...p, round, tier }
+                : p
+        )));
+    }, []);
+
     return {
         players: players || [],
         ourPicksLeft: ourPicksLeft || [],
@@ -622,7 +642,8 @@ export const useDraftState = () => {
         undoAction,
         updateOurPicks,
         resetDraft,
-        importDraftState
+        importDraftState,
+        placePlayer
     };
 };
 

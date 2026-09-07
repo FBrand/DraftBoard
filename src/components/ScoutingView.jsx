@@ -3,6 +3,9 @@ import ScoutingGroupedList, { UnmatchedList } from './ScoutingGroupedList';
 import { GROUPINGS } from '../utils/grouping';
 import ScoutingControls from './ScoutingControls';
 import ScoutingLeftPanel from './ScoutingLeftPanel';
+import BoardSwitcher from './BoardSwitcher';
+import { parseRankings } from '../utils/dataParser';
+import CreateBoardModal from './CreateBoardModal';
 import * as scoutingState from '../utils/scoutingState';
 import { buildNameIndex, findMatchingIndex } from '../utils/nameMatcher';
 import useIsMobile from '../hooks/useIsMobile';
@@ -19,13 +22,18 @@ import { addProspect, savePlayerEdit, deletePlayer, restorePlayer, hiddenPlayers
 import * as athleticMatrix from '../utils/athleticMatrix';
 import * as playerRegistry from '../utils/playerRegistry';
 
-import { listBoards, boardBySlug, boardById, renameBoard, listSeasons, currentSeason } from '../utils/boardRegistry';
+import { createBoard, listBoards, boardBySlug, boardById, renameBoard, listSeasons, currentSeason } from '../utils/boardRegistry';
 import { ownerIdFor, remarksFor, addRemark, removeRemark } from '../utils/evaluations';
 
 const TAG_FILTERS = [
     { id: 'all', label: 'All' },
     ...PLAYER_TAGS.map(t => ({ id: t.id, label: `${t.symbol} ${t.label}` })),
     { id: 'untagged', label: 'Untagged' },
+    // Unranked is a filter like any other — "nobody has placed him" is a state
+    // to filter on, not a second axis. It was a separate toggle that could be
+    // combined with a tag, which sounds flexible and in practice just made two
+    // controls that looked alike behave differently.
+    { id: 'unranked', label: 'Unranked' },
 ];
 
 // Uses the same board-grid CenterBoard renders for Draft — building a
@@ -64,9 +72,9 @@ export default function ScoutingView({ players }) {
     // stack, but the address bar should still point at whoever is open.
     const setSelectedName = (name) => setSelectedNameParam(name ?? '', { replace: true });
     const [tagFilter, setTagFilter] = useState('all');
-    const [unrankedOnly, setUnrankedOnly] = useState(false);
     const [addOpen, setAddOpen] = useState(false);
     const [settingsOpen, setSettingsOpen] = useState(false);
+    const [newBoardOpen, setNewBoardOpen] = useState(false);
     // An import that replaces a board should say what it did — silence here
     // reads as "nothing happened" when the file was wrong.
     const [importSummary, setImportSummary] = useState(null);
@@ -167,14 +175,14 @@ export default function ScoutingView({ players }) {
             // Unranked means nobody has placed him in a tier yet — the state
             // every added player starts in, and the working list an analyst
             // needs after a weekend of games.
-            if (unrankedOnly && p.round != null) return false;
+            if (tagFilter === 'unranked') return p.round == null;
             if (tagFilter === 'all') return true;
             const entry = entryFor(p.name, p);
             if (tagFilter === 'untagged') return !entry?.tag;
             return entry?.tag === tagFilter;
         });
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [effectivePlayers, tagFilter, unrankedOnly, entryIndex]);
+    }, [effectivePlayers, tagFilter, entryIndex]);
 
     // Already ordered by effective rank above.
     const orderedPlayers = effectivePlayers;
@@ -468,6 +476,30 @@ export default function ScoutingView({ players }) {
      * and unlike "Export as Board CSV" it carries the analyst's evaluations
      * rather than placement alone.
      */
+    /**
+     * Creates a board and, if a file was given, seeds it from that file.
+     *
+     * Seeding goes through the same parse the shipped rankings use, so a board
+     * started from a CSV is indistinguishable from one that shipped with the
+     * app — and an empty board is a real option: every player shows unranked
+     * until somebody places him.
+     */
+    const handleCreateBoard = async ({ label, authorName, file }) => {
+        const board = await createBoard({ label, authorName });
+        if (!board) return;
+
+        if (file) {
+            const players = parseRankings(await file.text()).filter(p => p?.name);
+            if (players.length) scoutingState.seedBoard(board.id, players);
+        }
+
+        // The pools are keyed by board, so a new one has to be re-merged
+        // before it can be shown.
+        invalidatePools();
+        setBoardList(listBoards());
+        setActiveBoard(board.id);
+    };
+
     const handleExportSpreadsheet = () => {
         const csv = exportBoardCSV(effectivePlayers, {
             entryFor: (p) => entryFor(p.name, p),
@@ -505,23 +537,11 @@ export default function ScoutingView({ players }) {
 
                 <div style={{ width: '20px' }} />
 
-                <div className="board-switcher">
-                    <span className="switcher-label">BOARD</span>
-                    <div className="switcher-buttons">
-                        {boardList.map(b => (
-                            <button
-                                key={b.id}
-                                className={`switcher-btn ${activeBoard === b.id ? 'active' : ''}`}
-                                onClick={() => setActiveBoard(b.id)}
-                                // Double-click to rename: a board's label is
-                                // display text, and an analyst can be renamed
-                                // or replaced without the work moving.
-                                onDoubleClick={() => setRenaming(b.id)}
-                                title="Double-click to rename"
-                            >{b.label}</button>
-                        ))}
-                    </div>
-                </div>
+                <BoardSwitcher
+                    boards={boardList}
+                    activeId={activeBoard}
+                    onSelect={(b) => setActiveBoard(b.id)}
+                />
 
                 <div className="roster-zoom-ctrl" style={{ gap: 6 }}>
                     {TAG_FILTERS.map(f => (
@@ -532,23 +552,20 @@ export default function ScoutingView({ players }) {
                             style={{ width: 'auto', padding: '2px 8px' }}
                         >{f.label}</button>
                     ))}
-                    <span className="scouting-filter-divider" />
-                    {GROUPINGS.map(g => (
-                        <button
-                            key={g.id}
-                            onClick={() => setGroupBy(g.id)}
-                            className={`rv-ctrl-btn ${groupBy === g.id ? 'active' : ''}`}
-                            style={{ width: 'auto', padding: '2px 8px' }}
-                            title={`Group the board by ${g.label.toLowerCase()}`}
-                        >{g.label}</button>
-                    ))}
-                    <span className="scouting-filter-divider" />
-                    <button
-                        onClick={() => setUnrankedOnly(v => !v)}
-                        className={`rv-ctrl-btn ${unrankedOnly ? 'active' : ''}`}
-                        style={{ width: 'auto', padding: '2px 8px' }}
-                        title="Players not yet placed in a tier"
-                    >Unranked</button>
+                </div>
+
+                <div className="board-switcher">
+                    <span className="switcher-label">GROUP BY</span>
+                    <div className="switcher-buttons">
+                        {GROUPINGS.map(g => (
+                            <button
+                                key={g.id}
+                                onClick={() => setGroupBy(g.id)}
+                                className={`switcher-btn ${groupBy === g.id ? 'active' : ''}`}
+                                title={`Group the board by ${g.label.toLowerCase()}`}
+                            >{g.label}</button>
+                        ))}
+                    </div>
                 </div>
 
                 <div style={{ flex: 1 }} />
@@ -567,6 +584,7 @@ export default function ScoutingView({ players }) {
                     >Undo</button>
                     <Menu items={[
                         { label: 'Export Board CSV…', onClick: handleExportSpreadsheet, title: 'The whole board — editable in Sheets, and readable as a seed file in public/ or ?rankings=' },
+                        { label: 'New Board…', onClick: () => setNewBoardOpen(true), title: 'A board for another analyst — optionally seeded from a CSV' },
                         { label: 'Settings…', onClick: () => setSettingsOpen(true), title: 'Positional value and the Athletic Matrix link — shared by every board' },
                         ...(hidden.length ? [{
                             label: `Restore ${hidden.length} Removed Player${hidden.length === 1 ? '' : 's'}`,
@@ -645,6 +663,13 @@ export default function ScoutingView({ players }) {
                     }}
                 />
             )}
+
+            <CreateBoardModal
+                key={`new-board-${newBoardOpen}`}
+                isOpen={newBoardOpen}
+                onClose={() => setNewBoardOpen(false)}
+                onCreate={handleCreateBoard}
+            />
 
             {settingsOpen && (
                 <SettingsModal

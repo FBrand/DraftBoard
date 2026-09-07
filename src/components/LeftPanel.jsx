@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import PlayerCard from './PlayerCard';
 
-const LeftPanel = ({ players, onDraft, onDraftUnranked, onInfoOpen, tagFor }) => {
+const LeftPanel = ({ players, onDraft, onInfoOpen, tagFor }) => {
     const [searchTerm, setSearchTerm] = useState('');
 
     const remaining = players
@@ -66,12 +66,6 @@ const LeftPanel = ({ players, onDraft, onDraftUnranked, onInfoOpen, tagFor }) =>
                         );
                     })
                 )}
-            </div>
-
-            <div className="panel-actions">
-                <button className="action-button primary w-full" onClick={onDraftUnranked}>
-                    Draft Unranked Player
-                </button>
             </div>
         </div>
     );

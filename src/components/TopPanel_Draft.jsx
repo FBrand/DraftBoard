@@ -2,8 +2,10 @@ import React, { useState, useCallback } from 'react';
 import { exportBoardToImage } from '../utils/exportBoard';
 import Toast from './Toast';
 import Menu from './Menu';
+import BoardSwitcher from './BoardSwitcher';
+import { listBoards } from '../utils/boardRegistry';
 
-const TopPanel = ({ currentPick, currentPickStatus, ourPicksLeft, onUndo, onUpdatePicks, onReset, isLiveSync, canLiveSync, toggleLiveSync, isFocusMode, onToggleFocus }) => {
+const TopPanel = ({ currentPick, currentPickStatus, ourPicksLeft, onUndo, onUpdatePicks, onReset, isLiveSync, canLiveSync, toggleLiveSync, isFocusMode, onToggleFocus, onDraftUnranked, onSavePicks, onLoadPicks, boardEditable, onToggleBoardEdit }) => {
     const [isExporting, setIsExporting] = useState(false);
     const [toast, setToast] = useState(null);
     const dismissToast = useCallback(() => setToast(null), []);
@@ -21,13 +23,21 @@ const TopPanel = ({ currentPick, currentPickStatus, ourPicksLeft, onUndo, onUpda
         }
     };
 
-    const updateRankingsParam = (newPath) => {
+    // From the registry, not from filenames written in here: a fourth board
+    // or a renamed analyst has to just appear.
+    const boards = listBoards();
+    const currentRankings = new URLSearchParams(window.location.search).get('rankings') || '';
+    const isActive = (board) => (board.rankingsFile
+        ? currentRankings.includes(board.rankingsFile)
+        : !currentRankings) || (!currentRankings && board.order === 0);
+    const chooseBoard = (board) => {
         const params = new URLSearchParams(window.location.search);
-        params.set('rankings', newPath);
-        window.location.href = `?${params.toString()}`;
+        if (board.rankingsFile) params.set('rankings', `${import.meta.env.BASE_URL}${board.rankingsFile}`);
+        else params.delete('rankings');
+        params.set('board', board.slug);
+        window.location.assign(`?${params.toString()}`);
     };
 
-    const currentRankings = new URLSearchParams(window.location.search).get('rankings') || '';
 
     const picksList = [...ourPicksLeft].filter(p => p >= currentPick).sort((a, b) => a - b);
 
@@ -55,31 +65,19 @@ const TopPanel = ({ currentPick, currentPickStatus, ourPicksLeft, onUndo, onUpda
                         ))}
                     </div>
                 </div>
-                <div className="board-switcher">
-                    <span className="switcher-label">BOARD</span>
-                    <div className="switcher-buttons">
-                        <button
-                            className={`switcher-btn ${!currentRankings || currentRankings.includes('rankings_consensus.csv') ? 'active' : ''}`}
-                            onClick={() => updateRankingsParam(`${import.meta.env.BASE_URL}rankings_consensus.csv`)}
-                        >
-                            Consensus
-                        </button>
-                        <button
-                            className={`switcher-btn ${currentRankings.includes('rankings_dan.csv') ? 'active' : ''}`}
-                            onClick={() => updateRankingsParam(`${import.meta.env.BASE_URL}rankings_dan.csv`)}
-                        >
-                            Dan
-                        </button>
-                        <button
-                            className={`switcher-btn ${currentRankings.includes('rankings_ryan.csv') ? 'active' : ''}`}
-                            onClick={() => updateRankingsParam(`${import.meta.env.BASE_URL}rankings_ryan.csv`)}
-                        >
-                            Ryan
-                        </button>
-                    </div>
-                </div>
+                <BoardSwitcher
+                    boards={boards}
+                    activeId={boards.find(isActive)?.id ?? null}
+                    onSelect={chooseBoard}
+                />
                 <div className="top-actions">
                     <button className="action-pill trade-pill" onClick={onUpdatePicks}>Update Picks</button>
+                    <button className="action-pill" onClick={onDraftUnranked}>+ Draft Unranked Player</button>
+                    <button
+                        className={`action-pill ${boardEditable ? 'active' : ''}`}
+                        onClick={onToggleBoardEdit}
+                        title="Drag cards between tiers on the board"
+                    >{boardEditable ? '✓ Editing' : '✎ Edit Board'}</button>
                     <button
                         className="action-pill export-pill"
                         onClick={handleExport}
@@ -120,29 +118,11 @@ const TopPanel = ({ currentPick, currentPickStatus, ourPicksLeft, onUndo, onUpda
             </div>
 
             <div className="top-actions">
-                <div className="board-switcher">
-                    <span className="switcher-label">BOARD</span>
-                    <div className="switcher-buttons">
-                        <button
-                            className={`switcher-btn ${!currentRankings || currentRankings.includes('rankings_consensus.csv') ? 'active' : ''}`}
-                            onClick={() => updateRankingsParam(`${import.meta.env.BASE_URL}rankings_consensus.csv`)}
-                        >
-                            Consensus
-                        </button>
-                        <button
-                            className={`switcher-btn ${currentRankings.includes('rankings_dan.csv') ? 'active' : ''}`}
-                            onClick={() => updateRankingsParam(`${import.meta.env.BASE_URL}rankings_dan.csv`)}
-                        >
-                            Dan
-                        </button>
-                        <button
-                            className={`switcher-btn ${currentRankings.includes('rankings_ryan.csv') ? 'active' : ''}`}
-                            onClick={() => updateRankingsParam(`${import.meta.env.BASE_URL}rankings_ryan.csv`)}
-                        >
-                            Ryan
-                        </button>
-                    </div>
-                </div>
+                <BoardSwitcher
+                    boards={boards}
+                    activeId={boards.find(isActive)?.id ?? null}
+                    onSelect={chooseBoard}
+                />
                 {canLiveSync && (
                     <label className="sync-toggle">
                         <input
@@ -155,10 +135,18 @@ const TopPanel = ({ currentPick, currentPickStatus, ourPicksLeft, onUndo, onUpda
                 )}
                 {/* Undo and Full Board stay out here — both are used live,
                     mid-draft. Everything occasional moves into the menu. */}
+                <button className="action-pill" onClick={onDraftUnranked}>+ Draft Unranked Player</button>
+                <button
+                    className={`action-pill ${boardEditable ? 'active' : ''}`}
+                    onClick={onToggleBoardEdit}
+                    title="Drag cards between tiers on the board"
+                >{boardEditable ? '✓ Editing' : '✎ Edit Board'}</button>
                 <button className="action-pill undo-pill" onClick={onUndo}>Undo</button>
                 <button className="action-pill focus-pill" onClick={onToggleFocus}>⛶ Full Board</button>
                 <Menu items={[
                     { label: 'Update Our Picks…', onClick: onUpdatePicks },
+                    { label: 'Save Picks…', onClick: onSavePicks, title: 'This draft\'s picks and UDFA signings, as CSV' },
+                    { label: 'Load Picks…', onClick: onLoadPicks, title: 'Replaces the picks made so far' },
                     { label: 'Export Board Image…', onClick: handleExport, title: 'JPEG snapshot of the board' },
                     { label: 'Reset Draft…', onClick: onReset, tone: 'danger' },
                 ]} />

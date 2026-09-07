@@ -3682,3 +3682,7 @@ body.export-mode .card-glow {
    the same wherever he appears. */
 .udfa-signed-card { margin-bottom: 6px; }
 .udfa-signed-card .player-card { width: 100%; cursor: pointer; }
+
+.cb-file-row { display: flex; align-items: center; gap: 10px; }
+.cb-file-name { font-size: 0.8rem; color: var(--text-dim); min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.ap-hint-inline { color: var(--text-dim); font-weight: 400; font-size: 0.75rem; }

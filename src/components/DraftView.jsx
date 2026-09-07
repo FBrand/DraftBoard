@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
+import { serializeDraftState, deserializeDraftState, getExportFilename } from '../utils/sessionSerializer';
 import TopPanelDraft from './TopPanel_Draft';
 import LeftPanel from './LeftPanel';
 import CenterBoard from './CenterBoard';
@@ -16,11 +17,38 @@ import usePlayerTags from '../hooks/usePlayerTags';
 export default function DraftView({
     players, ourPicksLeft, draftedPlayers, yourPicks, currentPick, remotePicks,
     isLiveSync, canLiveSync, toggleLiveSync, draftPlayer, updateOurPicks,
-    resetDraft, undoAction, columnOrder, importDraftState, onInfoOpen, signUndrafted,
+    resetDraft, undoAction, columnOrder, importDraftState, onInfoOpen, signUndrafted, placePlayer,
 }) {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const tagFor = usePlayerTags();
     const [isUnrankedModalOpen, setIsUnrankedModalOpen] = useState(false);
+    // The board is editable during a draft for the same reason Scouting's is:
+    // a player rises on Friday night and the board has to say so before you
+    // are on the clock. Off by default — mid-draft, a stray drag is expensive.
+    const [boardEditable, setBoardEditable] = useState(false);
+    const picksFileRef = useRef(null);
+
+    const handleSavePicks = () => {
+        const csv = serializeDraftState(draftedPlayers, ourPicksLeft);
+        const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = getExportFilename();
+        a.click();
+        URL.revokeObjectURL(url);
+    };
+
+    const handleLoadPicks = () => picksFileRef.current?.click();
+
+    const handlePicksFile = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        try {
+            const imported = deserializeDraftState(await file.text());
+            if (imported.draftedPlayers.length || imported.ourPicksLeft.length) importDraftState(imported);
+        } catch { /* a bad file should not take the draft down mid-broadcast */ }
+        e.target.value = '';
+    };
     // Once the draft is over there are no picks left to spend, so clicking a
     // player opens the sign dialog prefilled with him instead of recording a
     // phantom pick at 258. UnrankedModal has supported `initialPlayer` for a
@@ -50,6 +78,11 @@ export default function DraftView({
                 onUndo={undoAction}
                 onUpdatePicks={() => setIsModalOpen(true)}
                 onReset={resetDraft}
+                onDraftUnranked={() => setIsUnrankedModalOpen(true)}
+                onSavePicks={handleSavePicks}
+                onLoadPicks={handleLoadPicks}
+                boardEditable={boardEditable}
+                onToggleBoardEdit={() => setBoardEditable(v => !v)}
                 isLiveSync={isLiveSync}
                 canLiveSync={canLiveSync}
                 toggleLiveSync={toggleLiveSync}
@@ -83,7 +116,6 @@ export default function DraftView({
                         <LeftPanel
                             players={players}
                             onDraft={draftComplete ? setSignPlayer : draftPlayer}
-                            onDraftUnranked={() => setIsUnrankedModalOpen(true)}
                             onInfoOpen={onInfoOpen}
                             tagFor={tagFor}
                         />
@@ -97,6 +129,8 @@ export default function DraftView({
                     isFocusMode={isFocusMode}
                     onInfoOpen={onInfoOpen}
                     tagFor={tagFor}
+                    editable={boardEditable}
+                    onPlace={placePlayer}
                 />
 
                 <div className={`right-sidebar-wrapper ${showRightSidebar && !isFocusMode ? 'mobile-open' : ''}`}>
@@ -105,8 +139,6 @@ export default function DraftView({
                             remotePicks={remotePicks}
                             draftedPlayers={draftedPlayers}
                             currentPick={currentPick}
-                            ourPicksLeft={ourPicksLeft}
-                            onImport={importDraftState}
                         />
                     )}
                 </div>
@@ -125,6 +157,8 @@ export default function DraftView({
             />
 
             {/* Prefilled with the clicked player, post-draft only. */}
+            <input type="file" accept=".csv" ref={picksFileRef} onChange={handlePicksFile} hidden />
+
             <UnrankedModal
                 key={`sign-${signPlayer?.name ?? 'none'}`}
                 isOpen={!!signPlayer}

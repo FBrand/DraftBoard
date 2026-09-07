@@ -159,9 +159,11 @@ export function renameAuthor(id, name) {
 
 /**
  * Rolls the season over. The outgoing season's boards freeze and stay in
- * history; the new season gets a board per author, empty. A draft class is
- * entirely new players, so carrying last year's placements forward would
- * assert judgements about people nobody has watched yet.
+ * history. It creates NO boards: a new season starts empty and you make the
+ * boards you want with createBoard, because who is scouting this year is a
+ * decision, not something to infer from who scouted last year. Carrying last
+ * year's placements forward would be worse still — a draft class is entirely
+ * new players, so it would assert judgements about people nobody has watched.
  */
 export async function startSeason(year) {
     const outgoing = currentSeason();
@@ -169,21 +171,62 @@ export async function startSeason(year) {
         id: newId('s'), year, status: 'current', createdAt: new Date().toISOString(),
     };
 
-    const carried = listBoards(outgoing?.id).map((b, order) => ({
-        id: newId('b'),
-        slug: b.slug,
-        label: b.label,
-        authorId: b.authorId,
-        seasonId: season.id,
-        rankingsFile: null,       // a new season has no file until one is imported
-        order,
-        createdAt: season.createdAt,
-    }));
-
     await repository.set(SEASONS, season.id, season);
     if (outgoing) {
         await repository.set(SEASONS, outgoing.id, { ...outgoing, status: 'archived' });
     }
-    await repository.commit(BOARDS_COLLECTION, carried.map(b => ({ id: b.id, doc: b })));
     return season;
+}
+
+/**
+ * Makes a board in the current season.
+ *
+ * `authorName` is who is writing it. Passing none makes an authorless board,
+ * which is what consensus is — derived rather than written by a person. An
+ * author with that name is reused rather than duplicated, so the same analyst
+ * keeps one identity across seasons and across boards.
+ *
+ * The slug is derived from the label and made unique, because `?board=` uses
+ * it and two boards answering to one slug would make a link ambiguous. The
+ * label itself is free to repeat and free to change; nothing keys on it.
+ */
+export async function createBoard({ label, authorName = '' } = {}) {
+    const name = String(label ?? '').trim();
+    if (!name) return null;
+
+    const season = currentSeason();
+    if (!season) return null;
+
+    let authorId = null;
+    const author = String(authorName ?? '').trim();
+    if (author) {
+        const existing = repository.all(AUTHORS).find(
+            a => a.name.toLowerCase() === author.toLowerCase(),
+        );
+        if (existing) authorId = existing.id;
+        else {
+            authorId = newId('a');
+            await repository.set(AUTHORS, authorId, { id: authorId, name: author });
+        }
+    }
+
+    const taken = new Set(repository.all(BOARDS_COLLECTION).map(b => b.slug));
+    const base = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'board';
+    let slug = base;
+    for (let n = 2; taken.has(slug); n += 1) slug = `${base}-${n}`;
+
+    const board = {
+        id: newId('b'),
+        slug,
+        label: name,
+        authorId,
+        seasonId: season.id,
+        // Boards made in the app have no file behind them — they are seeded
+        // from whatever is imported into them, or start empty.
+        rankingsFile: null,
+        order: listBoards(season.id).length,
+        createdAt: new Date().toISOString(),
+    };
+    await repository.set(BOARDS_COLLECTION, board.id, board);
+    return board;
 }

@@ -41,7 +41,8 @@ function App() {
     undoAction,
     signUndrafted,
     columnOrder,
-    importDraftState
+    importDraftState,
+    placePlayer
   } = useDraftState();
 
   // The active stage lives in the URL so a view can be linked to. localStorage
@@ -183,6 +184,7 @@ function App() {
               columnOrder={columnOrder}
               importDraftState={importDraftState}
               signUndrafted={signUndrafted}
+              placePlayer={placePlayer}
               onInfoOpen={setInfoPlayer}
             />
           )

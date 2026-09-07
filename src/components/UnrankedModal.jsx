@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import useEscapeKey from '../hooks/useEscapeKey';
+import { resolve as resolvePlayer, byId } from '../utils/playerRegistry';
 
 // mode: 'draft' | 'roster' | 'postdraft'
 // 'draft'     → draft board during the draft: Name+Pos, Draft
@@ -22,7 +23,17 @@ const UnrankedModal = ({ isOpen, onClose, onDraft, mode = 'draft', initialPlayer
     // School is part of the identity — two players sharing a name are told
     // apart by position OR school (see nameMatcher). Collecting it here is
     // also the only chance: nothing downstream can infer where he played.
-    const [school, setSchool] = useState(() => initialPlayer?.school || '');
+    // The draft pool is built from the rankings files, which carry no school
+    // column — but the registry has one for nearly everybody, seeded from the
+    // draft file and the league. Not prefilling it made you retype something
+    // the app already knew.
+    const [school, setSchool] = useState(() => {
+        if (initialPlayer?.school) return initialPlayer.school;
+        if (!initialPlayer?.name) return '';
+        const id = initialPlayer.id
+            ?? resolvePlayer({ name: initialPlayer.name }, { create: false });
+        return (id && byId(id)?.school) || '';
+    });
     const [team, setTeam] = useState(() => initialPlayer?.team || 'KC');
     // Where he came from. Only means anything for a move between clubs — a
     // draft pick and a UDFA are entering the league, not leaving somewhere.
@@ -44,8 +55,9 @@ const UnrankedModal = ({ isOpen, onClose, onDraft, mode = 'draft', initialPlayer
     // one player two.
     const MOVED_CLUBS = new Set(['FA', 'TR']);
 
-    const submit = (suffix = '') => {
+    const submit = (suffix = '', clubOverride) => {
         if (disabled) return;
+        const club = clubOverride !== undefined ? clubOverride : team;
         onDraft({
             name: name.trim(),
             position: position.toUpperCase(),
@@ -54,7 +66,7 @@ const UnrankedModal = ({ isOpen, onClose, onDraft, mode = 'draft', initialPlayer
             // Blank is meaningful in the UDFA stage: signed, but not yet
             // assigned to a club. Passing '' says that; omitting the key
             // would let the caller fall back to the session team.
-            ...(team.trim() ? { team: team.trim().toUpperCase() } : (mode === 'postdraft' ? { team: '' } : {})),
+            ...(club.trim() ? { team: club.trim().toUpperCase() } : (mode === 'postdraft' ? { team: '' } : {})),
             ...(MOVED_CLUBS.has(suffix) && previousTeam.trim()
                 ? { previousTeam: previousTeam.trim().toUpperCase() }
                 : {}),
@@ -164,6 +176,9 @@ const UnrankedModal = ({ isOpen, onClose, onDraft, mode = 'draft', initialPlayer
                         {mode === 'postdraft' && (
                             <div style={{ display: 'flex', gap: 10 }}>
                                 <button type="button" className="action-button primary" style={{ flex: 1, background: 'var(--chiefs-gold)', color: '#000' }} disabled={disabled} onClick={() => submit('UDFA')}>Sign UDFA</button>
+                                <button type="button" className="action-button secondary" style={{ flex: 1 }} disabled={disabled}
+                                    title="Signed, but not assigned to a club yet"
+                                    onClick={() => { setTeam(''); submit('UDFA', ''); }}>Sign · No Team</button>
                                 <button type="button" className="action-button secondary" style={{ flex: 1 }} disabled={disabled} onClick={() => submit('INV')}>Minicamp Invite</button>
                             </div>
                         )}

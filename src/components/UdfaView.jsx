@@ -1,4 +1,6 @@
 import React, { useState, useMemo } from 'react';
+import { listBoards } from '../utils/boardRegistry';
+import BoardSwitcher from './BoardSwitcher';
 import CenterBoard from './CenterBoard';
 import PlayerCard from './PlayerCard';
 import UnrankedModal from './UnrankedModal';
@@ -79,12 +81,20 @@ export default function UdfaView({ players, draftedPlayers, columnOrder, signUnd
     // — but clicking a card can't record a signing.
     const draftComplete = isDraftComplete(currentPick);
 
-    const updateRankingsParam = (newPath) => {
-        const params = new URLSearchParams(window.location.search);
-        params.set('rankings', newPath);
-        window.location.href = `?${params.toString()}`;
-    };
+    // Boards come from the registry, not from three filenames spelled out
+    // here — that is exactly the coupling boardRegistry.js exists to remove.
+    const boards = listBoards();
     const currentRankings = new URLSearchParams(window.location.search).get('rankings') || '';
+    const isActive = (board) => (board.rankingsFile
+        ? currentRankings.includes(board.rankingsFile)
+        : currentRankings === '') || (!currentRankings && board.order === 0);
+    const chooseBoard = (board) => {
+        const params = new URLSearchParams(window.location.search);
+        if (board.rankingsFile) params.set('rankings', `${import.meta.env.BASE_URL}${board.rankingsFile}`);
+        else params.delete('rankings');
+        params.set('board', board.slug);
+        window.location.assign(`?${params.toString()}`);
+    };
 
     return (
         <div className="roster-view">
@@ -96,23 +106,11 @@ export default function UdfaView({ players, draftedPlayers, columnOrder, signUnd
 
                 <div style={{ width: '20px' }} />
 
-                <div className="board-switcher">
-                    <span className="switcher-label">BOARD</span>
-                    <div className="switcher-buttons">
-                        <button
-                            className={`switcher-btn ${!currentRankings || currentRankings.includes('rankings_consensus.csv') ? 'active' : ''}`}
-                            onClick={() => updateRankingsParam(`${import.meta.env.BASE_URL}rankings_consensus.csv`)}
-                        >Consensus</button>
-                        <button
-                            className={`switcher-btn ${currentRankings.includes('rankings_dan.csv') ? 'active' : ''}`}
-                            onClick={() => updateRankingsParam(`${import.meta.env.BASE_URL}rankings_dan.csv`)}
-                        >Dan</button>
-                        <button
-                            className={`switcher-btn ${currentRankings.includes('rankings_ryan.csv') ? 'active' : ''}`}
-                            onClick={() => updateRankingsParam(`${import.meta.env.BASE_URL}rankings_ryan.csv`)}
-                        >Ryan</button>
-                    </div>
-                </div>
+                <BoardSwitcher
+                    boards={boards}
+                    activeId={boards.find(isActive)?.id ?? null}
+                    onSelect={chooseBoard}
+                />
 
                 <div style={{ flex: 1 }} />
 
