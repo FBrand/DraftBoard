@@ -124,7 +124,11 @@ export default function DraftView({
 
                 <CenterBoard
                     players={players}
-                    onAction={draftComplete ? setSignPlayer : draftPlayer}
+                    // While the draft runs, a click drafts. Once it is over
+                    // there is nothing left to draft, so a click asks who he
+                    // is — it used to open a UDFA signing form, which belongs
+                    // to the UDFA stage and not to a board you are reading.
+                    onAction={draftComplete ? onInfoOpen : draftPlayer}
                     columnOrder={columnOrder}
                     isFocusMode={isFocusMode}
                     onInfoOpen={onInfoOpen}
@@ -142,6 +146,7 @@ export default function DraftView({
                             remotePicks={remotePicks}
                             draftedPlayers={draftedPlayers}
                             currentPick={currentPick}
+                            onInfoOpen={onInfoOpen}
                         />
                     )}
                 </div>
@@ -149,7 +154,7 @@ export default function DraftView({
 
             {/* Picks only. A UDFA is a signing and belongs to the UDFA stage,
                 which has its own panel for them. */}
-            {!isFocusMode && <BottomPanel yourPicks={yourPicks.filter(p => !isUndraftedSigning(p))} />}
+            {!isFocusMode && <BottomPanel yourPicks={yourPicks.filter(p => !isUndraftedSigning(p))} onInfoOpen={onInfoOpen} />}
 
             <PicksModal
                 key={`picks-${isModalOpen}`}

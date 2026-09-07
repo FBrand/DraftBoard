@@ -491,7 +491,11 @@ export default function RosterView({ masterPlayers, draftedPlayers, onInfoOpen }
 
                 <div className="roster-counters">
                     <CounterBox label="53-MAN" val={destined53} max={53} status={counterStatus(destined53, 53)} />
-                    <CounterBox label="PRACTICE SQUAD" val={psCount} max={16} status={counterStatus(psCount, 16)} />
+                    {/* 16 + 1: an International Pathway player is an exemption
+                        to the practice-squad limit, not a player who has to
+                        occupy one of the sixteen. He stays wherever he is on
+                        the chart; the ALLOWANCE is what changes. */}
+                    <CounterBox label="PRACTICE SQUAD" val={psCount} max={17} status={counterStatus(psCount, 17)} maxLabel="16+1" />
                     <CounterBox label="TOTAL SQUAD" val={total} max={91} status={counterStatus(total, 91)} isLast maxLabel="90+1" />
                 </div>
 

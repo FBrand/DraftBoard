@@ -4,7 +4,7 @@ import Toast from './Toast';
 import Menu from './Menu';
 import { getSessionTeam } from '../utils/appSettings';
 
-const RightPanel = ({ remotePicks, draftedPlayers, currentPick }) => {
+const RightPanel = ({ remotePicks, draftedPlayers, currentPick, onInfoOpen }) => {
     const scrollRef = useRef(null);
     const currentPickRef = useRef(null);
     const [toast, setToast] = useState(null);
@@ -49,6 +49,11 @@ const RightPanel = ({ remotePicks, draftedPlayers, currentPick }) => {
                     isCurrent={isCurrent}
                     traded={p.traded}
                     tradeNote={p.tradeNote}
+                    // A pick in the tracker is a player like any other: a
+                    // click should tell you who he is. These were inert.
+                    onClick={player.name ? onInfoOpen : undefined}
+                    onInfoOpen={player.name ? onInfoOpen : undefined}
+                    alwaysClickable
                 />
             </div>
         );

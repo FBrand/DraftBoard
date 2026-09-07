@@ -22,9 +22,19 @@ function Row({ player, rank, group, onSelect, isSelected }) {
     return (
         <div
             ref={node => { setDragRef(node); setDropRef(node); }}
+            // The whole row drags, not just the grip.
+            //
+            // The listeners used to sit on the ⠿ alone — a column about ten
+            // pixels wide at the far left — so dragging the player, which is
+            // what anybody tries first, did nothing at all and the list looked
+            // like it could not be reordered. The sensor needs 8px of movement
+            // before it treats a press as a drag, so a plain click still
+            // selects the player; only an actual drag reorders.
+            {...listeners}
+            {...attributes}
             className={`scouting-rank-row ${isDragging ? 'dragging-source' : ''} ${isOver ? 'drag-over' : ''} ${isSelected ? 'selected' : ''}`}
         >
-            <div className="scouting-rank-handle" {...listeners} {...attributes} style={{ cursor: 'grab' }}>⠿</div>
+            <div className="scouting-rank-handle" style={{ cursor: 'grab' }}>⠿</div>
             <div className={`scouting-rank-num ${rank == null ? 'unranked' : ''}`}>{rank ?? '???'}</div>
             {group && <div className="scouting-rank-group">{group}</div>}
             <div className="scouting-rank-card" onClick={() => onSelect(player)}>

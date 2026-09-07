@@ -3748,3 +3748,8 @@ body.export-mode .card-glow {
 
 .fa-need { border-color: var(--chiefs-red); }
 .fa-needs-none { font-size: 0.72rem; color: var(--text-dim); font-style: italic; }
+
+/* The row is the drag target now, so it should say so on hover. */
+.scouting-rank-row { cursor: grab; }
+.scouting-rank-row.dragging-source { cursor: grabbing; }
+.scouting-rank-row .scouting-rank-card { cursor: pointer; }

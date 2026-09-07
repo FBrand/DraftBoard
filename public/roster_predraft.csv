@@ -1,7 +1,7 @@
 Phase,pos,slots53,slot1,slot2,slot3,slot4,slot5
-O,LWR,2,Tyquan Thornton:FA,Nikko Remigio:UDFA
-O,RWR,2,Xavier Worthy:24/1,Jason Brownlee:FA,R:Andrew Armstrong:FA
-O,SWR,2,Rashee Rice:23/2,Jalen Royals:25/4,R:Jimmy Holiday:FA
+O,WR.Z,2,Tyquan Thornton:FA,Nikko Remigio:UDFA
+O,WR.X,2,Xavier Worthy:24/1,Jason Brownlee:FA,R:Andrew Armstrong:FA
+O,WR.S,2,Rashee Rice:23/2,Jalen Royals:25/4,R:Jimmy Holiday:FA
 O,LT,2,Josh Simmons:25/1,Esa Pole:FA,R:Ethan Driskell:UDFA
 O,LG,2,Kingsley Suamataia:24/2,C.J. Hanson:24/7
 O,C,2,Creed Humphrey:21/2,Hunter Nourzad:24/5
@@ -11,16 +11,16 @@ O,TE,4,Travis Kelce:13/3,Noah Gray:21/5,Jared Wiley:24/4,Jake Briningstool:UDFA,
 O,QB,3,Patrick Mahomes:17/1,Justin Fields:TR,Chris Oladokun:FA,R:Jake Haener:FA
 O,RB,4,Kenneth Walker:FA,Brashard Smith:25/7,Emari Demercado:FA,ShunDerrick Powell:FA
 D,LDE,3,George Karlaftis:22/1,Ethan Downs:FA,Tyreke Smith:FA
-D,LDT,2,Chris Jones:16/2,Zacch Pickens:FA,R:Marcus Harris:FA
-D,RDT,2,Khyiris Tonga:FA,Omarr Norman-Lott:25/2
+D,DT.3T,2,Khyiris Tonga:FA,Omarr Norman-Lott:25/2
+D,DT.1T,2,Chris Jones:16/2,Zacch Pickens:FA,R:Marcus Harris:FA
 D,RDE,2,Ashton Gillotte:25/3,Felix Anudike-Uzomah:23/1
-D,WLB,2,Drue Tranquill:FA,Jeffrey Bassa:25/5,R:Cole Christiansen:FA,R:Kam Arnold:FA
-D,MLB,3,Nick Bolton:21/2,Jack Cochrane:UDFA,Cooper McDonald:UDFA,R:Brandon George:UDFA
-D,LCB,2,Nohl Williams:25/3,Melvin Smith Jr.:UDFA
-D,SS,2,Chamarri Conner:23/4,Jaden Hicks:24/4
-D,FS,2,Alohi Gilman:FA,Chris Roland-Wallace:UDFA,R:Tanner McCalister:FA
-D,RCB,2,Kristian Fulton:FA,Kaiir Elam:FA
-D,NB,2,Kader Kohou:FA,Kevin Knowles:UDFA
+D,LB.W,2,Drue Tranquill:FA,Jeffrey Bassa:25/5,R:Cole Christiansen:FA,R:Kam Arnold:FA
+D,LB.M,3,Nick Bolton:21/2,Jack Cochrane:UDFA,Cooper McDonald:UDFA,R:Brandon George:UDFA
+D,CB.L,2,Nohl Williams:25/3,Melvin Smith Jr.:UDFA
+D,S.S,2,Chamarri Conner:23/4,Jaden Hicks:24/4
+D,S.F,2,Alohi Gilman:FA,Chris Roland-Wallace:UDFA,R:Tanner McCalister:FA
+D,CB.R,2,Kristian Fulton:FA,Kaiir Elam:FA
+D,CB.N,2,Kader Kohou:FA,Kevin Knowles:UDFA
 S,P,Matt Araiza:FA
 S,K,Harrison Butker:FA
 S,LS,James Winchester:FA

@@ -6,7 +6,7 @@ import React from 'react';
 // flex item's default min-width is auto — so instead of shrinking and
 // scrolling its own content, it grew to fit every card and pushed the panel
 // wide. min-width:0 is what lets a flex child actually be a scroll container.
-const BottomPanel = ({ yourPicks }) => {
+const BottomPanel = ({ yourPicks, onInfoOpen }) => {
     // Chrome does not turn a vertical wheel into horizontal scrolling for an
     // ordinary element — that is shift+wheel, which nobody discovers and which
     // is useless on a trackpad-less broadcast machine. overflow-x:auto alone
@@ -33,7 +33,10 @@ const BottomPanel = ({ yourPicks }) => {
                     <div
                         key={player.name}
                         className="player-card ours bp-pick"
+                        onClick={() => onInfoOpen?.(player)}
+                        onContextMenu={(e) => { e.preventDefault(); onInfoOpen?.(player); }}
                         style={{
+                            cursor: onInfoOpen ? 'pointer' : 'default',
                             minWidth: '150px',
                             marginBottom: '0.5rem',
                             padding: '0.5rem 1rem',
