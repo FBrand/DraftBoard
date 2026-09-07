@@ -22,19 +22,16 @@ function Row({ player, rank, group, onSelect, isSelected }) {
     return (
         <div
             ref={node => { setDragRef(node); setDropRef(node); }}
-            // The whole row drags, not just the grip.
-            //
-            // The listeners used to sit on the ⠿ alone — a column about ten
-            // pixels wide at the far left — so dragging the player, which is
-            // what anybody tries first, did nothing at all and the list looked
-            // like it could not be reordered. The sensor needs 8px of movement
-            // before it treats a press as a drag, so a plain click still
-            // selects the player; only an actual drag reorders.
+            // The whole row drags. The listeners used to sit on a ⠿ grip about
+            // ten pixels wide, so dragging the player — which is what anybody
+            // tries — did nothing and the list looked fixed. With the row
+            // itself draggable the grip had nothing left to say, so it is
+            // gone. The sensor needs 8px of movement before it calls a press a
+            // drag, so a plain click still selects.
             {...listeners}
             {...attributes}
             className={`scouting-rank-row ${isDragging ? 'dragging-source' : ''} ${isOver ? 'drag-over' : ''} ${isSelected ? 'selected' : ''}`}
         >
-            <div className="scouting-rank-handle" style={{ cursor: 'grab' }}>⠿</div>
             <div className={`scouting-rank-num ${rank == null ? 'unranked' : ''}`}>{rank ?? '???'}</div>
             {group && <div className="scouting-rank-group">{group}</div>}
             <div className="scouting-rank-card" onClick={() => onSelect(player)}>
@@ -104,6 +101,15 @@ export default function ScoutingLeftPanel({ orderedPlayers, selectedName, onSele
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="search-input"
                 />
+            </div>
+
+            {/* The rows lead with two numbers — where he ranks overall, and
+                the round and tier he sits in. Unlabelled they are just digits;
+                these are the headings for them. */}
+            <div className="scouting-rank-headings">
+                <span className="scouting-rank-num">RANK</span>
+                <span className="scouting-rank-group">RD.TIER</span>
+                <span className="scouting-rank-heading-player">PLAYER</span>
             </div>
 
             <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={() => setActiveName(null)}>

@@ -2235,11 +2235,32 @@ body.export-mode .card-glow {
   border-radius: 6px;
 }
 
-.scouting-rank-handle {
+/* Headings for the row's two leading numbers. Aligned to the same widths the
+   rows use, so they sit over their own columns. */
+.scouting-rank-headings {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 10px 6px;
+  font-size: 0.6rem;
+  letter-spacing: 0.08em;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 4px;
+}
+
+.scouting-rank-headings .scouting-rank-num,
+.scouting-rank-headings .scouting-rank-group {
+  font-size: 0.6rem;
+  background: none;
+  padding: 0;
   color: var(--text-dim);
-  font-size: 1.1rem;
-  padding: 0 2px;
-  touch-action: none;
+}
+
+.scouting-rank-heading-player {
+  flex: 1;
+  color: var(--text-dim);
+  font-weight: 700;
+  padding-left: 4px;
 }
 
 .scouting-rank-num {
@@ -3637,8 +3658,9 @@ body.export-mode .card-glow {
 /* The unmatched column is a worklist: narrow, single-file, and it should read
    as a side note rather than compete with the board. */
 .sg-unmatched-panel {
-  /* Takes the space the player card used to reserve. */
-  width: 340px;
+  /* The full width the two right-hand columns held between them — the old
+     unmatched strip plus the card's reserved space. */
+  width: 572px;
   flex-shrink: 0;
   border-left: 1px solid var(--border-color);
   display: flex;
