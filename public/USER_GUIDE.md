@@ -47,32 +47,58 @@ session file is the whole thing.
 ## 🔎 Scouting — building a board
 
 This is where most of the work happens. A **board** is one person's ranking of
-the class. There are three: **Consensus**, and one for each analyst. Switch
-between them in the left panel — they are genuinely different boards, not
-different views of one list.
+the class. The app ships with **Consensus** and one per analyst, and you can
+make more — they are genuinely different boards, not different views of one
+list. Switch between them with **BOARD** in the top bar; past three boards the
+personal ones move into a dropdown so the bar stays readable.
+
+The screen reads left to right: your **ranking** in order, the same players
+**grouped**, the ones the grouping can't place, and the card for whoever is
+selected. On a phone you get the grouped list alone.
+
+### Reading the board
+
+**GROUP BY** arranges the same players three ways — by **position**, by
+**school**, or by **round**. It changes how they are laid out, never where
+they sit. Click a group header to collapse it.
+
+Each grouping leaves somebody out, and that is the point: grouped by school
+it's the players with no school recorded, by round the ones nobody has ranked,
+by position the ones nobody has labelled. They get their own **Unmatched**
+column, and each row says what it's missing — a worklist of gaps worth filling.
 
 ### Ranking a player
 
 Every player sits in a **round** and a **tier** inside it (shown as `2.1`,
 `2.2`, and so on), and has a position within that tier. Three ways to move him:
 
-- **Drag his card** to where he belongs.
+- **Drag him by the ⠿ handle** in the ranking column on the left.
 - **Type a total rank** on his card. This is a *move*, not a label: he takes
   that slot and everyone between his old and new spot shifts by one. Two
   players can never end up sharing a rank.
-- **Drag him into a different tier row** to re-tier him.
+- **Set his Round and Tier** on his card to re-tier him.
 
 **Total Rank** and **Position Rank** are counted off the board itself, so they
 can never disagree with where a card actually sits.
+
+### Making a new board
+
+**More → New Board…** takes a name, an author, and optionally a CSV to start
+from. The CSV is optional on purpose: an empty board is a perfectly good
+start — every player shows as unranked until you place him.
+
+An author is who is writing it; leave it blank for a board nobody owns, which
+is what Consensus is. Reusing a name reuses that person, so one analyst keeps
+one identity across boards and seasons.
 
 ### Unranked players
 
 A player someone else has ranked and you haven't is **unranked** on your board,
 not missing from it — he shows as `???` and sits in the `UR` row at the bottom.
 That is deliberate: he has to be on your board for you to disagree about him.
-The **Unranked** filter in the top bar shows only these.
 
-Unranked is a separate thing from a tag — a player can be liked *and* unplaced.
+
+**Unranked** is one of the filters in the top bar, alongside the tags.
 
 ### Tags and remarks
 
@@ -81,10 +107,17 @@ Click a player to tag him — **Like** ★, **Avoid** ❗, **Monitor** 🔎 or
 are one mechanic rather than two that can disagree. In a spreadsheet the tag
 column takes either the symbol or the word.
 
-Behind the ✏️ pencil on a player's card you can record **strengths (+)**,
+On a player's card you can record **strengths (+)**,
 **weaknesses (−)** and **notes (•)**. These belong to the person who wrote
 them, not to the board, so they keep growing across seasons — a note you made
-two drafts ago is still on the player's card today.
+two drafts ago is still on the player's card today. Everywhere except Scouting
+they sit behind the **✎** pencil, so a card you opened to read can't collect a
+stray keystroke mid-broadcast.
+
+A player nobody has touched can be deleted. Once he has been placed, tagged or
+written about, he can't — the card tells you which boards hold him and offers
+to clear **your** opinions instead. Deleting was never meant to be a way to
+lose somebody else's work.
 
 ### Adding a player who isn't in the file
 
@@ -116,9 +149,25 @@ Position columns across, rounds and tiers down. Click a player to draft him.
 
 - **Normal view** hides drafted players and collapses emptied rows, so what's
   left is what you see.
-- **Focus view** shows everyone, dimming the players already gone.
+- **⛶ Full Board** shows everyone, dimming the players already gone.
 - **Undo** steps back through picks if a pick was entered wrong.
-- Your own picks are marked, and the panel tracks which of them are left.
+- **+ Draft Unranked Player** takes somebody who isn't on the board at all.
+- Your own picks run along the bottom — scroll them with the wheel. UDFA
+  signings are not among them; those belong to the UDFA tab.
+- **More → Save Picks / Load Picks** writes this draft's picks to a CSV and
+  reads them back. That is the *picks*, not the whole app — Session in the tab
+  bar is the one that covers every stage.
+
+**✎ Edit Board** makes the board itself draggable during the draft, because a
+player rises on the Friday night and the board has to say so before you are on
+the clock. Drop a card:
+
+- **on empty space in a cell** to move him to that round and tier;
+- **on another player** to put him directly above that man;
+- **in a different column** to correct his position — that is a fact about
+  him, so it follows him onto every board.
+
+It is off by default. Mid-draft, a stray drag is expensive.
 
 Each pick records the year, the overall pick number and the team. The **round
 is never guessed from the pick number** — compensatory picks make that
@@ -132,6 +181,21 @@ worse than a blank one.
 Once the last pick is in, the UDFA tab opens. It is the same board grid showing
 exactly who is left, so priority free agents are picked off the same list you
 spent the spring building.
+
+Clicking a player opens a **signing form** rather than signing him outright —
+a signing records a club and a league-entry fact, and that shouldn't happen on
+one click during a broadcast. It arrives prefilled with what the app already
+knows, including his school.
+
+- **Sign UDFA** signs him to the team in the Team field.
+- **Sign · No Team** marks him signed but unassigned, for when the club isn't
+  settled yet.
+- **Minicamp Invite** records an invitation rather than a signing.
+
+Everyone you have signed shows in the **Signed** panel on the right — the board
+shows who is *left*, so without it your own signings would vanish the moment
+you made them. The counter counts your team's, not the league's, and
+**More → Export / Import Signed UDFAs** moves them as CSV.
 
 ---
 
@@ -157,13 +221,10 @@ Both import and export CSV, so a roster can be bulk-edited in a spreadsheet.
 
 ## Working with spreadsheets
 
-Scouting, Free Agency, Roster and the Draft board each export CSV; Scouting
-and the two depth charts import it back. The formats below are meant to be
-typed in Google Sheets by hand — if a file only has to reach the app, that is
-all you need to write.
-
-UDFA has no file of its own: its signings are part of the draft, and they come
-out in the draft export alongside the picks.
+Every stage moves data as CSV, and the formats are meant to be typed in Google
+Sheets by hand — if a file only has to reach the app, that is all you need to
+write. Free Agency, Roster and UDFA each offer a **Download CSV Template** next
+to their import, so you never have to guess the columns.
 
 Scouting has one way in and two ways out. **+ Add Players** is the way in: type
 players by hand, or import a CSV — the **Download template** button inside that
@@ -196,12 +257,21 @@ the app reads it. There is only one board format — the old three-column
 `group,name,position` files still load, because their columns are a subset of
 this one.
 
-**Roster** rows are `Phase, position, slots53, then the players in order`.
+**Roster and Free Agency** rows are `Phase, position, slots53, then the players
+in order`. Importing one **replaces the whole depth chart** — it is a bootstrap,
+not a way to add one player; use **+ Sign Player** or **+ Add Candidate** for
+that.
 `R:` in front of a name means a reserve/practice-squad slot. A suffix after a
 name records how he arrived — `:24/1` drafted 2024 round 1, `:5` drafted in
 this year's fifth round, `:UDFA`, `:FA` free agent, `:TR` trade. The app
 splits those off on import and rejoins them on export, so a round trip through
 the file loses nothing.
+
+**UDFA** exports and imports your signings as `name, position, school, team`.
+An imported row is signed exactly as the button would sign it, so it records
+the same facts.
+
+**The draft's picks** are their own file, under Draft → More → Save Picks.
 
 ---
 
