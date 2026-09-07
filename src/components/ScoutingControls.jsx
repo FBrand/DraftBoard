@@ -81,23 +81,30 @@ function BoardNotes({ boards, seasons }) {
 
     return (
         <div className="scouting-board-notes">
-            {withContent.map(b => (
-                <div key={b.board} className="scouting-board-notes-group">
-                    <div className="scouting-board-notes-header">{b.label}</div>
+            {/* Kind first, board underneath.
+                What you want off a read-only card is what people think of the
+                player, and the answer to that is "here is what everyone likes
+                about him, here is what everyone doubts". Board-first buried
+                that: it made you read three separate opinions end to end and
+                assemble the comparison yourself. This way the disagreement is
+                the thing on screen — every board's strengths together, then
+                every board's weaknesses.
 
-                    {/* Split by kind under the board's name, in the same
-                        order the editable lists use. A single mixed list made
-                        you read the symbols to work out what somebody thought
-                        of him; strengths together and weaknesses together is
-                        the shape of an opinion. A kind with nothing in it is
-                        left out rather than shown empty. */}
-                    {LIST_FIELDS.map(f => {
-                        const mine = b.remarks.filter(r => r.kind === f.kind);
-                        if (!mine.length) return null;
-                        return (
-                            <div key={f.kind} className={`scouting-list-field ${f.cls}`}>
-                                <div className="scouting-list-label">{f.label}</div>
-                                {bySeason(mine, seasons).map(group => (
+                A kind nobody has written under is left out, and so is a board
+                with nothing to say under that kind. */}
+            {LIST_FIELDS.map(f => {
+                const perBoard = withContent
+                    .map(b => ({ ...b, mine: b.remarks.filter(r => r.kind === f.kind) }))
+                    .filter(b => b.mine.length);
+                if (!perBoard.length) return null;
+
+                return (
+                    <div key={f.kind} className={`scouting-list-field ${f.cls}`}>
+                        <div className="scouting-list-label">{f.label}</div>
+                        {perBoard.map(b => (
+                            <div key={b.board} className="scouting-board-notes-group">
+                                <div className="scouting-board-notes-header">{b.label}</div>
+                                {bySeason(b.mine, seasons).map(group => (
                                     <div key={group.seasonId || 'undated'} className="scouting-season-group">
                                         {group.label && <div className="scouting-season-label">{group.label}</div>}
                                         <ul className="scouting-bullet-list">
@@ -111,10 +118,10 @@ function BoardNotes({ boards, seasons }) {
                                     </div>
                                 ))}
                             </div>
-                        );
-                    })}
-                </div>
-            ))}
+                        ))}
+                    </div>
+                );
+            })}
         </div>
     );
 }

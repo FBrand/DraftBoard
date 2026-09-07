@@ -3691,3 +3691,22 @@ body.export-mode .card-glow {
 .board-card-over { box-shadow: inset 0 3px 0 var(--chiefs-gold); }
 
 .ap-updating { color: var(--text-dim); }
+
+/* Kind is the outer heading in the read-only stack, so it takes the emphasis
+   the board name used to carry, and the board name steps back to a caption. */
+.scouting-board-notes .scouting-list-label {
+  color: var(--gold-color);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  padding-bottom: 3px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.scouting-board-notes .scouting-board-notes-header {
+  color: var(--text-dim);
+  font-weight: 600;
+  border-bottom: 0;
+  padding-bottom: 0;
+  margin: 6px 0 2px;
+  letter-spacing: 0.04em;
+}
