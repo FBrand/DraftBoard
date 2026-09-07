@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
+import useIsMobile from '../hooks/useIsMobile';
 import * as faState from '../utils/faState';
 import * as rosterState from '../utils/rosterState';
 import { CSV_TEMPLATE } from '../utils/rosterState';
@@ -20,6 +21,7 @@ export default function FreeAgencyView({ masterPlayers, draftedPlayers, onInfoOp
     // Same control Roster has: this grid is desktop-wide by design, so on a
     // phone it needs shrinking to be navigable. FA renders the identical
     // DepthChartGrid but was missing it.
+    const isMobile = useIsMobile();
     const [zoomLevel, setZoomLevel] = useState(1);
 
     // Every write goes through setState, so wrapping it here is all undo needs.
@@ -233,19 +235,25 @@ export default function FreeAgencyView({ masterPlayers, draftedPlayers, onInfoOp
 
                 <div style={{ flex: 1 }} />
 
-                <div className="roster-zoom-ctrl">
-                    <button
-                        onClick={() => setZoomLevel(z => Math.max(0.5, +(z - 0.1).toFixed(2)))}
-                        className="rv-ctrl-btn"
-                        title="Zoom out"
-                    >−</button>
-                    <span className="rv-zoom-label">{Math.round(zoomLevel * 100)}%</span>
-                    <button
-                        onClick={() => setZoomLevel(z => Math.min(1, +(z + 0.1).toFixed(2)))}
-                        className="rv-ctrl-btn"
-                        title="Zoom in"
-                    >+</button>
-                </div>
+                {/* Zoom is a small-screen affordance: the depth chart is
+                    desktop-wide by design, so on a phone it needs shrinking to
+                    be navigable. On a desktop there is nothing to solve, and a
+                    permanent "100%" beside the real controls is just noise. */}
+                {isMobile && (
+                    <div className="roster-zoom-ctrl">
+                        <button
+                            onClick={() => setZoomLevel(z => Math.max(0.5, +(z - 0.1).toFixed(2)))}
+                            className="rv-ctrl-btn"
+                            title="Zoom out"
+                        >−</button>
+                        <span className="rv-zoom-label">{Math.round(zoomLevel * 100)}%</span>
+                        <button
+                            onClick={() => setZoomLevel(z => Math.min(1, +(z + 0.1).toFixed(2)))}
+                            className="rv-ctrl-btn"
+                            title="Zoom in"
+                        >+</button>
+                    </div>
+                )}
 
                 <div className="top-actions">
                     <button

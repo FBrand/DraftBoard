@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
+import useIsMobile from '../hooks/useIsMobile';
 import { CSV_TEMPLATE } from '../utils/rosterState';
 import {
     loadState, saveState, defaultState,
@@ -49,6 +50,7 @@ export default function RosterView({ masterPlayers, draftedPlayers, onInfoOpen }
     // on a phone that means horizontal scrolling to reach most slots. `zoom`
     // (not transform:scale, which wouldn't shrink the actual scrollable
     // layout) lets a mobile user shrink the whole grid to fit more on screen.
+    const isMobile = useIsMobile();
     const [zoomLevel, setZoomLevel] = useState(1);
 
     // Slots are normalised on the way in, so the value that lands in state,
@@ -490,19 +492,25 @@ export default function RosterView({ masterPlayers, draftedPlayers, onInfoOpen }
                 </div>
 
                 <div className="top-actions">
-                    <div className="roster-zoom-ctrl">
-                        <button
-                            onClick={() => setZoomLevel(z => Math.max(0.5, +(z - 0.1).toFixed(2)))}
-                            className="rv-ctrl-btn"
-                            title="Zoom out"
-                        >−</button>
-                        <span className="rv-zoom-label">{Math.round(zoomLevel * 100)}%</span>
-                        <button
-                            onClick={() => setZoomLevel(z => Math.min(1, +(z + 0.1).toFixed(2)))}
-                            className="rv-ctrl-btn"
-                            title="Zoom in"
-                        >+</button>
-                    </div>
+                {/* Zoom is a small-screen affordance: the depth chart is
+                    desktop-wide by design, so on a phone it needs shrinking to
+                    be navigable. On a desktop there is nothing to solve, and a
+                    permanent "100%" beside the real controls is just noise. */}
+                    {isMobile && (
+                        <div className="roster-zoom-ctrl">
+                            <button
+                                onClick={() => setZoomLevel(z => Math.max(0.5, +(z - 0.1).toFixed(2)))}
+                                className="rv-ctrl-btn"
+                                title="Zoom out"
+                            >−</button>
+                            <span className="rv-zoom-label">{Math.round(zoomLevel * 100)}%</span>
+                            <button
+                                onClick={() => setZoomLevel(z => Math.min(1, +(z + 0.1).toFixed(2)))}
+                                className="rv-ctrl-btn"
+                                title="Zoom in"
+                            >+</button>
+                        </div>
+                    )}
                     <button
                         onClick={history.undo}
                         disabled={!history.canUndo}
