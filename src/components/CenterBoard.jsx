@@ -30,10 +30,16 @@ const CenterBoard = ({ players, onAction, columnOrder = [], isFocusMode = false,
         setDragging(null);
         if (!over || !onPlace) return;
         const player = active.data.current?.player;
-        const tier = over.data.current?.tier;
-        if (!player || !tier) return;
-        if (player.round === tier.round && player.tier === tier.tier) return;
-        onPlace(player, tier);
+        const target = over.data.current;
+        if (!player || !target?.tier) return;
+
+        const samePlace = player.round === target.tier.round && player.tier === target.tier.tier;
+        const samePosition = !target.position
+            || player.position.split('.', 1)[0] === target.position;
+        // Dropping a card back where it already was is not a move.
+        if (samePlace && samePosition) return;
+
+        onPlace(player, { ...target.tier, position: target.position });
     };
     const visiblePlayers = isFocusMode ? players : players.filter(p => !p.drafted);
 
@@ -139,7 +145,11 @@ const CenterBoard = ({ players, onAction, columnOrder = [], isFocusMode = false,
                                     <DroppableCell
                                         key={pos}
                                         id={`cell-${group.key}-${pos}`}
-                                        data={{ tier: { round: group.round, tier: group.tier } }}
+                                        // Both axes: a cell is a tier AND a
+                                        // position, and dropping into another
+                                        // column is how you correct a player
+                                        // somebody filed under the wrong one.
+                                        data={{ tier: { round: group.round, tier: group.tier }, position: pos }}
                                         disabled={!editable}
                                         className="slot-cell"
                                     >

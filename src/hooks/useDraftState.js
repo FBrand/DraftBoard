@@ -1,10 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { parseRankings, parsePicks } from '../utils/dataParser';
-import { parseTier } from '../utils/boardRanking';
 import { shouldSeed } from '../utils/appInit';
 import { highestDraftPick, isUndraftedSigning, roundForPick, lastDraftPick } from '../utils/draftPhase';
 import { TEAM_CONFIG, DRAFT_YEAR } from '../constants';
-import { resolve as resolvePlayer, resolveAll, setFacts, setFactsMany } from '../utils/playerRegistry';
+import { resolve as resolvePlayer, resolveAll, setFacts, setFactsMany, rename as renamePlayer } from '../utils/playerRegistry';
 import { getSessionTeam as sessionTeam } from '../utils/appSettings';
 
 /**
@@ -615,14 +614,34 @@ export const useDraftState = () => {
      * the existing persistence effect saves — no separate store, so the board
      * you edit is the board you drafted from.
      */
-    const placePlayer = useCallback((player, tierLabel) => {
-        const { round, tier } = parseTier(tierLabel);
+    const placePlayer = useCallback((player, target) => {
+        // CenterBoard hands over the cell's own {round, tier, position}. This
+        // used to call parseTier on it as though it were the fused "1.2"
+        // label, which parsed "[object Object]", produced no round, and
+        // returned — so the board looked editable and moved nothing.
+        const round = target?.round ?? null;
+        const tier = target?.tier ?? null;
         if (round == null) return;
+
+        const base = player.position.split('.', 1)[0];
+        const movedColumn = target.position && target.position !== base;
+        // Keep the alignment when he stays in his own column ("WR.Z" is still
+        // a WR); a move to another column replaces it, because the alignment
+        // belonged to the old position.
+        const position = movedColumn ? target.position : player.position;
+
         setPlayers(prev => prev.map(p => (
             p.name === player.name && p.position === player.position
-                ? { ...p, round, tier }
+                ? { ...p, round, tier, position }
                 : p
         )));
+
+        // Position is base data — true on every board — so a correction has to
+        // reach the record, not just this pool.
+        if (movedColumn) {
+            const id = resolvePlayer({ name: player.name }, { create: false });
+            if (id) renamePlayer(id, { position: target.position });
+        }
     }, []);
 
     return {
