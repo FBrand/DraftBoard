@@ -15,11 +15,16 @@
  *   :IR    a designation, not an arrival
  *   (none) a holdover
  *
- * Produces:
- *   roster_2025_end.csv  last season's roster: holdovers only. Free agency
- *                        starts here, and Roster takes its empty shape from it.
- *   roster_predraft.csv  the day before the draft: holdovers + FA signings.
- *                        This is what Free Agency looks like once it is done.
+ * Produces roster_2025_end.csv — last season's roster, holdovers only, which
+ * is where free agency starts and where Roster takes its empty shape from.
+ *
+ * It no longer derives roster_predraft.csv. That file is now the REAL
+ * pre-draft depth chart, typed from the club's own, with its own position
+ * labels (LWR/RWR/SWR, LDT/RDT, WLB/MLB, LCB/RCB/NB) and a pre-seeded cut
+ * panel of the cap casualties and departing free agents. Deriving it by
+ * subtraction produced something plausible and wrong: it could only ever
+ * contain players who were still on the roster afterwards, so everybody let
+ * go in March simply did not exist.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 
@@ -63,7 +68,6 @@ function snapshot(keep) {
 
 const outputs = [
     ['roster_2025_end.csv', (a) => a === 'holdover'],
-    ['roster_predraft.csv', (a) => a === 'holdover' || a === 'fa'],
 ];
 
 for (const [file, keep] of outputs) {

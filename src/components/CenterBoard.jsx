@@ -17,7 +17,15 @@ import { DraggableCard, DroppableCell } from './BoardDnd';
  * Off by default. During a live draft the board must not move under a
  * mis-click, and a card there is a thing you press to draft somebody.
  */
-const CenterBoard = ({ players, onAction, columnOrder = [], isFocusMode = false, alwaysClickable = false, hideDraftedStyle = false, onInfoOpen, tagFor, editable = false, onPlace }) => {
+const CenterBoard = ({ players, onAction, columnOrder = [], isFocusMode = false, alwaysClickable = false, hideDraftedStyle = false, onInfoOpen, tagFor, editable = false, onPlace, takenTest }) => {
+    // What counts as GONE depends on the board you are looking at.
+    //
+    // The draft board asks "was he drafted", and a player who went undrafted
+    // was not — even once somebody signs him, which sets the same flag. So on
+    // that board a UDFA is still available, because in draft terms he is.
+    // The UDFA board asks "is he still unsigned", where that same signing does
+    // take him off the list. One predicate, supplied by the caller.
+    const isTaken = takenTest ?? ((pl) => !!pl.drafted);
     const [dragging, setDragging] = React.useState(null);
     const sensors = useSensors(
         // Same activation as the roster grid: 8px of movement, so a click to
@@ -59,7 +67,7 @@ const CenterBoard = ({ players, onAction, columnOrder = [], isFocusMode = false,
     // Whether a ROW still earns its place: in normal view, only while somebody
     // in it is undrafted.
     const liveTiers = new Set(
-        (isFocusMode ? players : players.filter(p => !p.drafted))
+        (isFocusMode ? players : players.filter(p => !isTaken(p)))
             .map(p => tierKey(p.round, p.tier)),
     );
 
@@ -110,7 +118,7 @@ const CenterBoard = ({ players, onAction, columnOrder = [], isFocusMode = false,
     // For each position, find the best available player
     const bestAvailable = {};
     positions.forEach(pos => {
-        bestAvailable[pos] = players.find(p => p.position.split('.', 1)[0] === pos && !p.drafted);
+        bestAvailable[pos] = players.find(p => p.position.split('.', 1)[0] === pos && !isTaken(p));
     });
 
     const grid = (
@@ -174,9 +182,14 @@ const CenterBoard = ({ players, onAction, columnOrder = [], isFocusMode = false,
                                     >
                                         {roundPlayers.map(player => {
                                             const isBest = bestAvailable[pos]?.name === player.name;
+                                            // Not taken by THIS board's rule
+                                            // renders as plainly available —
+                                            // undimmed, no pick label, and
+                                            // clickable.
+                                            const shown = isTaken(player) ? player : { ...player, drafted: false };
                                             const card = (
                                                 <PlayerCard
-                                                    player={player}
+                                                    player={shown}
                                                     isBest={isBest}
                                                     onClick={onAction}
                                                     slim={true}

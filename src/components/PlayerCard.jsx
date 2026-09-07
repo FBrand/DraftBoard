@@ -37,7 +37,13 @@ const PlayerCard = ({ player, isBest, onClick, slim, team, displayPick, noStrike
     const handleTouchMove = () => clearPressTimer();
     const handleClick = () => {
         if (suppressClickRef.current) { suppressClickRef.current = false; return; }
-        if ((alwaysClickable || !drafted) && onClick) onClick(player);
+        if ((alwaysClickable || !drafted) && onClick) return onClick(player);
+        // A drafted player can't be drafted again, so the primary action is
+        // rightly off — but the card then swallowed the click and did nothing,
+        // which since drafted players started staying on the board is most of
+        // round one. Clicking him asks the only question left about him: who
+        // is he, and who took him.
+        if (drafted && onInfoOpen) onInfoOpen(player);
     };
 
     const classes = [

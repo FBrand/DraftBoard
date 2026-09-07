@@ -135,6 +135,10 @@ export function parseAcquisition(rawName, thisDraftYear) {
 
     const upper = suffix.toUpperCase();
     if (upper === 'UDFA') return { name, facts: { isUdfa: true, draftYear: thisDraftYear }, route: 'udfa' };
+    // ":IR" is a designation, not a route — but it is written like one, and
+    // anything unrecognised is left inside the name. That produced a player
+    // called "Omarr Norman-Lott:IR", who matches nothing in the registry.
+    if (upper === 'IR') return { name, facts: {}, route: 'ir' };
     if (upper === 'FA') return { name, facts: {}, route: 'fa' };
     if (upper === 'TR') return { name, facts: {}, route: 'trade' };
 

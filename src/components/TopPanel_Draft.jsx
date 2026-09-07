@@ -26,14 +26,15 @@ const TopPanel = ({ currentPick, currentPickStatus, ourPicksLeft, onUndo, onUpda
     // From the registry, not from filenames written in here: a fourth board
     // or a renamed analyst has to just appear.
     const boards = listBoards();
-    const currentRankings = new URLSearchParams(window.location.search).get('rankings') || '';
-    const isActive = (board) => (board.rankingsFile
-        ? currentRankings.includes(board.rankingsFile)
-        : !currentRankings) || (!currentRankings && board.order === 0);
+    // ?board= is the name; ?rankings= is a file. The switcher was reading only
+    // the file, so a link carrying just the board selected the right pool and
+    // then highlighted the wrong button.
+    const currentSlug = new URLSearchParams(window.location.search).get('board');
+    const isActive = (board) => (currentSlug ? board.slug === currentSlug : board.order === 0);
+
     const chooseBoard = (board) => {
         const params = new URLSearchParams(window.location.search);
-        if (board.rankingsFile) params.set('rankings', `${import.meta.env.BASE_URL}${board.rankingsFile}`);
-        else params.delete('rankings');
+        params.delete('rankings');   // retired — the board name is the switch
         params.set('board', board.slug);
         window.location.assign(`?${params.toString()}`);
     };
@@ -77,11 +78,6 @@ const TopPanel = ({ currentPick, currentPickStatus, ourPicksLeft, onUndo, onUpda
                 <div className="top-actions">
                     <button className="action-pill trade-pill" onClick={onUpdatePicks}>Update Picks</button>
                     <button className="action-pill" onClick={onDraftUnranked}>+ Draft Unranked Player</button>
-                    <button
-                        className={`action-pill ${boardEditable ? 'active' : ''}`}
-                        onClick={onToggleBoardEdit}
-                        title="Drag cards between tiers on the board"
-                    >{boardEditable ? '✓ Editing' : '✎ Edit Board'}</button>
                     <button
                         className="action-pill export-pill"
                         onClick={handleExport}
@@ -136,14 +132,10 @@ const TopPanel = ({ currentPick, currentPickStatus, ourPicksLeft, onUndo, onUpda
                 {/* Undo and Full Board stay out here — both are used live,
                     mid-draft. Everything occasional moves into the menu. */}
                 <button className="action-pill" onClick={onDraftUnranked}>+ Draft Unranked Player</button>
-                <button
-                    className={`action-pill ${boardEditable ? 'active' : ''}`}
-                    onClick={onToggleBoardEdit}
-                    title="Drag cards between tiers on the board"
-                >{boardEditable ? '✓ Editing' : '✎ Edit Board'}</button>
-                <button className="action-pill undo-pill" onClick={onUndo}>Undo</button>
                 <button className="action-pill focus-pill" onClick={onToggleFocus}>⛶ Full Board</button>
+                <button className="action-pill undo-pill" onClick={onUndo}>Undo</button>
                 <Menu items={[
+                    { label: boardEditable ? '✓ Editing board — click to stop' : '✎ Edit Board', onClick: onToggleBoardEdit, title: 'Drag cards between tiers, and into other position columns' },
                     { label: 'Update Our Picks…', onClick: onUpdatePicks },
                     { label: 'Save Picks…', onClick: onSavePicks, title: 'This draft\'s picks and UDFA signings, as CSV' },
                     { label: 'Load Picks…', onClick: onLoadPicks, title: 'Replaces the picks made so far' },

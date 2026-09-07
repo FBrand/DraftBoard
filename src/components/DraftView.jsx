@@ -7,7 +7,7 @@ import RightPanel from './RightPanel';
 import BottomPanel from './BottomPanel';
 import PicksModal from './PicksModal';
 import UnrankedModal from './UnrankedModal';
-import { isDraftComplete, isUndraftedSigning } from '../utils/draftPhase';
+import { isDraftComplete, isUndraftedSigning, isDraftPick } from '../utils/draftPhase';
 import usePlayerTags from '../hooks/usePlayerTags';
 
 // Owns all Draft-view-local UI state (focus mode, sidebar toggles, modals) —
@@ -131,6 +131,9 @@ export default function DraftView({
                     tagFor={tagFor}
                     editable={boardEditable}
                     onPlace={placePlayer}
+                    // Drafted means drafted. A player signed as a UDFA went
+                    // undrafted, so he stays available here.
+                    takenTest={isDraftPick}
                 />
 
                 <div className={`right-sidebar-wrapper ${showRightSidebar && !isFocusMode ? 'mobile-open' : ''}`}>

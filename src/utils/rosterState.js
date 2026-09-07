@@ -198,10 +198,11 @@ export function parseCSV(csvText) {
             const parsedSlots = parseInt(col2);
             const hasSlots53Col = !isNaN(parsedSlots);
             const rawSlots = hasSlots53Col ? cols.slice(3) : cols.slice(2);
-            const names = rawSlots.map(s => s.trim()).filter(Boolean)
-                .map(n => slotFromImport(n.replace(/^(PS:|IR:|R:)/i, '').trim(), '53')?.name)
+            // Slots, not names — the arrival has to survive the file.
+            const irSlots = rawSlots.map(s => s.trim()).filter(Boolean)
+                .map(n => slotFromImport(n.replace(/^(PS:|IR:|R:)/i, '').trim(), 'ir'))
                 .filter(Boolean);
-            reserve.push(...names);
+            reserve.push(...irSlots);
             continue;
         }
         if (phase === 'CUT' || phase === 'CUTS') {
@@ -209,10 +210,12 @@ export function parseCSV(csvText) {
             const parsedSlots = parseInt(col2);
             const hasSlots53Col = !isNaN(parsedSlots);
             const rawSlots = hasSlots53Col ? cols.slice(3) : cols.slice(2);
-            const names = rawSlots.map(s => s.trim()).filter(Boolean)
-                .map(n => slotFromImport(n.replace(/^(PS:|IR:|R:)/i, '').trim(), '53')?.name)
+            // Slots, not bare names: a cut player keeps how he arrived, so
+            // moving him back onto the chart restores his tag and colour.
+            const cutSlots = rawSlots.map(s => s.trim()).filter(Boolean)
+                .map(n => slotFromImport(n.replace(/^(PS:|IR:|R:)/i, '').trim(), 'cut'))
                 .filter(Boolean);
-            cuts.push(...names);
+            cuts.push(...cutSlots);
             continue;
         }
 
@@ -263,7 +266,7 @@ export function parseCSV(csvText) {
                 const resIdx = limit53 + 3 + (parsed.filter(x => x?.zone === 'r').length);
                 parsed[resIdx] = slot;
             } else if (zone === 'ir') {
-                reserve.push(name);
+                reserve.push(slot);
             } else {
                 parsed[rIndex++] = slot;
             }
@@ -320,10 +323,14 @@ export function exportCSV(state) {
         rows.push(['S', id, s ? s.name : ''].map(csvField).join(','));
     });
     if (state.reserve && state.reserve.length > 0) {
-        rows.push(['IR', 'IR', '', ...state.reserve].map(csvField).join(','));
+        rows.push(['IR', 'IR', '', ...state.reserve.map(x => (typeof x === 'string' ? x : exportName(x)))]
+            .map(csvField).join(','));
     }
     if (state.cuts && state.cuts.length > 0) {
-        rows.push(['CUT', 'CUT', '', ...state.cuts].map(csvField).join(','));
+        // Written the same way every other slot is, so the arrival survives
+        // the file too. Older saves hold plain strings; those still export.
+        rows.push(['CUT', 'CUT', '', ...state.cuts.map(c => (typeof c === 'string' ? c : exportName(c)))]
+            .map(csvField).join(','));
     }
     return rows.join('\n');
 }

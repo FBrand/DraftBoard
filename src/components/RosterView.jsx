@@ -190,6 +190,10 @@ export default function RosterView({ masterPlayers, draftedPlayers, onInfoOpen }
         return placeAt(i, 'r', 'reserve');
     };
 
+    // Every branch here carries the slot's `arrival` with it. Rebuilding a
+    // moved player from his NAME alone — which is what makeSlot(name, zone)
+    // did — quietly stripped how he got here, so a player dragged to the cut
+    // panel and back came home a plain veteran with his FA or UDFA tag gone.
     const performMove = useCallback((src, dst) => {
         if (src.posId === dst.posId && src.slotIdx === dst.slotIdx) return;
 
@@ -212,8 +216,8 @@ export default function RosterView({ masterPlayers, draftedPlayers, onInfoOpen }
             }
 
             // Place at destination
-            if (dst.posId === '__ir__') next.reserve.push(src.slot.name);
-            else if (dst.posId === '__cut__') next.cuts.push(src.slot.name);
+            if (dst.posId === '__ir__') next.reserve.push(src.slot);
+            else if (dst.posId === '__cut__') next.cuts.push(src.slot);
             else {
                 if (!dc[dst.posId]) dc[dst.posId] = [];
                 dc[dst.posId] = [...dc[dst.posId]];
@@ -222,8 +226,8 @@ export default function RosterView({ masterPlayers, draftedPlayers, onInfoOpen }
 
             // Swap displaced back to source
             if (displaced) {
-                if (src.posId === '__ir__') next.reserve.push(displaced.name);
-                else if (src.posId === '__cut__') next.cuts.push(displaced.name);
+                if (src.posId === '__ir__') next.reserve.push(displaced);
+                else if (src.posId === '__cut__') next.cuts.push(displaced);
                 else dc[src.posId][src.slotIdx] = makeSlot(displaced.name, src.slot?.zone ?? '53', displaced.arrival ?? null);
             }
 
@@ -511,14 +515,14 @@ export default function RosterView({ masterPlayers, draftedPlayers, onInfoOpen }
                             >+</button>
                         </div>
                     )}
+                    <button onClick={() => setIsSignModalOpen(true)} className="action-pill">+ Sign Player</button>
+                    <button onClick={handleSyncFromStages} className="action-pill" title="Fill empty slots from FA candidates, draft picks, and UDFA signings — never overwrites">Sync from FA/Draft/UDFA</button>
                     <button
                         onClick={history.undo}
                         disabled={!history.canUndo}
                         className="action-pill undo-pill"
                         title="Undo the last change"
                     >Undo</button>
-                    <button onClick={() => setIsSignModalOpen(true)} className="action-pill">+ Sign Player</button>
-                    <button onClick={handleSyncFromStages} className="action-pill" title="Fill empty slots from FA candidates, draft picks, and UDFA signings — never overwrites">Sync from FA/Draft/UDFA</button>
                     <Menu items={[
                         // The load/import options that used to be a blocking
                         // "initialize roster" screen.

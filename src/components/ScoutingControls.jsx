@@ -229,6 +229,9 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
     const [base, setBase] = useState({ name: player?.name ?? '', position: '', school: '' });
     const [baseError, setBaseError] = useState('');
     const [confirmRemove, setConfirmRemove] = useState(false);
+    // Clearing wipes a placement, a tag and every remark for this board in one
+    // press. That is somebody's work, and there is no undo on this card.
+    const [confirmClear, setConfirmClear] = useState(false);
     // The card opened outside Scouting shows one analyst's take at a time and
     // starts locked. A pencil beside the pager unlocks THAT board's opinions,
     // so a correction can be made where the player is being looked at rather
@@ -711,22 +714,31 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
                                 <span className="scouting-prospect-note">
                                     Ranked or evaluated on {workedOn.join(', ')} — clear those first
                                 </span>
-                                {(onEntryChange || onChange) && (
+                                {(onEntryChange || onChange) && (confirmClear ? (
+                                    <div className="scouting-prospect-confirm">
+                                        <span className="scouting-prospect-note">
+                                            Clear this board&rsquo;s ranking, tag and {(remarks ?? []).length} remark{(remarks ?? []).length === 1 ? '' : 's'}?
+                                        </span>
+                                        <button type="button" className="ap-link" onClick={() => setConfirmClear(false)}>Keep</button>
+                                        <button type="button" className="scouting-prospect-remove"
+                                            onClick={() => {
+                                                // Through commit, not onEntryChange: Scouting's panel
+                                                // passes onChange instead, so calling the other one
+                                                // directly did nothing at all there.
+                                                commit({ round: null, tier: null, withinGroup: null, tag: null });
+                                                // The remarks are the other half of it — leaving them
+                                                // behind meant the player still could not be deleted.
+                                                (remarks ?? []).forEach(r => onRemoveRemark?.(r.id));
+                                                setConfirmClear(false);
+                                            }}>Clear</button>
+                                    </div>
+                                ) : (
                                     <button type="button" className="scouting-prospect-remove"
-                                        title="Removes this board's placement, tag and remarks for him, and nobody else's"
-                                        onClick={() => {
-                                            // Through commit, not onEntryChange: Scouting's panel
-                                            // passes onChange instead, so calling the other one
-                                            // directly did nothing at all there.
-                                            commit({ round: null, tier: null, withinGroup: null, tag: null });
-                                            // Remarks are the other half of "my opinions" — leaving
-                                            // them behind meant the player still could not be
-                                            // deleted after clearing.
-                                            (remarks ?? []).forEach(r => onRemoveRemark?.(r.id));
-                                        }}>
-                                        Clear my opinions
+                                        title="Removes this board's ranking, tag and remarks for him, and nobody else's"
+                                        onClick={() => setConfirmClear(true)}>
+                                        Clear evaluations
                                     </button>
-                                )}
+                                ))}
                             </>
                         ) : confirmRemove ? (
                             <>

@@ -55,6 +55,10 @@ export default function FreeAgencyView({ masterPlayers, draftedPlayers, onInfoOp
     const needs = faState.computePositionNeed(state);
     const openNeeds = Object.entries(needs).filter(([, n]) => n.stillNeed > 0);
 
+    // Every branch here carries the slot's `arrival` with it. Rebuilding a
+    // moved player from his NAME alone — which is what makeSlot(name, zone)
+    // did — quietly stripped how he got here, so a player dragged to the cut
+    // panel and back came home a plain veteran with his FA or UDFA tag gone.
     const performMove = useCallback((src, dst) => {
         if (src.posId === dst.posId && src.slotIdx === dst.slotIdx) return;
         setState(prev => {
@@ -66,14 +70,14 @@ export default function FreeAgencyView({ masterPlayers, draftedPlayers, onInfoOp
             else if (src.posId === '__cut__') next.cuts.splice(src.slotIdx, 1);
             else { dc[src.posId] = [...(dc[src.posId] ?? [])]; dc[src.posId][src.slotIdx] = null; }
 
-            if (dst.posId === '__ir__') next.reserve.push(src.slot.name);
-            else if (dst.posId === '__cut__') next.cuts.push(src.slot.name);
-            else { dc[dst.posId] = [...(dc[dst.posId] ?? [])]; dc[dst.posId][dst.slotIdx] = makeSlot(src.slot.name, dst.targetZone); }
+            if (dst.posId === '__ir__') next.reserve.push(src.slot);
+            else if (dst.posId === '__cut__') next.cuts.push(src.slot);
+            else { dc[dst.posId] = [...(dc[dst.posId] ?? [])]; dc[dst.posId][dst.slotIdx] = makeSlot(src.slot.name, dst.targetZone, src.slot.arrival); }
 
             if (displaced) {
-                if (src.posId === '__ir__') next.reserve.push(displaced.name);
-                else if (src.posId === '__cut__') next.cuts.push(displaced.name);
-                else dc[src.posId][src.slotIdx] = makeSlot(displaced.name, src.slot?.zone ?? '53');
+                if (src.posId === '__ir__') next.reserve.push(displaced);
+                else if (src.posId === '__cut__') next.cuts.push(displaced);
+                else dc[src.posId][src.slotIdx] = makeSlot(displaced.name, src.slot?.zone ?? '53', displaced.arrival);
             }
             return next;
         });
@@ -256,13 +260,13 @@ export default function FreeAgencyView({ masterPlayers, draftedPlayers, onInfoOp
                 )}
 
                 <div className="top-actions">
+                    <button onClick={() => setIsAddOpen(true)} className="action-pill">+ Add Candidate</button>
                     <button
                         onClick={history.undo}
                         disabled={!history.canUndo}
                         className="action-pill undo-pill"
                         title="Undo the last change"
                     >Undo</button>
-                    <button onClick={() => setIsAddOpen(true)} className="action-pill">+ Add Candidate</button>
                     <Menu items={[
                         { label: 'Import Positions from Roster', onClick: handleSyncPositionsFromRoster, title: 'Adds any position row Roster has that FA doesn\'t' },
                         { label: 'Export Candidates CSV…', onClick: handleExport },

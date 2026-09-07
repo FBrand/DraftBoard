@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { parseRankings, parsePicks } from '../utils/dataParser';
+import { openBoards, boardBySlug } from '../utils/boardRegistry';
 import { shouldSeed } from '../utils/appInit';
 import { highestDraftPick, isUndraftedSigning, roundForPick, lastDraftPick } from '../utils/draftPhase';
 import { TEAM_CONFIG, DRAFT_YEAR } from '../constants';
@@ -141,11 +142,19 @@ export const useDraftState = () => {
                 // white screen. Someone was told "it's fixed, try again",
                 // clicked that, and saw nothing twice.
                 const fallback = `${base}rankings_consensus.csv`;
-                const requested = params.get('rankings');
-                // A link is worth one retry with the extra encoding stripped:
-                // %252F is always a mistake, never a filename.
-                const candidates = [requested, requested && decodeURIComponent(requested), fallback]
-                    .filter(Boolean);
+
+                // One switch, not two. A board used to be selectable by
+                // ?board= (its name) or ?rankings= (a file path), and only the
+                // second actually worked on this view — so the name did
+                // nothing while the path quietly did the work, and a board
+                // whose file was renamed, or one made in the app, could not be
+                // linked to at all. The path is gone; the board knows its own
+                // file.
+                await openBoards();
+                const slug = params.get('board');
+                const board = slug ? boardBySlug(slug) : null;
+                const fromBoard = board?.rankingsFile ? `${base}${board.rankingsFile}` : null;
+                const candidates = [fromBoard, fallback].filter(Boolean);
 
                 // First candidate that actually answers. Falling back to the
                 // shipped board beats showing nothing: a wrong board is

@@ -16,7 +16,7 @@ export function boardForCurrentRankings() {
     const boards = listBoards();
     const fallback = boards[0]?.id ?? null;
     try {
-        const url = new URLSearchParams(window.location.search).get('rankings') ?? '';
+        const url = new URLSearchParams(window.location.search).get('board') ?? '';
         const match = boards.find(b => b.rankingsFile && url.includes(b.rankingsFile));
         return match?.id ?? fallback;
     } catch {

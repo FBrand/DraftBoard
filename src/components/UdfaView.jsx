@@ -18,7 +18,7 @@ import { csvField, parseCsvLine } from '../utils/csvUtils';
 // looked like the same action, but draftPlayer stamps the current pick number
 // and advances the draft, so clicking a UDFA card mid-draft consumed a real
 // pick and recorded the signing in draft order.
-export default function UdfaView({ players, draftedPlayers, columnOrder, signUndrafted, currentPick, onInfoOpen }) {
+export default function UdfaView({ players, draftedPlayers, columnOrder, signUndrafted, undoAction, currentPick, onInfoOpen }) {
     const [isUnrankedOpen, setIsUnrankedOpen] = useState(false);
     // Clicking a card used to sign him outright. A signing records a team and
     // a league-entry fact, and doing that on one click — during a broadcast,
@@ -84,14 +84,14 @@ export default function UdfaView({ players, draftedPlayers, columnOrder, signUnd
     // Boards come from the registry, not from three filenames spelled out
     // here — that is exactly the coupling boardRegistry.js exists to remove.
     const boards = listBoards();
-    const currentRankings = new URLSearchParams(window.location.search).get('rankings') || '';
-    const isActive = (board) => (board.rankingsFile
-        ? currentRankings.includes(board.rankingsFile)
-        : currentRankings === '') || (!currentRankings && board.order === 0);
+    // ?board= is the name; ?rankings= is a file. The switcher was reading only
+    // the file, so a link carrying just the board selected the right pool and
+    // then highlighted the wrong button.
+    const currentSlug = new URLSearchParams(window.location.search).get('board');
+    const isActive = (board) => (currentSlug ? board.slug === currentSlug : board.order === 0);
     const chooseBoard = (board) => {
         const params = new URLSearchParams(window.location.search);
-        if (board.rankingsFile) params.set('rankings', `${import.meta.env.BASE_URL}${board.rankingsFile}`);
-        else params.delete('rankings');
+        params.delete('rankings');   // retired — the board name is the switch
         params.set('board', board.slug);
         window.location.assign(`?${params.toString()}`);
     };
@@ -132,6 +132,13 @@ export default function UdfaView({ players, draftedPlayers, columnOrder, signUnd
                         className="action-pill"
                         disabled={!draftComplete}
                     >+ Sign Unranked Player</button>
+                    {/* Signing goes through the draft's own history, so it was
+                        always undoable — this view just never offered it. */}
+                    <button
+                        onClick={undoAction}
+                        className="action-pill undo-pill"
+                        title="Undo the last signing"
+                    >Undo</button>
                     <Menu items={[
                         { label: 'Export Signed UDFAs…', onClick: exportSigned, title: 'name, position, school, team' },
                         { label: 'Import Signed UDFAs…', file: { accept: '.csv', onFile: importSigned }, title: 'Signs everyone in the file, the same way the button does' },

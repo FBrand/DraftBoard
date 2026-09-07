@@ -199,6 +199,7 @@ function App() {
               draftedPlayers={draftedPlayers}
               columnOrder={columnOrder}
               signUndrafted={signUndrafted}
+              undoAction={undoAction}
               currentPick={currentPick}
               onInfoOpen={setInfoPlayer}
             />

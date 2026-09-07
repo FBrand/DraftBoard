@@ -315,9 +315,15 @@ function RosterSidebar({ cuts, onSign, signLabel, masterPlayers, draftedPlayers,
             <div ref={setNodeRef} className={`roster-cuts ${isOver ? 'drag-over' : ''}`}>
                 <div className="roster-cuts-label">CUT PANEL — {cuts.length}</div>
                 <div className="roster-cuts-list">
-                    {cuts.map((name, i) => (
+                    {cuts.map((cut, i) => (
                         <SlotCell
-                            key={i} slot={{ name, zone: 'cut' }} zone="cut" posId="__cut__" slotIdx={i} targetZone="cut"
+                            // A cut is a slot now — it used to be a bare name,
+                            // which is why a player came back from the cut
+                            // panel stripped of how he arrived. Old saves still
+                            // hold strings.
+                            key={i}
+                            slot={typeof cut === 'string' ? { name: cut, zone: 'cut' } : { ...cut, zone: 'cut' }}
+                            zone="cut" posId="__cut__" slotIdx={i} targetZone="cut"
                             masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} onInfoOpen={onInfoOpen}
                         />
                     ))}
@@ -336,8 +342,13 @@ function IRDropZone({ reserve, masterPlayers, draftedPlayers, onInfoOpen }) {
         <div ref={setNodeRef} className={`roster-ir ${isOver ? 'drag-over' : ''}`}>
             <div className="roster-ir-label">INJURY RESERVE — {reserve.length}</div>
             <div className="roster-ir-list">
-                {reserve.map((name, i) => (
-                    <SlotCell key={i} slot={{ name, zone: 'ir' }} zone="ir" posId="__ir__" slotIdx={i} targetZone="ir" masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} onInfoOpen={onInfoOpen} />
+                {reserve.map((entry, i) => (
+                    <SlotCell
+                        key={i}
+                        // Slots now, names in older saves — see the cut panel.
+                        slot={typeof entry === 'string' ? { name: entry, zone: 'ir' } : { ...entry, zone: 'ir' }}
+                        zone="ir" posId="__ir__" slotIdx={i} targetZone="ir"
+                        masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} onInfoOpen={onInfoOpen} />
                 ))}
             </div>
         </div>
