@@ -99,9 +99,18 @@ export function rankBoard(players, entryFor) {
 
     const withOverrides = players.map(p => {
         const e = entryFor(p.name, p);
-        // An entry places a player only if it says where; a null round means
-        // this analyst hasn't placed him, not that he has been unplaced.
-        const placed = e?.round != null ? e : p;
+        // Three states, not two.
+        //
+        // A round on the entry is a placement. No round usually means the
+        // analyst has said nothing, so the file's own placement stands — that
+        // is what stops a freshly seeded board reading as entirely unranked.
+        //
+        // But it can also mean he took the placement OFF, and those are not
+        // the same thing. Without `cleared` they were, so "Clear evaluations"
+        // wrote a null round, this read it as silence, and the file's
+        // placement came straight back: the player stayed exactly where he
+        // was and the button looked broken.
+        const placed = e?.round != null ? e : (e?.cleared ? { round: null, tier: null } : p);
         return {
             player: p,
             round: placed?.round ?? null,

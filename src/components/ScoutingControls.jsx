@@ -725,7 +725,7 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
                                                 // Through commit, not onEntryChange: Scouting's panel
                                                 // passes onChange instead, so calling the other one
                                                 // directly did nothing at all there.
-                                                commit({ round: null, tier: null, withinGroup: null, tag: null });
+                                                commit({ round: null, tier: null, withinGroup: null, tag: null, cleared: true });
                                                 // The remarks are the other half of it — leaving them
                                                 // behind meant the player still could not be deleted.
                                                 (remarks ?? []).forEach(r => onRemoveRemark?.(r.id));

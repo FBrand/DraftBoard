@@ -269,6 +269,9 @@ export default function ScoutingView({ players }) {
         // personalRank is derived, never stored — strip it before persisting
         // so a stale copy can't start competing with the derivation.
         const { personalRank: _drop, ...persisted } = updated;
+        // Placing him again undoes a clear — otherwise the flag would keep
+        // him unranked no matter where he was put.
+        if (persisted.round != null) persisted.cleared = false;
         if (idx !== -1) entries[idx] = { ...entries[idx], ...persisted };
         else entries.push(persisted);
 

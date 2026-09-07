@@ -184,3 +184,46 @@ describe('the joined tier label is a boundary format', () => {
         ]);
     });
 });
+
+/**
+ * Clearing a placement has to survive the file the board was seeded from.
+ *
+ * A board's entry with no round normally means the analyst has said nothing,
+ * so the rankings file's own placement stands — that is what stops a freshly
+ * seeded board reading as entirely unranked. But it can also mean he took the
+ * placement OFF, and those two are not the same. Conflated, "Clear
+ * evaluations" wrote a null round, the ranking read it as silence, and the
+ * file's placement came straight back: the player did not move and the button
+ * looked broken.
+ */
+describe('clearing a placement', () => {
+    const players = [
+        { name: 'Fernando Mendoza', position: 'QB', round: 1, tier: null, overallRank: 1 },
+        { name: 'Arvell Reese', position: 'EDGE', round: 1, tier: null, overallRank: 2 },
+    ];
+
+    it('leaves the file placement alone when an entry simply says nothing', () => {
+        const ranked = rankBoard(players, (name) => ({ name, round: null, tier: null }));
+        expect(ranked.find(p => p.name === 'Arvell Reese').overallRank).not.toBeNull();
+    });
+
+    it('unranks him when the analyst cleared it deliberately', () => {
+        const ranked = rankBoard(players, (name) => (name === 'Arvell Reese'
+            ? { name, round: null, tier: null, cleared: true }
+            : null));
+
+        const reese = ranked.find(p => p.name === 'Arvell Reese');
+        expect(reese.round).toBeNull();
+        expect(reese.overallRank).toBeNull();
+        expect(reese.positionRank).toBeNull();
+        // And everyone else closes up behind him.
+        expect(ranked.find(p => p.name === 'Fernando Mendoza').overallRank).toBe(1);
+    });
+
+    it('takes him back when he is placed again', () => {
+        const ranked = rankBoard(players, (name) => (name === 'Arvell Reese'
+            ? { name, round: 1, tier: 1, cleared: false }
+            : null));
+        expect(ranked.find(p => p.name === 'Arvell Reese').overallRank).not.toBeNull();
+    });
+});
