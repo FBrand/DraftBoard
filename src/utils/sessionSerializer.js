@@ -43,7 +43,11 @@ export const deserializeDraftState = (csvText) => {
                 if (parts[1]) {
                     ourPicksLeft = parts[1].split(",")
                         .map(n => parseInt(n.trim(), 10))
-                        .filter(n => !isNaN(n));
+                        // A pick is 1 or more. An exhausted draft used to
+                        // write "# OurPicksLeft: 0", which read back as a
+                        // phantom pick 0 that could never come up and could
+                        // never be cleared.
+                        .filter(n => Number.isFinite(n) && n > 0);
                 }
             }
             return;

@@ -1,406 +1,199 @@
-import React, { useState, useCallback } from 'react';
-import {
-    DndContext, DragOverlay, useDraggable, useDroppable,
-    useSensor, useSensors, MouseSensor, TouchSensor
-} from '@dnd-kit/core';
+import React, { useState, useCallback, useEffect } from 'react';
+import useIsMobile from '../hooks/useIsMobile';
+import { CSV_TEMPLATE } from '../utils/rosterState';
 import {
     loadState, saveState, defaultState,
-    parseCSV, exportCSV, makeSlot,
-    SPECIALIST_IDS, POS_TRANSLATIONS, hasRosterSourceAdapter, fetchAdapterRoster, fetchLocalRoster, parseHTMLToRoster
+    parseCSV, exportCSV, makeSlot, resolvePosition,
+    SPECIALIST_IDS, hasRosterSourceAdapter, fetchAdapterRoster, fetchLocalRoster, fetchSeasonStartStructure, parseHTMLToRoster
 } from '../utils/rosterState';
-import { buildNameIndex, findMatchingIndex } from '../utils/nameMatcher';
-import { parseName } from '../utils/formatName';
+import * as faState from '../utils/faState';
 import UnrankedModal from './UnrankedModal';
+import DepthChartGrid from './DepthChartGrid';
+import { TextPromptDialog, ConfirmDialog } from './Dialogs';
+import Toast from './Toast';
+import Menu from './Menu';
+import { shouldSeed } from '../utils/appInit';
+import { isDraftPick, isUndraftedSigning } from '../utils/draftPhase';
+import { resolve as resolvePlayer, setFacts } from '../utils/playerRegistry';
+import useUndoableState from '../hooks/useUndoableState';
 
-const PS_SLOTS = 3;
-
-// ── Helper: Pick to Round ──────────────────────────────────────────────
-function getRoundFromPick(pick) {
-    const p = parseInt(pick);
-    if (isNaN(p)) return null;
-    if (p <= 32) return 1;
-    if (p <= 64) return 2;
-    if (p <= 100) return 3;
-    if (p <= 135) return 4;
-    if (p <= 175) return 5;
-    if (p <= 210) return 6;
-    return 7;
-}
-
-function zoneClass(zone, isNeed) {
-    if (zone) return `zone-${zone}`;
-    return isNeed ? 'zone-need' : '';
-}
-
-// slotMeta runs once per rendered slot — dozens of times per render — and
-// each call name-matches against the full masterPlayers/draftedPlayers
-// lists. Caching each list's name index by reference (safe: both come from
-// useDraftState, which always replaces rather than mutates these arrays)
-// turns that from a per-cell rebuild into a one-time-per-render-pass cost.
-const nameIndexCache = new WeakMap();
-function getOrBuildIndex(list) {
-    if (!list) return [];
-    let idx = nameIndexCache.get(list);
-    if (!idx) {
-        idx = buildNameIndex(list);
-        nameIndexCache.set(list, idx);
-    }
-    return idx;
-}
-
-function slotMeta(slot, masterPlayers, draftedPlayers) {
-    const { displayName, suffix, nameColor } = parseName(slot?.name);
-
-    const findByRobustName = (list) => {
-        if (!list) return null;
-        const idx = findMatchingIndex(displayName, getOrBuildIndex(list));
-        return idx !== -1 ? list[idx] : null;
-    };
-    const draftData = findByRobustName(draftedPlayers) || findByRobustName(masterPlayers);
-
-    let topLabel = suffix || '';
-    if (draftData && (draftData.round || draftData.pickNumber)) {
-        const r = draftData.round || getRoundFromPick(draftData.pickNumber);
-        const p = draftData.pickNumber;
-        if (r && p && !isNaN(parseInt(p))) topLabel = `R${r}: ${p}`;
-        else if (r) topLabel = `R${r}`;
-        else if (p) topLabel = !isNaN(parseInt(p)) ? `PICK ${p}` : p;
-    } else if (suffix && /^\d+$/.test(suffix)) {
-        topLabel = `R${suffix}`;
-    }
-
-    const rawPos = draftData?.position || '';
-    const displayPos = POS_TRANSLATIONS[rawPos] || rawPos;
-
-    return { displayName, nameColor, topLabel, displayPos };
-}
-
-// ── Shared card content (also reused by the DragOverlay clone) ────────────
-function SlotCardContent({ displayName, nameColor, topLabel, displayPos, small, className }) {
+function CounterBox({ label, val, max, status, isLast, maxLabel }) {
     return (
-        <div className={className ?? 'rv-slot-content'}>
-            <span
-                className="rv-slot-name"
-                style={small ? { color: nameColor, fontSize: '0.85rem', fontWeight: 800 } : { color: nameColor }}
-            >
-                {displayName}
-            </span>
-            <div className="rv-slot-meta">
-                <span className="rv-slot-tag">{topLabel}</span>
-                <span className="rv-slot-pos">{displayPos}</span>
-            </div>
-        </div>
-    );
-}
-
-// ── Slot cell ─────────────────────────────────────────────────────────────
-// Draggable (when filled) and droppable (always) share the same logical id
-// but separate dnd-kit registries (useDraggable/useDroppable each track
-// their own id namespace), so reusing `posId::slotIdx` for both is safe.
-function SlotCell({ slot, zone, posId, slotIdx, targetZone, onClick, masterPlayers, draftedPlayers }) {
-    const isNeed = !slot && zone === '53';
-    const meta = slotMeta(slot, masterPlayers, draftedPlayers);
-    const resolvedZone = targetZone ?? zone;
-    const cellId = `${posId}::${slotIdx}`;
-
-    const { setNodeRef: setDropRef, isOver } = useDroppable({
-        id: `drop-${cellId}`,
-        data: { kind: 'item', posId, slotIdx, targetZone: resolvedZone },
-    });
-    const { attributes, listeners, setNodeRef: setDragRef, isDragging } = useDraggable({
-        id: `drag-${cellId}`,
-        disabled: !slot,
-        data: { kind: 'item', posId, slotIdx, slot },
-    });
-
-    return (
-        <div
-            ref={node => { setDropRef(node); setDragRef(node); }}
-            {...(slot ? listeners : {})}
-            {...(slot ? attributes : {})}
-            onClick={() => slot && onClick && onClick(slot, posId, slotIdx)}
-            className={`rv-slot ${slot ? 'filled' : 'empty-square'} ${zoneClass(slot?.zone ?? zone, isNeed)} ${isOver ? 'drag-over' : ''} ${isDragging ? 'dragging-source' : ''}`}
-            style={slot ? { cursor: 'grab' } : undefined}
-        >
-            {slot ? (
-                <SlotCardContent {...meta} />
-            ) : (
-                <span className="rv-slot-add-icon">+</span>
-            )}
-        </div>
-    );
-}
-
-// ── Single row — 4 grid cells: [pos+ctrl | 53-man | PS | Reserve] ────────────
-// The row-header cell is a drop target for reordering, but only its position
-// label is a drag handle — keeping the delete/±count buttons outside the
-// drag listeners avoids any pointerdown conflict between "click a button"
-// and "start dragging the row".
-function DepthRow({ posConfig, slots, idx, phase, onConfigChange, onDeletePosition, masterPlayers, draftedPlayers }) {
-    const { id, label, slots53 } = posConfig;
-    const rowParity = idx % 2 === 0 ? 'odd' : '';
-    const rowId = `${phase}::${idx}`;
-
-    const { setNodeRef: setDropRef, isOver } = useDroppable({
-        id: `drop-row-${rowId}`,
-        data: { kind: 'row', idx, phase },
-    });
-    const { attributes, listeners, setNodeRef: setDragRef, isDragging } = useDraggable({
-        id: `drag-row-${rowId}`,
-        data: { kind: 'row', idx, phase, label },
-    });
-
-    // Build slot arrays for each zone
-    const s53 = Math.max(slots53, 1);
-    const slots53Items = Array.from({ length: s53 }, (_, i) => ({ slot: slots[i] || null, zone: '53', idx: i }));
-    // Always show one empty drop target at the end of each section
-    const psStart = s53;
-    const psItems = [];
-    for (let i = 0; i < PS_SLOTS; i++) { if (slots[psStart + i]) psItems.push({ slot: slots[psStart + i], zone: 'ps', idx: psStart + i }); }
-    psItems.push({ slot: null, zone: 'ps', idx: psStart + psItems.length });
-
-    const rStart = s53 + PS_SLOTS;
-    const rItems = [];
-    for (let i = 0; slots[rStart + i]; i++) rItems.push({ slot: slots[rStart + i], zone: 'r', idx: rStart + i });
-    rItems.push({ slot: null, zone: 'r', idx: rStart + rItems.length });
-
-    return (
-        <React.Fragment>
-            {/* Col 1: Pos label + - N + controller */}
-            <div
-                ref={setDropRef}
-                className={`rv-row-cell rv-pos-cell ${rowParity} ${isOver ? 'drag-over' : ''}`}
-            >
-                <button
-                    className="rv-delete-pos"
-                    title={`Remove ${label}`}
-                    onClick={e => { e.stopPropagation(); onDeletePosition(); }}
-                >✕</button>
-                <div
-                    ref={setDragRef}
-                    {...listeners}
-                    {...attributes}
-                    className={`rv-pos-label ${isDragging ? 'dragging-source' : ''}`}
-                    style={{ cursor: 'grab' }}
-                >
-                    {label}
-                </div>
-                <div className="rv-pos-ctrl">
-                    <button onClick={e => { e.stopPropagation(); onConfigChange(Math.max(0, slots53 - 1)); }} className="rv-ctrl-btn">-</button>
-                    <span className="rv-pos-count">{slots53}</span>
-                    <button onClick={e => { e.stopPropagation(); onConfigChange(Math.min(6, slots53 + 1)); }} className="rv-ctrl-btn">+</button>
-                </div>
-            </div>
-
-            {/* Col 2: 53-Man */}
-            <div className={`rv-row-cell ${rowParity}`}>
-                {slots53Items.map(item => (
-                    <SlotCell key={item.idx} slot={item.slot} zone={item.zone} posId={id} slotIdx={item.idx} targetZone="53" masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} />
-                ))}
-            </div>
-
-            {/* Col 3: Practice Squad */}
-            <div className={`rv-row-cell ${rowParity}`}>
-                {psItems.map(item => (
-                    <SlotCell key={item.idx} slot={item.slot} zone={item.zone} posId={id} slotIdx={item.idx} targetZone="ps" masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} />
-                ))}
-            </div>
-
-            {/* Col 4: Reserve */}
-            <div className={`rv-row-cell last ${rowParity}`}>
-                {rItems.map(item => (
-                    <SlotCell key={item.idx} slot={item.slot} zone={item.zone} posId={id} slotIdx={item.idx} targetZone="r" masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} />
-                ))}
-            </div>
-        </React.Fragment>
-    );
-}
-
-// ── Specialist cell ────────────────────────────────────────────────────────
-// No explicit targetZone here (matches prior behavior): makeSlot()'s default
-// zone param ('53') is what a moved player lands with, since specialists
-// aren't tracked as a distinct zone.
-function SpecialistCell({ id, slot, masterPlayers, draftedPlayers }) {
-    const label = { P: 'Punter', K: 'Kicker', LS: 'Long Snapper' }[id] ?? id;
-    const meta = slotMeta(slot, masterPlayers, draftedPlayers);
-
-    const { setNodeRef: setDropRef, isOver } = useDroppable({
-        id: `drop-spec-${id}`,
-        data: { kind: 'item', posId: id, slotIdx: 0, targetZone: undefined },
-    });
-    const { attributes, listeners, setNodeRef: setDragRef, isDragging } = useDraggable({
-        id: `drag-spec-${id}`,
-        disabled: !slot,
-        data: { kind: 'item', posId: id, slotIdx: 0, slot },
-    });
-
-    return (
-        <div
-            ref={setDropRef}
-            className={`rv-specialist ${slot ? 'filled' : ''} ${isOver ? 'drag-over' : ''}`}
-        >
-            <div className="rv-specialist-label">{label}</div>
-            {slot ? (
-                <div
-                    ref={setDragRef}
-                    {...listeners}
-                    {...attributes}
-                    className={`rv-slot-content ${isDragging ? 'dragging-source' : ''}`}
-                    style={{ cursor: 'grab' }}
-                >
-                    <span className="rv-slot-name" style={{ color: meta.nameColor, fontSize: '0.85rem', fontWeight: 800 }}>{meta.displayName}</span>
-                    <div className="rv-slot-meta">
-                        <span className="rv-slot-tag">{meta.topLabel}</span>
-                        <span className="rv-slot-pos">{meta.displayPos}</span>
-                    </div>
-                </div>
-            ) : (
-                <div className="rv-specialist-need">NEED</div>
-            )}
-        </div>
-    );
-}
-
-// ── Roster Side Panel ── Cut panel only (IR is at bottom of main content)
-function RosterSidebar({ cuts, onSign, masterPlayers, draftedPlayers }) {
-    const { setNodeRef, isOver } = useDroppable({
-        id: 'drop-cut-zone',
-        data: { kind: 'item', posId: '__cut__', slotIdx: cuts.length, targetZone: 'cut' },
-    });
-    return (
-        <div className="roster-sidebar">
-            <button onClick={onSign} className="action-pill roster-sign-btn">+ SIGN PLAYER</button>
-
-            <div ref={setNodeRef} className={`roster-cuts ${isOver ? 'drag-over' : ''}`}>
-                <div className="roster-cuts-label">CUT PANEL — {cuts.length}</div>
-                <div className="roster-cuts-list">
-                    {cuts.map((name, i) => (
-                        <SlotCell
-                            key={i} slot={{ name, zone: 'cut' }} zone="cut" posId="__cut__" slotIdx={i} targetZone="cut"
-                            masterPlayers={masterPlayers} draftedPlayers={draftedPlayers}
-                        />
-                    ))}
-                </div>
-            </div>
-        </div>
-    );
-}
-
-// ── Small in-app replacements for window.prompt / window.confirm ───────────
-function TextPromptDialog({ title, placeholder, onSubmit, onCancel }) {
-    const [value, setValue] = useState('');
-    return (
-        <div className="modal-overlay rv-inline-dialog" onClick={onCancel}>
-            <div className="modal-content" onClick={e => e.stopPropagation()}>
-                <div className="modal-header">
-                    <h2>{title}</h2>
-                    <button className="close-btn" onClick={onCancel}>&times;</button>
-                </div>
-                <form onSubmit={e => { e.preventDefault(); if (value.trim()) onSubmit(value.trim()); }}>
-                    <div className="modal-body">
-                        <input
-                            autoFocus
-                            type="text"
-                            value={value}
-                            placeholder={placeholder}
-                            onChange={e => setValue(e.target.value)}
-                        />
-                    </div>
-                    <div className="modal-footer">
-                        <button type="button" className="cancel-pill" onClick={onCancel}>Cancel</button>
-                        <button type="submit" className="save-pill" disabled={!value.trim()}>Add</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    );
-}
-
-function ConfirmDialog({ title, message, onConfirm, onCancel }) {
-    return (
-        <div className="modal-overlay rv-inline-dialog" onClick={onCancel}>
-            <div className="modal-content" onClick={e => e.stopPropagation()}>
-                <div className="modal-header">
-                    <h2>{title}</h2>
-                    <button className="close-btn" onClick={onCancel}>&times;</button>
-                </div>
-                <div className="modal-body"><p>{message}</p></div>
-                <div className="modal-footer">
-                    <button className="cancel-pill" onClick={onCancel}>Cancel</button>
-                    <button className="save-pill" onClick={onConfirm}>Confirm</button>
-                </div>
-            </div>
+        <div className={`roster-counter ${isLast ? 'last' : ''}`}>
+            <div className="roster-counter-label">{label}</div>
+            <div className={`roster-counter-value ${status}`}>{val} <span className="roster-counter-max">/ {maxLabel ?? max}</span></div>
         </div>
     );
 }
 
 // ── Main RosterView ────────────────────────────────────────────────────────
-export default function RosterView({ masterPlayers, draftedPlayers, currentPick, onDraft }) {
-    const isDraftComplete = (currentPick || 1) > 257;
-    const [state, setStateRaw] = useState(() => {
-        const loaded = loadState() ?? defaultState();
-        if (!loaded.cuts) loaded.cuts = [];
-        if (!loaded.reserve) loaded.reserve = [];
-        return loaded;
-    });
-    const [bootstrapping, setBootstrapping] = useState(() => loadState() === null);
+// Owns roster state/persistence/CSV/bootstrap; the grid itself (drag-and-drop,
+// slots, specialists, IR, cuts) is DepthChartGrid.jsx, shared with Free Agency.
+export default function RosterView({ masterPlayers, draftedPlayers, onInfoOpen }) {
+    // Roster initialises like every other phase — silently, with no screen of
+    // its own to get past. Seeded mode loads the real post-offseason roster;
+    // clean mode loads last season's position structure with the slots empty,
+    // so there is a depth chart to build into and "Sync from FA/Draft/UDFA"
+    // has somewhere to place players. The import options that used to live on
+    // the blocking bootstrap screen are in this view's menu instead.
+    const [seeding, setSeeding] = useState(() => loadState() === null);
     const [isSignModalOpen, setIsSignModalOpen] = useState(false);
     const [isPasting, setIsPasting] = useState(false);
     const [pastedHtml, setPastedHtml] = useState('');
     const [addPositionPhase, setAddPositionPhase] = useState(null); // 'offense' | 'defense' | null
     const [showResetConfirm, setShowResetConfirm] = useState(false);
+    const [toast, setToast] = useState(null); // { message, tone }
+    // Stable identity: Toast's auto-dismiss timer keys off this, so an inline
+    // arrow would restart the countdown on every render.
+    const dismissToast = useCallback(() => setToast(null), []);
     // The depth-chart grid is desktop-wide by design (many position columns);
     // on a phone that means horizontal scrolling to reach most slots. `zoom`
     // (not transform:scale, which wouldn't shrink the actual scrollable
     // layout) lets a mobile user shrink the whole grid to fit more on screen.
+    const isMobile = useIsMobile();
     const [zoomLevel, setZoomLevel] = useState(1);
 
-    const setState = useCallback(next => {
-        setStateRaw(prev => {
-            const result = typeof next === 'function' ? next(prev) : next;
-            if (result && result.depthChart && result.positionConfig) {
-                const normalize = (slots, limit53) => {
-                    if (!slots) return [];
-                    const newSlots = [];
-                    // 1. Keep 53-man slots (indices 0 to limit53 - 1)
-                    for (let i = 0; i < limit53; i++) {
-                        newSlots[i] = slots[i] || null;
-                    }
-                    // 2. PS slots (limit53 to limit53 + 2)
-                    const psSlots = slots.slice(limit53, limit53 + 3).filter(Boolean);
-                    for (let i = 0; i < 3; i++) {
-                        newSlots[limit53 + i] = psSlots[i] || null;
-                    }
-                    // 3. Reserve slots (from limit53 + 3 onwards)
-                    const rSlots = slots.slice(limit53 + 3).filter(Boolean);
-                    rSlots.forEach((slot, idx) => {
-                        newSlots[limit53 + 3 + idx] = slot;
-                    });
-                    return newSlots;
-                };
+    // Slots are normalised on the way in, so the value that lands in state,
+    // in history and in storage is always the same shape — an un-normalised
+    // snapshot would come back subtly different when undone.
+    const normalizeState = useCallback(result => {
+        if (!result?.depthChart || !result?.positionConfig) return result;
 
-                const newDC = { ...result.depthChart };
-                const allPositions = [
-                    ...(result.positionConfig.offense || []),
-                    ...(result.positionConfig.defense || [])
-                ];
-                allPositions.forEach(p => {
-                    if (newDC[p.id]) {
-                        newDC[p.id] = normalize(newDC[p.id], Math.max(1, p.slots53));
-                    }
-                });
-                result.depthChart = newDC;
+        const normalize = (slots, limit53) => {
+            if (!slots) return [];
+            const newSlots = [];
+            // 1. Keep 53-man slots (indices 0 to limit53 - 1)
+            for (let i = 0; i < limit53; i++) {
+                newSlots[i] = slots[i] || null;
             }
-            saveState(result);
-            return result;
-        });
+            // 2. PS slots (limit53 to limit53 + 2)
+            const psSlots = slots.slice(limit53, limit53 + 3).filter(Boolean);
+            for (let i = 0; i < 3; i++) {
+                newSlots[limit53 + i] = psSlots[i] || null;
+            }
+            // 3. Reserve slots (from limit53 + 3 onwards)
+            const rSlots = slots.slice(limit53 + 3).filter(Boolean);
+            rSlots.forEach((slot, idx) => {
+                newSlots[limit53 + 3 + idx] = slot;
+            });
+            return newSlots;
+        };
+
+        const newDC = { ...result.depthChart };
+        [...(result.positionConfig.offense || []), ...(result.positionConfig.defense || [])]
+            .forEach(p => {
+                if (newDC[p.id]) newDC[p.id] = normalize(newDC[p.id], Math.max(1, p.slots53));
+            });
+        return { ...result, depthChart: newDC };
     }, []);
 
+    const [state, setUndoableState, history] = useUndoableState(() => {
+        const loaded = loadState() ?? defaultState();
+        if (!loaded.cuts) loaded.cuts = [];
+        if (!loaded.reserve) loaded.reserve = [];
+        return loaded;
+    }, saveState);
+
+    const setState = useCallback(next => {
+        setUndoableState(prev => normalizeState(typeof next === 'function' ? next(prev) : next));
+    }, [setUndoableState, normalizeState]);
+
+    // One-shot: only runs when there is nothing saved and we're in seeded mode.
+    // Any later edit writes state, so this never fires again and can't overwrite
+    // real work. A failure drops through to the bootstrap screen rather than
+    // leaving the view stuck on a spinner.
+    useEffect(() => {
+        if (!seeding) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                const loaded = shouldSeed()
+                    ? await fetchLocalRoster()
+                    : await fetchSeasonStartStructure();
+                if (cancelled) return;
+                history.reset(loaded);
+            } catch (err) {
+                if (cancelled) return;
+                // An empty grid plus the menu's import options is still a
+                // usable view, so report and carry on.
+                setToast({ message: `Couldn't load the roster: ${err.message}`, tone: 'error' });
+            } finally {
+                if (!cancelled) setSeeding(false);
+            }
+        })();
+        return () => { cancelled = true; };
+        // history.reset is stable (useCallback in useUndoableState); listing
+        // the whole object would re-run this on every render.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [seeding]);
+
+    // Signing is a roster move, not a draft pick.
+    //
+    // This used to call draftPlayer, which stamps the *current* pick number on
+    // the player and advances the draft — so signing a free agent after nine
+    // picks recorded him as pick ten. It also pushed the name onto `reserve`,
+    // which is the injury-reserve pool, so every signing arrived injured.
+    //
+    // A signing now lands in the player's own position row: first free 53-man
+    // slot, then practice squad, then that row's reserve column. Nothing
+    // touches draft state; the arrival tag beside the name records how they
+    // arrived, the same thing roster.csv encodes in its suffix.
     const handleSignPlayer = (customPlayer) => {
-        if (onDraft) onDraft(customPlayer);
-        setState(prev => ({ ...prev, reserve: [...prev.reserve, customPlayer.name] }));
+        const { name, position, arrival = null, team, previousTeam, draftYear, draftRound } = customPlayer;
+        const displayName = String(name).split(':')[0];
+
+        // Team and previous team are facts about the player, so they go on his
+        // record. How he arrived HERE is a fact about this roster, so it stays
+        // on the slot.
+        if (team || previousTeam || draftYear || draftRound) {
+            const id = resolvePlayer({ name: displayName, position });
+            if (id) setFacts(id, {
+                ...(team ? { team } : {}),
+                ...(previousTeam ? { previousTeam } : {}),
+                ...(draftYear ? { draftYear } : {}),
+                ...(draftRound ? { draftRound, isUdfa: false } : {}),
+            });
+        }
+
+        // Computed outside setState: an updater is deferred to the render
+        // phase, so a result read back straight after it would be stale.
+        const next = { ...state, depthChart: { ...state.depthChart } };
+        const rowId = resolvePosition(position, state.positionConfig, next.depthChart);
+
+        if (!rowId) {
+            setToast({
+                message: `No ${position} row on the depth chart — add one, then sign ${displayName}.`,
+                tone: 'error',
+            });
+            return;
+        }
+
+        const chip = [...state.positionConfig.offense, ...state.positionConfig.defense]
+            .find(p => p.id === rowId);
+        const limit53 = Math.max(1, chip?.slots53 ?? 2);
+        const arr = next.depthChart[rowId] = [...(next.depthChart[rowId] ?? [])];
+
+        const placeAt = (index, zone, label) => {
+            arr[index] = makeSlot(displayName, zone, arrival);
+            setState(next);
+            setToast({ message: `Signed ${displayName} — ${chip?.label ?? position}, ${label}.`, tone: 'success' });
+        };
+
+        for (let i = 0; i < limit53; i++) {
+            if (!arr[i]) return placeAt(i, '53', '53-man');
+        }
+        for (let i = limit53; i < limit53 + 3; i++) {
+            if (!arr[i]) return placeAt(i, 'ps', 'practice squad');
+        }
+        let i = limit53 + 3;
+        while (arr[i]) i++;
+        return placeAt(i, 'r', 'reserve');
     };
 
+    // Every branch here carries the slot's `arrival` with it. Rebuilding a
+    // moved player from his NAME alone — which is what makeSlot(name, zone)
+    // did — quietly stripped how he got here, so a player dragged to the cut
+    // panel and back came home a plain veteran with his FA or UDFA tag gone.
     const performMove = useCallback((src, dst) => {
         if (src.posId === dst.posId && src.slotIdx === dst.slotIdx) return;
 
@@ -423,19 +216,19 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
             }
 
             // Place at destination
-            if (dst.posId === '__ir__') next.reserve.push(src.slot.name);
-            else if (dst.posId === '__cut__') next.cuts.push(src.slot.name);
+            if (dst.posId === '__ir__') next.reserve.push(src.slot);
+            else if (dst.posId === '__cut__') next.cuts.push(src.slot);
             else {
                 if (!dc[dst.posId]) dc[dst.posId] = [];
                 dc[dst.posId] = [...dc[dst.posId]];
-                dc[dst.posId][dst.slotIdx] = makeSlot(src.slot.name, dst.targetZone);
+                dc[dst.posId][dst.slotIdx] = makeSlot(src.slot.name, dst.targetZone, src.slot.arrival ?? null);
             }
 
             // Swap displaced back to source
             if (displaced) {
-                if (src.posId === '__ir__') next.reserve.push(displaced.name);
-                else if (src.posId === '__cut__') next.cuts.push(displaced.name);
-                else dc[src.posId][src.slotIdx] = makeSlot(displaced.name, src.slot?.zone ?? '53');
+                if (src.posId === '__ir__') next.reserve.push(displaced);
+                else if (src.posId === '__cut__') next.cuts.push(displaced);
+                else dc[src.posId][src.slotIdx] = makeSlot(displaced.name, src.slot?.zone ?? '53', displaced.arrival ?? null);
             }
 
             return next;
@@ -504,67 +297,36 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
         });
     }, [setState]);
 
-    // ── Drag-and-drop (mouse + touch, via @dnd-kit) ──────────────────────────
-    // MouseSensor uses a small movement threshold so plain clicks don't start
-    // a drag. TouchSensor uses a hold delay instead: a quick swipe (scrolling)
-    // is released back to the browser as a normal scroll, and only a
-    // deliberate press-and-hold locks into a drag — this is what actually
-    // stops touch drags from hijacking scroll gestures.
-    const sensors = useSensors(
-        useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
-        useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
-    );
-    const [activeDragData, setActiveDragData] = useState(null);
-
-    const handleDragStart = useCallback(({ active }) => {
-        setActiveDragData(active.data.current ?? null);
-    }, []);
-
-    const handleDragEnd = useCallback(({ active, over }) => {
-        setActiveDragData(null);
-        if (!over) return;
-        const src = active.data.current;
-        const dst = over.data.current;
-        if (!src || !dst || src.kind !== dst.kind) return;
-
-        if (src.kind === 'row') {
-            performRowMove(src.idx, src.phase, dst.idx, dst.phase);
-        } else {
-            performMove(src, dst);
-        }
-    }, [performMove, performRowMove]);
-
-    const handleDragCancel = useCallback(() => setActiveDragData(null), []);
-
     const handleBootstrap = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
         const text = await file.text();
-        setState(parseCSV(text));
-        setBootstrapping(false);
+        history.reset(parseCSV(text));
     };
 
     const handleFetchAdapter = async () => {
         try {
-            setBootstrapping(true);
-            setState(await fetchAdapterRoster());
-            setBootstrapping(false);
+            history.reset(await fetchAdapterRoster());
         } catch (err) {
-            alert('Failed to fetch: ' + err.message);
-            setBootstrapping(false);
+            setToast({ message: 'Failed to fetch roster: ' + err.message, tone: 'error' });
         }
     };
 
     const handleFetchLocal = async () => {
         try {
-            setBootstrapping(true);
-            setState(await fetchLocalRoster());
-            setBootstrapping(false);
+            history.reset(await fetchLocalRoster());
         } catch (err) {
-            alert('Failed to load: ' + err.message);
-            setBootstrapping(false);
+            setToast({ message: 'Failed to load default roster: ' + err.message, tone: 'error' });
         }
     };
+    const downloadTemplate = () => {
+        const url = URL.createObjectURL(new Blob([CSV_TEMPLATE], { type: 'text/csv' }));
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'roster_template.csv';
+        a.click();
+    };
+
 
     const handleExport = () => {
         const csv = exportCSV(state);
@@ -576,56 +338,117 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
         a.click();
     };
 
+    // Explicit, anytime-runnable, additive-only: pulls FA's candidates,
+    // the user's own real draft picks, and UDFA signings into empty 53-man
+    // slots. Never overwrites an occupied slot or removes anything — safe
+    // to run repeatedly as new picks/signings/candidates accumulate without
+    // losing hand-edits made in Roster between runs. Never writes to FA's
+    // own state (read-only via faState.loadState()).
+    const handleSyncFromStages = () => {
+        const fa = faState.loadState();
+        const ourPicks = (draftedPlayers || []).filter(p => p.draftedByUs && isDraftPick(p));
+        const udfaSignings = (draftedPlayers || []).filter(isUndraftedSigning);
+
+        // Computed from `state` directly and applied as a plain value, NOT
+        // inside a setState updater: the updater is deferred to the render
+        // phase (and may run more than once), so counters mutated in there
+        // can't be read back here to build the summary — an earlier version
+        // did exactly that and reported stale/doubled numbers.
+        let placed = 0, noRow = 0, rowFull = 0, alreadyPresent = 0;
+
+        const next = { ...state, depthChart: { ...state.depthChart } };
+        const dc = next.depthChart;
+        const allChips = [...state.positionConfig.offense, ...state.positionConfig.defense];
+
+        const isAlreadyOnRoster = (name) =>
+            Object.values(dc).some(slots => (slots ?? []).some(s => s?.name === name)) ||
+            (next.reserve ?? []).includes(name) ||
+            (next.cuts ?? []).includes(name);
+
+        const placeInFirstEmpty53 = (name, declaredPos) => {
+            if (!name || !declaredPos) return;
+            if (isAlreadyOnRoster(name)) { alreadyPresent++; return; }
+            const rowId = resolvePosition(declaredPos, state.positionConfig, dc);
+            if (!rowId) { noRow++; return; } // no matching row — leave for manual placement, don't guess a new one
+            const chip = allChips.find(p => p.id === rowId);
+            const limit53 = chip?.slots53 ?? 2;
+            const arr = dc[rowId] = [...(dc[rowId] ?? [])];
+            for (let i = 0; i < limit53; i++) {
+                if (!arr[i]) { arr[i] = makeSlot(name, '53'); placed++; return; }
+            }
+            // Row's 53-man slots are all full — don't overflow into PS/reserve
+            // implicitly, don't overwrite; this player is simply skipped this run.
+            rowFull++;
+        };
+
+        if (fa?.depthChart) {
+            const faChips = [...(fa.positionConfig?.offense ?? []), ...(fa.positionConfig?.defense ?? [])];
+            Object.entries(fa.depthChart).forEach(([faRowId, slots]) => {
+                const label = faChips.find(p => p.id === faRowId)?.label ?? faRowId;
+                (slots || []).forEach(s => { if (s) placeInFirstEmpty53(s.name, label); });
+            });
+        }
+        ourPicks.forEach(p => placeInFirstEmpty53(p.name, p.position));
+        udfaSignings.forEach(p => placeInFirstEmpty53(p.name, p.position));
+
+        if (placed > 0) setState(next);
+
+        const skips = [
+            noRow && `${noRow} had no matching position row`,
+            rowFull && `${rowFull} had no free 53-man slot`,
+            alreadyPresent && `${alreadyPresent} already on the roster`,
+        ].filter(Boolean);
+
+        setToast(placed > 0
+            ? {
+                message: `Placed ${placed} player${placed === 1 ? '' : 's'}` + (skips.length ? ` — skipped: ${skips.join(', ')}.` : '.'),
+                tone: 'success',
+            }
+            : {
+                message: skips.length
+                    ? `Nothing placed — ${skips.join(', ')}.`
+                    : 'Nothing to sync — no FA candidates, draft picks, or UDFA signings found.',
+                tone: 'info',
+            });
+    };
+
     const handlePasteHtml = () => {
         if (!pastedHtml.trim()) return;
         try {
-            setState(parseHTMLToRoster(pastedHtml));
-            setBootstrapping(false);
+            history.reset(parseHTMLToRoster(pastedHtml));
             setIsPasting(false);
-        } catch (err) { alert('Failed: ' + err.message); }
+        } catch (err) { setToast({ message: 'Could not parse pasted roster: ' + err.message, tone: 'error' }); }
     };
 
-    if (bootstrapping && !state.positionConfig.offense.length) {
-        return (
-            <div className="roster-bootstrap">
-                <div className="roster-bootstrap-title">INITIALIZE ROSTER</div>
-
-                {!isPasting ? (
-                    <div className="roster-bootstrap-actions">
-                        {hasRosterSourceAdapter() && (
-                            <button onClick={handleFetchAdapter} className="roster-btn primary">Auto-Fetch Depth Chart</button>
-                        )}
-                        <button onClick={handleFetchLocal} className="roster-btn">Load Default Roster</button>
-                        <button onClick={() => setIsPasting(true)} className="roster-btn">Paste HTML source</button>
-                        <label className="roster-btn" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-                            Upload CSV
-                            <input type="file" accept=".csv" onChange={handleBootstrap} style={{ display: 'none' }} />
-                        </label>
-                    </div>
-                ) : (
-                    <div className="roster-paste-box">
-                        <textarea
-                            className="roster-paste-textarea"
-                            placeholder="Paste Ourlads source (Ctrl+U from the site)..."
-                            value={pastedHtml}
-                            onChange={e => setPastedHtml(e.target.value)}
-                        />
-                        <div style={{ display: 'flex', gap: 15 }}>
-                            <button onClick={handlePasteHtml} className="roster-btn primary" style={{ flex: 1 }}>Process HTML</button>
-                            <button onClick={() => setIsPasting(false)} className="roster-btn" style={{ flex: 1 }}>Cancel</button>
-                        </div>
-                    </div>
-                )}
-                <div className="roster-bootstrap-hint">
-                    Automate your roster setup by fetching the latest depth chart directly,<br />or use your manual baseline files.
+    // The paste-source flow is a modal now rather than a whole-screen mode,
+    // so the depth chart stays visible behind it.
+    const pasteDialog = isPasting && (
+        <div className="modal-overlay" onClick={() => setIsPasting(false)}>
+            <div className="modal-content roster-paste-box" onClick={e => e.stopPropagation()}>
+                <div className="modal-header">
+                    <h2>Paste depth chart source</h2>
+                    <button className="close-btn" onClick={() => setIsPasting(false)}>&times;</button>
+                </div>
+                <textarea
+                    className="roster-paste-textarea"
+                    placeholder="Paste the page source (Ctrl+U on the depth chart page)..."
+                    value={pastedHtml}
+                    onChange={e => setPastedHtml(e.target.value)}
+                />
+                <div className="modal-footer">
+                    <button onClick={() => setIsPasting(false)} className="cancel-pill">Cancel</button>
+                    <button onClick={handlePasteHtml} className="save-pill" disabled={!pastedHtml.trim()}>Process</button>
                 </div>
             </div>
-        );
-    }
+        </div>
+    );
 
     const { positionConfig, depthChart, reserve, cuts } = state;
-    let oCount = 0, dCount = 0, psCount = 0, total = 0, needs = 0;
+    let oCount = 0, dCount = 0, psCount = 0, total = 0;
 
+    // "REMAINING NEEDS" itself is computed and rendered inside DepthChartGrid
+    // now (it needs the same per-position slot counts this loop derives) —
+    // this copy is only for the toolbar's 53-man/PS/Total counters above.
     const calculateStats = (positions) => {
         positions.forEach(p => {
             const slots = depthChart[p.id] ?? [];
@@ -635,9 +458,8 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
                     total++;
                     if (i < s53) { if (positions === positionConfig.offense) oCount++; else dCount++; }
                     else if (i < s53 + 3) psCount++;
-                } else if (i < s53) needs++;
+                }
             });
-            for (let i = slots.length; i < s53; i++) needs++;
         });
     };
     calculateStats(positionConfig.offense);
@@ -646,7 +468,7 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
     let destined53 = oCount + dCount;
     SPECIALIST_IDS.forEach(id => {
         const s = depthChart[id]?.[0];
-        if (s) { destined53++; total++; } else needs++;
+        if (s) { destined53++; total++; }
     });
     total += reserve.length;
 
@@ -657,7 +479,6 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
     };
 
     return (
-        <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={handleDragCancel}>
         <div className="roster-view">
             {/* Toolbar — visually matches the Draft view's top-panel */}
             <div className="top-panel">
@@ -670,73 +491,73 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
 
                 <div className="roster-counters">
                     <CounterBox label="53-MAN" val={destined53} max={53} status={counterStatus(destined53, 53)} />
-                    <CounterBox label="PRACTICE SQUAD" val={psCount} max={16} status={counterStatus(psCount, 16)} />
+                    {/* 16 + 1: an International Pathway player is an exemption
+                        to the practice-squad limit, not a player who has to
+                        occupy one of the sixteen. He stays wherever he is on
+                        the chart; the ALLOWANCE is what changes. */}
+                    <CounterBox label="PRACTICE SQUAD" val={psCount} max={17} status={counterStatus(psCount, 17)} maxLabel="16+1" />
                     <CounterBox label="TOTAL SQUAD" val={total} max={91} status={counterStatus(total, 91)} isLast maxLabel="90+1" />
                 </div>
 
                 <div className="top-actions">
-                    <div className="roster-zoom-ctrl">
-                        <button
-                            onClick={() => setZoomLevel(z => Math.max(0.5, +(z - 0.1).toFixed(2)))}
-                            className="rv-ctrl-btn"
-                            title="Zoom out"
-                        >−</button>
-                        <span className="rv-zoom-label">{Math.round(zoomLevel * 100)}%</span>
-                        <button
-                            onClick={() => setZoomLevel(z => Math.min(1, +(z + 0.1).toFixed(2)))}
-                            className="rv-ctrl-btn"
-                            title="Zoom in"
-                        >+</button>
-                    </div>
-                    <button onClick={handleExport} className="action-pill">Export CSV</button>
-                    <button onClick={() => setShowResetConfirm(true)} className="action-pill reset-pill">Reset</button>
-                </div>
-            </div>
-
-            <div className="roster-body" style={{ zoom: zoomLevel }}>
-                <div className="roster-main">
-                    <div className="roster-section-header">
-                        <div className="roster-section-title">OFFENSE</div>
-                        <div className="roster-section-count">{oCount}</div>
-                        <button onClick={() => setAddPositionPhase('offense')} className="action-pill">+ Add Position</button>
-                    </div>
-                    <div className="roster-grid">
-                        <DepthHeader />
-                        {positionConfig.offense.map((p, idx) => (
-                            <DepthRow key={p.id} idx={idx} phase="offense" posConfig={p} slots={depthChart[p.id] ?? []} onConfigChange={val => handleSlotsChange(p.id, val)} onDeletePosition={() => handleDeletePosition('offense', p.id)} masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} />
-                        ))}
-                    </div>
-
-                    <div className="roster-section-header" style={{ marginTop: 60 }}>
-                        <div className="roster-section-title">DEFENSE</div>
-                        <div className="roster-section-count">{dCount}</div>
-                        <button onClick={() => setAddPositionPhase('defense')} className="action-pill">+ Add Position</button>
-                    </div>
-                    <div className="roster-grid">
-                        <DepthHeader />
-                        {positionConfig.defense.map((p, idx) => (
-                            <DepthRow key={p.id} idx={idx} phase="defense" posConfig={p} slots={depthChart[p.id] ?? []} onConfigChange={val => handleSlotsChange(p.id, val)} onDeletePosition={() => handleDeletePosition('defense', p.id)} masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} />
-                        ))}
-                    </div>
-
-                    <div className="roster-specialists">
-                        <div style={{ display: 'flex', gap: 12 }}>
-                            {SPECIALIST_IDS.map(id => (
-                                <SpecialistCell key={id} id={id} slot={depthChart[id]?.[0] ?? null} masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} />
-                            ))}
+                {/* Zoom is a small-screen affordance: the depth chart is
+                    desktop-wide by design, so on a phone it needs shrinking to
+                    be navigable. On a desktop there is nothing to solve, and a
+                    permanent "100%" beside the real controls is just noise. */}
+                    {isMobile && (
+                        <div className="roster-zoom-ctrl">
+                            <button
+                                onClick={() => setZoomLevel(z => Math.max(0.5, +(z - 0.1).toFixed(2)))}
+                                className="rv-ctrl-btn"
+                                title="Zoom out"
+                            >−</button>
+                            <span className="rv-zoom-label">{Math.round(zoomLevel * 100)}%</span>
+                            <button
+                                onClick={() => setZoomLevel(z => Math.min(1, +(z + 0.1).toFixed(2)))}
+                                className="rv-ctrl-btn"
+                                title="Zoom in"
+                            >+</button>
                         </div>
-                        <div style={{ flex: 1 }} />
-                        {needs > 0 && <div className="roster-needs-label">REMAINING NEEDS: {needs}</div>}
-                    </div>
-
-                    {/* IR — bottom */}
-                    <IRDropZone reserve={reserve} masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} />
+                    )}
+                    <button onClick={() => setIsSignModalOpen(true)} className="action-pill">+ Sign Player</button>
+                    <button onClick={handleSyncFromStages} className="action-pill" title="Fill empty slots from FA candidates, draft picks, and UDFA signings — never overwrites">Sync from FA/Draft/UDFA</button>
+                    <button
+                        onClick={history.undo}
+                        disabled={!history.canUndo}
+                        className="action-pill undo-pill"
+                        title="Undo the last change"
+                    >Undo</button>
+                    <Menu items={[
+                        // The load/import options that used to be a blocking
+                        // "initialize roster" screen.
+                        hasRosterSourceAdapter() && { label: 'Auto-Fetch Depth Chart', onClick: handleFetchAdapter },
+                        { label: 'Load Default Roster', onClick: handleFetchLocal, title: 'The shipped post-offseason roster' },
+                        { label: 'Paste Depth Chart Source…', onClick: () => setIsPasting(true) },
+                        { label: 'Import Roster CSV…', file: { accept: '.csv', onFile: handleBootstrap } },
+                        { label: 'Download CSV Template…', onClick: downloadTemplate, title: 'The columns, with worked rows showing the slot prefixes and arrival suffixes' },
+                        { label: 'Export Roster CSV…', onClick: handleExport },
+                        { label: 'Clear Roster…', onClick: () => setShowResetConfirm(true), tone: 'danger' },
+                    ]} />
                 </div>
-
-                <RosterSidebar cuts={cuts} masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} onSign={() => setIsSignModalOpen(true)} />
             </div>
 
-            <UnrankedModal key={`sign-${isSignModalOpen}`} isOpen={isSignModalOpen} onClose={() => setIsSignModalOpen(false)} onDraft={handleSignPlayer} mode={isDraftComplete ? 'postdraft' : 'roster'} />
+            <DepthChartGrid
+                positionConfig={positionConfig}
+                depthChart={depthChart}
+                reserve={reserve}
+                cuts={cuts}
+                masterPlayers={masterPlayers}
+                draftedPlayers={draftedPlayers}
+                onMove={performMove}
+                onRowMove={performRowMove}
+                onDeletePosition={handleDeletePosition}
+                onSlotsChange={handleSlotsChange}
+                onAddPosition={setAddPositionPhase}
+                zoomLevel={zoomLevel}
+                onInfoOpen={onInfoOpen}
+            />
+
+            <UnrankedModal key={`sign-${isSignModalOpen}`} isOpen={isSignModalOpen} onClose={() => setIsSignModalOpen(false)} onDraft={handleSignPlayer} mode="roster" />
 
             {addPositionPhase && (
                 <TextPromptDialog
@@ -747,63 +568,29 @@ export default function RosterView({ masterPlayers, draftedPlayers, currentPick,
                 />
             )}
 
+            {pasteDialog}
+
             {showResetConfirm && (
                 <ConfirmDialog
-                    title="Reset Roster?"
-                    message="This clears your entire depth chart, practice squad, injury reserve, and cut list. This cannot be undone."
-                    onConfirm={() => { setState(defaultState()); setBootstrapping(true); setShowResetConfirm(false); }}
+                    title="Clear the roster?"
+                    message="Empties every slot, the practice squad, injury reserve and the cut list, leaving the position rows in place to rebuild into."
+                    confirmLabel="Clear it"
+                    onConfirm={() => {
+                        // Keep the position rows: an empty depth chart with no
+                        // rows has nowhere for Sync — or you — to put anyone.
+                        history.reset({
+                            ...state,
+                            depthChart: Object.fromEntries(Object.keys(state.depthChart).map(id => [id, []])),
+                            reserve: [],
+                            cuts: [],
+                        });
+                        setShowResetConfirm(false);
+                    }}
                     onCancel={() => setShowResetConfirm(false)}
                 />
             )}
-        </div>
 
-        <DragOverlay dropAnimation={null}>
-            {activeDragData?.kind === 'item' && activeDragData.slot ? (
-                <div className="rv-slot filled rv-drag-overlay">
-                    <SlotCardContent {...slotMeta(activeDragData.slot, masterPlayers, draftedPlayers)} />
-                </div>
-            ) : activeDragData?.kind === 'row' ? (
-                <div className="rv-pos-label rv-drag-overlay">{activeDragData.label}</div>
-            ) : null}
-        </DragOverlay>
-        </DndContext>
-    );
-}
-
-function IRDropZone({ reserve, masterPlayers, draftedPlayers }) {
-    const { setNodeRef, isOver } = useDroppable({
-        id: 'drop-ir-zone',
-        data: { kind: 'item', posId: '__ir__', slotIdx: reserve.length, targetZone: 'ir' },
-    });
-    return (
-        <div ref={setNodeRef} className={`roster-ir ${isOver ? 'drag-over' : ''}`}>
-            <div className="roster-ir-label">INJURY RESERVE — {reserve.length}</div>
-            <div className="roster-ir-list">
-                {reserve.map((name, i) => (
-                    <SlotCell key={i} slot={{ name, zone: 'ir' }} zone="ir" posId="__ir__" slotIdx={i} targetZone="ir" masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} />
-                ))}
-            </div>
-        </div>
-    );
-}
-
-// DepthHeader — 4 cells matching the row grid
-function DepthHeader() {
-    return (
-        <React.Fragment>
-            <div className="rv-h">Pos</div>
-            <div className="rv-h" style={{ textAlign: 'left', paddingLeft: 10 }}>53-Man</div>
-            <div className="rv-h" style={{ textAlign: 'left', paddingLeft: 10 }}>Practice Squad</div>
-            <div className="rv-h" style={{ textAlign: 'left', paddingLeft: 10 }}>Reserve</div>
-        </React.Fragment>
-    );
-}
-
-function CounterBox({ label, val, max, status, isLast, maxLabel }) {
-    return (
-        <div className={`roster-counter ${isLast ? 'last' : ''}`}>
-            <div className="roster-counter-label">{label}</div>
-            <div className={`roster-counter-value ${status}`}>{val} <span className="roster-counter-max">/ {maxLabel ?? max}</span></div>
+            <Toast message={toast?.message} tone={toast?.tone} onDismiss={dismissToast} />
         </div>
     );
 }

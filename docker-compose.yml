@@ -1,0 +1,24 @@
+services:
+  draftboard-preview:
+    image: node:22-alpine
+    working_dir: /app
+    # Fresh `npm install` on start is required: node_modules contains
+    # platform-native bindings (see rolldown) that must match the
+    # container's own libc, not the host's. Keeping node_modules in a
+    # separate named volume (not bind-mounted) means this only actually
+    # reinstalls when package.json/package-lock.json change.
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    environment:
+      # Bind-mount file events don't always propagate reliably through
+      # Docker depending on the host storage driver; polling guarantees
+      # HMR picks up edits instead of silently going stale.
+      - CHOKIDAR_USEPOLLING=true
+    volumes:
+      - .:/app
+      - draftboard_preview_node_modules:/app/node_modules
+    ports:
+      - "5174:5173"
+    restart: unless-stopped
+
+volumes:
+  draftboard_preview_node_modules:

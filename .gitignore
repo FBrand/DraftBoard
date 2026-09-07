@@ -26,3 +26,10 @@ dist-ssr
 # Proprietary Data
 generate_rankings.py
 Template.png
+# Playwright
+test-results/
+playwright-report/
+dist-test/
+
+# Screenshots from ad-hoc browser probes
+.shots/

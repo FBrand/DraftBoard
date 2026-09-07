@@ -1,16 +1,55 @@
-import React from 'react';
-import { parseName } from '../utils/formatName';
+import React, { useRef } from 'react';
+import { parseName, colorForSuffix } from '../utils/formatName';
+import { tagById } from '../utils/playerTags';
 
 const isIntString = (val) => /^\d+$/.test(val);
+const LONG_PRESS_MS = 500;
 
-
-const PlayerCard = ({ player, isBest, onClick, slim, team, displayPick, noStrikethrough, isCurrent, traded, tradeNote }) => {
+const PlayerCard = ({ player, isBest, onClick, slim, team, displayPick, noStrikethrough, isCurrent, traded, tradeNote, alwaysClickable, hideDraftedStyle, onInfoOpen, tag }) => {
     const { name, position, overallRank, drafted, draftedByUs, team: draftedTeam } = player;
+
+    // Secondary-click (desktop) / long-press (touch) opens the scouting info
+    // card without disturbing the card's primary action (draft/sign/select).
+    // suppressClickRef blocks the synthetic click a touchend fires right
+    // after a long-press resolves — without it, a long-press would also
+    // trigger onClick's draft/sign action immediately after opening the info
+    // card.
+    const pressTimer = useRef(null);
+    const suppressClickRef = useRef(false);
+
+    const clearPressTimer = () => {
+        if (pressTimer.current) { clearTimeout(pressTimer.current); pressTimer.current = null; }
+    };
+    const handleContextMenu = (e) => {
+        if (!onInfoOpen) return;
+        e.preventDefault();
+        onInfoOpen(player);
+    };
+    const handleTouchStart = () => {
+        if (!onInfoOpen) return;
+        clearPressTimer();
+        pressTimer.current = setTimeout(() => {
+            suppressClickRef.current = true;
+            onInfoOpen(player);
+        }, LONG_PRESS_MS);
+    };
+    const handleTouchEnd = () => clearPressTimer();
+    const handleTouchMove = () => clearPressTimer();
+    const handleClick = () => {
+        if (suppressClickRef.current) { suppressClickRef.current = false; return; }
+        if ((alwaysClickable || !drafted) && onClick) return onClick(player);
+        // A drafted player can't be drafted again, so the primary action is
+        // rightly off — but the card then swallowed the click and did nothing,
+        // which since drafted players started staying on the board is most of
+        // round one. Clicking him asks the only question left about him: who
+        // is he, and who took him.
+        if (drafted && onInfoOpen) onInfoOpen(player);
+    };
 
     const classes = [
         'player-card',
         'anim-fade-in',
-        drafted ? 'drafted' : 'available',
+        drafted && !hideDraftedStyle ? 'drafted' : 'available',
         draftedByUs || (team === 'KC') || (draftedTeam === 'KC') ? 'ours' : '',
         isBest ? 'best' : '',
         slim ? 'slim' : '',
@@ -21,6 +60,13 @@ const PlayerCard = ({ player, isBest, onClick, slim, team, displayPick, noStrike
     const pickNo = displayPick || player.pickNumber;
     const teamAbbr = team || draftedTeam || (draftedByUs ? 'KC' : null);
     const rankDisplay = overallRank && overallRank !== '-' ? `#${overallRank}` : '';
+
+    // How he arrived travels beside the name now rather than inside it. Names
+    // written by an older build still carry the suffix, so both are read.
+    const parsed = parseName(name);
+    const arrival = player.arrival ?? parsed.suffix;
+    const displayName = parsed.displayName;
+    const nameColor = player.arrival != null ? colorForSuffix(player.arrival) : parsed.nameColor;
 
     let displayTradeNote = '';
     if (traded && tradeNote) {
@@ -45,7 +91,14 @@ const PlayerCard = ({ player, isBest, onClick, slim, team, displayPick, noStrike
     }
 
     return (
-        <div className={classes} onClick={() => !drafted && onClick && onClick(player)}>
+        <div
+            className={classes}
+            onClick={handleClick}
+            onContextMenu={handleContextMenu}
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
+            onTouchMove={handleTouchMove}
+        >
             <div className="card-top">
                 <span className="player-rank">{rankDisplay}</span>
                 <div className="card-team-info">
@@ -62,18 +115,25 @@ const PlayerCard = ({ player, isBest, onClick, slim, team, displayPick, noStrike
             </div>
             <div className="card-bottom">
                 <div className="player-name" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', overflow: 'hidden' }}>
-                    <span style={{ color: parseName(name).nameColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {parseName(name).displayName}
+                    <span style={{ color: nameColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {displayName}
                     </span>
-                    {parseName(name).suffix && (
+                    {arrival && (
                         <span style={{ fontSize: '0.65rem', color: '#ff0000', fontWeight: 800, marginLeft: 4 }}>
-                            {parseName(name).suffix}
+                            {arrival}
                         </span>
                     )}
                 </div>
                 {!slim && <div className="player-pos">{position}</div>}
             </div>
-            {player.isFavorite && <span className="fav-star">★</span>}
+            {(() => {
+                // The rankings-file "*" is seeded into the board as a real
+                // like tag, so there is one thing to read; see playerTags.js.
+                const marker = tagById(tag);
+                return marker && (
+                    <span className={`player-tag-marker tag-${marker.id}`} title={marker.title}>{marker.symbol}</span>
+                );
+            })()}
             {(draftedByUs || team === 'KC') && <div className="card-glow"></div>}
         </div>
     );

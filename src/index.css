@@ -379,12 +379,27 @@ body {
   background: rgba(255, 255, 255, 0.1);
 }
 
+/* Grid item stretch (used before DraftView became a nested component) only
+   bounds a DIRECT grid child's height — .draft-view-shell now sits between
+   .app-container and .main-layout, so that stretch has to be threaded down
+   explicitly via flex, or .main-layout (and center-board-container's
+   height:100% inside it) collapses to content size instead of the viewport,
+   breaking vertical scrolling. */
+.draft-view-shell {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 .main-layout {
   display: grid;
   grid-template-columns: 272px 1fr 272px;
   gap: 1px;
   background: var(--border-color);
   overflow: hidden;
+  flex: 1;
+  min-height: 0;
 }
 
 .left-sidebar-wrapper,
@@ -716,25 +731,46 @@ body {
   font-style: italic;
 }
 
-.fav-star {
+/* Tag marker on a player card — one look wherever a tag appears.
+   This is the original .fav-star treatment (offset out of the corner, heavy
+   shadow so it reads over gold borders and glows); the other three tags reuse
+   it rather than inventing their own scale. */
+.player-tag-marker {
   position: absolute;
   top: -8px;
   right: -8px;
-  color: #FFB81C;
-  /* Chiefs Gold */
   font-size: 1.3rem;
-  /* Slightly larger */
   line-height: 1;
-  /* Stronger multi-layer shadow to ensure visibility on gold borders */
   text-shadow:
     0 0 4px rgba(0, 0, 0, 1),
     0 0 2px rgba(0, 0, 0, 1),
     0 0 8px rgba(255, 184, 28, 0.4);
   pointer-events: none;
-  z-index: 500;
-  /* High enough to beat borders and glows */
+  /* Above the card's own border and glow, but BELOW the sticky position and
+     round headers (40-100). .player-card is position:relative with no
+     z-index, so it isn't a stacking context — a high value here competed at
+     the root and painted markers over the header row while scrolling. */
+  z-index: 2;
   opacity: 1 !important;
   filter: none !important;
+}
+
+.player-tag-marker.tag-like {
+  color: var(--gold-color);
+}
+
+/* The medical red cross */
+.player-tag-marker.tag-injury {
+  color: var(--chiefs-red);
+}
+
+/* ❗ and 🔎 are emoji — the font draws them noticeably larger than the text
+   glyphs (★ ✚) at the same font-size, so they are set smaller here to come
+   out the same size on screen. Matching the numbers would not match the
+   appearance. Both carry their own colour, so none is set. */
+.player-tag-marker.tag-avoid,
+.player-tag-marker.tag-monitor {
+  font-size: 0.95rem;
 }
 
 .player-card.no-strike {
@@ -773,14 +809,46 @@ body {
 /* Side Panels */
 .bottom-panel {
   background: var(--panel-bg);
-  padding: 2rem 2rem;
+  padding: 1.25rem 2rem;
   border-top: 1px solid var(--border-color);
   display: flex;
   gap: 1rem;
-  overflow-x: auto;
+  /* The ROW scrolls, not the panel — otherwise the "Your Picks" heading
+     scrolls away with the cards. */
+  overflow: hidden;
   align-items: center;
-  /*height: 120px;*/
 }
+
+.bp-picks-row {
+  display: flex;
+  gap: 1rem;
+  flex: 1;
+  /* Without this a flex child refuses to shrink below its content, so it
+     never overflows and never scrolls. */
+  min-width: 0;
+  overflow-x: auto;
+  /* Explicit, and not just tidiness: setting one axis to auto computes the
+     other to auto as well, and a box that could scroll vertically does not
+     translate a vertical wheel into horizontal movement. With this, a plain
+     mouse wheel over the picks scrolls them — which is the only way most
+     people will try. */
+  overflow-y: hidden;
+  padding-bottom: 6px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-color) transparent;
+}
+
+/* And a scrollbar you can actually see, so it looks scrollable before you
+   try. The default overlay bar on a dark panel is close to invisible. */
+.bp-picks-row::-webkit-scrollbar { height: 8px; }
+.bp-picks-row::-webkit-scrollbar-track { background: transparent; }
+.bp-picks-row::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 4px;
+}
+.bp-picks-row::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+
+.bp-pick { flex: 0 0 auto; }
 
 /* Modal Styles */
 .modal-overlay {
@@ -2069,3 +2137,1658 @@ body.export-mode .card-glow {
     flex-shrink: 0;
   }
 }
+
+/* ── Scouting view ─────────────────────────────────────────────────────── */
+/* Scouting: 3-column layout like Draft (ranking list | board | info card) —
+   replaced an earlier fixed-position floating info card that read as
+   randomly parked in a corner regardless of what else was on screen. */
+.scouting-layout {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+  /* The player card floats over the unmatched column rather than sitting
+     beside it — see below. */
+  position: relative;
+}
+
+.scouting-layout .left-panel {
+  width: 280px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--border-color);
+}
+
+.scouting-layout .center-board-container {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Selected player: floats over the unmatched column instead of taking a
+   column of its own. Nothing is selected most of the time, and a permanently
+   reserved 340px of "Select a player to view scouting notes" was the widest
+   thing on screen saying the least. */
+.scouting-layout .right-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  /* The same width as the unmatched column it covers — a card floating over
+     half a column, with the other half showing past its edge, reads as a
+     mistake rather than as a layer. */
+  width: 572px;
+  flex-shrink: 0;
+  border-left: 1px solid var(--border-color);
+  box-shadow: -14px 0 28px rgba(0, 0, 0, 0.55);
+  padding: 14px 16px;
+  box-sizing: border-box;
+}
+
+/* Cross-cutting info card (PlayerInfoModal): same ScoutingControls fields as
+   the Scouting panel, opened via right-click/long-press outside Scouting
+   where there's no dedicated right-column to render it in. */
+.scouting-modal-box {
+  width: 380px;
+  max-width: calc(100vw - 40px);
+  height: auto;
+  max-height: 80vh;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
+  padding: 14px 16px;
+  box-sizing: border-box;
+}
+
+.scouting-modal-box .panel-content {
+  max-height: calc(80vh - 120px);
+}
+
+.scouting-empty {
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  padding: 1rem 0;
+}
+
+/* My Board (ScoutingLeftPanel) — draggable ranked list */
+.scouting-rank-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.scouting-rank-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+
+.scouting-rank-row.drag-over {
+  background: rgba(255, 184, 28, 0.12);
+}
+
+.scouting-rank-row.dragging-source {
+  opacity: 0.4;
+}
+
+.scouting-rank-row.selected {
+  outline: 2px solid var(--gold-color);
+  outline-offset: -2px;
+  border-radius: 6px;
+}
+
+/* Headings for the row's two leading numbers. Aligned to the same widths the
+   rows use, so they sit over their own columns. */
+.scouting-rank-headings {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 10px 6px;
+  font-size: 0.6rem;
+  letter-spacing: 0.08em;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 4px;
+}
+
+.scouting-rank-headings .scouting-rank-num,
+.scouting-rank-headings .scouting-rank-group {
+  font-size: 0.6rem;
+  background: none;
+  padding: 0;
+  color: var(--text-dim);
+}
+
+.scouting-rank-heading-player {
+  flex: 1;
+  color: var(--text-dim);
+  font-weight: 700;
+  padding-left: 4px;
+}
+
+.scouting-rank-num {
+  width: 26px;
+  flex-shrink: 0;
+  text-align: right;
+  color: var(--text-dim);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.scouting-rank-group {
+  flex-shrink: 0;
+  background: rgba(255, 184, 28, 0.12);
+  color: var(--gold-color);
+  font-size: 0.68rem;
+  font-weight: 800;
+  padding: 2px 5px;
+  border-radius: 4px;
+}
+
+.scouting-rank-card {
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.scouting-controls-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 10px;
+}
+
+/* A position is a category, so it reads as a chip; the school is plain
+   secondary text beside it. */
+.scouting-controls-pos {
+  color: var(--text-dim);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
+.scouting-controls-tags {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.scouting-tag-btn {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--text-main);
+  border-radius: 6px;
+  padding: 6px 4px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.scouting-tag-btn.active {
+  background: var(--chiefs-gold, #ffb81c);
+  color: #111;
+  border-color: var(--chiefs-gold, #ffb81c);
+}
+
+.scouting-board-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 0 12px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.scouting-board-pager button {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  color: var(--text-main);
+  cursor: pointer;
+  width: 26px;
+  height: 26px;
+  font-size: 1rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.scouting-board-pager button:hover {
+  border-color: var(--gold-color);
+  color: var(--gold-color);
+}
+
+/* Transient status message (Toast.jsx) */
+.app-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: min(560px, calc(100vw - 40px));
+  padding: 12px 16px;
+  border-radius: 8px;
+  background: var(--panel-bg);
+  border: 1px solid var(--border-color);
+  border-left: 4px solid var(--text-dim);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
+  font-size: 0.88rem;
+  color: var(--text-main);
+}
+
+.app-toast--success {
+  border-left-color: #4ade80;
+}
+
+.app-toast--error {
+  border-left-color: var(--chiefs-red);
+}
+
+.app-toast--info {
+  border-left-color: var(--gold-color);
+}
+
+.app-toast button {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 1.2rem;
+  line-height: 1;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.app-toast button:hover {
+  color: var(--text-main);
+}
+
+.scouting-group-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.68rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.scouting-group-field input {
+  width: 100px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  color: var(--text-main);
+  padding: 6px 8px;
+  box-sizing: border-box;
+  text-transform: none;
+}
+
+.scouting-number-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.scouting-number-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.68rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.scouting-number-grid input {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  color: var(--text-main);
+  padding: 6px 8px;
+  box-sizing: border-box;
+}
+
+.scouting-list-field {
+  margin-bottom: 14px;
+}
+
+.scouting-list-label {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.scouting-bullet-list {
+  list-style: none;
+  margin: 0 0 6px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.scouting-bullet-list li {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-size: 0.82rem;
+}
+
+.scouting-bullet-list li .scouting-remark-text {
+  flex: 1;
+}
+
+.scouting-bullet-list li .scouting-remark-symbol {
+  flex: 0 0 12px;
+}
+
+.scouting-bullet-list li button {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 0.9rem;
+  line-height: 1;
+  padding: 0;
+}
+
+.scouting-bullet-list li button:hover {
+  color: var(--chiefs-red);
+}
+
+.scouting-list-add {
+  display: flex;
+  gap: 6px;
+}
+
+.scouting-list-add input {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  color: var(--text-main);
+  padding: 6px 8px;
+  font-size: 0.82rem;
+  box-sizing: border-box;
+}
+
+.scouting-list-add button {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  color: var(--text-main);
+  cursor: pointer;
+  width: 30px;
+  flex-shrink: 0;
+  font-weight: 700;
+}
+
+/* ── Mobile layout fixes ──────────────────────────────────────────────────
+   .app-container hides overflow, so anything wider than the viewport is
+   silently CLIPPED rather than scrollable — content ends up unreachable
+   instead of merely awkward. These rules make the offenders either scroll
+   or stack. */
+
+@media (max-width: 1024px) {
+
+  /* Five tabs don't fit a phone; without this the first tab is cut off and
+     there's no way to scroll to it. */
+  .view-tabbar {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-left: 0;
+  }
+
+  .view-tab {
+    flex-shrink: 0;
+  }
+
+  /* Scouting's three columns (ranked list | board | info card) stack, since
+     side by side on a phone pushes the board entirely off-screen. */
+  .scouting-layout {
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  .scouting-layout .left-panel,
+  .scouting-layout .right-panel {
+    width: 100%;
+    flex-shrink: 0;
+    border-left: none;
+    border-right: none;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .scouting-layout .left-panel {
+    max-height: 45vh;
+  }
+
+  .scouting-layout .center-board-container {
+    flex-shrink: 0;
+    min-height: 60vh;
+  }
+}
+
+@media (max-width: 600px) {
+
+  /* Centered bootstrap screen overflowed both edges at phone width, putting
+     half of "INITIALIZE ROSTER" and part of its buttons off-screen. */
+  .roster-bootstrap {
+    padding: 20px;
+    text-align: center;
+  }
+
+  .roster-bootstrap-title {
+    font-size: 1.4rem;
+  }
+
+  /* Brand block was overlapping the toolbar buttons next to it. */
+  .roster-brand {
+    flex-shrink: 0;
+  }
+}
+
+
+/* Read-only player info card (PlayerInfoModal) */
+.scouting-readonly-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.scouting-readonly-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 6px;
+  padding: 7px 9px;
+}
+
+.scouting-readonly-label {
+  font-size: 0.62rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.scouting-readonly-value {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--gold-color);
+  font-family: 'Outfit', sans-serif;
+}
+
+/* Unset values read as "not rated yet", not as a real number */
+.scouting-readonly-value.unset {
+  color: var(--text-dim);
+  opacity: 0.5;
+}
+
+/* The tag is a static badge in read-only mode, not a button */
+.scouting-tag-static {
+  flex: 0 0 auto;
+  cursor: default;
+  padding: 6px 12px;
+}
+
+
+/* ── Dropdown menu (Menu.jsx) ─────────────────────────────────────────── */
+.app-menu {
+  position: relative;
+  display: inline-block;
+}
+
+.app-menu-caret {
+  font-size: 0.7em;
+  opacity: 0.7;
+  margin-left: 2px;
+}
+
+.app-menu-list {
+  min-width: 210px;
+  background: var(--panel-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
+  padding: 5px;
+  /* Above every other overlay layer; it portals to <body>, so it competes
+     only in the root stacking context. */
+  z-index: 4000;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.app-menu-item {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  text-align: left;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  color: var(--text-main);
+  font-size: 0.85rem;
+  font-family: inherit;
+  padding: 8px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.app-menu-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.app-menu-item.danger {
+  color: var(--chiefs-red);
+}
+
+.app-menu-item.danger:hover {
+  background: rgba(227, 24, 55, 0.12);
+}
+
+/* Global session actions live in the tab bar, right-aligned */
+.view-tabbar-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  padding: 4px 12px 4px 0;
+}
+
+/* Derived (non-editable) value inside the scouting number grid */
+.scouting-derived-value {
+  display: flex;
+  align-items: center;
+  min-height: 31px;
+  padding: 6px 8px;
+  border: 1px dashed rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  color: var(--gold-color);
+  font-weight: 800;
+  font-family: 'Outfit', sans-serif;
+  box-sizing: border-box;
+}
+
+/* Athletic Matrix attribution — shown only when a player carries matrix numbers */
+.scouting-matrix-credit {
+  display: block;
+  margin: -4px 0 16px;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  text-decoration: none;
+  border-bottom: 1px dotted var(--text-dim);
+  padding-bottom: 1px;
+  width: fit-content;
+}
+
+.scouting-matrix-credit:hover {
+  color: var(--gold-color);
+  border-bottom-color: var(--gold-color);
+}
+
+/* Read-only card: remarks grouped by analyst, symbols carry the field */
+.scouting-board-notes-group {
+  margin-bottom: 14px;
+}
+
+.scouting-board-notes-header {
+  font-size: 0.68rem;
+  color: var(--gold-color);
+  text-transform: uppercase;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  margin-bottom: 6px;
+  padding-bottom: 3px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Selector matches `.scouting-bullet-list li` so these actually win: the
+   shared list styles are just as specific, and the remark rows need a
+   left-aligned symbol + text rather than the editor's space-between row. */
+.scouting-bullet-list li.scouting-remark {
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 8px;
+}
+
+/* The generic bullet is replaced by a per-kind symbol */
+.scouting-bullet-list li.scouting-remark::before {
+  content: none;
+}
+
+/* Scoped under the list so it beats `.scouting-bullet-list li span {flex:1}`,
+   which would otherwise give the symbol half the row's width. */
+.scouting-bullet-list li .scouting-remark-symbol {
+  flex: 0 0 14px;
+  text-align: center;
+  font-weight: 900;
+  line-height: 1.4;
+}
+
+.scouting-remark.strength .scouting-remark-symbol {
+  color: #4ade80;
+}
+
+.scouting-remark.weakness .scouting-remark-symbol {
+  color: var(--chiefs-red);
+}
+
+.scouting-remark.note .scouting-remark-symbol {
+  color: var(--text-dim);
+}
+
+/* UDFA: why signing is unavailable before the draft ends */
+.udfa-locked-note {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  font-style: italic;
+  white-space: nowrap;
+}
+
+/* Round and tier sit side by side — they're two halves of one value ("1.3") */
+.scouting-group-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.scouting-group-fields .scouting-group-field {
+  margin-bottom: 0;
+}
+
+.scouting-group-fields .scouting-group-field input {
+  width: 100%;
+}
+
+/* ---- Add Prospects -------------------------------------------------------
+   Two steps in one box: a compact typing grid, then a verification list where
+   each player occupies three rows (identity / numbers / remarks). The box is
+   capped and the list scrolls inside it, because a CSV import can arrive with
+   thirty players in it and the action buttons must stay reachable. */
+
+.modal-content.add-prospects {
+  max-width: 1020px;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.ap-hint,
+.ap-error {
+  margin: 0;
+  padding: 10px 24px;
+  font-size: 0.78rem;
+  color: var(--text-dim);
+}
+
+.ap-error {
+  color: var(--chiefs-red);
+  font-weight: 600;
+}
+
+.ap-entry-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1.5fr;
+  gap: 8px;
+  padding: 0 24px 16px;
+  overflow-y: auto;
+}
+
+.ap-col-head {
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--text-dim);
+}
+
+.ap-entry-grid .text-input,
+.ap-player .text-input {
+  width: 100%;
+  box-sizing: border-box;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  color: var(--text-main);
+  padding: 6px 8px;
+  text-transform: none;
+}
+
+.ap-verify-list {
+  overflow-y: auto;
+  padding: 0 24px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ap-player {
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+/* An unresolved collision is the one thing here that stops a submit, so it
+   marks the whole player rather than just the message under it. */
+.ap-player.blocked {
+  border-color: var(--chiefs-red);
+  background: rgba(227, 24, 55, 0.06);
+}
+
+.ap-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ap-row-base .ap-name { flex: 2; }
+.ap-row-base .ap-pos { flex: 0 0 84px; }
+.ap-row-base .ap-school { flex: 1.4; }
+
+.ap-tags {
+  display: flex;
+  gap: 4px;
+}
+
+.ap-tag-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-main);
+  font-size: 0.95rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.ap-tag-btn:hover { background: rgba(255, 255, 255, 0.12); }
+
+.ap-tag-btn.active {
+  background: var(--chiefs-gold);
+  border-color: var(--chiefs-gold);
+  color: #000;
+}
+
+.ap-remove {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.ap-remove:hover {
+  color: var(--chiefs-red);
+  border-color: rgba(227, 24, 55, 0.4);
+}
+
+.ap-row-numbers {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+}
+
+.ap-num {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--text-dim);
+}
+
+.ap-add-btn {
+  padding: 5px 12px;
+  border-radius: 9999px;
+  border: 1px dashed rgba(255, 255, 255, 0.25);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 0.74rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.ap-add-btn:hover {
+  color: var(--text-main);
+  border-style: solid;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.ap-add-btn.strength:hover { border-color: #22c55e; color: #22c55e; }
+.ap-add-btn.weakness:hover { border-color: var(--chiefs-red); color: #f87171; }
+.ap-add-btn.note:hover { border-color: var(--chiefs-gold); color: var(--chiefs-gold); }
+
+.ap-bullets {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ap-bullet {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-left: 3px solid var(--border-color);
+  padding-left: 8px;
+}
+
+.ap-bullet.strength { border-left-color: #22c55e; }
+.ap-bullet.weakness { border-left-color: var(--chiefs-red); }
+.ap-bullet.note { border-left-color: var(--chiefs-gold); }
+
+.ap-collision {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 0.78rem;
+  color: var(--text-main);
+  padding-top: 4px;
+}
+
+/* "Already there" must never be a dead end — every collision offers the way
+   through to the player who is already on the board. */
+.ap-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--chiefs-gold);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.ap-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--border-color);
+}
+
+.ap-file {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+}
+
+.ap-blocked-note {
+  font-size: 0.76rem;
+  color: var(--chiefs-red);
+  font-weight: 600;
+}
+
+@media (max-width: 820px) {
+  .ap-row-base { flex-wrap: wrap; }
+  .ap-row-numbers { grid-template-columns: repeat(2, 1fr); }
+  .ap-row-remarks { flex-wrap: wrap; }
+}
+
+/* Base data for a player added in-app. Rankings-file players don't get this —
+   their name and school come from the file, so the app is not their editor. */
+.scouting-prospect-admin {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.scouting-prospect-remove {
+  background: none;
+  border: 1px solid rgba(227, 24, 55, 0.4);
+  border-radius: 6px;
+  color: #f87171;
+  font-size: 0.74rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.scouting-prospect-remove:hover {
+  background: rgba(227, 24, 55, 0.12);
+}
+
+.scouting-prospect-confirm {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 0.76rem;
+}
+
+/* Identity line: name — position, then school. School only shows when there
+   is one; the rankings files carry no school column, so it is in practice a
+   marker of a player added in this app. */
+.scouting-controls-identity {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.scouting-controls-name {
+  font-size: 1rem;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.scouting-controls-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.scouting-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+}
+
+.scouting-controls-school {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scouting-edit-btn {
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  line-height: 1;
+  padding: 3px 5px;
+  cursor: pointer;
+}
+
+.scouting-edit-btn:hover {
+  color: var(--chiefs-gold);
+  border-color: rgba(255, 184, 28, 0.4);
+}
+
+.scouting-base-edit {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  min-width: 0;
+  flex: 1;
+}
+
+.scouting-base-edit .text-input {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  color: var(--text-main);
+  padding: 4px 7px;
+  font-size: 0.8rem;
+  text-transform: none;
+  min-width: 0;
+}
+
+.scouting-base-edit .text-input:nth-of-type(1) { flex: 2 1 130px; }
+.scouting-base-edit .text-input:nth-of-type(2) { flex: 0 1 60px; }
+.scouting-base-edit .text-input:nth-of-type(3) { flex: 1 1 100px; }
+
+.scouting-base-error {
+  padding: 6px 0 0;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--chiefs-red);
+}
+
+.scouting-prospect-note {
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--text-dim);
+}
+
+/* Remark symbols in the add/verify modal, matching the scouting card's. */
+.ap-add-symbol {
+  font-weight: 800;
+  margin-right: 5px;
+}
+
+.ap-bullet-symbol {
+  flex: 0 0 12px;
+  text-align: center;
+  font-weight: 800;
+  color: var(--text-dim);
+}
+
+.ap-bullet.strength .ap-bullet-symbol { color: #22c55e; }
+.ap-bullet.weakness .ap-bullet-symbol { color: #f87171; }
+.ap-bullet.note .ap-bullet-symbol { color: var(--chiefs-gold); }
+
+/* Unranked is a separate axis from the tag filters — a player can be liked
+   and still unplaced — so it sits apart rather than in the same set. */
+.scouting-filter-divider {
+  width: 1px;
+  align-self: stretch;
+  background: var(--border-color);
+  margin: 0 2px;
+}
+
+/* Editable remark lists carry the same +/−/• the read-only card does, so a
+   strength reads as a strength whether you are writing it or reading it. */
+.scouting-list-field.strength .scouting-remark-symbol { color: #22c55e; }
+.scouting-list-field.weakness .scouting-remark-symbol { color: #f87171; }
+.scouting-list-field.note .scouting-remark-symbol { color: var(--chiefs-gold); }
+
+.scouting-bullet-list .scouting-remark-symbol {
+  flex: 0 0 12px;
+  text-align: center;
+  font-weight: 800;
+}
+
+/* An unranked row shows "???" rather than a number: nobody has tiered him,
+   and numbering him last would assert a judgement no analyst made. */
+.scouting-rank-num.unranked {
+  color: var(--text-dim);
+  font-size: 0.7rem;
+  letter-spacing: -0.05em;
+}
+
+/* Facts about the player — read the same on every board, unlike the tier and
+   tag above them, which belong to whoever set them. */
+.scouting-fact-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color);
+}
+
+.scouting-fact-header {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--text-dim);
+}
+
+.scouting-udfa-toggle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 0.72rem;
+}
+
+.scouting-udfa-toggle input {
+  accent-color: var(--chiefs-gold);
+  cursor: pointer;
+}
+
+.scouting-fact-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.66rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--text-dim);
+}
+
+.scouting-fact-field input {
+  width: 100%;
+  box-sizing: border-box;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  color: var(--text-main);
+  padding: 6px 8px;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+}
+
+/* Tool settings — shared by every board, unlike anything on a scouting card. */
+.modal-content.app-settings { max-width: 560px; }
+
+.settings-body {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 18px 24px;
+}
+
+.settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.settings-label {
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--text-dim);
+}
+
+.settings-hint {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  line-height: 1.45;
+}
+
+.settings-field .text-input {
+  width: 100%;
+  box-sizing: border-box;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  color: var(--text-main);
+  padding: 8px 10px;
+  text-transform: none;
+}
+
+.settings-textarea {
+  font-family: inherit;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.settings-reset { align-self: flex-start; }
+
+/* Facts read as text until the pencil is used. These cards are looked at far
+   more than they are corrected, and a grid of live inputs invites a stray
+   keystroke mid-broadcast. */
+.scouting-fact-value {
+  color: var(--text-main);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+  padding: 6px 0;
+}
+
+.scouting-fact-value.unset {
+  color: var(--text-dim);
+  font-weight: 400;
+}
+
+.scouting-fact-badge {
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--chiefs-gold);
+  border: 1px solid rgba(255, 184, 28, 0.4);
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+
+/* The pencil that unlocks one analyst's take on a card opened outside
+   Scouting. Sits with the take it edits, not with the player's own details —
+   they are different things to correct and belong to different people. */
+.scouting-opinion-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.scouting-edit-btn.active {
+  color: var(--chiefs-gold);
+  border-color: rgba(255, 184, 28, 0.5);
+}
+
+/* Board edit mode. Only present while an analyst is rearranging — a live
+   draft board must not look draggable, because there a card is a thing you
+   press to draft somebody. */
+.board-draggable {
+  cursor: grab;
+}
+
+.board-draggable.dragging-source {
+  opacity: 0.35;
+}
+
+.board-cell-over {
+  outline: 2px dashed var(--chiefs-gold);
+  outline-offset: -2px;
+  background: rgba(255, 184, 28, 0.06);
+}
+
+.board-drag-overlay {
+  cursor: grabbing;
+  transform: rotate(-1.5deg);
+  filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.55));
+}
+
+.action-pill.active {
+  background: var(--chiefs-gold);
+  border-color: var(--chiefs-gold);
+  color: #000;
+}
+
+/* Remarks accumulate across seasons, so each group is headed by the season it
+   was written in. A remark from two years ago must not read as a current
+   take — and showing the year is what makes a quiet rewrite visible. */
+.scouting-season-group {
+  margin-bottom: 6px;
+}
+
+.scouting-season-label {
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+  color: var(--text-dim);
+  margin-bottom: 3px;
+}
+
+/* ---- User guide (HelpModal) ---------------------------------------------
+   A reading surface, not a form: the guide is long prose, so it gets a
+   measure narrow enough to read and a scroll of its own rather than growing
+   the modal past the viewport. */
+.help-modal {
+    max-width: 780px;
+    width: min(92vw, 780px);
+    max-height: 88vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.help-body {
+    overflow-y: auto;
+    padding: 4px 24px 8px;
+    line-height: 1.6;
+    font-size: 0.95rem;
+}
+
+.help-body h1 { font-size: 1.5rem; margin: 0 0 12px; }
+.help-body h2 { font-size: 1.15rem; margin: 26px 0 8px; }
+.help-body h3 { font-size: 1rem; margin: 20px 0 6px; }
+.help-body h4 { font-size: 0.95rem; margin: 16px 0 4px; }
+.help-body p { margin: 0 0 12px; }
+.help-body ul { margin: 0 0 12px; padding-left: 22px; }
+.help-body li { margin-bottom: 6px; }
+.help-body hr { border: 0; border-top: 1px solid rgba(255, 255, 255, 0.12); margin: 22px 0; }
+
+.help-body code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.87em;
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.help-body pre {
+    overflow-x: auto;
+    padding: 12px 14px;
+    border-radius: 6px;
+    background: rgba(0, 0, 0, 0.28);
+    margin: 0 0 14px;
+}
+
+.help-body pre code { background: none; padding: 0; }
+
+/* Wide tables scroll inside their own box rather than stretching the modal. */
+.help-table {
+    display: block;
+    overflow-x: auto;
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0 0 14px;
+}
+
+.help-table th,
+.help-table td {
+    text-align: left;
+    padding: 7px 12px 7px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    vertical-align: top;
+}
+
+.help-table th { font-weight: 600; white-space: nowrap; }
+
+.help-tab { flex: 0 0 auto; }
+
+/* An import replaces a whole board, so it says what it did rather than
+   leaving the analyst to guess whether the file was read at all. */
+.import-summary {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 14px;
+    font-size: 0.85rem;
+    background: rgba(64, 160, 96, 0.16);
+    border-bottom: 1px solid rgba(64, 160, 96, 0.35);
+}
+
+.import-summary span { flex: 1; }
+
+/* Two short fields side by side — a draft year and a round belong together. */
+.form-row-pair { display: flex; gap: 10px; }
+.form-row-pair .form-group { flex: 1; }
+
+/* Free agency has no practice squad, so its grid is one column narrower. */
+.roster-grid.no-ps { grid-template-columns: 85px 1fr 1fr; }
+
+/* ---- Scouting grouped list ----------------------------------------------
+   A reading surface. The board grid was a table because a grid IS one; this
+   is a list, and it should look like something you scan rather than something
+   you query.
+
+   Two rules do most of the work. Rows carry no borders — separation comes
+   from rhythm and the group headers, because 328 hairlines is a cage. And a
+   group flows in COLUMNS, top to bottom then across, so a ranked list still
+   reads downwards; laying it out left-to-right put 21 beside 22 and made the
+   reading order ambiguous. */
+.sg-list {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding-bottom: 32px;
+}
+
+.sg-group { padding-bottom: 10px; }
+
+/* A quiet label and a rule, not a black bar. Sticky and opaque, so rows pass
+   underneath it cleanly instead of showing through. */
+.sg-group-header {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  padding: 16px 16px 7px;
+  background: var(--bg-color);
+  border: 0;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-main);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.sg-group-header.static { cursor: default; }
+.sg-group-header:hover:not(.static) .sg-group-label { color: var(--chiefs-gold); }
+
+.sg-chevron {
+  width: 10px;
+  flex-shrink: 0;
+  font-size: 0.6rem;
+  color: var(--text-dim);
+}
+
+.sg-group-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  transition: color 0.12s ease;
+}
+
+.sg-group-count {
+  margin-left: auto;
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Down, then across: the column count follows the width, and the browser
+   balances the group across them. */
+.sg-group-body {
+  columns: 300px;
+  column-gap: 26px;
+  column-rule: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 4px 8px 0;
+}
+
+.sg-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  /* A row must not be split across a column boundary. */
+  break-inside: avoid;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 0.9rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sg-row:hover { background: rgba(255, 255, 255, 0.055); }
+
+.sg-row.selected {
+  background: rgba(255, 184, 28, 0.12);
+  box-shadow: inset 2px 0 0 var(--chiefs-gold);
+}
+
+.sg-rank {
+  width: 32px;
+  flex-shrink: 0;
+  text-align: right;
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+}
+
+.sg-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-main);
+}
+
+.sg-tag { flex-shrink: 0; font-size: 0.8rem; }
+
+.sg-meta {
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.sg-missing { color: var(--chiefs-red); }
+
+/* The unmatched column is a worklist: narrow, single-file, and it should read
+   as a side note rather than compete with the board. */
+.sg-unmatched-panel {
+  /* The full width the two right-hand columns held between them — the old
+     unmatched strip plus the card's reserved space. */
+  width: 572px;
+  flex-shrink: 0;
+  border-left: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.sg-panel-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 16px 14px 2px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.sg-panel-hint {
+  padding: 0 14px 10px;
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.sg-panel-body { overflow-y: auto; padding: 6px 8px 24px; }
+.sg-unmatched-panel .sg-group-body { columns: auto; column-rule: 0; }
+
+.sg-list .scouting-empty { padding: 20px 16px; }
+
+@media (max-width: 820px) {
+  .sg-unmatched-panel { display: none; }
+  .sg-group-body { columns: auto; column-rule: 0; }
+  .sg-unmatched .sg-group-label { color: var(--chiefs-red); }
+}
+
+/* The UDFA board shows who is LEFT, so a signing disappears from it. The
+   panel is where they go — otherwise the one tab about signings never shows
+   one. */
+.udfa-body { display: flex; flex: 1; min-height: 0; overflow: hidden; }
+.udfa-body .center-board-container { flex: 1; min-width: 0; }
+
+.udfa-signed-panel {
+  width: 232px;
+  flex-shrink: 0;
+  border-left: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+@media (max-width: 820px) { .udfa-signed-panel { display: none; } }
+
+/* Signed UDFAs are shown as the same cards the board uses, so a player reads
+   the same wherever he appears. */
+.udfa-signed-card { margin-bottom: 6px; }
+.udfa-signed-card .player-card { width: 100%; cursor: pointer; }
+
+.cb-file-row { display: flex; align-items: center; gap: 10px; }
+.cb-file-name { font-size: 0.8rem; color: var(--text-dim); min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.ap-hint-inline { color: var(--text-dim); font-weight: 400; font-size: 0.75rem; }
+
+/* Dropping onto a card means "above this man" — say so. */
+.board-card-over { box-shadow: inset 0 3px 0 var(--chiefs-gold); }
+
+.ap-updating { color: var(--text-dim); }
+
+/* Kind is the outer heading in the read-only stack, so it takes the emphasis
+   the board name used to carry, and the board name steps back to a caption. */
+.scouting-board-notes .scouting-list-label {
+  color: var(--gold-color);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  padding-bottom: 3px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.scouting-board-notes .scouting-board-notes-header {
+  color: var(--text-dim);
+  font-weight: 600;
+  border-bottom: 0;
+  padding-bottom: 0;
+  margin: 6px 0 2px;
+  letter-spacing: 0.04em;
+}
+
+/* "none left" is information, not a pick — it should not look clickable. */
+.pick-pill.empty {
+  color: var(--text-dim);
+  border-style: dashed;
+  font-style: italic;
+}
+
+/* Free agency's needs read-out. Always present, so "no needs" is visibly a
+   result rather than a missing feature — and it wraps on a phone instead of
+   being pushed off the bar. */
+.fa-needs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  /* Not min-width:0 — as a flex item in a crowded toolbar that let it shrink
+     to nothing while still wrapping, so on a phone it measured 0 wide and
+     267 tall: present in the DOM, invisible on screen. */
+  flex-shrink: 0;
+}
+
+/* On a phone the toolbar has no room beside the buttons, so the needs take a
+   line of their own rather than being squeezed out of existence. */
+@media (max-width: 820px) {
+  .top-panel:has(.fa-needs) { flex-wrap: wrap; }
+  .fa-needs { flex-basis: 100%; padding: 4px 0 2px; }
+}
+
+.fa-needs-label {
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+  color: var(--text-dim);
+  font-weight: 700;
+}
+
+.fa-need { border-color: var(--chiefs-red); }
+.fa-needs-none { font-size: 0.72rem; color: var(--text-dim); font-style: italic; }
+
+/* The row is the drag target now, so it should say so on hover. */
+.scouting-rank-row { cursor: grab; }
+.scouting-rank-row.dragging-source { cursor: grabbing; }
+.scouting-rank-row .scouting-rank-card { cursor: pointer; }

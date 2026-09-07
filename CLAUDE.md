@@ -25,30 +25,336 @@ GitHub Pages via `.github/workflows/deploy.yml`, and is fully static —
 sequential-but-revisitable stages.
 
 1. **Free Agency** — FA signings, budget/contract tracking, board holes after FA
-2. **Scouting** — personal rankings, ✓/✗/? tags, consensus-vs-personal comparison
+2. **Scouting** — building a board: rankings, tiers, ✓/✗/? tags, notes
+   (note: `ROADMAP.md` frames this as "consensus-vs-personal comparison"; the
+   built feature is deliberately *not* that — see the ranking model below)
 3. **Draft** — the original live board (this is the app's current core)
 4. **UDFA** — undrafted free agent signings, priority targets
 5. **Roster Construction** — 53-man depth chart, practice squad/IR, specialist alignment
 
 ### Actual build status (verify against code before trusting any doc, including this one)
 
+**All five stages now exist as their own tab** in `App.jsx`
+(`fa | scouting | draft | udfa | roster`). Two shared primitives do the heavy
+lifting rather than five bespoke UIs:
+
+- **`CenterBoard.jsx`** — the board grid (position columns × round/tier rows).
+  Used by Draft, UDFA and Scouting.
+- **`DepthChartGrid.jsx`** — the depth-chart grid (position rows × 53-man/PS/
+  reserve slots, drag-and-drop, IR and cuts). Used by Roster and Free Agency.
+
+Stage notes:
+
 - **Stage 3 (Draft) — done.** `useDraftState.js` (central state/undo/pick
-  tracking), `CenterBoard.jsx` (grid), `LeftPanel.jsx`/`RightPanel.jsx`/
-  `BottomPanel.jsx`, live sync via `ESPNProvider.js` + `services/DraftService.js`.
-- **Stage 5 (Roster) — substantially built,** and moving fast. `RosterView.jsx`
-  + `utils/rosterState.js` implement full drag-and-drop 53-man/practice-squad/
-  IR/cuts management, Ourlads auto-fetch, CSV import/export, position config.
-  This is *not* a minimal skeleton — treat it as near-parity with Draft.
-- **Stage 4 (UDFA) — folded into Roster's "Sign Player" flow** rather than
-  being a distinct stage/view. `UnrankedModal.jsx` has a `postdraft`/`roster`
-  mode (see `mode={(currentPick || 1) > 257 ? 'postdraft' : 'draft'}` in
-  `App.jsx`) instead of its own priority-targets UI.
-- **Stages 1 (FA) and 2 (Scouting) — not started.** No FA budget tracking or
-  personal scouting-tag code exists anywhere in `src/`.
-- **App navigation is a 2-tab switcher** in `App.jsx` (`view: 'draft' | 'roster'`),
-  not the 5-stage tab shell `ROADMAP.md` describes. If/when building that
-  shell, Draft and Roster are the two stages closest to done; UDFA needs to be
-  split out of Roster's sign-player flow into its own view.
+  tracking), `DraftView.jsx`, `CenterBoard.jsx`, `LeftPanel.jsx`/
+  `RightPanel.jsx`/`BottomPanel.jsx`, live sync via `ESPNProvider.js`.
+- **Stage 5 (Roster) — substantially built.** `RosterView.jsx` +
+  `utils/rosterState.js`: drag-and-drop 53-man/practice-squad/IR/cuts, CSV
+  import/export, position config, and "Sync from FA/Draft/UDFA" which fills
+  empty slots additively from the other stages (never overwrites).
+- **Stage 4 (UDFA) — its own view** (`UdfaView.jsx`), reusing `CenterBoard`
+  with its own chrome, no longer folded into Roster's sign-player flow.
+- **Stage 1 (FA) — built** as a *needs-and-candidates snapshot*, deliberately
+  not a signings/budget tracker: `FreeAgencyView.jsx` + `utils/faState.js`
+  render the same depth-chart grid against a candidate pool, and read Roster's
+  real depth chart read-only to compute needs.
+- **Stage 2 (Scouting) — built** as a board *builder*, not a
+  consensus-vs-personal comparison: `ScoutingView.jsx` +
+  `utils/scoutingState.js` + `utils/boardRanking.js`. See the ranking model
+  below — it's the part most easily broken by a well-meaning change.
+
+### Boards, authors and seasons (`utils/boardRegistry.js`)
+
+A board used to BE its name — `BOARDS = ['consensus','dan','ryan']`, keyed in
+storage as `scouting_overlay_v1__dan`. Rename an analyst or replace one and
+the work is stranded under a dead key, or reattributed to whoever inherits the
+name. The player-identity mistake, one level up.
+
+    seasons/{id}   { id, year, status: 'current' | 'archived' }
+    authors/{id}   { id, name }
+    boards/{id}    { id, slug, label, authorId|null, seasonId, rankingsFile, order }
+
+An **author** is a person and persists across seasons. A **board** belongs to
+one season and usually one author; its `label` renames freely because nothing
+keys on it, while its `slug` is stable purely so `?board=dan` survives the
+rename. Storage keys on the board id; the old per-name key is migrated on first
+read.
+
+**Consensus has no author** — it is derived rather than written by a person,
+and inventing somebody called Consensus to own it would make "who said this" a
+lie. Anything reading `board.authorId` must handle null.
+
+**A season makes a board an artifact.** `startSeason()` archives the outgoing
+season and gives each author a fresh, EMPTY board: a draft class is entirely
+new players, so carrying placements forward would assert judgements about
+people nobody has watched. Archived boards freeze their **placements** —
+`isFrozen()` — but not their **evaluations**: what you know about a player
+keeps growing after the board that ranked him is done. The player card reads
+`allBoards()` rather than the current season, so it reaches back into past
+scouting.
+
+### Pick numbers, rounds and the session team
+
+How many picks each round has is something an expert states, not something
+derived: compensatory picks make `ceil(pick / 32)` wrong from the third round
+on. `constants.DEFAULT_ROUND_SIZES` is `[32, 32, 36, 40, 41, 35, 41]` — the
+**real 2026 order**, read off the completed draft file, not a generic layout —
+and `appSettings.getRoundSizes()` makes it editable per season from Scouting →
+Settings. `draftPhase.getRoundEnds()` turns sizes into boundaries; anything
+past the last one gets no round rather than a guessed one.
+
+`appSettings.getSessionTeam()` is whose offseason this is, defaulting to
+`TEAM_CONFIG.abbreviation`. Everyone imported onto the roster gets it as a
+fact — being on the roster *is* the fact that he plays there — and the draft
+records it on every pick.
+
+### The data layer (`src/data/`)
+
+Everything stored goes through `repository` — documents in named collections,
+addressed by id, with `where`/`orderBy`/`limit` over them. The interface is
+Firestore's, narrowed to what this app does, so swapping stores should be a
+change of adapter.
+
+**Reads are synchronous, writes are not.** That is not a compromise, it is how
+a client with a live document store behaves: subscribe once, keep a local copy,
+render from it. A board ranks 328 players on a keystroke and cannot await
+anything. So a collection loads asynchronously and is then served from memory;
+writes update memory first, notify subscribers, and go to the adapter after.
+The honest limitation is that a failed write has already been shown as
+succeeded — with localStorage that needs a full quota, with a network it will
+happen for real, and that is where rollback belongs.
+
+`localAdapter.loadSync` is the one local-only affordance: the roster import
+resolves players *while parsing*, before any `ready()` could finish, and
+without it would see an empty registry and mint a duplicate for every player.
+**A remote adapter must not implement it** — its absence is what forces callers
+onto `ready()` instead of silently reading nothing.
+
+Collections live under `db_<name>` in localStorage. Anything added to
+`OWNED_KEYS` for a wipe must also call `repository.invalidate()`, or the
+in-memory copy simply restores what was deleted.
+
+### The player registry (`utils/playerRegistry.js`) — start here
+
+**A player is a record with a stable id, not a name.** Until recently a player
+*was* his name: every store keyed on it and every read re-derived identity by
+fuzzy-matching. The same bug kept returning in new disguises — two men sharing
+a name, a rename that had to be hand-migrated across three boards and the
+matrix store, two analysts labelling one player at different positions. Each
+was the same missing thing: nothing to point at.
+
+The `players` collection holds **one document per player**: `{ id, name, position,
+school, aliases[], hidden }`. Ids are opaque and permanent — they survive a
+rename, which any key derived from the name cannot.
+
+Fuzzy matching still happens, because the data arrives as names, but it happens
+**once**, in `resolveAll()`, when `useBoardRankings` loads the pool — never
+again on the read path. Downstream stores key on `playerId`
+(`scoutingState` entries, `athleticMatrix` rows), with the qualified name
+match kept only as a fallback for rows written before ids existed.
+
+A rename records the old identity as an **alias**, which is what stops the next
+load — where the rankings file still supplies the old name — from creating a
+second record. The registry is fully re-derivable from the files, so a clean
+slate clears it and it rebuilds.
+
+This is also the shape a backend needs: a document store keys on ids and cannot
+fuzzy-match server-side, so keying on `playerId` is what makes that move a
+change of adapter rather than a rewrite.
+
+### Player identity: name + position + school (`utils/nameMatcher.js`)
+
+**A name is not an identity.** Two players really do turn up in one draft class
+with the same name, and a board that merged them would put one man's tape under
+the other man's tier. Identity is name, position and school **together** — any
+one of the three differing makes it a different player.
+
+`findMatchingIndex(name, index, qualifier)` takes an optional third argument —
+a player-ish `{ position, school }`, or a bare position string. When given, the
+search only matches players it cannot tell apart from this one, and returns
+"not found" rather than merging two people. **Only fields both sides declare
+can discriminate**: rankings files carry no school column and some sources
+spell positions their own way, so a field missing on either side is not
+evidence of a difference.
+
+Callers that know nothing beyond the name (scraped roster data, ESPN sync) pass
+nothing and get the original name-only behaviour — do not "fix" those by
+forcing a qualifier through, or legitimate matches across inconsistent sources
+will start failing. The scouting/prospect/matrix paths all pass the player.
+
+**But joining the rankings files is a different question**, and reusing the
+identity rule there was a real bug. "Are these two different people?" is not
+"is this the same man in two analysts' files": analysts label the same player
+DL and EDGE all the time, so joining on position split one player into two,
+which then collided as duplicate React keys and leaked list rows on every board
+switch. `useBoardRankings.joinKeyFor()` joins on the **name**, except for a
+name that appears more than once inside a *single* file — there the analyst
+deliberately listed two people and position is doing real work.
+
+Anything rendering a player list keys on name **and** position, never name
+alone, since two players may legitimately share one.
+
+### Every board carries every player
+
+A player one analyst has ranked and another hasn't is **unranked** on the
+second board, not missing from it — otherwise there is nowhere to disagree.
+`useBoardRankings` builds the union of all three files (plus in-app additions)
+and gives each board that whole pool, overlaying only its own file's `group`,
+`overallRank` and favourite flag.
+
+An unranked player has **no rank at all**, not the worst one. `rankBoard`
+returns `overallRank: null` / `positionRank: null` for anyone with no tier, and
+the UI shows `???`. Numbering him last would assert a judgement nobody made,
+and would renumber the whole board the moment a name was jotted down mid-game.
+`CenterBoard` gives them a `UR` row after the numbered rounds, and Scouting has
+an `Unranked` filter (a separate axis from the tag filters — a player can be
+liked *and* unplaced).
+
+### Pick numbers are not always numbers (`utils/draftPhase.js`)
+
+`DraftBoard_Picks.csv` records undrafted signings with the literal `UDFA` in
+the pick column, and the card prints that where a drafted player prints
+`PK 41`. So arithmetic on `pickNumber` is a trap, and it sprang: seeding the
+pick counter did `Math.max(max, p.pickNumber)` across every signing, one
+`Math.max(257, "UDFA")` returned `NaN`, `NaN` swallowed the rest, and
+`(NaN || 1) > 257` reported a completed draft as not started — locking the UDFA
+stage and counting zero UDFAs. Nothing outside `draftPhase.js` compares a raw
+`pickNumber` against a number; use `isDraftPick`, `isUndraftedSigning`,
+`isDraftComplete`, `highestDraftPick`.
+
+### Adding and editing players (`utils/prospects.js` + `AddProspectsModal.jsx`)
+
+The rankings CSVs are a snapshot; players declare late, rise late, or get
+missed. `+ Add Players` in Scouting is the only in-app way to add a player who
+isn't in any rankings file — every other "unranked player" button *disposes* of
+a player (drafts/signs/rosters him) rather than creating one.
+
+The split that matters: **name, position and school are base data**, stored in
+`prospects_v1` and applied to every board's pool by `useBoardRankings` via
+`applyProspects()`. Tier, tag, remarks and within-tier order stay per board in
+`scoutingState`. The athletic matrix is global, because it measures the player
+rather than an opinion of him.
+
+**An added player is not a special kind of player.** He arrives *unranked*
+(`group: null`, so he sorts last until someone places him) and carries no flag
+marking his origin. Edit and delete work on every player, whoever he came from:
+an in-app player is changed in place, while a rankings-file player gets an
+**override** (`edits`) or a **hide** (`hidden`) recorded instead — the file is
+re-read on every load and is not ours to rewrite. Corrected file players keep a
+`sourceIdentity` pointing at the file's own identity, so a second correction
+updates the same override rather than stacking a new one.
+
+Both entry paths (typed rows, CSV import) land in the same verification step,
+and **nothing is written until that step is submitted** — an import is a
+proposal, not a bulk write. Collisions block submit and always offer the
+already-existing player's card rather than dead-ending; filling in a different
+position or school is itself a resolution.
+
+### Player facts vs. board opinions
+
+A **fact** is true whoever is looking, so it lives once on the registry record:
+`isUdfa`, `draftYear`, `draftRound`, `draftPick`, `team`, `previousTeam`, and
+the athletic-matrix scores (`athletic_matrix_v1` is retired —
+`athleticMatrix.js` is now a facade over the record and migrates old rows).
+Every fact is null when unrecorded, `isUdfa` included: null is "unknown",
+false is "drafted".
+
+An **opinion** is per board: `round`, `tier`, `withinGroup`, `tag`,
+`strengths`/`weaknesses`/`notes`. Three analysts may disagree about all of
+them; none can disagree about who drafted a player.
+
+Facts are read-only on the scouting card — a prospect has not entered the
+league, so a draft year means nothing while a board is being built. They are
+written by the draft itself, by import, and by the sign/trade modal.
+
+**`draftRound` is never derived from `draftPick`.** Compensatory picks make
+`ceil(pick / 32)` wrong from round three on, and a confidently wrong round is
+worse than a blank one. The live draft records year + overall pick and leaves
+the round for import or hand entry.
+
+### The name is the identity — nothing else goes in it
+
+`roster.csv` records how a player arrived inside his own name:
+`Xavier Worthy:24/1`, `Andrew Armstrong:FA`, `Omari Evans:UDFA`. That put
+facts inside the identity key, and the name is what everything matches on — so
+`Trey Smith` and `Trey Smith:24/3` were two different players, one of them
+fiction.
+
+The file keeps its format; it is hand-edited and it is the import format.
+`parseAcquisition()` splits it on the way in: the league-entry facts go on the
+player's registry record, and the app stores a **plain name** plus an
+`arrival` tag on the roster slot. The tag stays on the slot rather than the
+player because it describes a roster, not a person — the same player arrives at
+different clubs by different routes. `exportCSV` rejoins them, so a round trip
+through the file is lossless.
+
+`slotIdentity()` reads either shape, so slots saved by an older build still
+render. The `R:`/`PS:`/`IR:` **prefixes** are a separate thing and were
+already parsed into zones.
+
+The registry therefore holds more players than any one board's pool — roster
+veterans are registered too. A board is a subset of the registry.
+
+### CSVs seed; storage is the truth
+
+A rankings file creates a board's **initial state and nothing more**.
+`scoutingState.seedBoard()` materialises every player's placement on first
+load, marks the board `seeded`, and the file is never consulted again — editing
+it later changes nothing until it is explicitly imported. Anything that writes
+a board must preserve the `seeded` flag; dropping it makes the next load
+re-seed from the file and throw the edit away.
+
+### `withinGroup` is a float
+
+A move writes **one number on one player**. Landing between two players takes
+the midpoint of their values, so nobody else shifts and nobody else is written
+— `moveToRank` returns a placement for the mover, not a new ordering for the
+board. It used to rewrite all 328 entries for one drag, which also quietly
+transcribed the file's order onto every untouched player.
+
+Enough midpoint insertions at one spot will eat into float precision (~50);
+the fix is renormalising that one tier with `spaceEvenly`, not changing the
+model. Total rank is still counted off the ordering rather than stored, so it
+cannot contradict the tiers or collide.
+
+### Positional value is configurable (`utils/appSettings.js`)
+
+It decides the order of players nobody has placed, which makes it an opinion —
+it used to be a hardcoded list quietly shaping every board. It is **global, not
+per board**: if analysts disagree about what a position is worth, that belongs
+in where they place players, not in a hidden default that makes their untouched
+boards differ. Edited via Scouting → Settings, alongside the Athletic Matrix
+link.
+
+### The board ranking model (read before touching ranks or groups)
+
+Scouting's "Total Rank", "Position Rank" and "Round.Group" are **not** a
+separate annotation layer sitting beside the board's own numbers — they are
+the board's own parameters, the ones `CenterBoard` places cards by and that
+the exported `group,name,position` CSV carries into the draft board and roster
+import.
+
+Only two things are stored per player (`utils/scoutingState.js`): the `group`
+(tier) and `withinGroup` (position inside that tier). **Total rank and
+position rank are derived**, never stored, by `utils/boardRanking.js`:
+
+1. Subgroups are authoritative — everyone in `1.2` outranks everyone in `1.3`.
+2. Inside a tier, the analyst's explicit order wins (set by dragging, or by
+   typing a total rank).
+3. Otherwise, positional value breaks the tie (`POSITION_VALUE`).
+
+Consequences that are easy to regress and are covered by
+`tests/scouting-params.spec.js`:
+
+- A rank is a *position in an ordering*, so two players can never share one.
+  Typing a rank is a **move** — the player takes that slot, adopts that slot's
+  tier, and everyone between the old and new position shifts by one. It is
+  never a bare assignment.
+- Because both numbers are read off one ordering, they cannot disagree with
+  each other or with where a card actually sits on the board.
+- `CenterBoard` derives its subgroup row order by sorting the group labels,
+  *not* by the order players arrive in — Scouting hands it players in rank
+  order, and relying on arrival order silently scrambled the rows.
 - `ROADMAP.md` also describes a **Normal vs. Focus view toggle** for the Draft
   board (Normal = hide drafted, collapse empty rows; Focus = show all,
   dim drafted). This exists as `isFocusMode` state in `App.jsx`/`CenterBoard.jsx`
@@ -79,6 +385,81 @@ and real-time sync on top:
   Phase 6 (board CRUD abstractions, player-card data shape, session
   serialization robustness) is medium priority, (3) pure cleanup/lint is low
   priority unless it threatens broadcast stability.
+
+### Seed data: one offseason, as it actually happened
+
+`Session → Load Current State` loads the real 2026 offseason. The files in
+`public/` are not four independent snapshots — three of them are **derived**,
+because separately maintained lists drift and then disagree about who was on
+the team:
+
+    rankings_*.csv        the player pool: each analyst's board (consensus, dan, ryan)
+    player_facts_2026.csv school + draft outcome per player      <- built, see below
+    roster.csv            the roster the day before cutdown (91)  <- hand-edited source
+    roster_predraft.csv   the day before the draft (64)           <- derived
+    roster_2025_end.csv   last season's roster, holdovers (50)    <- derived
+    DraftBoard_Picks.csv  the completed draft: 257 picks + UDFAs + MCIs
+
+`roster.csv` is the one hand-edited roster, and it already records how every
+player arrived in the suffix on his name. `scripts/build-roster-snapshots.mjs`
+reads those suffixes backwards to produce the two earlier states — strip 2026
+draft picks and UDFAs for the pre-draft roster, strip `:FA` as well for last
+season's. The chain reconciles: 50 holdovers + 14 FA = 64 pre-draft, + 7 KC
+picks + 20 UDFAs = 91. Free Agency seeds from `roster_predraft.csv` (free
+agency is *done* by the day before the draft), Roster from `roster.csv`.
+
+`scripts/build-player-facts.mjs` builds the facts file from two sources,
+because neither alone is enough: `Knowledgebase/draft2026.json` has the draft
+outcome but a school for only ~71% of players, while
+`rankings/rankings_sttm_source.csv` carries a school for every ranked player.
+The result is 348 players, **100% with a school**, 257 with a draft outcome.
+
+`utils/playerFacts.js` applies it on load and **fills blanks only** — anything
+corrected in the app outranks a seed. It commits **once** for the whole file:
+the per-player `rename()`/`setFacts()` calls each rewrite the entire
+collection, so seeding this way was up to 514 full-collection writes per page
+load and crashed the renderer. Use `playerRegistry.fillMany()` for anything
+bulk.
+
+### The user guide
+
+`public/USER_GUIDE.md` is written for the analysts, not for developers. It is
+one file serving two readers: GitHub renders it, and `HelpModal.jsx` fetches
+and renders it behind the **? Help** button in the tab bar, so there is no
+second copy to fall out of date. The small Markdown renderer in that component
+covers only the subset the guide uses — extend it there if the guide needs
+more, rather than adding a Markdown dependency.
+
+## Testing
+
+- **Vitest** (`npm run test:unit`, `tests/unit/*.test.js`) — pure logic:
+  ranking, grouping, phase detection, name matching, CSV round-trips, the
+  registry. 77 tests in ~9s, node environment, no jsdom. Most bugs here have
+  been logic bugs, so this is the loop to stay in while working.
+- **Playwright fast** (`npm run test:fast`, `tests/fast/`) — 15 tests in
+  ~3.5 minutes, covering only what a browser can answer: rendering, routing,
+  drag and drop, persistence across a reload, modal flows.
+- `tests/*.spec.js` is the OLD 87-test suite (~50 min). Superseded by the two
+  above; kept for reference, not part of the loop.
+
+Two things make the fast suite fast. `tests/fast/globalSetup.js` boots the app
+ONCE and snapshots the state it settles on, so no test pays the cold bootstrap;
+and the worker count comes from the machine rather than from CI being set —
+the old config dropped to two workers under `CI=1`, which ran a browser suite
+on a quarter of an 8-core box.
+
+Traps, all of which have cost real runs here:
+
+- **Never rebuild into a directory a running suite is serving from**, and
+  verify the port answers before launching.
+- `addInitScript` runs before EVERY navigation, not once. Seeding storage
+  there without a `localStorage.length` guard means every `page.reload()`
+  restores the seed and silently undoes what the test just did — every
+  "survives a reload" assertion was really testing the seeding.
+- If an actionability wait (`waitForSelector`, `click`) hangs on an element
+  that is plainly visible, the main thread is blocked; `waitForFunction` still
+  works because it is a plain evaluation. Profile before blaming the harness.
+  See the note on repository writes below.
 
 ## Architecture
 

@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
+import useEscapeKey from '../hooks/useEscapeKey';
 
 const PicksModal = ({ isOpen, onClose, initialPicks, onSave }) => {
     const [picksText, setPicksText] = useState(() => initialPicks.join(', '));
+    useEscapeKey(onClose, isOpen);
 
     if (!isOpen) return null;
 

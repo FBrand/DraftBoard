@@ -1,0 +1,145 @@
+import React, { useState, useCallback } from 'react';
+import {
+    DndContext, DragOverlay, useDraggable, useDroppable,
+    useSensor, useSensors, MouseSensor, TouchSensor,
+} from '@dnd-kit/core';
+import PlayerCard from './PlayerCard';
+import { tierLabel } from '../utils/boardRanking';
+
+// One draggable+droppable row. Draggable via the handle only (keeps the
+// click-to-select target free of drag-listener interference) — same split
+// DepthChartGrid.jsx uses for its position-row reordering.
+function Row({ player, rank, group, onSelect, isSelected }) {
+    const { attributes, listeners, setNodeRef: setDragRef, isDragging } = useDraggable({
+        id: `sc-drag-${player.name}`,
+        data: { name: player.name },
+    });
+    const { setNodeRef: setDropRef, isOver } = useDroppable({
+        id: `sc-drop-${player.name}`,
+        data: { name: player.name },
+    });
+
+    return (
+        <div
+            ref={node => { setDragRef(node); setDropRef(node); }}
+            // The whole row drags. The listeners used to sit on a ⠿ grip about
+            // ten pixels wide, so dragging the player — which is what anybody
+            // tries — did nothing and the list looked fixed. With the row
+            // itself draggable the grip had nothing left to say, so it is
+            // gone. The sensor needs 8px of movement before it calls a press a
+            // drag, so a plain click still selects.
+            {...listeners}
+            {...attributes}
+            className={`scouting-rank-row ${isDragging ? 'dragging-source' : ''} ${isOver ? 'drag-over' : ''} ${isSelected ? 'selected' : ''}`}
+        >
+            <div className={`scouting-rank-num ${rank == null ? 'unranked' : ''}`}>{rank ?? '???'}</div>
+            {group && <div className="scouting-rank-group">{group}</div>}
+            <div className="scouting-rank-card" onClick={() => onSelect(player)}>
+                <PlayerCard player={player} alwaysClickable hideDraftedStyle noStrikethrough />
+            </div>
+        </div>
+    );
+}
+
+// Global personal-ranking list — the Scouting-side analogue of Draft's
+// LeftPanel, except it's not just "remaining undrafted players" (this is a
+// personal big board, drafted-or-not doesn't matter) and it's editable via
+// drag-and-drop rather than click-to-draft. Dragging a row to a new spot
+// reorders the whole list and the caller records the new within-tier order
+// (moving the player into the tier it was dropped among) — see
+// ScoutingView.jsx's handleReorder. Ranks themselves are derived, never
+// stored; see boardRanking.js.
+export default function ScoutingLeftPanel({ orderedPlayers, selectedName, onSelect, onReorder }) {
+    const [searchTerm, setSearchTerm] = useState('');
+    const [activeName, setActiveName] = useState(null);
+
+    const sensors = useSensors(
+        useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
+        useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
+    );
+
+    const visible = searchTerm
+        ? orderedPlayers.filter(p => {
+            const term = searchTerm.toLowerCase();
+            return p.name.toLowerCase().includes(term) || p.position.toLowerCase().includes(term);
+        })
+        : orderedPlayers;
+
+    const handleDragStart = useCallback(({ active }) => {
+        setActiveName(active.data.current?.name ?? null);
+    }, []);
+
+    const handleDragEnd = useCallback(({ active, over }) => {
+        setActiveName(null);
+        if (!over) return;
+        const fromName = active.data.current?.name;
+        const toName = over.data.current?.name;
+        if (!fromName || !toName || fromName === toName) return;
+
+        const names = orderedPlayers.map(p => p.name);
+        const fromIdx = names.indexOf(fromName);
+        const toIdx = names.indexOf(toName);
+        if (fromIdx === -1 || toIdx === -1) return;
+
+        const next = [...names];
+        const [moved] = next.splice(fromIdx, 1);
+        next.splice(toIdx, 0, moved);
+        onReorder(next);
+    }, [orderedPlayers, onReorder]);
+
+    const activePlayer = activeName ? orderedPlayers.find(p => p.name === activeName) : null;
+
+    return (
+        <div className="side-panel left-panel">
+            <h3 className="panel-title text-center">My Board</h3>
+
+            <div className="search-bar">
+                <input
+                    type="text"
+                    placeholder="Search name or position..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="search-input"
+                />
+            </div>
+
+            {/* The rows lead with two numbers — where he ranks overall, and
+                the round and tier he sits in. Unlabelled they are just digits;
+                these are the headings for them. */}
+            <div className="scouting-rank-headings">
+                <span className="scouting-rank-num">RANK</span>
+                <span className="scouting-rank-group">RD.TIER</span>
+                <span className="scouting-rank-heading-player">PLAYER</span>
+            </div>
+
+            <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={() => setActiveName(null)}>
+                <div className="panel-content scroll-container">
+                    {visible.length > 0 ? (
+                        <div className="scouting-rank-list">
+                            {visible.map(player => (
+                                <Row
+                                    key={`${player.name}|${player.position}`}
+                                    player={player}
+                                    rank={player.overallRank ?? null}
+                                    group={tierLabel(player.round, player.tier)}
+                                    onSelect={onSelect}
+                                    isSelected={player.name === selectedName}
+                                />
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="no-results">No players matching "{searchTerm}"</div>
+                    )}
+                </div>
+
+                <DragOverlay dropAnimation={null}>
+                    {activePlayer ? (
+                        <div className="scouting-rank-row rv-drag-overlay">
+                            <div className="scouting-rank-card"><PlayerCard player={activePlayer} noStrikethrough /></div>
+                        </div>
+                    ) : null}
+                </DragOverlay>
+            </DndContext>
+        </div>
+    );
+}

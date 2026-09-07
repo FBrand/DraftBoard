@@ -8,7 +8,13 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "playwright test",
+    "test:docker": "docker run --rm --network host -v \"$PWD\":/work -w /work -e CI=1 mcr.microsoft.com/playwright:v1.55.0-noble npx playwright test",
+    "test:unit": "vitest run",
+    "test:unit:watch": "vitest",
+    "test:fast": "playwright test --config playwright.fast.config.js",
+    "test:fast:docker": "docker run --rm --network host -v \"$PWD\":/work -w /work -e NO_WEBSERVER=1 mcr.microsoft.com/playwright:v1.55.0-noble npx playwright test --config playwright.fast.config.js"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -18,6 +24,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
+    "@playwright/test": "^1.55.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
@@ -25,6 +32,7 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.4.0",
-    "vite": "^8.0.4"
+    "vite": "^8.0.4",
+    "vitest": "^3.2.7"
   }
 }

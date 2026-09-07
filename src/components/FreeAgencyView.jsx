@@ -1,0 +1,326 @@
+import React, { useState, useCallback, useEffect } from 'react';
+import useIsMobile from '../hooks/useIsMobile';
+import * as faState from '../utils/faState';
+import * as rosterState from '../utils/rosterState';
+import { CSV_TEMPLATE } from '../utils/rosterState';
+import { makeSlot, resolvePosition } from '../utils/rosterState';
+import DepthChartGrid from './DepthChartGrid';
+import { TextPromptDialog } from './Dialogs';
+import Menu from './Menu';
+import useUndoableState from '../hooks/useUndoableState';
+import UnrankedModal from './UnrankedModal';
+import { resolve as resolvePlayer, setFacts } from '../utils/playerRegistry';
+
+// Needs + candidates snapshot — not a signing tracker (see faState.js).
+// Renders the same DepthChartGrid Roster uses, against FA's own candidate
+// pool. Roster's real depth chart is read fresh on every render (cheap,
+// always current) purely to compute need indicators — never written to.
+export default function FreeAgencyView({ masterPlayers, draftedPlayers, onInfoOpen }) {
+    const [isAddOpen, setIsAddOpen] = useState(false);
+    const [addPositionPhase, setAddPositionPhase] = useState(null);
+    // Same control Roster has: this grid is desktop-wide by design, so on a
+    // phone it needs shrinking to be navigable. FA renders the identical
+    // DepthChartGrid but was missing it.
+    const isMobile = useIsMobile();
+    const [zoomLevel, setZoomLevel] = useState(1);
+
+    // Every write goes through setState, so wrapping it here is all undo needs.
+    const [state, setState, history] = useUndoableState(
+        () => faState.loadState(),
+        useCallback(next => faState.saveState(next), []),
+    );
+
+    // Free agency opens on last season's roster rather than an empty grid —
+    // that's the squad you actually carry into it, and the thing needs are
+    // judged against. Only when nothing has been saved yet, so it can never
+    // overwrite work; a failure leaves the empty grid rather than blocking.
+    const [seeding, setSeeding] = useState(() => !faState.hasSavedState());
+    useEffect(() => {
+        if (!seeding) return;
+        let cancelled = false;
+        (async () => {
+            const seeded = await faState.ensureSeeded();
+            if (!cancelled) {
+                if (seeded) history.reset(seeded);
+                setSeeding(false);
+            }
+        })();
+        return () => { cancelled = true; };
+        // history.reset is stable; the object identity is not.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [seeding]);
+
+    // FA's own board — the roster as it stands going into the draft — not
+    // Roster's, which is where the draft has already been run.
+    const needs = faState.computePositionNeed(state);
+    const openNeeds = Object.entries(needs).filter(([, n]) => n.stillNeed > 0);
+
+    // Every branch here carries the slot's `arrival` with it. Rebuilding a
+    // moved player from his NAME alone — which is what makeSlot(name, zone)
+    // did — quietly stripped how he got here, so a player dragged to the cut
+    // panel and back came home a plain veteran with his FA or UDFA tag gone.
+    const performMove = useCallback((src, dst) => {
+        if (src.posId === dst.posId && src.slotIdx === dst.slotIdx) return;
+        setState(prev => {
+            const next = { ...prev, depthChart: { ...prev.depthChart }, reserve: [...prev.reserve], cuts: [...prev.cuts] };
+            const dc = next.depthChart;
+            const displaced = (dst.posId !== '__ir__' && dst.posId !== '__cut__') ? (dc[dst.posId]?.[dst.slotIdx] ?? null) : null;
+
+            if (src.posId === '__ir__') next.reserve.splice(src.slotIdx, 1);
+            else if (src.posId === '__cut__') next.cuts.splice(src.slotIdx, 1);
+            else { dc[src.posId] = [...(dc[src.posId] ?? [])]; dc[src.posId][src.slotIdx] = null; }
+
+            if (dst.posId === '__ir__') next.reserve.push(src.slot);
+            else if (dst.posId === '__cut__') next.cuts.push(src.slot);
+            else { dc[dst.posId] = [...(dc[dst.posId] ?? [])]; dc[dst.posId][dst.slotIdx] = makeSlot(src.slot.name, dst.targetZone, src.slot.arrival); }
+
+            if (displaced) {
+                if (src.posId === '__ir__') next.reserve.push(displaced);
+                else if (src.posId === '__cut__') next.cuts.push(displaced);
+                else dc[src.posId][src.slotIdx] = makeSlot(displaced.name, src.slot?.zone ?? '53', displaced.arrival);
+            }
+            return next;
+        });
+    }, [setState]);
+
+    const performRowMove = useCallback((srcIdx, srcPhase, dstIdx, dstPhase) => {
+        if (isNaN(srcIdx)) return;
+        setState(prev => {
+            const next = { ...prev, positionConfig: { ...prev.positionConfig } };
+            const srcList = [...next.positionConfig[srcPhase]];
+            const [moved] = srcList.splice(srcIdx, 1);
+            if (srcPhase === dstPhase) {
+                srcList.splice(dstIdx, 0, moved);
+                next.positionConfig[srcPhase] = srcList;
+            } else {
+                const dstList = [...next.positionConfig[dstPhase]];
+                dstList.splice(dstIdx, 0, moved);
+                next.positionConfig[srcPhase] = srcList;
+                next.positionConfig[dstPhase] = dstList;
+            }
+            return next;
+        });
+    }, [setState]);
+
+    const handleDeletePosition = (phase, posId) => {
+        setState(prev => ({
+            ...prev,
+            positionConfig: { ...prev.positionConfig, [phase]: prev.positionConfig[phase].filter(x => x.id !== posId) },
+        }));
+    };
+
+    const handleSlotsChange = (id, val) => {
+        setState(prev => {
+            const next = { ...prev, positionConfig: { ...prev.positionConfig } };
+            ['offense', 'defense'].forEach(p => {
+                next.positionConfig[p] = next.positionConfig[p].map(x => x.id === id ? { ...x, slots53: val } : x);
+            });
+            return next;
+        });
+    };
+
+    const handleAddPosition = (label) => {
+        const phase = addPositionPhase;
+        const id = `${phase[0].toUpperCase()}-${label}-${Date.now()}`;
+        setState(prev => ({
+            ...prev,
+            positionConfig: { ...prev.positionConfig, [phase]: [...prev.positionConfig[phase], { id, label, slots53: 2 }] },
+        }));
+        setAddPositionPhase(null);
+    };
+
+    // Additive only: adds any Roster position row FA doesn't already have
+    // (matched by label), never touches rows FA already has candidates in.
+    const handleSyncPositionsFromRoster = () => {
+        const snap = rosterState.loadState();
+        if (!snap) return;
+        setState(prev => {
+            const next = { ...prev, positionConfig: { offense: [...prev.positionConfig.offense], defense: [...prev.positionConfig.defense] }, depthChart: { ...prev.depthChart } };
+            ['offense', 'defense'].forEach(phase => {
+                (snap.positionConfig[phase] ?? []).forEach(p => {
+                    const exists = next.positionConfig[phase].some(x => x.label === p.label);
+                    if (!exists) {
+                        // Matches parseCSV's own `${phase}-${label}-0` id convention (see
+                        // rosterState.js) — a random-suffixed id round-trips fine in-app
+                        // but gets renamed to this on the next CSV export/re-import,
+                        // which is harmless (ids are never displayed) but avoidable.
+                        const id = `${phase[0].toUpperCase()}-${p.label}-0`;
+                        next.positionConfig[phase].push({ id, label: p.label, slots53: p.slots53 });
+                        next.depthChart[id] = [];
+                    }
+                });
+            });
+            return next;
+        });
+    };
+
+    const handleAddCandidate = ({ name, position, team, previousTeam, draftYear, draftRound }) => {
+        // Where a candidate plays now is a fact about him, not about this
+        // shortlist, so it goes on his record the same way a signing's does.
+        if (team || previousTeam || draftYear || draftRound) {
+            const id = resolvePlayer({ name, position });
+            if (id) setFacts(id, {
+                ...(team ? { team } : {}),
+                ...(previousTeam ? { previousTeam } : {}),
+                ...(draftYear ? { draftYear } : {}),
+                ...(draftRound ? { draftRound, isUdfa: false } : {}),
+            });
+        }
+
+        setState(prev => {
+            let rowId = resolvePosition(position, prev.positionConfig, prev.depthChart);
+            const next = { ...prev, positionConfig: { ...prev.positionConfig }, depthChart: { ...prev.depthChart } };
+            if (!rowId) {
+                const isDefense = ['ED', 'DT', 'DE', 'LB', 'CB', 'S', 'NT'].includes(position);
+                const phase = isDefense ? 'defense' : 'offense';
+                rowId = `${phase[0].toUpperCase()}-${position}-${Date.now()}`;
+                next.positionConfig[phase] = [...next.positionConfig[phase], { id: rowId, label: position, slots53: 2 }];
+                next.depthChart[rowId] = [];
+            }
+            const arr = [...(next.depthChart[rowId] ?? [])];
+            // The slot indices after the 53 belong to the practice squad, and
+            // free agency does not draw that column — a candidate placed there
+            // was saved and invisible. Take a free 53 slot, else the reserve
+            // band that starts after the practice squad's three.
+            const s53 = Math.max(next.positionConfig[rowId?.startsWith('D-') ? 'defense' : 'offense']
+                ?.find(r => r.id === rowId)?.slots53 ?? 2, 1);
+            const PS_SLOTS = 3;
+            let idx = arr.slice(0, s53).findIndex(s => !s);
+            if (idx === -1) {
+                const reserveStart = s53 + PS_SLOTS;
+                const tail = arr.slice(reserveStart).findIndex(s => !s);
+                idx = tail === -1 ? Math.max(arr.length, reserveStart) : reserveStart + tail;
+            }
+            arr[idx] = makeSlot(name, idx < s53 ? '53' : 'r');
+            next.depthChart[rowId] = arr;
+            return next;
+        });
+    };
+
+    const handleExport = () => {
+        const csv = faState.exportCSV(state);
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'fa_candidates.csv';
+        a.click();
+    };
+    const downloadTemplate = () => {
+        const url = URL.createObjectURL(new Blob([CSV_TEMPLATE], { type: 'text/csv' }));
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'fa_candidates_template.csv';
+        a.click();
+    };
+
+
+    const handleImport = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const text = await file.text();
+        // reset, not setState: undoing back into the file you just replaced
+        // would be surprising rather than useful.
+        history.reset(faState.parseCSV(text));
+    };
+
+    return (
+        <div className="roster-view">
+            <div className="top-panel">
+                <div className="roster-brand">
+                    <span className="roster-brand-name">FREE AGENCY</span>
+                    <span className="roster-brand-sub">NEEDS &amp; CANDIDATES</span>
+                </div>
+
+                <div style={{ flex: 1 }} />
+
+                {/* Always rendered. A view named "needs" that shows nothing
+                    when there are none is indistinguishable from one where
+                    the feature is broken — which is exactly how it read. */}
+                <div className="fa-needs" title="Positions where the roster is short of its own slot count">
+                    <span className="fa-needs-label">NEEDS</span>
+                    {openNeeds.length > 0
+                        ? openNeeds.map(([label, n]) => (
+                            <span key={label} className="rv-ctrl-btn fa-need" style={{ width: 'auto', padding: '2px 8px', cursor: 'default' }}>
+                                {label} ({n.stillNeed})
+                            </span>
+                        ))
+                        : <span className="fa-needs-none">roster is full at every position</span>}
+                </div>
+
+                <div style={{ flex: 1 }} />
+
+                {/* Zoom is a small-screen affordance: the depth chart is
+                    desktop-wide by design, so on a phone it needs shrinking to
+                    be navigable. On a desktop there is nothing to solve, and a
+                    permanent "100%" beside the real controls is just noise. */}
+                {isMobile && (
+                    <div className="roster-zoom-ctrl">
+                        <button
+                            onClick={() => setZoomLevel(z => Math.max(0.5, +(z - 0.1).toFixed(2)))}
+                            className="rv-ctrl-btn"
+                            title="Zoom out"
+                        >−</button>
+                        <span className="rv-zoom-label">{Math.round(zoomLevel * 100)}%</span>
+                        <button
+                            onClick={() => setZoomLevel(z => Math.min(1, +(z + 0.1).toFixed(2)))}
+                            className="rv-ctrl-btn"
+                            title="Zoom in"
+                        >+</button>
+                    </div>
+                )}
+
+                <div className="top-actions">
+                    <button onClick={() => setIsAddOpen(true)} className="action-pill">+ Add Candidate</button>
+                    <button
+                        onClick={history.undo}
+                        disabled={!history.canUndo}
+                        className="action-pill undo-pill"
+                        title="Undo the last change"
+                    >Undo</button>
+                    <Menu items={[
+                        { label: 'Import Positions from Roster', onClick: handleSyncPositionsFromRoster, title: 'Adds any position row Roster has that FA doesn\'t' },
+                        { label: 'Export Candidates CSV…', onClick: handleExport },
+                        { label: 'Import Candidates CSV…', file: { accept: '.csv', onFile: handleImport } },
+                        { label: 'Download CSV Template…', onClick: downloadTemplate, title: 'The columns, with worked rows showing the slot prefixes and arrival suffixes' },
+                    ]} />
+                </div>
+            </div>
+
+            <DepthChartGrid
+                showPracticeSquad={false}
+                positionConfig={state.positionConfig}
+                depthChart={state.depthChart}
+                reserve={state.reserve}
+                cuts={state.cuts}
+                masterPlayers={masterPlayers}
+                draftedPlayers={draftedPlayers}
+                onMove={performMove}
+                onRowMove={performRowMove}
+                onDeletePosition={handleDeletePosition}
+                onSlotsChange={handleSlotsChange}
+                onAddPosition={setAddPositionPhase}
+                showNeeds
+                zoomLevel={zoomLevel}
+                onInfoOpen={onInfoOpen}
+            />
+
+            <UnrankedModal
+                key={`fa-add-${isAddOpen}`}
+                isOpen={isAddOpen}
+                onClose={() => setIsAddOpen(false)}
+                onDraft={handleAddCandidate}
+                mode="candidate"
+            />
+
+            {addPositionPhase && (
+                <TextPromptDialog
+                    title={`Add ${addPositionPhase} position`}
+                    placeholder="e.g. WR.Z"
+                    onSubmit={handleAddPosition}
+                    onCancel={() => setAddPositionPhase(null)}
+                />
+            )}
+        </div>
+    );
+}

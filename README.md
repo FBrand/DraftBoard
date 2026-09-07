@@ -35,6 +35,22 @@ The application is prepared to support real-time synchronization by polling live
 - **Live Sync Activation**: Add `?sync=true` to the URL to enable the Live Sync toggle in the Top Panel.
 - **Rankings Override**: Load a custom CSV by adding `?rankings=https://your-url.com/rankings.csv` to the URL.
   - *Note: External URLs must support CORS.*
+- **Athletic Matrix Link**: `?matrixUrl=https://your-store.com/matrix` changes the
+  "Get your Athletic Matrix copy here." link shown on scouting cards that carry
+  matrix values. The value is remembered, so it only needs to be passed once.
+  Only `http`/`https` URLs are accepted. It can also be set per deployment at
+  build time with the `VITE_ATHLETIC_MATRIX_URL` environment variable.
+
+### Saving your work
+
+- **Per-stage CSVs** — each stage exports its own human-readable CSV (draft
+  session, roster, FA candidates, scouting overlay, and a board-ready
+  `group,name,position` rankings file). Found under each view's **More** menu,
+  and the Right Panel's Save/Load Session buttons on the draft board.
+- **Full session (JSON)** — the **Session** menu at the right of the tab bar
+  exports *every* stage at once and restores it. Use this to move a whole
+  offseason between machines; use the CSVs when you want to edit something in a
+  spreadsheet or hand one stage to someone else.
 
 ## Data Formatting
 

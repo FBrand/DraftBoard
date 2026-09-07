@@ -1,61 +1,33 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import PlayerCard from './PlayerCard';
-import { serializeDraftState, deserializeDraftState, getExportFilename } from '../utils/sessionSerializer';
+import Toast from './Toast';
+import Menu from './Menu';
+import { getSessionTeam } from '../utils/appSettings';
 
-const RightPanel = ({ remotePicks, draftedPlayers, currentPick, ourPicksLeft, onImport }) => {
+const RightPanel = ({ remotePicks, draftedPlayers, currentPick, onInfoOpen }) => {
     const scrollRef = useRef(null);
     const currentPickRef = useRef(null);
-    const fileInputRef = useRef(null);
+    const [toast, setToast] = useState(null);
+    const dismissToast = useCallback(() => setToast(null), []);
 
-    // Auto-scroll to current pick
+    // Auto-scroll to current pick — scoped to this panel's own scroll
+    // container. scrollIntoView() walks up and scrolls EVERY scrollable
+    // ancestor into view, which was force-scrolling the left panel and
+    // center board too; scrollTo() on scrollRef only touches this list.
     useEffect(() => {
-        if (currentPickRef.current) {
-            currentPickRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        const container = scrollRef.current;
+        const el = currentPickRef.current;
+        if (container && el) {
+            // getBoundingClientRect deltas, not offsetTop — offsetTop is
+            // relative to the nearest positioned ancestor, which may not be
+            // this container (there's an unpositioned .tracker-list wrapper
+            // in between), so it can't be trusted to compute a clean offset.
+            const containerRect = container.getBoundingClientRect();
+            const elRect = el.getBoundingClientRect();
+            const delta = (elRect.top + elRect.height / 2) - (containerRect.top + containerRect.height / 2);
+            container.scrollTo({ top: container.scrollTop + delta, behavior: 'smooth' });
         }
     }, [currentPick, remotePicks.length]);
-
-    const handleExport = () => {
-        const csv = serializeDraftState(draftedPlayers, ourPicksLeft);
-        const blob = new Blob([csv], { type: 'text/csv' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = getExportFilename();
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    };
-
-    const handleImportClick = () => {
-        if (fileInputRef.current) {
-            fileInputRef.current.click();
-        }
-    };
-
-    const handleFileChange = (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            const text = event.target.result;
-            try {
-                const importedState = deserializeDraftState(text);
-                if (importedState.draftedPlayers.length > 0 || importedState.ourPicksLeft.length > 0) {
-                    onImport(importedState);
-                } else {
-                    alert("No valid draft data found in file.");
-                }
-            } catch (err) {
-                console.error("Parse error:", err);
-                alert("Failed to parse draft file. Please ensure it's a valid CSV.");
-            }
-        };
-        reader.readAsText(file);
-        // Reset input
-        e.target.value = '';
-    };
 
     const renderPickCard = (p) => {
         const isCurrent = p.overall === currentPick;
@@ -77,6 +49,11 @@ const RightPanel = ({ remotePicks, draftedPlayers, currentPick, ourPicksLeft, on
                     isCurrent={isCurrent}
                     traded={p.traded}
                     tradeNote={p.tradeNote}
+                    // A pick in the tracker is a player like any other: a
+                    // click should tell you who he is. These were inert.
+                    onClick={player.name ? onInfoOpen : undefined}
+                    onInfoOpen={player.name ? onInfoOpen : undefined}
+                    alwaysClickable
                 />
             </div>
         );
@@ -87,7 +64,13 @@ const RightPanel = ({ remotePicks, draftedPlayers, currentPick, ourPicksLeft, on
         const player = draftedPlayers.find(dp => dp.pickNumber === overall);
         return {
             overall,
-            team: player?.draftedByUs ? "KC" : "-",
+            // The player already knows who took him — the board shows it on
+            // his card. This threw that away and printed a dash for every
+            // pick that was not ours, so the tracker claimed not to know
+            // something sitting a few pixels to the left. "KC" was hardcoded
+            // here too, which is wrong for anybody whose offseason this is
+            // not; the session team is the app's answer to that.
+            team: player?.team || (player?.draftedByUs ? getSessionTeam() : "-"),
             player,
             traded: false,
             tradeNote: ""
@@ -104,21 +87,12 @@ const RightPanel = ({ remotePicks, draftedPlayers, currentPick, ourPicksLeft, on
                 </div>
             </div>
 
-            <div className="panel-actions">
-                <button className="action-button secondary" onClick={handleExport}>
-                    Save Session
-                </button>
-                <button className="action-button primary" onClick={handleImportClick}>
-                    Load Session
-                </button>
-                <input
-                    type="file"
-                    ref={fileInputRef}
-                    style={{ display: 'none' }}
-                    accept=".csv"
-                    onChange={handleFileChange}
-                />
-            </div>
+            {/* "Save Session" here only ever meant the PICKS. The tab bar has
+                a Session menu that covers every stage, so two things called a
+                session did two different jobs a metre apart. Named for what it
+                is, and moved into a menu like every other occasional action. */}
+
+            <Toast message={toast?.message} tone={toast?.tone} onDismiss={dismissToast} />
         </div>
     );
 };

@@ -2,6 +2,13 @@
  * Roster state management + CSV import/export.
  * Stored in localStorage under key 'rosterState'.
  */
+import { parseCsvLine, csvField } from './csvUtils';
+import { parseAcquisition } from './draftPhase';
+import { basePosition } from './boardRanking';
+import { getSessionTeam } from './appSettings';
+import { DRAFT_YEAR } from '../constants';
+import { resolve as resolvePlayer, setFactsMany } from './playerRegistry';
+import { applyPlayerFacts } from './playerFacts';
 
 // Reasonable 53-man slot defaults by major position
 const DEFAULT_SLOTS53 = {
@@ -55,8 +62,46 @@ const STORAGE_KEY = 'rosterState';
 // ---------------------------------------------------------------------------
 // Slot helpers
 // ---------------------------------------------------------------------------
-export function makeSlot(name, zone = '53') {
-    return name ? { name, zone } : null;
+/**
+ * A depth-chart slot.
+ *
+ * `name` is the plain player name — the identity everything else matches on.
+ * `arrival` is how he got to this team ("24/1", "FA", "UDFA"), which the
+ * import file writes into the name and this splits back out. It is kept on the
+ * slot rather than on the player because it describes a roster, not a person:
+ * the same player arrives at different clubs by different routes.
+ */
+export function makeSlot(name, zone = '53', arrival = null) {
+    if (!name) return null;
+    return arrival ? { name, zone, arrival } : { name, zone };
+}
+
+/**
+ * Splits an imported cell into a slot, recording what the suffix says about
+ * the player on his registry record along the way. The file keeps its format;
+ * the app stores a plain name and a tag.
+ */
+// Filled while a file is being parsed and flushed once at the end — see
+// setFactsMany. Module-scoped because parseCSV threads slotFromImport through
+// several loops and passing a collector down all of them is noise.
+let pendingFacts = null;
+
+function slotFromImport(raw, zone, position = '') {
+    const { name, facts } = parseAcquisition(raw, DRAFT_YEAR);
+    if (!name) return null;
+    const arrival = String(raw ?? '').trim().slice(name.length + 1).trim() || null;
+
+    // Every player on a roster gets a record, not only the ones whose suffix
+    // says something. Registering only the suffixed ones left most of the
+    // roster — the veterans, who carry no suffix at all — with nothing to hang
+    // a fact on, so their cards had no facts to show.
+    // The row label is an alignment ("WR.Z", "LB.O"); the player plays "WR".
+    // The alignment belongs to the depth chart, not to him.
+    const id = resolvePlayer({ name, position: basePosition(position) });
+    // Being on the roster IS the fact that he plays for this team.
+    if (id) pendingFacts?.push({ id, patch: { team: getSessionTeam(), ...facts } });
+
+    return makeSlot(name, zone, arrival);
 }
 
 export function defaultState() {
@@ -73,59 +118,62 @@ export function defaultState() {
 // ---------------------------------------------------------------------------
 // Persistence
 // ---------------------------------------------------------------------------
+/**
+ * Stored shape version. Bump when the persisted shape changes in a way older
+ * data can't satisfy, and add a step to `migrate` — without this there was no
+ * way to tell an old shape from a current one, so a stale blob was simply
+ * trusted and rendered wrong.
+ *
+ * Version 1 is the shape that already existed; unversioned data is treated as
+ * version 1 rather than discarded, since that is exactly what it is.
+ */
+export const STATE_VERSION = 1;
+
+function migrate(parsed) {
+    const from = typeof parsed.version === 'number' ? parsed.version : 1;
+    if (from > STATE_VERSION) return null; // written by a newer app — don't guess
+    // (no migration steps yet; add them here as the shape changes)
+    return { ...parsed, version: STATE_VERSION };
+}
+
 export function loadState() {
     try {
         const raw = localStorage.getItem(STORAGE_KEY);
         if (raw) {
             const parsed = JSON.parse(raw);
-            if (parsed?.positionConfig?.offense?.length > 0) return parsed;
+            if (parsed?.positionConfig?.offense?.length > 0) return migrate(parsed);
         }
     } catch { /* ignore */ }
     return null;
 }
 
 export function saveState(state) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...state, version: STATE_VERSION }));
 }
 
 // ---------------------------------------------------------------------------
 // CSV Import
 // ---------------------------------------------------------------------------
 
-// RFC-4180-style quote-aware split: a plain `line.split(',')` corrupts any
-// field containing a literal comma — and Ourlads' own "Last, First" name
-// convention makes that a real, not just theoretical, input (players signed
-// or pasted in that format silently split into two garbled reserve/cut
-// entries on export/re-import). Handles quoted fields and doubled-quote
-// escaping; doesn't handle a quoted field spanning multiple physical lines,
-// since parseCSV splits on '\n' before this ever runs.
-function parseCsvLine(line) {
-    const fields = [];
-    let cur = '';
-    let inQuotes = false;
-    for (let i = 0; i < line.length; i++) {
-        const c = line[i];
-        if (inQuotes) {
-            if (c === '"') {
-                if (line[i + 1] === '"') { cur += '"'; i++; }
-                else inQuotes = false;
-            } else {
-                cur += c;
-            }
-        } else if (c === '"') {
-            inQuotes = true;
-        } else if (c === ',') {
-            fields.push(cur);
-            cur = '';
-        } else {
-            cur += c;
-        }
-    }
-    fields.push(cur);
-    return fields;
-}
+/**
+ * A starting file for somebody building a depth chart in a spreadsheet.
+ *
+ * Worked rows rather than a bare header: the header alone does not show that
+ * `R:` marks a reserve slot or that `:24/1` records how a player arrived, and
+ * those are exactly the two things nobody guesses.
+ */
+export const CSV_TEMPLATE = [
+    'Phase,pos,slots53,slot1,slot2,slot3',
+    '# Phase is O (offense), D (defense), S (specialist) or IR',
+    '# slots53 = how many of the leading slots are the active roster',
+    '# R: before a name = reserve/practice squad',
+    '# :24/1 drafted 2024 rd 1  ·  :5 drafted this year rd 5  ·  :UDFA  ·  :FA  ·  :TR',
+    'O,QB,2,Patrick Mahomes:17/1,Some Backup:FA,R:A Practice Squadder',
+    'D,EDGE,2,A Starter:22/1,A Rotational Guy:UDFA,',
+].join('\n') + '\n';
 
 export function parseCSV(csvText) {
+    pendingFacts = [];
     const lines = csvText
         .trim()
         .split('\n')
@@ -150,8 +198,11 @@ export function parseCSV(csvText) {
             const parsedSlots = parseInt(col2);
             const hasSlots53Col = !isNaN(parsedSlots);
             const rawSlots = hasSlots53Col ? cols.slice(3) : cols.slice(2);
-            const names = rawSlots.map(s => s.trim()).filter(Boolean).map(n => n.replace(/^(PS:|IR:|R:)/i, '').trim());
-            reserve.push(...names);
+            // Slots, not names — the arrival has to survive the file.
+            const irSlots = rawSlots.map(s => s.trim()).filter(Boolean)
+                .map(n => slotFromImport(n.replace(/^(PS:|IR:|R:)/i, '').trim(), 'ir'))
+                .filter(Boolean);
+            reserve.push(...irSlots);
             continue;
         }
         if (phase === 'CUT' || phase === 'CUTS') {
@@ -159,8 +210,12 @@ export function parseCSV(csvText) {
             const parsedSlots = parseInt(col2);
             const hasSlots53Col = !isNaN(parsedSlots);
             const rawSlots = hasSlots53Col ? cols.slice(3) : cols.slice(2);
-            const names = rawSlots.map(s => s.trim()).filter(Boolean).map(n => n.replace(/^(PS:|IR:|R:)/i, '').trim());
-            cuts.push(...names);
+            // Slots, not bare names: a cut player keeps how he arrived, so
+            // moving him back onto the chart restores his tag and colour.
+            const cutSlots = rawSlots.map(s => s.trim()).filter(Boolean)
+                .map(n => slotFromImport(n.replace(/^(PS:|IR:|R:)/i, '').trim(), 'cut'))
+                .filter(Boolean);
+            cuts.push(...cutSlots);
             continue;
         }
 
@@ -174,7 +229,11 @@ export function parseCSV(csvText) {
 
         if (phase === 'S' && SPECIALIST_IDS.includes(pos)) {
             const name = rawSlots.find(s => s.trim())?.trim();
-            depthChart[pos] = name ? [makeSlot(name, '53')] : [];
+            // Through slotFromImport like everyone else. Calling makeSlot
+            // directly skipped registration, which made the kicker, punter and
+            // long snapper the only players on the roster with no record — and
+            // so the only ones whose card could never show a school.
+            depthChart[pos] = name ? [slotFromImport(name, '53', pos)].filter(Boolean) : [];
             continue;
         }
 
@@ -197,8 +256,8 @@ export function parseCSV(csvText) {
             else if (v.toUpperCase().startsWith('R:')) zone = 'r';
             else if (rIndex >= limit53) zone = 'r';
 
-            const name = v.replace(/^(PS:|IR:|R:)/i, '').trim();
-            const slot = makeSlot(name, zone);
+            const slot = slotFromImport(v.replace(/^(PS:|IR:|R:)/i, '').trim(), zone, pos);
+            if (!slot) return;
 
             if (zone === 'ps') {
                 const psIdx = limit53 + (parsed.filter(x => x?.zone === 'ps').length);
@@ -207,7 +266,7 @@ export function parseCSV(csvText) {
                 const resIdx = limit53 + 3 + (parsed.filter(x => x?.zone === 'r').length);
                 parsed[resIdx] = slot;
             } else if (zone === 'ir') {
-                reserve.push(name);
+                reserve.push(slot);
             } else {
                 parsed[rIndex++] = slot;
             }
@@ -219,19 +278,23 @@ export function parseCSV(csvText) {
         else if (phase === 'D') defense.push(chip);
     }
 
+    // One write for every player on the roster, not one each.
+    setFactsMany(pendingFacts);
+    pendingFacts = null;
+
+    // The roster registers players the boards never saw — veterans, and the
+    // fringe of the depth chart. Seed data is applied again so they get their
+    // school too; it fills blanks only and writes nothing when there is
+    // nothing to fill. Not awaited: a school is a nicety, the roster is not.
+    applyPlayerFacts();
+
     return { positionConfig: { offense, defense }, depthChart, reserve, cuts };
 }
 
-// Counterpart to parseCsvLine: quote any field containing a comma, quote
-// character, or newline (RFC 4180 style), doubling embedded quotes. Without
-// this, a name like Ourlads' "Last, First" convention silently expands into
-// extra columns on export.
-function csvField(value) {
-    const s = String(value ?? '');
-    if (/[",\n]/.test(s)) {
-        return `"${s.replace(/"/g, '""')}"`;
-    }
-    return s;
+// The import format joins the arrival tag back onto the name, so a round trip
+// through the file is lossless.
+function exportName(slot) {
+    return slot.arrival ? `${slot.name}:${slot.arrival}` : slot.name;
 }
 
 export function exportCSV(state) {
@@ -244,10 +307,10 @@ export function exportCSV(state) {
             const slots = state.depthChart[p.id] ?? [];
             const cells = slots.map(s => {
                 if (!s) return '';
-                if (s.zone === 'ps') return `PS:${s.name}`;
-                if (s.zone === 'ir') return `IR:${s.name}`;
-                if (s.zone === 'r') return `R:${s.name}`;
-                return s.name;
+                if (s.zone === 'ps') return `PS:${exportName(s)}`;
+                if (s.zone === 'ir') return `IR:${exportName(s)}`;
+                if (s.zone === 'r') return `R:${exportName(s)}`;
+                return exportName(s);
             });
             rows.push([phase, p.label, p.slots53, ...cells].map(csvField).join(','));
         });
@@ -260,10 +323,14 @@ export function exportCSV(state) {
         rows.push(['S', id, s ? s.name : ''].map(csvField).join(','));
     });
     if (state.reserve && state.reserve.length > 0) {
-        rows.push(['IR', 'IR', '', ...state.reserve].map(csvField).join(','));
+        rows.push(['IR', 'IR', '', ...state.reserve.map(x => (typeof x === 'string' ? x : exportName(x)))]
+            .map(csvField).join(','));
     }
     if (state.cuts && state.cuts.length > 0) {
-        rows.push(['CUT', 'CUT', '', ...state.cuts].map(csvField).join(','));
+        // Written the same way every other slot is, so the arrival survives
+        // the file too. Older saves hold plain strings; those still export.
+        rows.push(['CUT', 'CUT', '', ...state.cuts.map(c => (typeof c === 'string' ? c : exportName(c)))]
+            .map(csvField).join(','));
     }
     return rows.join('\n');
 }
@@ -518,6 +585,25 @@ export async function fetchAdapterRoster() {
     const html = await adapter.fetchRosterHTML();
     if (!html) throw new Error('Adapter returned no data');
     return parseHTMLToRoster(html);
+}
+
+/**
+ * Last season's position structure with every slot emptied — the depth chart
+ * you start an offseason with before anyone is signed or drafted into it.
+ *
+ * defaultState() has no position rows at all, so a roster built from it has
+ * nowhere to put anybody: "Sync from FA/Draft/UDFA" resolves each player to a
+ * row, finds none, and silently places nothing. Starting from the real shape
+ * means the pipeline (free agency + draft picks + UDFA signings -> the 53)
+ * actually has somewhere to land.
+ */
+export async function fetchSeasonStartStructure() {
+    const res = await fetch(`${import.meta.env.BASE_URL}roster_2025_end.csv`);
+    if (!res.ok) throw new Error(`Could not load last season's roster (HTTP ${res.status})`);
+    const parsed = parseCSV(await res.text());
+    const depthChart = {};
+    Object.keys(parsed.depthChart).forEach(id => { depthChart[id] = []; });
+    return { ...parsed, depthChart, reserve: [], cuts: [] };
 }
 
 export async function fetchLocalRoster() {

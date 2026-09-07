@@ -1,6 +1,51 @@
 import { useState, useEffect, useCallback } from 'react';
 import { parseRankings, parsePicks } from '../utils/dataParser';
-import { TEAM_CONFIG } from '../constants';
+import { openBoards, boardBySlug } from '../utils/boardRegistry';
+import { shouldSeed } from '../utils/appInit';
+import { highestDraftPick, isUndraftedSigning, roundForPick, lastDraftPick } from '../utils/draftPhase';
+import { TEAM_CONFIG, DRAFT_YEAR } from '../constants';
+import { resolve as resolvePlayer, resolveAll, setFacts, setFactsMany, rename as renamePlayer } from '../utils/playerRegistry';
+import { getSessionTeam as sessionTeam } from '../utils/appSettings';
+
+/**
+ * Writes what a completed draft says about the players in it.
+ *
+ * A draft read from DraftBoard_Picks.csv never passes through draftPlayer, so
+ * nothing recorded who took whom — the cards showed no team, no pick and no
+ * round even though the draft was over. Resolved in one batch, because this
+ * runs over every pick in the draft.
+ */
+function recordDraftFacts(drafted) {
+    if (!drafted?.length) return;
+    const ids = resolveAll(drafted.map(p => ({ name: p.name, position: p.position, school: p.school })));
+
+    // One write for the whole draft. Per player, this was 639 serialisations
+    // of the entire players collection on every cold start.
+    const updates = [];
+    drafted.forEach((p, i) => {
+        const id = ids[i];
+        if (!id) return;
+
+        if (isUndraftedSigning(p)) {
+            updates.push({ id, patch: { isUdfa: true, draftYear: DRAFT_YEAR, team: p.team || null } });
+            return;
+        }
+
+        const pick = Number(p.pickNumber);
+        if (!Number.isFinite(pick)) return;
+        updates.push({
+            id,
+            patch: {
+                isUdfa: false,
+                draftYear: DRAFT_YEAR,
+                draftPick: pick,
+                draftRound: roundForPick(pick),
+                team: p.team || null,
+            },
+        });
+    });
+    setFactsMany(updates);
+}
 import { findMatchingPlayerIndex, buildNameIndex, findMatchingIndex } from '../utils/nameMatcher';
 
 const DRAFT_STORAGE_KEY = 'nfl_draft_board_state';
@@ -88,16 +133,47 @@ export const useDraftState = () => {
             try {
                 const base = import.meta.env.BASE_URL;
                 const params = new URLSearchParams(window.location.search);
-                const rankingsUrl = params.get('rankings') || `${base}rankings_consensus.csv`;
+                // A ?rankings= link is the normal way to hand somebody a
+                // board, which means it is also the normal way to hand
+                // somebody a TYPO. One double-encoded link — %252F where %2F
+                // was meant — fetched a path that 404s, and because fetch does
+                // not throw on 404 the app parsed GitHub's error page as a
+                // rankings file, crashed on the first row, and rendered a
+                // white screen. Someone was told "it's fixed, try again",
+                // clicked that, and saw nothing twice.
+                const fallback = `${base}rankings_consensus.csv`;
 
-                const [rankingsRes, picksRes, columnsRes, preloadRes] = await Promise.all([
-                    fetch(rankingsUrl),
+                // One switch, not two. A board used to be selectable by
+                // ?board= (its name) or ?rankings= (a file path), and only the
+                // second actually worked on this view — so the name did
+                // nothing while the path quietly did the work, and a board
+                // whose file was renamed, or one made in the app, could not be
+                // linked to at all. The path is gone; the board knows its own
+                // file.
+                await openBoards();
+                const slug = params.get('board');
+                const board = slug ? boardBySlug(slug) : null;
+                const fromBoard = board?.rankingsFile ? `${base}${board.rankingsFile}` : null;
+                const candidates = [fromBoard, fallback].filter(Boolean);
+
+                // First candidate that actually answers. Falling back to the
+                // shipped board beats showing nothing: a wrong board is
+                // obvious and recoverable, a blank page looks broken.
+                let rankingsRes = null;
+                for (const url of candidates) {
+                    try {
+                        const res = await fetch(url);
+                        if (res.ok) { rankingsRes = res; break; }
+                    } catch { /* try the next one */ }
+                }
+
+                const [picksRes, columnsRes, preloadRes] = await Promise.all([
                     fetch(`${base}picks.txt`),
                     fetch(`${base}columns.txt`),
                     fetch(`${base}DraftBoard_Picks.csv`).catch(() => null)
                 ]);
 
-                const rankingsText = await rankingsRes.text();
+                const rankingsText = rankingsRes ? await rankingsRes.text() : '';
                 const picksText = await picksRes.text();
                 const columnsText = await columnsRes.text().catch(() => "");
                 const parsedPositions = columnsText.split(',').map(p => p.trim()).filter(p => p);
@@ -111,8 +187,9 @@ export const useDraftState = () => {
                 let seedDrafted = [];
                 let seedKCLeft = parsedOurPicks;
 
-                // If no saved localStorage state but CSV exists, use CSV as seed
-                if (!savedState && preloadRes && preloadRes.ok) {
+                // If no saved localStorage state but CSV exists, use CSV as seed.
+                // Skipped in "clean" mode — see utils/appInit.js.
+                if (!savedState && shouldSeed() && preloadRes && preloadRes.ok) {
                     const csvText = await preloadRes.text();
                     try {
                         const { deserializeDraftState } = await import('../utils/sessionSerializer');
@@ -182,12 +259,22 @@ export const useDraftState = () => {
                         const enrichedYourPicks = enrichedDrafted.filter(p => p.draftedByUs);
                         setYourPicks(enrichedYourPicks);
 
+                        // A draft loaded from file never passed through
+                        // draftPlayer, so nothing had recorded what it says
+                        // about these players. Their cards showed no team, no
+                        // pick and no round despite the draft being complete.
+                        recordDraftFacts(enrichedDrafted);
+
                         setRemotePicks(savedState && Array.isArray(parsedState.remotePicks) ? parsedState.remotePicks : []);
 
-                        // Seed current pick explicitly from highest historically recorded pick + 1 for Preloads
+                        // Seed the current pick from the highest recorded one.
+                        // UDFA rows carry the literal 'UDFA' rather than a
+                        // number and are skipped — one of them in a Math.max
+                        // used to turn currentPick into NaN, which read as
+                        // 'draft not started' and locked the UDFA stage on a
+                        // completed draft (see utils/draftPhase.js).
                         if (!savedState && enrichedDrafted.length > 0) {
-                            const lastPick = enrichedDrafted.reduce((max, p) => Math.max(max, p.pickNumber), 0);
-                            setCurrentPick(lastPick + 1);
+                            setCurrentPick(highestDraftPick(enrichedDrafted) + 1);
                         }
                     } catch {
                         console.warn("Corrupted localStorage, using fresh data");
@@ -254,9 +341,59 @@ export const useDraftState = () => {
             setOurPicksLeft(prev => prev.filter(pk => pk !== pickNumber));
         }
 
+        // A pick is a fact about the player, not an opinion, so it goes on his
+        // record rather than only into this session's draft state. The round
+        // comes from the stated boundaries (constants.DRAFT_ROUND_ENDS), not
+        // from dividing the pick number, which compensatory picks break.
+        const id = resolvePlayer({ name: player.name, position: player.position, school: player.school });
+        if (id) {
+            setFacts(id, {
+                isUdfa: false,
+                draftYear: DRAFT_YEAR,
+                draftPick: pickNumber,
+                draftRound: roundForPick(pickNumber),
+                team,
+            });
+        }
+
         triggerChime();
         setCurrentPick(prev => prev + 1);
     }, [currentPick, ourPicksLeft, remotePicks, players, saveHistory, triggerChime]);
+
+    /**
+     * Signs an undrafted free agent. Deliberately NOT draftPlayer: that stamps
+     * the current pick number on the player and advances the draft, so signing
+     * from the UDFA board consumed a real pick and recorded the signing as, say,
+     * pick 10. UDFA signings sit past the end of the draft (258+) — the number
+     * is an identifier, not a pick — and `currentPick` never moves.
+     */
+    const signUndrafted = useCallback((player) => {
+        if (player.drafted) return;
+        saveHistory();
+
+        // Signings are numbered on from the end of the draft. UDFA rows read
+        // from the CSV carry a label instead of a number and contribute
+        // nothing to the count, which is fine — the number only has to be
+        // unique and after the draft.
+        const lastUdfaPick = draftedPlayers.reduce((max, p) => {
+            if (!isUndraftedSigning(p)) return max;
+            const n = Number(p.pickNumber);
+            return Number.isFinite(n) ? Math.max(max, n) : max;
+        }, lastDraftPick());
+        const pickNumber = lastUdfaPick + 1;
+        // An explicitly empty team is "signed, no club yet" and must survive;
+        // only an absent key falls back to whose offseason this is.
+        const club = player.team === undefined ? sessionTeam() : (player.team || null);
+        const signed = { ...player, drafted: true, pickNumber, draftedByUs: club === sessionTeam(), team: club };
+
+        const matchIdx = findMatchingPlayerIndex(player.name, players);
+        setPlayers(prev => prev.map((p, idx) => (idx === matchIdx ? { ...p, ...signed } : p)));
+        setDraftedPlayers(prev => [...prev, signed]);
+
+        // Going undrafted is just as much a league-entry fact as being picked.
+        const id = resolvePlayer({ name: player.name, position: player.position, school: player.school });
+        if (id) setFacts(id, { isUdfa: true, draftYear: DRAFT_YEAR, draftPick: null, draftRound: null, team: club });
+    }, [draftedPlayers, players, saveHistory]);
 
     const undoAction = useCallback(() => {
         if (!history) return;
@@ -273,9 +410,13 @@ export const useDraftState = () => {
         setOurPicksLeft(newPicks);
     }, [saveHistory]);
 
+    // Clears the draft only, and stops the shipped picks file re-seeding it on
+    // the way back up. (This used to write the literal string 'empty' into the
+    // state key, which worked only because it is truthy enough to skip seeding
+    // and then throws inside the JSON.parse try/catch.)
     const resetDraft = useCallback(() => {
         localStorage.removeItem(DRAFT_STORAGE_KEY);
-        localStorage.setItem(DRAFT_STORAGE_KEY, 'empty')
+        localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify({ draftedPlayers: [], ourPicksLeft: [] }));
         window.location.reload();
     }, []);
 
@@ -496,6 +637,55 @@ export const useDraftState = () => {
         return () => clearInterval(interval);
     }, [isLiveSync, loading, draftedPlayers, yourPicks, ourPicksLeft, currentPick, triggerChime]);
 
+    /**
+     * Moves a player into a tier on the draft board.
+     *
+     * The board is editable during a draft for the same reason Scouting's is:
+     * a player rises or falls on Friday night and the board has to say so
+     * before you are on the clock. It writes round and tier on the pool, which
+     * the existing persistence effect saves — no separate store, so the board
+     * you edit is the board you drafted from.
+     */
+    const placePlayer = useCallback((player, target) => {
+        // CenterBoard hands over the cell's own {round, tier, position}. This
+        // used to call parseTier on it as though it were the fused "1.2"
+        // label, which parsed "[object Object]", produced no round, and
+        // returned — so the board looked editable and moved nothing.
+        const round = target?.round ?? null;
+        const tier = target?.tier ?? null;
+        if (round == null) return;
+
+        const base = player.position.split('.', 1)[0];
+        const movedColumn = target.position && target.position !== base;
+        // Keep the alignment when he stays in his own column ("WR.Z" is still
+        // a WR); a move to another column replaces it, because the alignment
+        // belonged to the old position.
+        const position = movedColumn ? target.position : player.position;
+
+        setPlayers(prev => {
+            const moved = { ...player, round, tier, position };
+            const rest = prev.filter(p => !(p.name === player.name && p.position === player.position));
+            // Within-cell order is the pool's own order — the board renders a
+            // cell's players in the order it receives them — so ordering means
+            // splicing him in ahead of the man he was dropped on.
+            if (!target.before) {
+                return prev.map(p => (
+                    p.name === player.name && p.position === player.position ? moved : p
+                ));
+            }
+            const at = rest.findIndex(p => p.name === target.before.name && p.position === target.before.position);
+            if (at === -1) return [...rest, moved];
+            return [...rest.slice(0, at), moved, ...rest.slice(at)];
+        });
+
+        // Position is base data — true on every board — so a correction has to
+        // reach the record, not just this pool.
+        if (movedColumn) {
+            const id = resolvePlayer({ name: player.name }, { create: false });
+            if (id) renamePlayer(id, { position: target.position });
+        }
+    }, []);
+
     return {
         players: players || [],
         ourPicksLeft: ourPicksLeft || [],
@@ -509,10 +699,12 @@ export const useDraftState = () => {
         columnOrder,
         toggleLiveSync: () => setIsLiveSync(prev => !prev),
         draftPlayer,
+        signUndrafted,
         undoAction,
         updateOurPicks,
         resetDraft,
-        importDraftState
+        importDraftState,
+        placePlayer
     };
 };
 
