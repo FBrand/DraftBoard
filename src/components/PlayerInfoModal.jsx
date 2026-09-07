@@ -112,17 +112,43 @@ export default function PlayerInfoModal({ player, players = [], onClose, editsOp
         return i !== -1 ? ranked[i] : player;
     }, [player, ranked, rankedIndex]);
 
-    // Remarks from every board, shown together on the card — see BoardNotes.
-    // Only the ranks and tags page with ‹/›; what an analyst wrote about a
-    // player is worth seeing all at once.
+    // A veteran opened from the roster arrives as a bare { name, position } —
+    // no id, because a depth-chart slot holds a name. He IS registered, so
+    // resolving without creating finds him; a player genuinely unknown to the
+    // registry simply gets no remarks rather than a new record minted behind
+    // somebody's back.
+    // By NAME, not by name and position — same rule as `resolved` above, and
+    // it bites here for the same reason. A depth-chart row says "DL" while the
+    // rankings file that created the record said "DL.3T", so qualifying by
+    // position missed, the player had no id, and with no id there was no
+    // remark handler and therefore no pencil: the roster card silently lost
+    // the ability to write anything at all.
+    const playerId = resolved?.id
+        ?? (resolved ? resolvePlayer({ name: resolved.name }, { create: false }) : null);
+
+    /**
+     * What every board has said about him, stacked.
+     *
+     * This read the remarks off each board's ENTRY, which is where they used
+     * to live — they moved to the evaluations store, keyed by author, some
+     * time ago (see utils/evaluations.js). So the entries came back without a
+     * `remarks` field, BoardNotes filtered every one of them out as empty, and
+     * a locked card showed nothing at all. It reads the store now.
+     *
+     * Only the ranks and tags page with ‹/›. What somebody wrote about a
+     * player is worth seeing all at once, whoever wrote it: on a read-only
+     * card that stack IS the card's content.
+     */
     const allBoardNotes = useMemo(() => {
-        if (!player) return [];
-        return boardList.map(board => {
-            const list = boards[board.id]?.entries ?? [];
-            const i = findMatchingIndex(player.name, buildNameIndex(list));
-            return { board: board.id, label: board.label, entry: i !== -1 ? list[i] : null };
-        });
-    }, [boards, boardList, player]);
+        if (!player || !playerId) return [];
+        return boardList.map(board => ({
+            board: board.id,
+            label: board.label,
+            remarks: remarksFor(ownerIdFor(board), playerId),
+        }));
+        // remarkTick: the store changed under us.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [boardList, player, playerId, remarkTick]);
 
 
     /**
@@ -156,19 +182,6 @@ export default function PlayerInfoModal({ player, players = [], onClose, editsOp
         setBoards(prev => ({ ...prev, [activeBoard]: next }));
     }, [activeBoard, resolved]);
 
-    // A veteran opened from the roster arrives as a bare { name, position } —
-    // no id, because a depth-chart slot holds a name. He IS registered, so
-    // resolving without creating finds him; a player genuinely unknown to the
-    // registry simply gets no remarks rather than a new record minted behind
-    // somebody's back.
-    // By NAME, not by name and position — same rule as `resolved` above, and
-    // it bites here for the same reason. A depth-chart row says "DL" while the
-    // rankings file that created the record said "DL.3T", so qualifying by
-    // position missed, the player had no id, and with no id there was no
-    // remark handler and therefore no pencil: the roster card silently lost
-    // the ability to write anything at all.
-    const playerId = resolved?.id
-        ?? (resolved ? resolvePlayer({ name: resolved.name }, { create: false }) : null);
 
     const ownerId = ownerIdFor(boardById(activeBoard));
     const remarks = useMemo(

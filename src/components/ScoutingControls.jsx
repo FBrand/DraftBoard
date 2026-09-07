@@ -84,22 +84,35 @@ function BoardNotes({ boards, seasons }) {
             {withContent.map(b => (
                 <div key={b.board} className="scouting-board-notes-group">
                     <div className="scouting-board-notes-header">{b.label}</div>
-                    {bySeason(b.remarks, seasons).map(group => (
-                        <div key={group.seasonId || 'undated'} className="scouting-season-group">
-                            {group.label && <div className="scouting-season-label">{group.label}</div>}
-                            <ul className="scouting-bullet-list">
-                                {group.items.map(r => {
-                                    const meta = KIND_META[r.kind] ?? KIND_META.note;
-                                    return (
-                                        <li key={r.id} className={`scouting-remark ${meta.cls}`}>
-                                            <span className="scouting-remark-symbol" aria-label={meta.label}>{meta.symbol}</span>
-                                            <span>{r.text}</span>
-                                        </li>
-                                    );
-                                })}
-                            </ul>
-                        </div>
-                    ))}
+
+                    {/* Split by kind under the board's name, in the same
+                        order the editable lists use. A single mixed list made
+                        you read the symbols to work out what somebody thought
+                        of him; strengths together and weaknesses together is
+                        the shape of an opinion. A kind with nothing in it is
+                        left out rather than shown empty. */}
+                    {LIST_FIELDS.map(f => {
+                        const mine = b.remarks.filter(r => r.kind === f.kind);
+                        if (!mine.length) return null;
+                        return (
+                            <div key={f.kind} className={`scouting-list-field ${f.cls}`}>
+                                <div className="scouting-list-label">{f.label}</div>
+                                {bySeason(mine, seasons).map(group => (
+                                    <div key={group.seasonId || 'undated'} className="scouting-season-group">
+                                        {group.label && <div className="scouting-season-label">{group.label}</div>}
+                                        <ul className="scouting-bullet-list">
+                                            {group.items.map(r => (
+                                                <li key={r.id} className={`scouting-remark ${f.cls}`}>
+                                                    <span className="scouting-remark-symbol" aria-label={f.label}>{f.symbol}</span>
+                                                    <span>{r.text}</span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                ))}
+                            </div>
+                        );
+                    })}
                 </div>
             ))}
         </div>
