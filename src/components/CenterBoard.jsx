@@ -33,13 +33,16 @@ const CenterBoard = ({ players, onAction, columnOrder = [], isFocusMode = false,
         const target = over.data.current;
         if (!player || !target?.tier) return;
 
+        // Dropped ON a card: he goes above that man, adopting his tier and
+        // column. Dropped on the cell itself: tier and column only.
+        const before = target.player && target.player.name !== player.name ? target.player : null;
+
         const samePlace = player.round === target.tier.round && player.tier === target.tier.tier;
         const samePosition = !target.position
             || player.position.split('.', 1)[0] === target.position;
-        // Dropping a card back where it already was is not a move.
-        if (samePlace && samePosition) return;
+        if (samePlace && samePosition && !before) return;
 
-        onPlace(player, { ...target.tier, position: target.position });
+        onPlace(player, { ...target.tier, position: target.position, before });
     };
     const visiblePlayers = isFocusMode ? players : players.filter(p => !p.drafted);
 
@@ -171,7 +174,11 @@ const CenterBoard = ({ players, onAction, columnOrder = [], isFocusMode = false,
                                                 <DraggableCard
                                                     key={`${player.name}-${player.position}`}
                                                     id={`card-${player.name}-${player.position}`}
-                                                    data={{ player }}
+                                                    data={{
+                                                        player,
+                                                        tier: { round: group.round, tier: group.tier },
+                                                        position: pos,
+                                                    }}
                                                     disabled={!editable}
                                                 >{card}</DraggableCard>
                                             );

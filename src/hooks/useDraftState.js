@@ -630,11 +630,21 @@ export const useDraftState = () => {
         // belonged to the old position.
         const position = movedColumn ? target.position : player.position;
 
-        setPlayers(prev => prev.map(p => (
-            p.name === player.name && p.position === player.position
-                ? { ...p, round, tier, position }
-                : p
-        )));
+        setPlayers(prev => {
+            const moved = { ...player, round, tier, position };
+            const rest = prev.filter(p => !(p.name === player.name && p.position === player.position));
+            // Within-cell order is the pool's own order — the board renders a
+            // cell's players in the order it receives them — so ordering means
+            // splicing him in ahead of the man he was dropped on.
+            if (!target.before) {
+                return prev.map(p => (
+                    p.name === player.name && p.position === player.position ? moved : p
+                ));
+            }
+            const at = rest.findIndex(p => p.name === target.before.name && p.position === target.before.position);
+            if (at === -1) return [...rest, moved];
+            return [...rest.slice(0, at), moved, ...rest.slice(at)];
+        });
 
         // Position is base data — true on every board — so a correction has to
         // reach the record, not just this pool.

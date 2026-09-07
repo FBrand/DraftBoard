@@ -4,6 +4,7 @@ import useEscapeKey from '../hooks/useEscapeKey';
 import { getAthleticMatrixUrl } from '../utils/appLinks';
 import { PLAYER_TAGS } from '../utils/playerTags';
 import * as athleticMatrix from '../utils/athleticMatrix';
+import { whoHasWorkedOn } from '../utils/playerWork';
 import { factsFor, setFacts, resolve as resolvePlayer, rename as renamePlayer, byId } from '../utils/playerRegistry';
 import { savePlayerEdit } from '../utils/prospects';
 import { REMARK_KINDS } from '../utils/evaluations';
@@ -242,19 +243,30 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
         setFacts(playerId, { [key]: raw });
         setFactsState(factsFor(playerId));
     };
-    // Only the modal presentation is dismissable — the panel variant is a
-    // permanent column, not something Escape should blank out.
-    useEscapeKey(onClose, variant === 'modal' && !!player);
 
-    if (!player) {
-        if (variant === 'modal') return null;
-        return (
-            <div className="side-panel right-panel">
-                <h3 className="panel-title">Player Info</h3>
-                <div className="scouting-empty">Select a player to view or edit scouting notes.</div>
-            </div>
-        );
-    }
+
+
+    // Scouting hands this to its own saveEntry, which can also move a player
+    // by rank. The card opened elsewhere writes straight to the board it is
+    // paged to — no rank moves there, because a rank is a position in an
+    // ordering and the card is only showing one player.
+    const commit = (patch) => {
+        (onEntryChange ?? onChange)({
+            name: player.name,
+            position: player.position,
+            tag: entry?.tag ?? null,
+            round: entry?.round ?? null,
+            tier: entry?.tier ?? null,
+            withinGroup: entry?.withinGroup ?? null,
+            athleticMatrixTotal: entry?.athleticMatrixTotal ?? null,
+            athleticMatrixPosition: entry?.athleticMatrixPosition ?? null,
+            strengths: entry?.strengths ?? [],
+            weaknesses: entry?.weaknesses ?? [],
+            notes: entry?.notes ?? [],
+            ...patch,
+            updatedAt: new Date().toISOString(),
+        });
+    };
 
     // Round and tier are two stored numbers. rankings.csv fuses them into one
     // "1.3" column, but that form now lives only at the CSV boundary.
@@ -273,6 +285,37 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
         }
     };
 
+    /**
+     * Writes back anything typed but not yet committed, then closes.
+     *
+     * A number field commits on blur, and closing the card never produces one
+     * — so stepping Total Rank with the arrows and pressing × threw the move
+     * away without a word. Both exits go through here.
+     */
+    const closeCard = () => {
+        NUMBER_FIELDS.forEach(f => {
+            if (!f.editable) return;
+            const was = f.derived ? player?.[f.derived] : entry?.[f.key];
+            const now = numbers[f.key];
+            if (String(was ?? '') !== String(now ?? '')) commitNumber(f, now);
+        });
+        onClose?.();
+    };
+
+    // Only the modal presentation is dismissable — the panel variant is a
+    // permanent column, not something Escape should blank out.
+    useEscapeKey(closeCard, variant === 'modal' && !!player);
+
+    if (!player) {
+        if (variant === 'modal') return null;
+        return (
+            <div className="side-panel right-panel">
+                <h3 className="panel-title">Player Info</h3>
+                <div className="scouting-empty">Select a player to view or edit scouting notes.</div>
+            </div>
+        );
+    }
+
     // Every player is editable, not only the ones added in the app — a name
     // misspelt in a rankings file is just as wrong as one misheard on air, and
     // the analyst shouldn't have to know where a player came from to fix him.
@@ -281,6 +324,9 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
     // these cards are looked at far more often than they are corrected, and a
     // grid of live inputs invites a stray keystroke during a broadcast.
     const canEditBase = readOnly ? !!playerId : !!onPlayerSave;
+    // A player nobody has touched is a mistake to undo; one who has been
+    // placed, tagged or written about is somebody's work.
+    const workedOn = whoHasWorkedOn(player);
     const canEditOpinions = readOnly && !!onEntryChange && !canEditBase;
     const factsLocked = readOnly && !editingBase && !editingOpinions;
     // Scouting is always live; elsewhere the pencil decides.
@@ -339,27 +385,6 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
         commit({ round: parseInt(round, 10), tier: tier ? parseInt(tier, 10) : null });
     };
 
-    // Scouting hands this to its own saveEntry, which can also move a player
-    // by rank. The card opened elsewhere writes straight to the board it is
-    // paged to — no rank moves there, because a rank is a position in an
-    // ordering and the card is only showing one player.
-    const commit = (patch) => {
-        (onEntryChange ?? onChange)({
-            name: player.name,
-            position: player.position,
-            tag: entry?.tag ?? null,
-            round: entry?.round ?? null,
-            tier: entry?.tier ?? null,
-            withinGroup: entry?.withinGroup ?? null,
-            athleticMatrixTotal: entry?.athleticMatrixTotal ?? null,
-            athleticMatrixPosition: entry?.athleticMatrixPosition ?? null,
-            strengths: entry?.strengths ?? [],
-            weaknesses: entry?.weaknesses ?? [],
-            notes: entry?.notes ?? [],
-            ...patch,
-            updatedAt: new Date().toISOString(),
-        });
-    };
 
     // Credit line for the Athletic Matrix, shown once a player actually has
     // matrix numbers on them — attribution where the data is displayed,
@@ -427,7 +452,7 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
                                 setEditingBase(true);
                             }}>✎</button>
                     )}
-                    <button className="close-btn" onClick={onClose}>&times;</button>
+                    <button className="close-btn" onClick={closeCard}>&times;</button>
                 </div>
             </div>
             {baseError && <div className="scouting-base-error">{baseError}</div>}
@@ -658,7 +683,20 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
 
                 {canEditBase && (
                     <div className="scouting-prospect-admin">
-                        {confirmRemove ? (
+                        {workedOn.length > 0 ? (
+                            <>
+                                <span className="scouting-prospect-note">
+                                    Ranked or evaluated on {workedOn.join(', ')} — clear those first
+                                </span>
+                                {onEntryChange && (
+                                    <button type="button" className="scouting-prospect-remove"
+                                        title="Removes this board's placement and tag for him, and nobody else's"
+                                        onClick={() => onEntryChange({ round: null, tier: null, withinGroup: null, tag: null })}>
+                                        Clear my opinions
+                                    </button>
+                                )}
+                            </>
+                        ) : confirmRemove ? (
                             <>
                                 <span className="scouting-prospect-note">Remove from every board?</span>
                                 <div className="scouting-prospect-confirm">
