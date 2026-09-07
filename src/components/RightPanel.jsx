@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import PlayerCard from './PlayerCard';
 import Toast from './Toast';
 import Menu from './Menu';
+import { getSessionTeam } from '../utils/appSettings';
 
 const RightPanel = ({ remotePicks, draftedPlayers, currentPick }) => {
     const scrollRef = useRef(null);
@@ -58,7 +59,13 @@ const RightPanel = ({ remotePicks, draftedPlayers, currentPick }) => {
         const player = draftedPlayers.find(dp => dp.pickNumber === overall);
         return {
             overall,
-            team: player?.draftedByUs ? "KC" : "-",
+            // The player already knows who took him — the board shows it on
+            // his card. This threw that away and printed a dash for every
+            // pick that was not ours, so the tracker claimed not to know
+            // something sitting a few pixels to the left. "KC" was hardcoded
+            // here too, which is wrong for anybody whose offseason this is
+            // not; the session team is the app's answer to that.
+            team: player?.team || (player?.draftedByUs ? getSessionTeam() : "-"),
             player,
             traded: false,
             tradeNote: ""
