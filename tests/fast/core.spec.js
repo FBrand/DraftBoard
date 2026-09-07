@@ -258,3 +258,39 @@ test.describe('settings', () => {
         await expect(page.locator('.ap-error')).toBeVisible();
     });
 });
+
+test.describe('the board CSV', () => {
+    test('exports what an analyst wrote, markers and all', async ({ page }) => {
+        await openWarm(page, 'scouting');
+        await page.waitForSelector('.sg-row', { timeout: 45_000 });
+
+        // Write one of each kind on whoever is first, through the panel the
+        // analyst actually uses.
+        await page.locator('.sg-row').first().click();
+        const panel = page.locator('.side-panel.right-panel');
+        await expect(panel.locator('.scouting-list-field')).toHaveCount(3);
+
+        const kinds = ['Elite arm talent', 'Footwork under pressure', 'Two-year starter'];
+        for (let i = 0; i < 3; i += 1) {
+            const box = panel.locator('.scouting-list-add').nth(i);
+            await box.locator('input').fill(kinds[i]);
+            await box.locator('button').click();
+            await page.waitForTimeout(200);
+        }
+
+        const download = page.waitForEvent('download');
+        await page.locator('.top-panel .app-menu-trigger').click();
+        await page.getByRole('menuitem', { name: /Export Board CSV/i }).click();
+        const file = await download;
+        const text = await (await import('node:fs/promises')).readFile(await file.path(), 'utf8');
+
+        // The header a spreadsheet needs, and one line per marker. Without the
+        // "Remarks:" prefix, Sheets and Excel read a leading + or - as a
+        // formula and mangle the cell before it is ever saved.
+        expect(text.split('\n')[0]).toContain('evaluation');
+        expect(text).toContain('Remarks:');
+        expect(text).toContain('+ Elite arm talent');
+        expect(text).toContain('- Footwork under pressure');
+        expect(text).toContain('• Two-year starter');
+    });
+});
