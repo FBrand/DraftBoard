@@ -40,6 +40,14 @@ const TopPanel = ({ currentPick, currentPickStatus, ourPicksLeft, onUndo, onUpda
 
 
     const picksList = [...ourPicksLeft].filter(p => p >= currentPick).sort((a, b) => a - b);
+    // An empty list rendered as a heading with nothing under it, which reads
+    // as broken rather than as "you are out of picks" — and after a completed
+    // draft that is its permanent state.
+    const picksPills = picksList.length
+        ? picksList.map(p => (
+            <span key={p} className={`pick-pill ${p === currentPick ? 'active' : ''}`}>#{p}</span>
+        ))
+        : <span className="pick-pill empty">none left</span>;
 
     // ── Focus Mode ────────────────────────────────────────────────────────────
     if (isFocusMode) {
@@ -58,11 +66,7 @@ const TopPanel = ({ currentPick, currentPickStatus, ourPicksLeft, onUndo, onUpda
                 <div className="our-picks-tracker">
                     <span className="tracker-label">OUR PICKS LEFT</span>
                     <div className="picks-list">
-                        {picksList.map(p => (
-                            <span key={p} className={`pick-pill ${p === currentPick ? 'active' : ''}`}>
-                                #{p}
-                            </span>
-                        ))}
+                        {picksPills}
                     </div>
                 </div>
                 <BoardSwitcher
@@ -109,11 +113,7 @@ const TopPanel = ({ currentPick, currentPickStatus, ourPicksLeft, onUndo, onUpda
             <div className="our-picks-tracker">
                 <span className="tracker-label">OUR PICKS LEFT</span>
                 <div className="picks-list">
-                    {picksList.map(p => (
-                        <span key={p} className={`pick-pill ${p === currentPick ? 'active' : ''}`}>
-                            #{p}
-                        </span>
-                    ))}
+                    {picksPills}
                 </div>
             </div>
 

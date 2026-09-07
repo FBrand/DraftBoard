@@ -86,6 +86,8 @@ export const parsePicks = (picksText) => {
   return picksText
     .split(',')
     .map(p => parseInt(p.trim(), 10))
-    .filter(p => !isNaN(p))
+    // Same rule as the session file: picks count from one, so a 0 is either
+    // a typo or an empty list that went through join(",").
+    .filter(p => Number.isFinite(p) && p > 0)
     .sort((a, b) => a - b);
 };

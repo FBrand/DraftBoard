@@ -3710,3 +3710,10 @@ body.export-mode .card-glow {
   margin: 6px 0 2px;
   letter-spacing: 0.04em;
 }
+
+/* "none left" is information, not a pick — it should not look clickable. */
+.pick-pill.empty {
+  color: var(--text-dim);
+  border-style: dashed;
+  font-style: italic;
+}
