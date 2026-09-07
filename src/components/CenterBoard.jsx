@@ -17,7 +17,7 @@ import { DraggableCard, DroppableCell } from './BoardDnd';
  * Off by default. During a live draft the board must not move under a
  * mis-click, and a card there is a thing you press to draft somebody.
  */
-const CenterBoard = ({ players, onAction, columnOrder = [], isFocusMode = false, alwaysClickable = false, hideDraftedStyle = false, onInfoOpen, tagFor, editable = false, onPlace, takenTest }) => {
+const CenterBoard = ({ players, onAction, columnOrder = [], isFocusMode = false, alwaysClickable = false, hideDraftedStyle = false, onInfoOpen, tagFor, editable = false, onPlace, takenTest, showTaken = false }) => {
     // What counts as GONE depends on the board you are looking at.
     //
     // The draft board asks "was he drafted", and a player who went undrafted
@@ -62,7 +62,11 @@ const CenterBoard = ({ players, onAction, columnOrder = [], isFocusMode = false,
     // ranked a corner" rather than "the corner went sixth". A drafted player
     // is still information — he is where he was, struck through, and the run
     // on a position is visible because his card is still sitting in it.
-    const visiblePlayers = players;
+    // The draft board keeps a drafted player in place — the run on a position
+    // is the information. The UDFA board is a list of who is LEFT to sign, and
+    // leaving the signed ones in it buried eleven available players under a
+    // hundred and forty-two who were already gone.
+    const visiblePlayers = (showTaken || isFocusMode) ? players : players.filter(p => !isTaken(p));
 
     // Whether a ROW still earns its place: in normal view, only while somebody
     // in it is undrafted.

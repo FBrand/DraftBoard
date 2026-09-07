@@ -138,6 +138,9 @@ export default function DraftView({
                     // Drafted means drafted. A player signed as a UDFA went
                     // undrafted, so he stays available here.
                     takenTest={isDraftPick}
+                    // A drafted player stays on the board, dimmed, so a run on
+                    // a position is visible as it happens.
+                    showTaken
                 />
 
                 <div className={`right-sidebar-wrapper ${showRightSidebar && !isFocusMode ? 'mobile-open' : ''}`}>

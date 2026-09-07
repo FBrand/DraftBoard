@@ -178,9 +178,20 @@ export default function FreeAgencyView({ masterPlayers, draftedPlayers, onInfoOp
                 next.depthChart[rowId] = [];
             }
             const arr = [...(next.depthChart[rowId] ?? [])];
-            let idx = arr.findIndex(s => !s);
-            if (idx === -1) idx = arr.length;
-            arr[idx] = makeSlot(name, '53');
+            // The slot indices after the 53 belong to the practice squad, and
+            // free agency does not draw that column — a candidate placed there
+            // was saved and invisible. Take a free 53 slot, else the reserve
+            // band that starts after the practice squad's three.
+            const s53 = Math.max(next.positionConfig[rowId?.startsWith('D-') ? 'defense' : 'offense']
+                ?.find(r => r.id === rowId)?.slots53 ?? 2, 1);
+            const PS_SLOTS = 3;
+            let idx = arr.slice(0, s53).findIndex(s => !s);
+            if (idx === -1) {
+                const reserveStart = s53 + PS_SLOTS;
+                const tail = arr.slice(reserveStart).findIndex(s => !s);
+                idx = tail === -1 ? Math.max(arr.length, reserveStart) : reserveStart + tail;
+            }
+            arr[idx] = makeSlot(name, idx < s53 ? '53' : 'r');
             next.depthChart[rowId] = arr;
             return next;
         });
