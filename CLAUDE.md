@@ -473,7 +473,12 @@ Traps, all of which have cost real runs here:
     seen group.
   - `picks.txt` — comma-separated list of pick numbers your team owns.
   - `columns.txt` — comma-separated position column order (e.g. `QB, RB, WR, TE, ...`).
-  - Rankings can be overridden at runtime via `?rankings=<url>` (must support CORS).
+  - These are *seed* files. Which board you are looking at is chosen with
+    `?board=<slug>` (`useDraftState.js`), resolved through `boardRegistry` to
+    that board's own `rankingsFile`. The older `?rankings=<url>` override is
+    retired and actively stripped (`TopPanel_Draft.jsx`, `UdfaView.jsx`): a
+    board now has an identity of its own, and loading a stranger's CSV over it
+    left the app showing one board's name above another board's players.
 - **Live Sync is optional/modular by design:** if `src/services/` is missing,
   the Live Sync UI gracefully disables itself rather than breaking the core
   board. Activated via `?sync=true` URL param.

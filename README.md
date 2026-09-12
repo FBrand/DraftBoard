@@ -33,8 +33,13 @@ The application is prepared to support real-time synchronization by polling live
 
 ### URL Parameters
 - **Live Sync Activation**: Add `?sync=true` to the URL to enable the Live Sync toggle in the Top Panel.
-- **Rankings Override**: Load a custom CSV by adding `?rankings=https://your-url.com/rankings.csv` to the URL.
-  - *Note: External URLs must support CORS.*
+- **Board Selection**: `?board=<slug>` opens a named board — `?board=ryan`
+  shows Ryan's rankings rather than the Consensus. The slug is the board's
+  name, lowercased.
+  - *Replaces the old `?rankings=<url>` override, which loaded a CSV straight
+    off a URL. A board is now a thing the app owns — it has an id, an author
+    and a season — so the board name is the switch, not the file behind it.
+    The app strips `?rankings=` from any link that still carries it.*
 - **Athletic Matrix Link**: `?matrixUrl=https://your-store.com/matrix` changes the
   "Get your Athletic Matrix copy here." link shown on scouting cards that carry
   matrix values. The value is remembered, so it only needs to be passed once.

@@ -148,9 +148,9 @@ Player {
 ```
 
 ### State Persistence
-- Move from in-memory state to `localStorage` or IndexedDB
-- Import/export JSON for season saves
-- Optional: Supabase/Firebase backend for multi-device sync
+- ✅ Everything is in `localStorage`, behind `src/data/repository.js`
+- ✅ Import/export of a whole session as JSON (`utils/appSession.js`, versioned)
+- 🔲 A real backend for multi-device sync — see below
 
 ---
 
@@ -172,34 +172,134 @@ Enable content creators/experts to log in, host public draft boards/rosters, and
   strengths/weaknesses/notes from every board at once. Editable in Scouting,
   read-only everywhere else (right-click or long-press a player). No further
   "grades and fit assessment" layer is planned.
-- **Architecture/Backend**:
-  - Requires a persistent database (e.g., Supabase, Firebase, or a light SQL backend).
-  - WebSockets or lightweight subscription channels for real-time draft pick dispatching.
+- **Architecture/Backend**: Firestore. The storage layer was built against its
+  interface from the start — see the migration below.
+
+---
+
+## Migrating to Firebase
+
+_Written 2026-09-12 against the code as it stands. The point of `src/data/` was
+always that this would be an adapter swap; most of it is, and this section is
+honest about the part that is not._
+
+### What is already in the shape
+
+`src/data/repository.js` stores documents in named collections, addressed by
+id, with `where` / `orderBy` / `limit` over them — Firestore's interface,
+narrowed to what this app does. `localAdapter` is one implementation of it.
+Five collections go through it today: `players`, `boards`, `seasons`,
+`authors`, `evaluations`.
+
+`repository.subscribe()` also already exists and is wired only to a local
+notify. `onSnapshot` maps onto it almost directly. That is the cheap part, and
+it is the part that turns "we cannot both edit the same board" into a yes.
+
+### What is in the way
+
+**1. Four stores are still single JSON blobs, not documents.**
+`scouting_board_v1__<boardId>`, `rosterState`, `fa_state_v1` and
+`nfl_draft_board_state` sit on raw `localStorage` keys, outside the
+repository. The board entries are the one that matters: two analysts editing
+different players on the same board are two whole-blob rewrites racing each
+other — exactly the failure `localAdapter`'s own header comment says the
+document shape exists to prevent. It wants to become
+`boards/<id>/entries/<playerId>`, one document per player. Roster and Free
+Agency are the same job (a document per slot); draft picks are already
+naturally one document per pick.
+
+**2. `loadSync` has to go, and its absence will be loud.**
+The repository offers synchronous reads — `get`, `all`, `docs`, `query` —
+which only a local adapter can serve, and roughly twenty call sites use them.
+A Firestore adapter must not implement `loadSync`; that is deliberate, and it
+means every one of those sites returns null or empty until `ready()` resolves.
+This is the single biggest source of "it rendered blank once" on migration.
+Each view needs to await the collections it reads and hold a real loading
+state, not just the one draft-data gate in `App.jsx`.
+
+**3. Authentication.**
+A board carries an `authorId` pointing at a row in a collection, with no login
+behind it. Rules cannot say "Ryan may write Ryan's board" until a board carries
+a real uid. Anonymous auth is enough to start.
+
+**4. Security rules.**
+The board is going on a stream. Anything world-writable gets defaced.
+
+**5. Writes become fallible.**
+`set` currently cannot fail — the adapter swallows quota errors, and the
+repository has already told the UI the write succeeded. Over a network that
+needs retry, an offline queue, and something on screen when a save does not
+land. Nothing surfaces that today.
+
+**6. Seeding moves off the client.**
+First load parses the CSVs in `public/` into storage per visitor. Remote, that
+has to happen once behind a guard, or every new viewer re-seeds shared data.
+
+**7. Session export/import changes meaning.**
+It bundles raw `localStorage` keys today. It becomes read-collections /
+write-under-this-user, and can no longer simply overwrite keys.
+
+### Order
+
+Auth → split the board entries into documents → remove the synchronous reads →
+rules. Get two people editing one board working on the collection that needs
+it, then bring roster, FA and draft across. Splitting board entries before auth
+exists means doing the migration twice.
+
+### Cost shape
+
+~330 players × N boards. The batched write helpers that already exist
+(`playerRegistry.setFactsMany`, `fillMany`, `repository.commit`) are what keep
+a seed from being one write per player; that pattern has to hold, because
+remotely it is one *billed* write per player.
 
 ---
 
 ## Priority Order
 
-_Updated 2026-09-03 against actual code, not just prior status — re-verify before trusting either._
+_Updated 2026-09-12 against the commit log and the code, not against the
+previous version of this list. The 3 September version had seven items marked
+unbuilt that had already shipped; if you are reading this after a long gap,
+re-verify rather than trusting it._
 
-1. ✅ Fix current board stability (no more sticky changes)
-2. ✅ Normal vs Focus view toggle (Short-Term) — implemented in `CenterBoard.jsx` (`visiblePlayers = isFocusMode ? players : players.filter(p => !p.drafted)`, groups/rounds derived from the filtered set); confirm with a visual smoke-test
-3. ✅ Clean up CenterBoard — no sentinel/shelf machinery found in current code; only ordinary CSS `position: sticky` headers remain
-4. 🔲 **Fix Roster drag-and-drop on mobile/touch** — `RosterView.jsx` uses native HTML5 `draggable`/`dragstart`/`drop` only, no touch handlers, no dnd library in `package.json`; native HTML5 DnD doesn't fire on touch devices by design. Needs touch-event handling or a touch-aware library (e.g. `@dnd-kit/core`)
-5. 🔲 Verify Ourlads auto-fetch position coverage (EDGE/specialists had repeated parsing gaps during development — regression-check before relying on it)
-6. 🔲 Stage navigation shell (tabs, routing) — unify Draft/Roster into the full 5-stage tab bar; currently a flat 2-tab switcher in `App.jsx`
-7. 🔲 Stage 2: Scouting view (builds on existing rankings data)
-8. 🔲 Stage 1: FA tracker
-9. 🔶 Stage 4: UDFA — folded into Roster's "Sign Player" flow (`UnrankedModal`'s `postdraft` mode) rather than a separate view; functionally covered, not a standalone UI
-10. 🔶 Stage 5: Roster builder — substantially built and near-parity with Draft: drag-and-drop 53-man/practice-squad/IR/cuts, CSV import/export, Ourlads auto-fetch, position config. Remaining work is item 4 (mobile DnD) and general polish, not core functionality
-11. 🔲 Mid-Term: Multi-season. Seasons are a **stack** — only the current one is
-    writable, earlier ones are read-only, and you can scrap the current season to
-    drop back to the previous one. Nothing ever edits a season a later one was
-    derived from, because going back means the later one no longer exists.
-    Per-player provenance already exists in `roster.csv` (`:FA`, `:UDFA`,
-    `:24/1`), and `roster_2025_end.csv` is derived from it — that suffix is the
-    seed of the model. Wants the same "state belongs to a scope" change as item
-    13, so they're cheaper built together.
-12. 🔲 Mid-Term: Scouting grouped list (see Stage 2 above) — blocked on adding a
-    school/college column to the rankings data.
-13. 🔲 Long-Term: Expert Authentication & Real-Time Follow Sync (Database backed)
+**Done**
+
+1. ✅ Board stability, Normal vs Focus view, CenterBoard cleanup
+2. ✅ Roster drag-and-drop on touch — `@dnd-kit/core`, mouse and touch sensors
+3. ✅ Five-stage navigation shell — FA / Scouting / Draft / UDFA / Roster
+4. ✅ Stage 1 Free Agency, Stage 2 Scouting, Stage 4 UDFA (its own view, not a
+   Roster flow), Stage 5 Roster
+5. ✅ Roster sync from FA + draft picks + UDFA, additive so hand edits survive
+6. ✅ Scouting as a grouped list — by position, school or round
+7. ✅ Player facts vs board opinions vs per-author evaluations, with stable ids
+8. ✅ Boards, authors and seasons as first-class records; consensus is the board
+   with no author
+9. ✅ Session export/import of every stage, versioned
+10. ✅ Player report cards — considered sufficient, see above
+
+**Open**
+
+11. 🔲 **Test coverage regressed and has not been repaid.** The old browser
+    suite (87 cases across `tests/*.spec.js`) was replaced by 96 Vitest unit
+    tests plus a 17-case fast browser suite, on the understanding that the new
+    ones would cover the same ground. Measured 2026-09-12, about half do.
+    Biggest holes: **the whole mobile layout** (the fast config has one
+    project, desktop at 1600×1000), **session export/import**, **roster slot
+    geometry** (holes in a row, cutting a mid-row player, deleting a position
+    row), **the FA/draft/UDFA → roster sync**, and the Add Players guard rails.
+    The old specs still exist and still pass; nothing runs them.
+12. 🔲 Take a player back off IR. Going on is a drag to the zone; there is no
+    way off, so injuries only accumulate.
+13. 🔲 Season rollover. Seasons are a **stack** — only the current one is
+    writable, earlier ones read-only, scrapping the current one drops back to
+    the previous. The data model is there and `boardRegistry.startSeason()`
+    exists; nothing calls it, so there is no way to roll over or roll back.
+14. 🔲 Firebase migration — see the section above.
+15. 🔲 Expert authentication and real-time follow sync. Depends on 14.
+
+**Dropped**
+
+- Ourlads auto-fetch verification. The hardcoded fetch was replaced by a
+  pluggable adapter interface (`1ab035a`); the depth chart is now seeded from
+  a checked-in `roster_predraft.csv` transformed to this app's position
+  labels. There is no auto-fetch left to regression-check.
