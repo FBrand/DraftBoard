@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 /**
  * Keeps a piece of view state in the query string, so what you're looking at
@@ -28,6 +28,13 @@ export default function useUrlParam(key, defaultValue, allowed = null) {
 
     const [value, setValue] = useState(read);
 
+    // The latest value, readable without putting `value` in `set`'s deps —
+    // which would hand every caller a new `set` on each change. Written in an
+    // effect rather than during render, which is the only place a ref may be
+    // touched.
+    const valueRef = useRef(value);
+    useEffect(() => { valueRef.current = value; }, [value]);
+
     // Back/forward should move through the app, not out of it.
     useEffect(() => {
         const onPop = () => setValue(read());
@@ -36,9 +43,19 @@ export default function useUrlParam(key, defaultValue, allowed = null) {
     }, [read]);
 
     const set = useCallback((next, { replace = false } = {}) => {
+        // A functional update, like setState takes. Without this the callback
+        // itself went into the query string — a scouting link came out reading
+        // `player=t%3D%3Et%3D%3D%3De.name%3Fnull%3Ae.name`, the minified
+        // toggle stringified. In-session nothing looked wrong, because React's
+        // own setState resolved the same function correctly; only the URL was
+        // wrong, so only a SHARED link was broken, which is the one thing this
+        // hook exists for.
+        const current = read() ?? valueRef.current;
+        const resolved = typeof next === 'function' ? next(current) : next;
+
         const params = new URLSearchParams(window.location.search);
-        if (next == null || next === '') params.delete(key);
-        else params.set(key, next);
+        if (resolved == null || resolved === '') params.delete(key);
+        else params.set(key, resolved);
 
         const qs = params.toString();
         const url = `${window.location.pathname}${qs ? `?${qs}` : ''}${window.location.hash}`;
@@ -48,8 +65,8 @@ export default function useUrlParam(key, defaultValue, allowed = null) {
         if (replace) window.history.replaceState(null, '', url);
         else window.history.pushState(null, '', url);
 
-        setValue(next ?? defaultValue);
-    }, [key, defaultValue]);
+        setValue(resolved ?? defaultValue);
+    }, [key, defaultValue, read]);
 
     return [value, set];
 }

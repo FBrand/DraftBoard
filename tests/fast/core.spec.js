@@ -61,6 +61,27 @@ test.describe('routing', () => {
         await expect(page.locator('.view-tab.active')).toHaveText(TABS.scouting);
     });
 
+    test('a scouting link carries the board and the player, and beats what was stored', async ({ page }) => {
+        await openWarm(page, 'scouting');
+        await page.waitForSelector('.sg-row', { timeout: 30_000 });
+
+        // Pick a player, and the URL says so — that is what makes a board
+        // shareable at all.
+        const name = await page.locator('.sg-row .sg-name').first().innerText();
+        await page.locator('.sg-row').first().click();
+        await expect(page).toHaveURL(/player=/);
+        const shared = page.url();
+
+        // Somebody else is looking at another stage. The link has to win:
+        // otherwise opening what you were sent lands you where YOU were.
+        await gotoTab(page, 'roster');
+        await page.goto(shared);
+        await page.waitForSelector('.sg-row', { timeout: 45_000 });
+
+        await expect(page.locator('.view-tab.active')).toHaveText(TABS.scouting);
+        await expect(page.locator('.sg-row.selected .sg-name')).toHaveText(name);
+    });
+
     test('an unknown view falls back rather than rendering nothing', async ({ page }) => {
         await page.addInitScript(() => {});
         await page.goto('/?view=not-a-real-view');
@@ -114,6 +135,20 @@ test.describe('the player card', () => {
 
         await page.keyboard.press('Escape');
         await expect(card).toBeHidden();
+
+        // Right-click reaches the same card. It is how you open one without
+        // picking the player up, which matters where a click means drag.
+        await page.locator('.rv-slot-name').first().click({ button: 'right' });
+        await expect(card).toBeVisible();
+        await page.keyboard.press('Escape');
+
+        // And from Free Agency, where the candidates are.
+        await gotoTab(page, 'fa');
+        await page.waitForSelector('.rv-slot-name', { timeout: 30_000 });
+        await page.locator('.rv-slot-name').first().click();
+        await expect(card).toBeVisible();
+        await expect(card.locator('.scouting-fact-grid')).toBeVisible();
+        await page.keyboard.press('Escape');
     });
 
     test('a remark can be written on a veteran, who is on nobody\'s draft board', async ({ page }) => {
@@ -202,6 +237,50 @@ test.describe('undo', () => {
         await page.waitForSelector('.roster-grid', { timeout: 45_000 });
         expect(await slotNames(page), 'undo did not write through').toEqual(before);
     });
+
+    test('each stage undoes its own work, not the stage you were on before', async ({ page }) => {
+        await openWarm(page, 'scouting');
+        await page.waitForSelector('.sg-row', { timeout: 30_000 });
+
+        const order = () => page.locator('.scouting-rank-row .rank-name, .scouting-rank-row').allInnerTexts();
+        const consensusBefore = await order();
+
+        // Move somebody on Consensus.
+        const rows = page.locator('.scouting-rank-row');
+        await dragTo(page, rows.nth(0), rows.nth(3));
+        await page.waitForTimeout(400);
+        expect(await order()).not.toEqual(consensusBefore);
+
+        // Switch analyst. His board is untouched, so there is nothing for HIM
+        // to undo — and the button says so. A shared history would offer to
+        // undo a move made on somebody else's board.
+        await page.getByRole('button', { name: 'Dan', exact: true }).click();
+        await page.waitForTimeout(600);
+        await expect(page.getByRole('button', { name: /Undo/i }).first()).toBeDisabled();
+
+        // And Consensus still holds the move, waiting for its own undo.
+        await page.getByRole('button', { name: 'Consensus', exact: true }).click();
+        await page.waitForTimeout(600);
+        expect(await order()).not.toEqual(consensusBefore);
+        await page.getByRole('button', { name: /Undo/i }).first().click();
+        await page.waitForTimeout(400);
+        expect(await order()).toEqual(consensusBefore);
+    });
+
+    test('free agency undoes an added candidate', async ({ page }) => {
+        await openWarm(page, 'fa');
+        await page.waitForSelector('.rv-slot-name', { timeout: 45_000 });
+        const before = await slotNames(page);
+
+        const slots = page.locator('.rv-slot-name');
+        await dragTo(page, slots.nth(0), slots.nth(2));
+        await page.waitForTimeout(300);
+        expect(await slotNames(page)).not.toEqual(before);
+
+        await page.getByRole('button', { name: /Undo/i }).first().click();
+        await page.waitForTimeout(300);
+        expect(await slotNames(page)).toEqual(before);
+    });
 });
 
 test.describe('adding players', () => {
@@ -218,9 +297,37 @@ test.describe('adding players', () => {
 
         // An import or a typed row PROPOSES; nothing is written until the
         // verification step is submitted, so the modal is still up.
-        // Still on the modal, at the verification step — an entry PROPOSES,
-        // and nothing reaches a board until it is submitted.
         await expect(modal).toBeVisible();
+    });
+
+    test('a name already on the board is blocked, and cancelling writes nothing', async ({ page }) => {
+        await openWarm(page, 'scouting');
+        await page.waitForSelector('.sg-row', { timeout: 30_000 });
+        const existing = await page.locator('.sg-row .sg-name').first().innerText();
+        const before = await page.locator('.sg-row').count();
+
+        await page.getByRole('button', { name: '+ Add Players' }).click();
+        const modal = page.locator('.add-prospects');
+        await modal.locator('input').nth(0).fill(existing);
+        await modal.locator('input').nth(1).fill('QB');
+
+        await page.getByRole('button', { name: /^Review/ }).click();
+
+        // He is already there. Adding him again would make two of him, so the
+        // verification step says so and the submit stays shut until it is
+        // resolved — rather than the board quietly growing a duplicate.
+        await expect(modal.locator('.ap-collision')).toBeVisible();
+        await expect(modal.getByRole('button', { name: / to board$/ })).toBeDisabled();
+
+        // Backing out leaves the board exactly as it was.
+        await page.keyboard.press('Escape');
+        await expect(modal).toBeHidden();
+        await expect(page.locator('.sg-row')).toHaveCount(before);
+
+        // And reopening starts a fresh batch rather than resuming the
+        // abandoned one.
+        await page.getByRole('button', { name: '+ Add Players' }).click();
+        await expect(modal.locator('input').nth(0)).toHaveValue('');
     });
 });
 
@@ -297,6 +404,41 @@ test.describe('the board CSV', () => {
 });
 
 test.describe('the draft board in normal view', () => {
+    test('scrolls down its own column without taking the side panels with it', async ({ page }) => {
+        await openWarm(page, 'draft');
+        await page.waitForSelector('.player-card', { timeout: 45_000 });
+
+        const before = await page.evaluate(() => {
+            const el = (s) => document.querySelector(s);
+            return {
+                board: el('.center-board-container')?.scrollTop ?? null,
+                left: el('.left-panel .scroll-container')?.scrollTop ?? null,
+                right: el('.right-panel .scroll-container')?.scrollTop ?? null,
+            };
+        });
+
+        // The board is taller than the window — 300-odd players — so it has to
+        // scroll. It used to be clipped instead, with the bottom rounds simply
+        // unreachable.
+        const after = await page.evaluate(() => {
+            const board = document.querySelector('.center-board-container');
+            board.scrollTop = 400;
+            const el = (s) => document.querySelector(s);
+            return {
+                board: board.scrollTop,
+                left: el('.left-panel .scroll-container')?.scrollTop ?? null,
+                right: el('.right-panel .scroll-container')?.scrollTop ?? null,
+            };
+        });
+
+        expect(after.board, 'the board does not scroll vertically').toBeGreaterThan(0);
+        // Each panel scrolls on its own. They shared a scroll once, so reading
+        // down the board dragged the picks list along with it.
+        expect(after.left).toBe(before.left);
+        expect(after.right).toBe(before.right);
+    });
+
+
     test('keeps drafted players in place and collapses only emptied tiers', async ({ page }) => {
         await openWarm(page, 'draft');
         await page.waitForSelector('.player-card', { timeout: 45_000 });

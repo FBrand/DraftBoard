@@ -9,12 +9,11 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "playwright test",
-    "test:docker": "docker run --rm --network host -v \"$PWD\":/work -w /work -e CI=1 mcr.microsoft.com/playwright:v1.55.0-noble npx playwright test",
+    "test": "npm run test:unit && npm run test:browser",
     "test:unit": "vitest run",
     "test:unit:watch": "vitest",
-    "test:fast": "playwright test --config playwright.fast.config.js",
-    "test:fast:docker": "docker run --rm --network host -v \"$PWD\":/work -w /work -e NO_WEBSERVER=1 mcr.microsoft.com/playwright:v1.55.0-noble npx playwright test --config playwright.fast.config.js"
+    "test:browser": "playwright test --config playwright.fast.config.js",
+    "test:browser:docker": "docker run --rm --network host -v \"$PWD\":/work -w /work -e NO_WEBSERVER=1 mcr.microsoft.com/playwright:v1.55.0-noble npx playwright test --config playwright.fast.config.js"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

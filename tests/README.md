@@ -1,88 +1,69 @@
 # Tests
 
-End-to-end Playwright tests that drive the real app against a production
-build. There are no unit tests: the bugs this suite exists to catch are
-rendering and interaction bugs — drag-and-drop, overflow clipping, stacking
-contexts, a modal opening off-screen — which a unit test cannot see and which
-a green `npm run build` does not rule out.
+Two suites, split by what the test actually needs.
 
-## Running
+**`tests/unit/` — Vitest, ~24 seconds.** Everything that is a function of
+values: ranking, identity and name matching, CSV in both directions, draft
+phases, the session bundle, board and author records, evaluations, the roster
+sync. No DOM. `setup.js` supplies a twenty-line `localStorage` — not jsdom,
+because nothing here touches a document.
 
-```bash
-npm run test          # needs browsers installed locally
-npm run test:docker   # runs in the official Playwright image (recommended here)
-```
-
-The npm `playwright` package is installed with `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1`
-because this host is memory-constrained — the browsers come from the Docker
-image instead, which is why `test:docker` is the normal way to run.
-
-`playwright.config.js` builds and serves the production bundle if a preview
-server isn't already running, and reuses yours if it is. Set `NO_WEBSERVER=1`
-to skip that and point at a server you started yourself.
-
-Useful flags:
+**`tests/fast/` — Playwright, ~4 minutes.** What only a browser can prove:
+drag-and-drop, clipping and stacking, a modal opening off-screen, a link
+restoring what it says, a layout collapsing at the wrong width.
 
 ```bash
-npm run test:docker -- --project=mobile        # phone-width specs only
-npm run test:docker -- scouting.spec.js        # one file
-npm run test:docker -- --trace on              # traces are off by default (see below)
-npm run test:docker -- --workers=1             # serialise, e.g. to debug a flake
+npm test                     # both, in order
+npm run test:unit
+npm run test:browser:docker  # the normal way to run the browser suite here
 ```
 
-The full suite takes roughly 9 minutes on an unloaded machine, and individual
-tests 20–60s — almost all of it a full app boot per test.
+The npm `playwright` package is installed with
+`PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1` because this host is memory-constrained;
+the browsers come from the Docker image.
 
-**It is very sensitive to how busy the host is.** This box has under 2 GB of
-RAM, and with other work on it the browsers start swapping: a test doing
-nothing but a page load has been measured at 2 minutes, at which point the
-120s per-test timeout fires and *everything* fails on
-`waitForSelector('.view-tabbar')`. That failure looks alarming and identical
-across all 82 tests, and it says nothing about the code. Before believing it,
-check `free -m` and time a trivial spec; if the machine is loaded, run with
-`--workers=1 --timeout=600000` instead.
+## Why it is shaped this way
 
-## Layout
+There used to be one suite: 87 browser tests, `tests/*.spec.js`, around 40
+minutes. Most of them were driving a browser to check something that was never
+about the browser — that a CSV round-trips, that a rank is derived correctly,
+that an import rejects a bad file. Each paid a ~20 second app boot to do it.
 
-| Spec | Covers |
-| --- | --- |
-| `smoke.spec.js` | every tab renders without console errors; board scrolling; panel auto-scroll isolation |
-| `init-modes.spec.js` | seeded vs clean start, and what a clean slate keeps |
-| `roster-slots.spec.js` | depth-chart slots with holes — the cut/move regressions |
-| `undo.spec.js` | undo in Roster, Free Agency and Scouting |
-| `info-card.spec.js` | player info card: read-only outside Scouting, reachable from Draft/FA/Roster |
-| `scouting.spec.js` | per-board evaluations, drag reordering, board CSV export |
-| `scouting-params.spec.js` | derived ranks, tiers, per-board player pools, tag markers |
-| `add-prospects.spec.js` | adding players missing from the rankings: entry, verification, collisions |
-| `identity.spec.js` | the player registry: stable ids, renames, aliases, rebuild after a wipe |
-| `settings.spec.js` | positional value and the Athletic Matrix link, shared by every board |
-| `linking.spec.js` | view/board/player in the URL, back and forward |
-| `session.spec.js` | whole-app session export/import round-trip and its failure modes |
-| `ui.spec.js` | app-wide conventions: no native dialogs, Escape closes overlays, menus |
-| `layout.mobile.spec.js` | phone-width layouts (runs only in the `mobile` project) |
+Those moved to Vitest, where they run in milliseconds, and the browser suite
+kept the cases that earn their cost. The old suite was deleted only once the
+new ones covered the same ground; see the commit that removed it for the
+case-by-case mapping.
 
-## Conventions worth knowing
+Two things keep the browser suite fast:
 
-- **Tests run in parallel and must stay independent.** Each test gets its own
-  browser context, so `localStorage` is per-test — specs that wipe or restore
-  all app state can't affect each other. Don't introduce shared state that
-  breaks that.
+- **`globalSetup.js` boots the app once** and snapshots the state it settles
+  on. A cold start fetches three rankings files, a 91-slot roster, the facts
+  seed and the draft, and resolves ~700 players into the registry. That
+  bootstrap is identical every time and is itself covered by unit tests, so
+  paying for it 87 times bought nothing. Tests that need a cold or wiped app
+  clear storage themselves — `openCold` in `helpers.js`.
+- **Tests are dense.** Several old cases become one test, because the boot
+  dominates the cost and assertions are nearly free. A test named for three
+  things is deliberate.
 
-- **Use `dragTo()` from `helpers.js` for drag-and-drop.** Rolling your own
-  mouse sequence tends to produce flaky, slow failures for two non-obvious
-  reasons, both handled there: dnd-kit only activates a drag after 8px of
-  movement, and its auto-scroll moves the target out from under coordinates
-  measured before the drag started. It also guarantees the pointer is
-  released — a drag left in flight makes every later step time out waiting for
-  something to become "stable".
+## The budget
 
-- **Use `ensureRoster()` to get a populated roster.** It snapshots the first
-  load and seeds `localStorage` directly afterwards, which is much faster than
-  loading it per test.
+**Ten minutes, all in, is the hard limit.** A suite slower than that stops
+being run, and a suite that is not run is not a suite. Targets: under 5
+minutes for Playwright, under 1 minute for the unit tests.
 
-- **Traces are off by default.** Writing trace archives into the bind-mounted
-  repo is slow and unreliable; turn them on per-run when debugging.
+If the browser suite creeps up, the first question is whether the new test
+needed a browser at all — not whether to raise the limit.
 
-- **Native dialogs count as failures.** `trackErrors()` treats any
-  `window.alert`/`confirm`/`prompt` as an error — this is a broadcast tool and
-  the app deliberately uses its own dialogs.
+## Writing a browser test
+
+- `openWarm(page, tab)` — the app with the snapshot already in storage.
+  The guard inside it is load-bearing: `addInitScript` runs before *every*
+  navigation, so without it a `page.reload()` re-injected the snapshot and
+  silently undid whatever the test had just done.
+- `openCold(page, tab)` — nothing in storage, the bootstrap path.
+- `dragTo`, `slotNames`, `trackErrors` — see `helpers.js`.
+
+Assert what a person would notice, and say why in a comment when the reason
+is not obvious from the name. Several tests here exist because of a specific
+bug; the comment naming it is the reason the test is still the right shape.

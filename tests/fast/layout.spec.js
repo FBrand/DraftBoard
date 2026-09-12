@@ -30,6 +30,9 @@ const readLayout = (page) => page.evaluate(() => {
     };
 });
 
+// Widths worth checking, and what should be on screen at each. The two
+// thresholds are here with the pixel either side of them, because a
+// breakpoint is exactly where a layout is wrong.
 const CASES = [
     { w: 1600, ranking: true, side: true },
     { w: 1264, ranking: true, side: true },   // the last width the side panel fits
@@ -38,22 +41,29 @@ const CASES = [
     { w: 691, ranking: false, side: false },  // and the ranking goes last
 ];
 
-for (const c of CASES) {
-    test(`scouting at ${c.w}px keeps a readable column`, async ({ page }) => {
+// One boot, resized between measurements. Five separate tests meant five app
+// starts at ~20s each to check five numbers, which is most of a minute of the
+// budget spent on the same bootstrap.
+test('scouting keeps a readable column at every width', async ({ page }) => {
+    await page.setViewportSize({ width: CASES[0].w, height: 900 });
+    await openWarm(page, 'scouting');
+    await page.waitForSelector('.sg-row', { timeout: 30_000 });
+
+    for (const c of CASES) {
         await page.setViewportSize({ width: c.w, height: 900 });
-        await openWarm(page, 'scouting');
-        await page.waitForSelector('.sg-row', { timeout: 30_000 });
+        // The layout follows matchMedia, so React needs a tick to hear it.
+        await page.waitForTimeout(250);
 
         const l = await readLayout(page);
         expect(l.ranking, `ranking at ${c.w}`).toBe(c.ranking);
         expect(l.side, `side panel at ${c.w}`).toBe(c.side);
 
-        // Never narrower than one worst-case row (unless the window itself is),
-        // never wider than two.
+        // Never narrower than one worst-case row (unless the window itself
+        // is), never wider than two.
         expect(l.rowW, `row at ${c.w}`).toBeGreaterThanOrEqual(Math.min(ROW, l.listW - PAD) - 2);
         expect(l.rowW, `row at ${c.w}`).toBeLessThanOrEqual(2 * ROW + 2);
-    });
-}
+    }
+});
 
 test('on a phone every stage is reachable and the card opens as a modal', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
