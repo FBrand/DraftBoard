@@ -260,8 +260,9 @@ player looks like. The file behind it is `evaluations_kc_2026.csv`, which is
 also a plain example of the import format.
 
 **Export Board CSV** writes the same columns back out, so a board round-trips.
-It is also a seed file: drop it into `public/` or load it with `?rankings=` and
-the app reads it. There is only one board format — the old three-column
+It is also a seed file: drop it into `public/` and the app reads it. (There
+used to be a `?rankings=` link that loaded a CSV straight off a URL; it is
+gone. Boards have names now, and `?board=ryan` opens one.) There is only one board format — the old three-column
 `group,name,position` files still load, because their columns are a subset of
 this one.
 
