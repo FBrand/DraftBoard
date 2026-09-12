@@ -104,6 +104,34 @@ function slotFromImport(raw, zone, position = '') {
     return makeSlot(name, zone, arrival);
 }
 
+/**
+ * Removes a position row, and keeps whoever was standing in it.
+ *
+ * Deleting a row used to drop it from positionConfig alone, which orphaned its
+ * occupants: not rendered anywhere, not removed from state either, just gone
+ * from the screen. They go to Cuts instead — the same never-truly-lose-a-player
+ * net that IR and Cuts already are.
+ *
+ * The SLOTS move, not their names. A slot carries how the player arrived, and
+ * rebuilding him from a name downstream turns a free agent back into a plain
+ * veteran.
+ */
+export function deletePositionRow(state, phase, posId) {
+    const occupants = (state.depthChart[posId] ?? []).filter(Boolean);
+    const depthChart = { ...state.depthChart };
+    delete depthChart[posId];
+
+    return {
+        ...state,
+        depthChart,
+        cuts: [...(state.cuts ?? []), ...occupants],
+        positionConfig: {
+            ...state.positionConfig,
+            [phase]: (state.positionConfig[phase] ?? []).filter(x => x.id !== posId),
+        },
+    };
+}
+
 export function defaultState() {
     const depthChart = {};
     SPECIALIST_IDS.forEach(id => { depthChart[id] = []; });
@@ -248,7 +276,16 @@ export function parseCSV(csvText) {
 
         rawSlots.forEach(s => {
             const v = s.trim();
-            if (!v) return;
+            if (!v) {
+                // An empty cell inside the 53-man band is a HOLE, not padding:
+                // slot 2 free while slot 3 is taken is an ordinary depth chart,
+                // and the exporter writes it as an empty cell on purpose.
+                // Skipping it without advancing closed the gap on the way back
+                // in, promoting everybody behind it — so exporting a roster and
+                // importing it returned a different depth chart.
+                if (rIndex < limit53) rIndex += 1;
+                return;
+            }
 
             let zone = '53';
             if (v.toUpperCase().startsWith('PS:')) zone = 'ps';

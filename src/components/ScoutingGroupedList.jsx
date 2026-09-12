@@ -68,10 +68,7 @@ export default function ScoutingGroupedList({
     ));
 
     return (
-        // unmatchedInline means this is the whole view — one column on screen,
-        // so one column of names inside it. The multi-column flow is for the
-        // desktop layout, where the list has real width to spend.
-        <div className={`sg-list scroll-container${unmatchedInline ? ' sg-list--stacked' : ''}`}>
+        <div className="sg-list scroll-container">
             {groups.map(group => {
                 const isCollapsed = collapsed.has(group.key);
                 return (

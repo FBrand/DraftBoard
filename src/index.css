@@ -2566,26 +2566,10 @@ body.export-mode .card-glow {
     flex-shrink: 0;
   }
 
-  /* Scouting's three columns (ranked list | board | info card) stack, since
-     side by side on a phone pushes the board entirely off-screen. */
-  .scouting-layout {
-    flex-direction: column;
-    overflow-y: auto;
-  }
-
-  .scouting-layout .left-panel,
-  .scouting-layout .right-panel {
-    width: 100%;
-    flex-shrink: 0;
-    border-left: none;
-    border-right: none;
-    border-bottom: 1px solid var(--border-color);
-  }
-
-  .scouting-layout .left-panel {
-    max-height: 45vh;
-  }
-
+  /* Scouting is NOT stacked at a breakpoint. useScoutingLayout drops the
+     side panel, then the ranking, each at the width it actually needs; what
+     survives stays side by side, because a ranking above a list is a ranking
+     you have to scroll past to reach the list. */
   .scouting-layout .center-board-container {
     flex-shrink: 0;
     min-height: 60vh;
@@ -3598,7 +3582,10 @@ body.export-mode .card-glow {
 /* Down, then across: the column count follows the width, and the browser
    balances the group across them. */
 .sg-group-body {
-  columns: 300px;
+  /* The lower limit, measured from the widest row the list can produce:
+     "??? Emmanuel McNeil-Warren   no position, school, rank" is 377px wide.
+     Below that the longest names lose their meta or wrap. */
+  columns: 380px;
   column-gap: 26px;
   column-rule: 1px solid rgba(255, 255, 255, 0.06);
   padding: 4px 8px 0;
@@ -3609,6 +3596,13 @@ body.export-mode .card-glow {
   align-items: baseline;
   gap: 10px;
   width: 100%;
+  /* The upper limit: twice the lower one. `columns` only sets a MINIMUM, so a
+     list with room for one column and not quite two stretched that column to
+     600px and flung each player's position and round to the far side of it.
+     Multicol splits at 2x + gap, so the cap is what holds the last few pixels
+     before the split to 2x exactly. Only bites in the single-wide-column
+     case — anywhere the list splits, the column is already narrower. */
+  max-width: 760px;
   /* A row must not be split across a column boundary. */
   break-inside: avoid;
   padding: 7px 8px;
@@ -3694,17 +3688,9 @@ body.export-mode .card-glow {
 
 .sg-list .scouting-empty { padding: 20px 16px; }
 
-/* One column, because the list IS the view. Driven by the prop rather than by
-   a width, which is what went wrong before: the stylesheet dropped to one
-   column at 820px while the layout switched to mobile at 1024px, so every
-   width in between stacked the view into a single column and then flowed two
-   or three columns of names inside it. */
-.sg-list--stacked .sg-group-body { columns: auto; column-rule: 0; }
-.sg-list--stacked .sg-unmatched .sg-group-label { color: var(--chiefs-red); }
-
-@media (max-width: 820px) {
-  .sg-unmatched-panel { display: none; }
-}
+/* The unmatched players, when they are folded into the list rather than
+   standing in their own column. */
+.sg-unmatched .sg-group-label { color: var(--chiefs-red); }
 
 /* The UDFA board shows who is LEFT, so a signing disappears from it. The
    panel is where they go — otherwise the one tab about signings never shows

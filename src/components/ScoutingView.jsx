@@ -8,7 +8,7 @@ import { parseRankings } from '../utils/dataParser';
 import CreateBoardModal from './CreateBoardModal';
 import * as scoutingState from '../utils/scoutingState';
 import { buildNameIndex, findMatchingIndex } from '../utils/nameMatcher';
-import useIsMobile from '../hooks/useIsMobile';
+import useScoutingLayout from '../hooks/useScoutingLayout';
 import Menu from './Menu';
 import { exportBoardCSV } from '../utils/boardCsv';
 import { rankBoard, moveToRank, between } from '../utils/boardRanking';
@@ -87,7 +87,7 @@ export default function ScoutingView({ players }) {
     // On mobile the three columns stack, so the info card would sit far below
     // the board — tapping a player looked like it did nothing. Present it as
     // a modal there instead. Still fully editable: this is Scouting.
-    const isMobile = useIsMobile();
+    const { showRanking, showSidePanel } = useScoutingLayout();
     // How the middle column is grouped. A view preference, not board data —
     // it changes how the same players are read, never where they sit.
     const [groupBy, setGroupBy] = useState('position');
@@ -603,7 +603,7 @@ export default function ScoutingView({ players }) {
             </div>
 
             <div className="scouting-layout">
-                {!isMobile && (
+                {showRanking && (
                 <ScoutingLeftPanel
                     orderedPlayers={orderedPlayers}
                     selectedName={selectedName}
@@ -624,10 +624,10 @@ export default function ScoutingView({ players }) {
                     tagFor={(name, qualifier) => entryFor(name, qualifier)?.tag ?? null}
                     // On a phone this is the only column, so the players the
                     // grouping cannot place go at the bottom of it.
-                    unmatchedInline={isMobile}
+                    unmatchedInline={!showSidePanel}
                 />
 
-                {!isMobile && (
+                {showSidePanel && (
                     <UnmatchedList
                         players={visiblePlayers}
                         groupBy={groupBy}
@@ -643,7 +643,7 @@ export default function ScoutingView({ players }) {
                     unmatched column, so rendering its "select a player"
                     placeholder would hide that column permanently — which is
                     the column you are looking at when nobody is selected. */}
-                {!isMobile && selectedPlayer && (
+                {showSidePanel && selectedPlayer && (
                     <ScoutingControls
                         key={`${selectedName || 'none'}-${activeBoard}`}
                         player={selectedPlayer}
@@ -709,7 +709,7 @@ export default function ScoutingView({ players }) {
                 />
             )}
 
-            {isMobile && selectedPlayer && (
+            {!showSidePanel && selectedPlayer && (
                 <ScoutingControls
                     key={`${selectedName}-${activeBoard}-modal`}
                     variant="modal"

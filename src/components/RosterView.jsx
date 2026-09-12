@@ -3,7 +3,7 @@ import useIsMobile from '../hooks/useIsMobile';
 import { CSV_TEMPLATE } from '../utils/rosterState';
 import {
     loadState, saveState, defaultState,
-    parseCSV, exportCSV, makeSlot, resolvePosition,
+    parseCSV, exportCSV, makeSlot, resolvePosition, deletePositionRow,
     SPECIALIST_IDS, hasRosterSourceAdapter, fetchAdapterRoster, fetchLocalRoster, fetchSeasonStartStructure, parseHTMLToRoster
 } from '../utils/rosterState';
 import * as faState from '../utils/faState';
@@ -13,7 +13,7 @@ import { TextPromptDialog, ConfirmDialog } from './Dialogs';
 import Toast from './Toast';
 import Menu from './Menu';
 import { shouldSeed } from '../utils/appInit';
-import { isDraftPick, isUndraftedSigning } from '../utils/draftPhase';
+import { syncFromStages, describeSync } from '../utils/rosterSync';
 import { resolve as resolvePlayer, setFacts } from '../utils/playerRegistry';
 import useUndoableState from '../hooks/useUndoableState';
 
@@ -256,26 +256,8 @@ export default function RosterView({ masterPlayers, draftedPlayers, onInfoOpen }
         });
     };
 
-    // Deleting a row used to only drop it from positionConfig — anyone still
-    // in its depthChart slots became orphaned (not rendered anywhere, but
-    // not actually removed from state either — just silently gone from the
-    // UI). Move any occupants to Cuts instead, matching how IR/Cuts already
-    // work as a never-truly-lose-a-player safety net rather than a hard delete.
     const handleDeletePosition = (phase, posId) => {
-        setState(prev => {
-            const occupants = (prev.depthChart[posId] ?? []).filter(Boolean).map(s => s.name);
-            const nextDepthChart = { ...prev.depthChart };
-            delete nextDepthChart[posId];
-            return {
-                ...prev,
-                depthChart: nextDepthChart,
-                cuts: [...prev.cuts, ...occupants],
-                positionConfig: {
-                    ...prev.positionConfig,
-                    [phase]: prev.positionConfig[phase].filter(x => x.id !== posId),
-                },
-            };
-        });
+        setState(prev => deletePositionRow(prev, phase, posId));
     };
 
     const performRowMove = useCallback((srcIdx, srcPhase, dstIdx, dstPhase) => {
@@ -345,71 +327,9 @@ export default function RosterView({ masterPlayers, draftedPlayers, onInfoOpen }
     // losing hand-edits made in Roster between runs. Never writes to FA's
     // own state (read-only via faState.loadState()).
     const handleSyncFromStages = () => {
-        const fa = faState.loadState();
-        const ourPicks = (draftedPlayers || []).filter(p => p.draftedByUs && isDraftPick(p));
-        const udfaSignings = (draftedPlayers || []).filter(isUndraftedSigning);
-
-        // Computed from `state` directly and applied as a plain value, NOT
-        // inside a setState updater: the updater is deferred to the render
-        // phase (and may run more than once), so counters mutated in there
-        // can't be read back here to build the summary — an earlier version
-        // did exactly that and reported stale/doubled numbers.
-        let placed = 0, noRow = 0, rowFull = 0, alreadyPresent = 0;
-
-        const next = { ...state, depthChart: { ...state.depthChart } };
-        const dc = next.depthChart;
-        const allChips = [...state.positionConfig.offense, ...state.positionConfig.defense];
-
-        const isAlreadyOnRoster = (name) =>
-            Object.values(dc).some(slots => (slots ?? []).some(s => s?.name === name)) ||
-            (next.reserve ?? []).includes(name) ||
-            (next.cuts ?? []).includes(name);
-
-        const placeInFirstEmpty53 = (name, declaredPos) => {
-            if (!name || !declaredPos) return;
-            if (isAlreadyOnRoster(name)) { alreadyPresent++; return; }
-            const rowId = resolvePosition(declaredPos, state.positionConfig, dc);
-            if (!rowId) { noRow++; return; } // no matching row — leave for manual placement, don't guess a new one
-            const chip = allChips.find(p => p.id === rowId);
-            const limit53 = chip?.slots53 ?? 2;
-            const arr = dc[rowId] = [...(dc[rowId] ?? [])];
-            for (let i = 0; i < limit53; i++) {
-                if (!arr[i]) { arr[i] = makeSlot(name, '53'); placed++; return; }
-            }
-            // Row's 53-man slots are all full — don't overflow into PS/reserve
-            // implicitly, don't overwrite; this player is simply skipped this run.
-            rowFull++;
-        };
-
-        if (fa?.depthChart) {
-            const faChips = [...(fa.positionConfig?.offense ?? []), ...(fa.positionConfig?.defense ?? [])];
-            Object.entries(fa.depthChart).forEach(([faRowId, slots]) => {
-                const label = faChips.find(p => p.id === faRowId)?.label ?? faRowId;
-                (slots || []).forEach(s => { if (s) placeInFirstEmpty53(s.name, label); });
-            });
-        }
-        ourPicks.forEach(p => placeInFirstEmpty53(p.name, p.position));
-        udfaSignings.forEach(p => placeInFirstEmpty53(p.name, p.position));
-
-        if (placed > 0) setState(next);
-
-        const skips = [
-            noRow && `${noRow} had no matching position row`,
-            rowFull && `${rowFull} had no free 53-man slot`,
-            alreadyPresent && `${alreadyPresent} already on the roster`,
-        ].filter(Boolean);
-
-        setToast(placed > 0
-            ? {
-                message: `Placed ${placed} player${placed === 1 ? '' : 's'}` + (skips.length ? ` — skipped: ${skips.join(', ')}.` : '.'),
-                tone: 'success',
-            }
-            : {
-                message: skips.length
-                    ? `Nothing placed — ${skips.join(', ')}.`
-                    : 'Nothing to sync — no FA candidates, draft picks, or UDFA signings found.',
-                tone: 'info',
-            });
+        const result = syncFromStages({ state, fa: faState.loadState(), draftedPlayers });
+        if (result.changed) setState(result.next);
+        setToast(describeSync(result));
     };
 
     const handlePasteHtml = () => {
