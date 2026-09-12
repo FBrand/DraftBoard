@@ -3694,10 +3694,16 @@ body.export-mode .card-glow {
 
 .sg-list .scouting-empty { padding: 20px 16px; }
 
+/* One column, because the list IS the view. Driven by the prop rather than by
+   a width, which is what went wrong before: the stylesheet dropped to one
+   column at 820px while the layout switched to mobile at 1024px, so every
+   width in between stacked the view into a single column and then flowed two
+   or three columns of names inside it. */
+.sg-list--stacked .sg-group-body { columns: auto; column-rule: 0; }
+.sg-list--stacked .sg-unmatched .sg-group-label { color: var(--chiefs-red); }
+
 @media (max-width: 820px) {
   .sg-unmatched-panel { display: none; }
-  .sg-group-body { columns: auto; column-rule: 0; }
-  .sg-unmatched .sg-group-label { color: var(--chiefs-red); }
 }
 
 /* The UDFA board shows who is LEFT, so a signing disappears from it. The
