@@ -73,20 +73,47 @@ describe('deleting a position row', () => {
 });
 
 describe('a hole in a depth chart', () => {
-    it('survives a file round trip in the slot it was left in', () => {
-        // Writing the row as a dense list would promote Xavier Worthy from
-        // third to second, which is a different depth chart.
-        const back = parseCSV(exportCSV(state()));
-        const wrz = back.depthChart[Object.keys(back.depthChart).find(k => k.includes('WR.Z'))];
-
-        expect(wrz[0].name).toBe('Rashee Rice');
-        expect(wrz[1]).toBeFalsy();
-        expect(wrz[2].name).toBe('Xavier Worthy');
+    // Cut a player out of the middle of a row and the cell stays behind — it
+    // is where you drop the next one, so the live state is sparse on purpose.
+    // The FILE is not. Each section is written contiguously, because a blank
+    // cell that could mean either "a gap here" or "nothing more in this row"
+    // is a blank cell the reader cannot interpret.
+    it('is not written to the file', () => {
+        const csv = exportCSV(state());
+        const wrz = csv.split('\n').find(r => r.startsWith('O,WR.Z'));
+        expect(wrz).toBe('O,WR.Z,3,Rashee Rice,Xavier Worthy:FA');
     });
 
-    it('keeps the arrival of the player standing behind it', () => {
+    it('closes up on the way out, keeping the order and the arrivals', () => {
         const back = parseCSV(exportCSV(state()));
         const wrz = back.depthChart[Object.keys(back.depthChart).find(k => k.includes('WR.Z'))];
-        expect(wrz[2].arrival).toBe('FA');
+
+        expect(wrz.filter(Boolean).map(s => s.name)).toEqual(['Rashee Rice', 'Xavier Worthy']);
+        expect(wrz.find(s => s?.name === 'Xavier Worthy').arrival).toBe('FA');
+    });
+
+    it('keeps each section to itself — a 53 man is not promoted into the reserves', () => {
+        const withBands = {
+            ...state(),
+            depthChart: {
+                ...state().depthChart,
+                wrz: [
+                    makeSlot('Rashee Rice'),
+                    null,
+                    makeSlot('Xavier Worthy', '53', 'FA'),
+                    makeSlot('A Squad Player', 'ps'),
+                    null,
+                    makeSlot('A Reserve', 'r'),
+                ],
+            },
+        };
+        const back = parseCSV(exportCSV(withBands));
+        const wrz = back.depthChart[Object.keys(back.depthChart).find(k => k.includes('WR.Z'))];
+        const zoneOf = (name) => wrz.find(s => s?.name === name)?.zone;
+
+        expect(zoneOf('Rashee Rice')).toBe('53');
+        expect(zoneOf('Xavier Worthy')).toBe('53');
+        expect(zoneOf('A Squad Player')).toBe('ps');
+        expect(zoneOf('A Reserve')).toBe('r');
     });
 });

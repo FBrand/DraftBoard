@@ -276,16 +276,7 @@ export function parseCSV(csvText) {
 
         rawSlots.forEach(s => {
             const v = s.trim();
-            if (!v) {
-                // An empty cell inside the 53-man band is a HOLE, not padding:
-                // slot 2 free while slot 3 is taken is an ordinary depth chart,
-                // and the exporter writes it as an empty cell on purpose.
-                // Skipping it without advancing closed the gap on the way back
-                // in, promoting everybody behind it — so exporting a roster and
-                // importing it returned a different depth chart.
-                if (rIndex < limit53) rIndex += 1;
-                return;
-            }
+            if (!v) return;
 
             let zone = '53';
             if (v.toUpperCase().startsWith('PS:')) zone = 'ps';
@@ -341,9 +332,16 @@ export function exportCSV(state) {
 
     const addRows = (phase, positions) => {
         positions.forEach(p => {
-            const slots = state.depthChart[p.id] ?? [];
+            // Holes are a live-state thing: cut a player from the middle of a
+            // row and the empty cell stays, because it is somewhere you can
+            // drop the next one. They are not a thing the FILE carries. Each
+            // section — the 53-man band, the practice squad, the reserves —
+            // is written contiguously, and the prefixes are what put each
+            // player back in his own band on the way in. Writing the gaps out
+            // as empty cells meant a blank could mean either "a hole here" or
+            // "nothing more in this row", and the reader could not tell.
+            const slots = (state.depthChart[p.id] ?? []).filter(Boolean);
             const cells = slots.map(s => {
-                if (!s) return '';
                 if (s.zone === 'ps') return `PS:${exportName(s)}`;
                 if (s.zone === 'ir') return `IR:${exportName(s)}`;
                 if (s.zone === 'r') return `R:${exportName(s)}`;
