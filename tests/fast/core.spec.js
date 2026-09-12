@@ -217,6 +217,30 @@ test.describe('drag and drop', () => {
         await page.waitForSelector('.roster-grid', { timeout: 45_000 });
         expect(await slotNames(page)).toEqual(after);
     });
+
+    test('roster: a player comes back off injured reserve', async ({ page }) => {
+        await openWarm(page, 'roster');
+        await page.waitForSelector('.roster-grid', { timeout: 45_000 });
+
+        const entry = page.locator('.roster-ir-entry').first();
+        await expect(entry).toBeVisible();
+        const name = await entry.locator('.rv-slot-name').innerText();
+        const irBefore = await page.locator('.roster-ir-entry').count();
+
+        // Dragging him out has always worked. This is the same move without
+        // having to land in exactly the right cell — which is the only way a
+        // roster ever stopped accumulating injuries.
+        await entry.getByRole('button', { name: /Activate/ }).click();
+        await page.waitForTimeout(500);
+
+        await expect(page.locator('.roster-ir-entry')).toHaveCount(irBefore - 1);
+        expect(await slotNames(page), 'he did not land on the depth chart').toContain(name);
+
+        // And it is an ordinary edit, so it undoes like one.
+        await page.getByRole('button', { name: /Undo/i }).first().click();
+        await page.waitForTimeout(400);
+        await expect(page.locator('.roster-ir-entry')).toHaveCount(irBefore);
+    });
 });
 
 test.describe('undo', () => {

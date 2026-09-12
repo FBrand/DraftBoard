@@ -333,7 +333,7 @@ function RosterSidebar({ cuts, onSign, signLabel, masterPlayers, draftedPlayers,
     );
 }
 
-function IRDropZone({ reserve, masterPlayers, draftedPlayers, onInfoOpen }) {
+function IRDropZone({ reserve, masterPlayers, draftedPlayers, onInfoOpen, onActivate }) {
     const { setNodeRef, isOver } = useDroppable({
         id: 'drop-ir-zone',
         data: { kind: 'item', posId: '__ir__', slotIdx: reserve.length, targetZone: 'ir' },
@@ -342,14 +342,32 @@ function IRDropZone({ reserve, masterPlayers, draftedPlayers, onInfoOpen }) {
         <div ref={setNodeRef} className={`roster-ir ${isOver ? 'drag-over' : ''}`}>
             <div className="roster-ir-label">INJURY RESERVE — {reserve.length}</div>
             <div className="roster-ir-list">
-                {reserve.map((entry, i) => (
-                    <SlotCell
-                        key={i}
-                        // Slots now, names in older saves — see the cut panel.
-                        slot={typeof entry === 'string' ? { name: entry, zone: 'ir' } : { ...entry, zone: 'ir' }}
-                        zone="ir" posId="__ir__" slotIdx={i} targetZone="ir"
-                        masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} onInfoOpen={onInfoOpen} />
-                ))}
+                {reserve.map((entry, i) => {
+                    // Slots now, names in older saves — see the cut panel.
+                    const slot = typeof entry === 'string' ? { name: entry, zone: 'ir' } : { ...entry, zone: 'ir' };
+                    return (
+                        <div key={i} className="roster-ir-entry">
+                            <SlotCell
+                                slot={slot}
+                                zone="ir" posId="__ir__" slotIdx={i} targetZone="ir"
+                                masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} onInfoOpen={onInfoOpen} />
+                            {onActivate && (
+                                // Dragging him out has always worked; this is
+                                // for when it should not need aim. A player
+                                // came back from injury by being dropped in
+                                // exactly the right cell or not at all.
+                                <button
+                                    type="button"
+                                    className="roster-ir-activate"
+                                    title={`${slot.name} is healthy — put him back on the depth chart`}
+                                    aria-label={`Activate ${slot.name}`}
+                                    onPointerDown={e => e.stopPropagation()}
+                                    onClick={e => { e.stopPropagation(); onActivate(i, slot); }}
+                                >Activate</button>
+                            )}
+                        </div>
+                    );
+                })}
             </div>
         </div>
     );
@@ -383,7 +401,7 @@ function DepthHeader({ showPracticeSquad = true }) {
 export default function DepthChartGrid({
     positionConfig, depthChart, reserve, cuts,
     masterPlayers, draftedPlayers,
-    onMove, onRowMove, onDeletePosition, onSlotsChange, onAddPosition,
+    onMove, onRowMove, onDeletePosition, onSlotsChange, onAddPosition, onActivateReserve,
     onSignClick, signButtonLabel = '+ SIGN PLAYER',
     zoomLevel = 1, showNeeds = true, onInfoOpen, showPracticeSquad = true,
 }) {
@@ -468,7 +486,7 @@ export default function DepthChartGrid({
                     </div>
 
                     {/* IR — bottom */}
-                    <IRDropZone reserve={reserve} masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} onInfoOpen={onInfoOpen} showPracticeSquad={showPracticeSquad} />
+                    <IRDropZone reserve={reserve} masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} onInfoOpen={onInfoOpen} onActivate={onActivateReserve} showPracticeSquad={showPracticeSquad} />
                 </div>
 
                 <RosterSidebar cuts={cuts} onSign={onSignClick} signLabel={signButtonLabel} masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} onInfoOpen={onInfoOpen} showPracticeSquad={showPracticeSquad} />

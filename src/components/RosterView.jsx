@@ -3,7 +3,7 @@ import useIsMobile from '../hooks/useIsMobile';
 import { CSV_TEMPLATE } from '../utils/rosterState';
 import {
     loadState, saveState, defaultState,
-    parseCSV, exportCSV, makeSlot, resolvePosition, deletePositionRow,
+    parseCSV, exportCSV, makeSlot, resolvePosition, deletePositionRow, activateFromReserve,
     SPECIALIST_IDS, hasRosterSourceAdapter, fetchAdapterRoster, fetchLocalRoster, fetchSeasonStartStructure, parseHTMLToRoster
 } from '../utils/rosterState';
 import * as faState from '../utils/faState';
@@ -14,7 +14,7 @@ import Toast from './Toast';
 import Menu from './Menu';
 import { shouldSeed } from '../utils/appInit';
 import { syncFromStages, describeSync } from '../utils/rosterSync';
-import { resolve as resolvePlayer, setFacts } from '../utils/playerRegistry';
+import { resolve as resolvePlayer, setFacts, byId } from '../utils/playerRegistry';
 import useUndoableState from '../hooks/useUndoableState';
 
 function CounterBox({ label, val, max, status, isLast, maxLabel }) {
@@ -256,6 +256,39 @@ export default function RosterView({ masterPlayers, draftedPlayers, onInfoOpen }
         });
     };
 
+    // Off injured reserve and back onto the depth chart.
+    //
+    // His position is not on the slot — a slot is a name and a zone — so it
+    // comes from his registry record, which is where the roster import put it.
+    const handleActivateReserve = (index, slot) => {
+        const id = resolvePlayer({ name: slot.name }, { create: false });
+        const position = id ? byId(id)?.position : null;
+
+        if (!position) {
+            setToast({
+                message: `No position recorded for ${slot.name} — open his card and set one, then activate him.`,
+                tone: 'error',
+            });
+            return;
+        }
+
+        const result = activateFromReserve(state, index, position);
+        if (result.reason === 'no-row') {
+            setToast({
+                message: `No ${position} row on the depth chart — add one, then activate ${slot.name}.`,
+                tone: 'error',
+            });
+            return;
+        }
+        if (!result.placed) return;
+
+        setState(result.next);
+        setToast({
+            message: `${slot.name} is off injured reserve — ${result.placed.row}, ${result.placed.label}.`,
+            tone: 'success',
+        });
+    };
+
     const handleDeletePosition = (phase, posId) => {
         setState(prev => deletePositionRow(prev, phase, posId));
     };
@@ -471,6 +504,7 @@ export default function RosterView({ masterPlayers, draftedPlayers, onInfoOpen }
                 onMove={performMove}
                 onRowMove={performRowMove}
                 onDeletePosition={handleDeletePosition}
+                onActivateReserve={handleActivateReserve}
                 onSlotsChange={handleSlotsChange}
                 onAddPosition={setAddPositionPhase}
                 zoomLevel={zoomLevel}

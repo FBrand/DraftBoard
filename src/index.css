@@ -3784,3 +3784,34 @@ body.export-mode .card-glow {
 .scouting-rank-row { cursor: grab; }
 .scouting-rank-row.dragging-source { cursor: grabbing; }
 .scouting-rank-row .scouting-rank-card { cursor: pointer; }
+
+/* Off injured reserve. Dragging him out has always worked; this is the same
+   move for when it should not need aim — a returning player used to have to
+   be dropped in exactly the right cell or not at all. */
+.roster-ir-entry {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.roster-ir-entry > .rv-slot { flex: 1; min-width: 0; }
+
+.roster-ir-activate {
+  flex-shrink: 0;
+  padding: 3px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-dim);
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.roster-ir-activate:hover {
+  color: var(--chiefs-gold);
+  border-color: var(--chiefs-gold);
+}

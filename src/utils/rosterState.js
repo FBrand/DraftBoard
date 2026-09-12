@@ -116,6 +116,62 @@ function slotFromImport(raw, zone, position = '') {
  * rebuilding him from a name downstream turns a free agent back into a plain
  * veteran.
  */
+/**
+ * The first place a player can stand in a position row: 53-man, then the
+ * practice squad, then the reserves behind it. One ladder, used by signing
+ * somebody and by bringing somebody back off injured reserve, so the two
+ * cannot disagree about where a new arrival goes.
+ */
+export function firstFreeSlot(slots, limit53) {
+    const arr = slots ?? [];
+    const limit = Math.max(1, limit53 ?? 2);
+
+    for (let i = 0; i < limit; i += 1) if (!arr[i]) return { index: i, zone: '53', label: '53-man' };
+    for (let i = limit; i < limit + 3; i += 1) if (!arr[i]) return { index: i, zone: 'ps', label: 'practice squad' };
+
+    let i = limit + 3;
+    while (arr[i]) i += 1;
+    return { index: i, zone: 'r', label: 'reserve' };
+}
+
+/**
+ * Takes a player off injured reserve and puts him back in the depth chart.
+ *
+ * Going onto IR was a drag and coming back off was nothing, so a roster could
+ * only ever accumulate injuries. Being IN the reserve list is what "injured"
+ * means here — there is no separate flag — so activating him is a move, and
+ * the only subtlety is the tag he carries.
+ *
+ * `arrival` records how a player ARRIVED, and for most of the reserve list
+ * that is still true: a free agent who got hurt is a free agent, and keeps his
+ * tag through IR and back. But a player imported as `Name:IR` has "IR" as his
+ * arrival, because the file had nothing else to say about him — and once he is
+ * healthy that tag is simply wrong. It is dropped, leaving a plain veteran,
+ * which is the honest answer to "how did he get here" when nobody recorded it.
+ *
+ * @returns {{next: object, placed: {label: string, zone: string}|null, reason: string|null}}
+ */
+export function activateFromReserve(state, index, position) {
+    const entry = (state.reserve ?? [])[index];
+    if (!entry) return { next: state, placed: null, reason: 'not-on-reserve' };
+
+    const slot = typeof entry === 'string' ? { name: entry } : entry;
+    const rowId = position ? resolvePosition(position, state.positionConfig, state.depthChart) : null;
+    if (!rowId) return { next: state, placed: null, reason: 'no-row' };
+
+    const chip = [...state.positionConfig.offense, ...state.positionConfig.defense]
+        .find(x => x.id === rowId);
+
+    const next = { ...state, depthChart: { ...state.depthChart }, reserve: [...state.reserve] };
+    next.reserve.splice(index, 1);
+
+    const arr = next.depthChart[rowId] = [...(next.depthChart[rowId] ?? [])];
+    const { index: at, zone, label } = firstFreeSlot(arr, chip?.slots53);
+    arr[at] = makeSlot(slot.name, zone, slot.arrival === 'IR' ? null : (slot.arrival ?? null));
+
+    return { next, placed: { label, zone, row: chip?.label ?? rowId }, reason: null };
+}
+
 export function deletePositionRow(state, phase, posId) {
     const occupants = (state.depthChart[posId] ?? []).filter(Boolean);
     const depthChart = { ...state.depthChart };
