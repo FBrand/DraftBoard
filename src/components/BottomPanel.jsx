@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState } from 'react';
+import useIsMobile from '../hooks/useIsMobile';
 
 // Your picks, left to right.
 //
@@ -7,6 +8,13 @@ import React from 'react';
 // scrolling its own content, it grew to fit every card and pushed the panel
 // wide. min-width:0 is what lets a flex child actually be a scroll container.
 const BottomPanel = ({ yourPicks, onInfoOpen }) => {
+    // On a phone this bar sat there permanently, ~100px of an 844px screen
+    // spent on a row you glance at between picks. It folds to its heading
+    // instead, and starts folded — the board is what you came to look at.
+    const isMobile = useIsMobile();
+    const [open, setOpen] = useState(!isMobile);
+    const collapsed = isMobile && !open;
+
     // Chrome does not turn a vertical wheel into horizontal scrolling for an
     // ordinary element — that is shift+wheel, which nobody discovers and which
     // is useless on a trackpad-less broadcast machine. overflow-x:auto alone
@@ -26,9 +34,22 @@ const BottomPanel = ({ yourPicks, onInfoOpen }) => {
     };
 
     return (
-        <div className="bottom-panel">
-            <h3 className="panel-title" style={{ margin: 0, minWidth: '120px' }}>Your Picks</h3>
-            <div className="bp-picks-row" onWheel={onWheel}>
+        <div className={`bottom-panel${collapsed ? ' collapsed' : ''}`}>
+            {isMobile ? (
+                <button
+                    type="button"
+                    className="bp-toggle"
+                    aria-expanded={open}
+                    onClick={() => setOpen(v => !v)}
+                >
+                    <span className="panel-title" style={{ margin: 0 }}>Your Picks</span>
+                    <span className="bp-count">{yourPicks.length}</span>
+                    <span className="bp-chevron" aria-hidden="true">{open ? '▾' : '▸'}</span>
+                </button>
+            ) : (
+                <h3 className="panel-title" style={{ margin: 0, minWidth: '120px' }}>Your Picks</h3>
+            )}
+            <div className="bp-picks-row" onWheel={onWheel} hidden={collapsed}>
                 {yourPicks.map(player => (
                     <div
                         key={player.name}
