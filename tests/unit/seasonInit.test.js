@@ -49,11 +49,10 @@ describe('setting a season up', () => {
         expect(roster.cuts).toEqual([]);
     });
 
-    it('leaves free agency and the pool absent rather than written empty', () => {
-        // Both seed themselves on first use, and an empty written state is
+    it('leaves the prospect pool absent rather than written empty', () => {
+        // It seeds itself on first use, and an empty written state is
         // indistinguishable from one somebody cleared.
         initialiseSeason('s1');
-        expect(localStorage.getItem(key('fa_state_v1', 's1'))).toBeNull();
         expect(localStorage.getItem(key('prospects_v1', 's1'))).toBeNull();
     });
 
@@ -62,17 +61,44 @@ describe('setting a season up', () => {
     });
 });
 
-describe('carrying the roster forward', () => {
-    // The one stage that continues: a draft class is entirely new players and
-    // free agency is a new market, but the team does not stop existing in
-    // February.
-    const LAST_YEAR = '{"version":1,"depthChart":{"qb":[{"name":"Patrick Mahomes"}]},"reserve":[],"cuts":[]}';
+describe('what a rollover hands the new season', () => {
+    // An offseason STARTS at free agency and ENDS at a 53-man roster. So last
+    // season's roster is not the new roster — it is the pool of players whose
+    // futures are the question. The new roster keeps its shape and none of its
+    // players, which is the same split the shipped files make: one file gives
+    // the structure, another gives free agency its candidates.
+    const LAST_YEAR = JSON.stringify({
+        version: 1,
+        positionConfig: { offense: [{ id: 'qb', label: 'QB', slots53: 2 }], defense: [] },
+        depthChart: { qb: [{ name: 'Patrick Mahomes', zone: '53' }] },
+        reserve: [{ name: 'Somebody Hurt', zone: 'ir' }],
+        cuts: [{ name: 'Somebody Cut', zone: 'cut' }],
+    });
 
-    it('copies last season’s roster into the new one', () => {
+    it('puts last season’s roster into free agency, where the offseason starts', () => {
         localStorage.setItem(key('rosterState', 's1'), LAST_YEAR);
         initialiseSeason('s2', { carryRosterFrom: 's1' });
 
-        expect(localStorage.getItem(key('rosterState', 's2'))).toBe(LAST_YEAR);
+        const fa = JSON.parse(localStorage.getItem(key('fa_state_v1', 's2')));
+        expect(fa.depthChart.qb.map(s => s.name)).toEqual(['Patrick Mahomes']);
+    });
+
+    it('gives the new roster the shape and none of the players', () => {
+        localStorage.setItem(key('rosterState', 's1'), LAST_YEAR);
+        initialiseSeason('s2', { carryRosterFrom: 's1' });
+
+        const roster = JSON.parse(localStorage.getItem(key('rosterState', 's2')));
+        expect(roster.positionConfig.offense).toEqual([{ id: 'qb', label: 'QB', slots53: 2 }]);
+        expect(roster.depthChart).toEqual({ qb: [] });
+        expect(roster.reserve).toEqual([]);
+        expect(roster.cuts).toEqual([]);
+    });
+
+    it('does not carry last season’s injuries or cuts into either', () => {
+        localStorage.setItem(key('rosterState', 's1'), LAST_YEAR);
+        initialiseSeason('s2', { carryRosterFrom: 's1' });
+
+        expect(JSON.parse(localStorage.getItem(key('rosterState', 's2'))).reserve).toEqual([]);
     });
 
     it('copies rather than shares, so this year does not rewrite last year', () => {
@@ -86,6 +112,7 @@ describe('carrying the roster forward', () => {
     it('starts empty when the season it came from has no roster', () => {
         initialiseSeason('s2', { carryRosterFrom: 's1' });
         expect(JSON.parse(localStorage.getItem(key('rosterState', 's2'))).depthChart).toEqual({});
+        expect(localStorage.getItem(key('fa_state_v1', 's2'))).toBeNull();
     });
 });
 
