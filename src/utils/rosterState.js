@@ -3,6 +3,13 @@
  * Stored in localStorage under key 'rosterState'.
  */
 import { parseCsvLine, csvField } from './csvUtils';
+import { readSeasonScoped, seasonScopedKey } from './appStorage';
+import { viewedSeason, isReadOnly } from './boardRegistry';
+
+// Which season's copy of this stage. Read at call time, never cached: the
+// answer changes when somebody switches season, and a stage holding the
+// previous answer would write one season's work into another's key.
+const seasonId = () => viewedSeason()?.id ?? null;
 import { parseAcquisition } from './draftPhase';
 import { basePosition } from './boardRanking';
 import { getSessionTeam } from './appSettings';
@@ -222,7 +229,7 @@ function migrate(parsed) {
 
 export function loadState() {
     try {
-        const raw = localStorage.getItem(STORAGE_KEY);
+        const raw = readSeasonScoped(STORAGE_KEY, seasonId());
         if (raw) {
             const parsed = JSON.parse(raw);
             if (parsed?.positionConfig?.offense?.length > 0) return migrate(parsed);
@@ -232,7 +239,11 @@ export function loadState() {
 }
 
 export function saveState(state) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...state, version: STATE_VERSION }));
+    // An archived season is a record, not a workspace. Guarded HERE rather than
+    // on each control, because one forgotten button is all it takes and this is
+    // the single door every change goes through.
+    if (isReadOnly()) return;
+    localStorage.setItem(seasonScopedKey(STORAGE_KEY, seasonId()), JSON.stringify({ ...state, version: STATE_VERSION }));
 }
 
 // ---------------------------------------------------------------------------

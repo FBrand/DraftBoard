@@ -470,7 +470,9 @@ test.describe('the draft board in normal view', () => {
         // Wind the seeded, completed draft back to a handful of picks so there
         // are drafted and undrafted players sharing a tier.
         await page.evaluate(() => {
-            const KEY = 'nfl_draft_board_state';
+            // Season-scoped now: the stage keys carry the season id, so no
+            // literal names one. Find the season's copy rather than assuming.
+            const KEY = Object.keys(localStorage).find(k => k.startsWith('nfl_draft_board_state'));
             const st = JSON.parse(localStorage.getItem(KEY));
             const kept = (st.draftedPlayers || []).filter(d => Number(d.pickNumber) <= 9);
             const names = new Set(kept.map(d => `${d.name}|${d.position}`));

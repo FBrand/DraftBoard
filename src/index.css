@@ -4045,3 +4045,24 @@ body.export-mode .card-glow {
 
 .season-confirm-row { display: flex; gap: 10px; }
 .season-confirm-row .action-button { flex: 1; }
+
+/* Open on an archived season. The stages refuse to change while this is up —
+   silently, at the store — so this is what says why. */
+.season-banner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 16px;
+  background: rgba(255, 184, 28, 0.1);
+  border-bottom: 1px solid var(--chiefs-gold);
+  font-size: 0.82rem;
+  color: var(--text-main);
+}
+
+.season-banner strong { color: var(--chiefs-gold); }
+.season-banner .action-pill { margin-left: auto; flex-shrink: 0; }
+
+@media (max-width: 640px) {
+  .season-banner { flex-wrap: wrap; gap: 8px; font-size: 0.75rem; }
+  .season-banner .action-pill { margin-left: 0; }
+}

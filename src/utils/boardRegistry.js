@@ -30,7 +30,8 @@
  */
 import { repository } from '../data/repository';
 import { DRAFT_YEAR } from '../constants';
-import { boardStateKey } from './appStorage';
+import { boardStateKey, seasonScopedKey } from './appStorage';
+import { initialiseSeason, forgetSeason } from './seasonInit';
 
 export const SEASONS = 'seasons';
 export const AUTHORS = 'authors';
@@ -62,7 +63,12 @@ export async function openBoards() {
     ]);
     if (repository.all(BOARDS_COLLECTION).length) return;
 
-    const season = { id: newId('s'), year: DRAFT_YEAR, status: 'current', createdAt: new Date().toISOString() };
+    // "seeded" marks the one season the files in public/ are ABOUT. They hold
+    // the 2026 class, the 2026 picks and the roster that produced — a later
+    // season must not re-read them, or rolling over hands you last year's
+    // draft board again and the new season is the old one wearing a different
+    // number.
+    const season = { id: newId('s'), year: DRAFT_YEAR, status: 'current', seeded: true, createdAt: new Date().toISOString() };
     const authors = [];
     const boards = [];
 
@@ -171,6 +177,35 @@ export function isFrozen(board) {
     return season?.status === 'archived';
 }
 
+/**
+ * Whether what is on screen can be changed.
+ *
+ * An archived season is a record: the roster as it finished, the draft as it
+ * happened, the boards as they were left. Opening one is worth doing — that is
+ * why they are kept rather than deleted — and editing one is not, because
+ * every number in it is an answer to "what did we think at the time".
+ *
+ * Evaluations are the exception and are handled separately; what you know
+ * about a player keeps growing after the board that ranked him is done.
+ */
+/**
+ * Whether the shipped files in public/ describe the season being viewed.
+ *
+ * They describe exactly one: the class, the picks and the roster of the year
+ * the app was built around. Every later season starts empty and is filled by
+ * importing, which is the only honest thing a new season can do.
+ */
+export function seasonIsSeeded() {
+    // Explicitly false only on a season started in the app. A season written
+    // before this field existed has no opinion and is the shipped one.
+    return viewedSeason()?.seeded !== false;
+}
+
+export function isReadOnly() {
+    const viewing = viewedSeason();
+    return !!viewing && viewing.status !== 'current';
+}
+
 export function renameBoard(id, label) {
     const board = boardById(id);
     const next = String(label ?? '').trim();
@@ -205,13 +240,16 @@ export async function startSeason(year) {
 
     const outgoing = currentSeason();
     const season = {
-        id: newId('s'), year: n, status: 'current', createdAt: new Date().toISOString(),
+        id: newId('s'), year: n, status: 'current', seeded: false, createdAt: new Date().toISOString(),
     };
 
     await repository.set(SEASONS, season.id, season);
     if (outgoing) {
         await repository.set(SEASONS, outgoing.id, { ...outgoing, status: 'archived' });
     }
+    // What the season starts with is seasonInit's decision, not this one's.
+    initialiseSeason(season.id, { carryRosterFrom: outgoing?.id ?? null });
+
     // You are looking at the season you just started, not the one you left.
     setViewedSeason(season.id);
     return season;
@@ -262,6 +300,11 @@ export async function scrapSeason() {
     doomed.forEach(b => {
         try { localStorage.removeItem(boardStateKey(b.id)); } catch { /* ignore */ }
     });
+
+    ['rosterState', 'fa_state_v1', 'nfl_draft_board_state', 'prospects_v1'].forEach(base => {
+        try { localStorage.removeItem(seasonScopedKey(base, outgoing.id)); } catch { /* ignore */ }
+    });
+    forgetSeason(outgoing.id);
 
     await repository.remove(SEASONS, outgoing.id);
     await repository.set(SEASONS, previous.id, { ...previous, status: 'current' });

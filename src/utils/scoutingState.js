@@ -28,7 +28,7 @@ import { parseCsvLine, csvField } from './csvUtils';
 import { buildNameIndex, findMatchingIndex } from './nameMatcher';
 import { parseTier, tierLabel, spaceEvenly } from './boardRanking';
 import { boardStateKey } from './appStorage';
-import { boardById } from './boardRegistry';
+import { boardById, isReadOnly } from './boardRegistry';
 import { ownerIdFor, remarksFor, REMARK_KINDS } from './evaluations';
 
 // Each analyst has their own rankings file, and they are genuinely different
@@ -258,6 +258,10 @@ export function attachPlayerIds(board, players) {
 }
 
 export function saveState(boardId, state) {
+    // An archived season is a record, not a workspace. Guarded HERE rather than
+    // on each control, because one forgotten button is all it takes and this is
+    // the single door every change goes through.
+    if (isReadOnly()) return;
     localStorage.setItem(storageKey(boardId), JSON.stringify(state));
 }
 

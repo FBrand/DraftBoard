@@ -9,6 +9,7 @@ import PlayerInfoModal from './components/PlayerInfoModal';
 import Menu from './components/Menu';
 import HelpModal from './components/HelpModal';
 import SeasonModal from './components/SeasonModal';
+import { viewedSeason, currentSeason, setViewedSeason, isReadOnly } from './utils/boardRegistry';
 import Toast from './components/Toast';
 import { ConfirmDialog } from './components/Dialogs';
 import { exportSession, importSession, sessionFilename } from './utils/appSession';
@@ -252,6 +253,20 @@ function App() {
 
       <Toast message={toast?.message} tone={toast?.tone} onDismiss={dismissToast} />
       <HelpModal isOpen={helpOpen} onClose={() => setHelpOpen(false)} />
+
+      {isReadOnly() && (
+        <div className="season-banner">
+          <span>
+            Viewing <strong>{viewedSeason()?.year}</strong> — read-only. Placements, the
+            roster and the draft are the record of that season. Evaluations can still be added.
+          </span>
+          <button
+            type="button"
+            className="action-pill"
+            onClick={() => { setViewedSeason(currentSeason()?.id); window.location.reload(); }}
+          >Back to {currentSeason()?.year}</button>
+        </div>
+      )}
 
       <SeasonModal
         isOpen={seasonOpen}

@@ -36,7 +36,13 @@ export default function SeasonModal({ isOpen, onClose, onChanged }) {
     const previous = seasons.filter(s => s.id !== current?.id && s.status === 'archived')
         .sort((a, b) => b.year - a.year)[0] ?? null;
 
-    const done = () => { onChanged?.(); onClose(); };
+    // Reload rather than re-render. A season change swaps the roster, the
+    // draft, free agency, the prospect pool and every board at once, and most
+    // of those are held in memory — the draft class is read once at startup, the
+    // repository keeps its own copy, free agency memoises its seeding. Asking
+    // each of them to drop what it holds is a list that will be wrong the first
+    // time somebody adds a stage. Clean slate already works this way.
+    const done = () => { onChanged?.(); window.location.reload(); };
 
     const view = (season) => {
         setViewedSeason(season.id);

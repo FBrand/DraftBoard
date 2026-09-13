@@ -11,6 +11,14 @@
  * /home/dev/.claude/plans/structured-growing-cat.md section 3 for why.
  */
 import { defaultState, parseCSV, exportCSV } from './rosterState';
+import { readSeasonScoped, seasonScopedKey } from './appStorage';
+import { viewedSeason, isReadOnly, seasonIsSeeded } from './boardRegistry';
+
+// Which season's copy of this stage. Read at call time, never cached: the
+// answer changes when somebody switches season, and a stage holding the
+// previous answer would write one season's work into another's key.
+const seasonId = () => viewedSeason()?.id ?? null;
+
 
 const STORAGE_KEY = 'fa_state_v1';
 
@@ -18,7 +26,7 @@ export { parseCSV, exportCSV };
 
 export function hasSavedState() {
     try {
-        return localStorage.getItem(STORAGE_KEY) !== null;
+        return readSeasonScoped(STORAGE_KEY, seasonId()) !== null;
     } catch {
         return false;
     }
@@ -50,12 +58,17 @@ export async function fetchSeasonStartRoster() {
  * from until you happened to click the tab. Idempotent, and shared by both
  * callers so there is one implementation of what seeding means.
  */
-let seedPromise = null;
+// Per season, not per module: memoising one promise meant switching season
+// handed back the season you left.
+const seedPromises = new Map();
 
 export function ensureSeeded() {
-    if (seedPromise) return seedPromise;
-    seedPromise = (async () => {
+    const sid = seasonId() ?? '_';
+    if (seedPromises.has(sid)) return seedPromises.get(sid);
+    const promise = (async () => {
         if (hasSavedState()) return loadState();
+        // A later season's free agency is a new market, not last year's again.
+        if (!seasonIsSeeded()) return loadState();
         try {
             const seeded = await fetchSeasonStartRoster();
             saveState(seeded);
@@ -64,7 +77,8 @@ export function ensureSeeded() {
             return loadState(); // leave FA empty rather than blocking
         }
     })();
-    return seedPromise;
+    seedPromises.set(sid, promise);
+    return promise;
 }
 
 // Same versioning contract as rosterState — see the note there. Unversioned
@@ -80,7 +94,7 @@ function migrate(parsed) {
 
 export function loadState() {
     try {
-        const raw = localStorage.getItem(STORAGE_KEY);
+        const raw = readSeasonScoped(STORAGE_KEY, seasonId());
         if (raw) {
             const parsed = JSON.parse(raw);
             if (parsed?.positionConfig) return migrate(parsed) ?? defaultState();
@@ -90,7 +104,11 @@ export function loadState() {
 }
 
 export function saveState(state) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...state, version: STATE_VERSION }));
+    // An archived season is a record, not a workspace. Guarded HERE rather than
+    // on each control, because one forgotten button is all it takes and this is
+    // the single door every change goes through.
+    if (isReadOnly()) return;
+    localStorage.setItem(seasonScopedKey(STORAGE_KEY, seasonId()), JSON.stringify({ ...state, version: STATE_VERSION }));
 }
 
 /**

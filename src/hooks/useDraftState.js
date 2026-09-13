@@ -1,4 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
+import { readSeasonScoped, seasonScopedKey } from '../utils/appStorage';
+import { viewedSeason, seasonIsSeeded } from '../utils/boardRegistry';
+
+// Which season's copy of this stage. Read at call time, never cached: the
+// answer changes when somebody switches season, and a stage holding the
+// previous answer would write one season's work into another's key.
+const seasonId = () => viewedSeason()?.id ?? null;
+
 import { parseRankings, parsePicks } from '../utils/dataParser';
 import { openBoards, boardBySlug } from '../utils/boardRegistry';
 import { shouldSeed } from '../utils/appInit';
@@ -154,7 +162,11 @@ export const useDraftState = () => {
                 const slug = params.get('board');
                 const board = slug ? boardBySlug(slug) : null;
                 const fromBoard = board?.rankingsFile ? `${base}${board.rankingsFile}` : null;
-                const candidates = [fromBoard, fallback].filter(Boolean);
+                // The fallback is the shipped file, which describes the shipped
+                // season and no other. A season started in the app has no class
+                // until one is imported, and falling back handed it last year's
+                // — 885 players who have already been drafted.
+                const candidates = [fromBoard, seasonIsSeeded() ? fallback : null].filter(Boolean);
 
                 // First candidate that actually answers. Falling back to the
                 // shipped board beats showing nothing: a wrong board is
@@ -182,14 +194,14 @@ export const useDraftState = () => {
                 const parsedPlayers = parseRankings(rankingsText) || [];
                 const parsedOurPicks = parsePicks(picksText) || [];
 
-                const savedState = localStorage.getItem(DRAFT_STORAGE_KEY);
+                const savedState = readSeasonScoped(DRAFT_STORAGE_KEY, seasonId());
 
                 let seedDrafted = [];
                 let seedKCLeft = parsedOurPicks;
 
                 // If no saved localStorage state but CSV exists, use CSV as seed.
                 // Skipped in "clean" mode — see utils/appInit.js.
-                if (!savedState && shouldSeed() && preloadRes && preloadRes.ok) {
+                if (!savedState && shouldSeed() && seasonIsSeeded() && preloadRes && preloadRes.ok) {
                     const csvText = await preloadRes.text();
                     try {
                         const { deserializeDraftState } = await import('../utils/sessionSerializer');
@@ -299,7 +311,7 @@ export const useDraftState = () => {
     useEffect(() => {
         if (!loading) {
             const state = { players, ourPicksLeft, currentPick, draftedPlayers, yourPicks, remotePicks };
-            localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(state));
+            localStorage.setItem(seasonScopedKey(DRAFT_STORAGE_KEY, seasonId()), JSON.stringify(state));
         }
     }, [players, ourPicksLeft, currentPick, draftedPlayers, yourPicks, remotePicks, loading]);
 
@@ -415,8 +427,8 @@ export const useDraftState = () => {
     // state key, which worked only because it is truthy enough to skip seeding
     // and then throws inside the JSON.parse try/catch.)
     const resetDraft = useCallback(() => {
-        localStorage.removeItem(DRAFT_STORAGE_KEY);
-        localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify({ draftedPlayers: [], ourPicksLeft: [] }));
+        localStorage.removeItem(seasonScopedKey(DRAFT_STORAGE_KEY, seasonId()));
+        localStorage.setItem(seasonScopedKey(DRAFT_STORAGE_KEY, seasonId()), JSON.stringify({ draftedPlayers: [], ourPicksLeft: [] }));
         window.location.reload();
     }, []);
 

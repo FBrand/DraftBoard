@@ -30,6 +30,7 @@ const EXACT = [
     'position_value_v1',       // appSettings.js
     'session_team_v1',         // appSettings.js
     'viewed_season_v1',        // which season is open (boardRegistry.js)
+    'season_init_v1',          // which seasons have been set up (seasonInit.js)
 ];
 
 /**
@@ -37,6 +38,10 @@ const EXACT = [
  * allowlist — it just names a shape instead of an instance.
  */
 const PREFIXES = [
+    'rosterState__',           // one per season (see seasonScopedKey)
+    'fa_state_v1__',           // the same
+    'nfl_draft_board_state__', // the same
+    'prospects_v1__',          // the same
     'scouting_board_v1__',     // one per board (boardRegistry.js gives the id)
     'scouting_overlay_v1__',   // the same, when a board was its own name
     'db_',                     // repository collections (data/localAdapter.js)
@@ -49,6 +54,44 @@ const PREFIXES = [
  * is how the session bundle came to name boards that no longer existed.
  */
 export const boardStateKey = (boardId) => `scouting_board_v1__${boardId}`;
+
+/**
+ * A stage's storage key, for one season.
+ *
+ * The roster, free agency, the draft and the prospect pool were single global
+ * keys, so every season shared one of each: rolling over to 2027 left last
+ * year's roster, last year's draft class and last year's picks sitting there,
+ * and the new season was the old one wearing a different number.
+ *
+ * The base key with no season is what every existing save is called, so it is
+ * kept as the unscoped form and migrated on first read — see `readSeasonScoped`.
+ */
+export const seasonScopedKey = (base, seasonId) => (seasonId ? `${base}__${seasonId}` : base);
+
+/**
+ * Reads a stage's state for a season, moving an old unscoped save into it the
+ * first time. Returns the raw string or null.
+ *
+ * The migration is one-way and happens once: whatever was saved before seasons
+ * were scoped belongs to the season that was current when it was written,
+ * which is the one being asked for the first time this runs.
+ */
+export function readSeasonScoped(base, seasonId) {
+    const key = seasonScopedKey(base, seasonId);
+    try {
+        const own = localStorage.getItem(key);
+        if (own !== null) return own;
+        if (key === base) return null;
+
+        const legacy = localStorage.getItem(base);
+        if (legacy === null) return null;
+        localStorage.setItem(key, legacy);
+        localStorage.removeItem(base);
+        return legacy;
+    } catch {
+        return null;
+    }
+}
 
 /** Whether the app owns this key, and may therefore write it on import. */
 export function isOwnedKey(key) {

@@ -22,7 +22,7 @@ import { addProspect, savePlayerEdit, deletePlayer, restorePlayer, hiddenPlayers
 import * as athleticMatrix from '../utils/athleticMatrix';
 import * as playerRegistry from '../utils/playerRegistry';
 
-import { createBoard, listBoards, boardBySlug, boardById, renameBoard, listSeasons, currentSeason } from '../utils/boardRegistry';
+import { createBoard, listBoards, boardBySlug, boardById, renameBoard, listSeasons, currentSeason, isReadOnly } from '../utils/boardRegistry';
 import { ownerIdFor, remarksFor, addRemark, removeRemark } from '../utils/evaluations';
 
 const TAG_FILTERS = [
@@ -88,6 +88,10 @@ export default function ScoutingView({ players }) {
     // the board — tapping a player looked like it did nothing. Present it as
     // a modal there instead. Still fully editable: this is Scouting.
     const { showRanking, showSidePanel } = useScoutingLayout();
+    // An archived board is a record of what somebody thought at the time. The
+    // store refuses the write either way; this is what stops the controls
+    // offering a change that will not happen.
+    const readOnly = isReadOnly();
     // How the middle column is grouped. A view preference, not board data —
     // it changes how the same players are read, never where they sit.
     const [groupBy, setGroupBy] = useState('position');
@@ -610,7 +614,7 @@ export default function ScoutingView({ players }) {
                     // Clicking the selected player again closes his card — the same
                     // gesture that opened it, which is how a toggle should behave.
                     onSelect={(p) => setSelectedName(prev => (prev === p.name ? null : p.name))}
-                    onReorder={handleReorder}
+                    onReorder={readOnly ? null : handleReorder}
                 />
                 )}
 
@@ -649,6 +653,7 @@ export default function ScoutingView({ players }) {
                         player={selectedPlayer}
                         entry={selectedPlayer ? entryFor(selectedPlayer.name, selectedPlayer) : null}
                         onChange={saveEntry}
+                        readOnly={readOnly}
                         onClose={() => setSelectedName(null)}
                         boardLabel={selectedPlayer ? boardById(activeBoard)?.label ?? '' : null}
                         onPrevBoard={() => cycleBoard(-1)}
@@ -716,6 +721,7 @@ export default function ScoutingView({ players }) {
                     player={selectedPlayer}
                     entry={entryFor(selectedPlayer.name, selectedPlayer)}
                     onChange={saveEntry}
+                    readOnly={readOnly}
                     onClose={() => setSelectedName(null)}
                     boardLabel={boardById(activeBoard)?.label ?? ''}
                     onPrevBoard={() => cycleBoard(-1)}
