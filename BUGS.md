@@ -13,7 +13,9 @@ a measurement has been wrong more than once here.
 
 ## Open
 
-Nothing open.
+| # | Reported | State |
+|---|---|---|
+| 22 | Roster sync has the same what-he-plays / where-he-stands problem | `syncFromStages` places players with `resolvePosition(p.position)`, so an OT with only LT and RT rows counts as "no matching position row" instead of being placed. The add form solves this by asking; sync has nobody to ask, so it needs a different answer — probably leaving them unplaced and naming them, which is what it already does, but the message should say it is about the ROW rather than the position. Deferred by the user. |
 
 ## Fixed this round
 

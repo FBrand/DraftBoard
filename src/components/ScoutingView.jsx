@@ -433,12 +433,21 @@ export default function ScoutingView({ players }) {
             return `${hit.match.name}${hit.match.position ? ` (${hit.match.position})` : ''} is already on the board.`;
         }
 
-        savePlayerEdit(previous, { name, position, school });
+        // Name and school are FACTS: he has one name and went to one school,
+        // and getting either wrong is a mistake to correct everywhere.
+        //
+        // Position is an OPINION. "I see him as an EDGE" is exactly the thing
+        // analysts disagree about, and they already do — Rueben Bain Jr. sits
+        // at DL.3T on consensus and EDGE elsewhere, because the boards were
+        // seeded from different files. There was simply no way to SET one
+        // without setting everybody's. So it is set globally when a player is
+        // first added, and after that each board keeps its own.
+        savePlayerEdit(previous, { name, school });
         // The registry record keeps its id and gains the old identity as an
         // alias, so the rankings file — which still carries the old name on
         // every load — resolves back to this same player instead of creating
         // a second record for him.
-        if (previous.id) playerRegistry.rename(previous.id, { name, position, school });
+        if (previous.id) playerRegistry.rename(previous.id, { name, school });
         if (name !== previous.name) athleticMatrix.renameScores(previous.name, name, previous);
 
         const next = {};
@@ -446,7 +455,10 @@ export default function ScoutingView({ players }) {
             const board = scoutingState.loadState(b);
             const idx = findMatchingIndex(previous.name, buildNameIndex(board.entries), previous);
             if (idx !== -1) {
-                const entries = board.entries.map((e, i) => (i === idx ? { ...e, name, position, school } : e));
+                // The position lands on the board being edited and nowhere
+                // else. Every other board keeps whatever its analyst thinks.
+                const patch = b === activeBoard ? { name, position, school } : { name, school };
+                const entries = board.entries.map((e, i) => (i === idx ? { ...e, ...patch } : e));
                 const updated = { ...board, entries };
                 scoutingState.saveState(b, updated);
                 next[b] = updated;

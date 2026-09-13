@@ -227,3 +227,48 @@ describe('clearing a placement', () => {
         expect(ranked.find(p => p.name === 'Arvell Reese').overallRank).not.toBeNull();
     });
 });
+
+/**
+ * Position is an opinion; name and school are facts.
+ *
+ * Boards already disagreed about position — Rueben Bain Jr. sits at DL.3T on
+ * one and EDGE on another, because they were seeded from different files —
+ * but there was no way to SET one without setting everybody's, and the ranking
+ * read position off the shared pool, so a change stored on a board was never
+ * shown by it.
+ */
+describe('whose position the board shows', () => {
+    const players = [
+        { name: 'Fernando Mendoza', position: 'QB', round: 1, tier: null, overallRank: 1 },
+    ];
+
+    it('takes the entry’s, which is this analyst’s read of him', () => {
+        const ranked = rankBoard(players, (name) => ({ name, position: 'ATH', round: 1, tier: 1 }));
+        expect(ranked[0].position).toBe('ATH');
+    });
+
+    it('falls back to the pool for a player this board has no entry for', () => {
+        const ranked = rankBoard(players, () => null);
+        expect(ranked[0].position).toBe('QB');
+    });
+
+    it('counts position rank under the position the board uses', () => {
+        const two = [
+            { name: 'Fernando Mendoza', position: 'QB', round: 1, tier: null, overallRank: 1 },
+            { name: 'Ty Simpson', position: 'QB', round: 1, tier: null, overallRank: 2 },
+        ];
+        // Calling one an ATH makes him the first ATH, not the second QB.
+        const ranked = rankBoard(two, (name) => (name === 'Fernando Mendoza'
+            ? { name, position: 'ATH', round: 1, tier: 1 }
+            : { name, position: 'QB', round: 1, tier: 1 }));
+
+        expect(ranked.find(p => p.name === 'Fernando Mendoza').positionRank).toBe(1);
+        expect(ranked.find(p => p.name === 'Ty Simpson').positionRank).toBe(1);
+    });
+
+    it('keeps an unranked player’s board position too', () => {
+        const ranked = rankBoard(players, (name) => ({ name, position: 'ATH', round: null, cleared: true }));
+        expect(ranked[0].position).toBe('ATH');
+        expect(ranked[0].overallRank).toBeNull();
+    });
+});
