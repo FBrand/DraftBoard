@@ -161,9 +161,19 @@ export default function RosterView({ masterPlayers, draftedPlayers, onInfoOpen }
         if (team || previousTeam || draftYear || draftRound) {
             const id = resolvePlayer({ name: displayName }, { create: false })
                 ?? resolvePlayer({ name: displayName, position });
+
+            // Signing him HERE is what makes this his team — and it is also the
+            // only moment his old one is still known. Writing the new team over
+            // the old one without keeping it lost where he came from: Diego
+            // Pounds arrived from Baltimore and his card then showed no
+            // previous team at all. An explicitly typed one still wins.
+            const before = id ? byId(id) : null;
+            const cameFrom = previousTeam
+                || (team && before?.team && before.team !== team ? before.team : null);
+
             if (id) setFacts(id, {
                 ...(team ? { team } : {}),
-                ...(previousTeam ? { previousTeam } : {}),
+                ...(cameFrom ? { previousTeam: cameFrom } : {}),
                 ...(draftYear ? { draftYear } : {}),
                 ...(draftRound ? { draftRound, isUdfa: false } : {}),
             });

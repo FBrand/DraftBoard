@@ -8,6 +8,7 @@ import RosterView from './components/RosterView';
 import PlayerInfoModal from './components/PlayerInfoModal';
 import Menu from './components/Menu';
 import HelpModal from './components/HelpModal';
+import SeasonModal from './components/SeasonModal';
 import Toast from './components/Toast';
 import { ConfirmDialog } from './components/Dialogs';
 import { exportSession, importSession, sessionFilename } from './utils/appSession';
@@ -49,6 +50,8 @@ function App() {
   // is only the fallback for "where was I last time", used when the URL says
   // nothing — a shared link always wins over the recipient's last session.
   const [helpOpen, setHelpOpen] = useState(false);
+  const [seasonOpen, setSeasonOpen] = useState(false);
+  const [seasonEpoch, setSeasonEpoch] = useState(0);
 
   const [view, setViewParam] = useUrlParam(
     'view',
@@ -140,9 +143,13 @@ function App() {
             onClick={() => setHelpOpen(true)}
             title="How this app works"
           >? Help</button>
+          {/* "Session" named one of the things in here. It now also holds the
+              season stack, which outlives any session — a session is what you
+              have open, a season is what the work belongs to. */}
           <Menu
-            label="Session"
+            label="Manage"
             items={[
+              { label: 'Seasons…', onClick: () => setSeasonOpen(true), title: 'Switch season, roll over to a new one, or roll back' },
               { label: 'Export Full Session…', onClick: handleSessionExport, title: 'Every stage — draft, roster, FA, scouting — in one JSON file' },
               { label: 'Import Full Session…', file: { accept: '.json', onFile: handleSessionFile }, title: 'Replaces all current state' },
               { label: 'Load Current State', onClick: () => setPendingInit(INIT_SEEDED), title: 'The real offseason as it happened — completed draft and the roster it produced' },
@@ -160,7 +167,7 @@ function App() {
       {view === 'scouting' && (
         loading
           ? <div className="loading">Loading Chiefs Draft Board...</div>
-          : <ScoutingView players={players} columnOrder={columnOrder} />
+          : <ScoutingView key={seasonEpoch} players={players} columnOrder={columnOrder} />
       )}
 
       {view === 'draft' && (
@@ -245,6 +252,12 @@ function App() {
 
       <Toast message={toast?.message} tone={toast?.tone} onDismiss={dismissToast} />
       <HelpModal isOpen={helpOpen} onClose={() => setHelpOpen(false)} />
+
+      <SeasonModal
+        isOpen={seasonOpen}
+        onClose={() => setSeasonOpen(false)}
+        onChanged={() => setSeasonEpoch(n => n + 1)}
+      />
 
     </div>
   );

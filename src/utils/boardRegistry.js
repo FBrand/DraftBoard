@@ -100,9 +100,39 @@ export function currentSeason() {
     return listSeasons().find(s => s.status === 'current') ?? null;
 }
 
-/** Boards of a season, in their display order. Defaults to the current one. */
+const VIEWED_KEY = 'viewed_season_v1';
+
+/**
+ * Which season you are LOOKING at, which is not the same as which season is
+ * current.
+ *
+ * Only one season is writable — the current one — but an archived season is
+ * still worth opening: it is the record of where everybody had a player at the
+ * time, which is the whole reason boards freeze rather than being deleted.
+ * Viewing one shows its boards, read-only.
+ *
+ * Falls back to the current season whenever the stored id names a season that
+ * is gone, which is what happens after a rollback purges the one you were
+ * looking at.
+ */
+export function viewedSeason() {
+    let stored = null;
+    try { stored = localStorage.getItem(VIEWED_KEY); } catch { /* ignore */ }
+    const found = stored ? listSeasons().find(s => s.id === stored) : null;
+    return found ?? currentSeason();
+}
+
+export function setViewedSeason(seasonId) {
+    try {
+        if (!seasonId) localStorage.removeItem(VIEWED_KEY);
+        else localStorage.setItem(VIEWED_KEY, seasonId);
+    } catch { /* ignore */ }
+    return viewedSeason();
+}
+
+/** Boards of a season, in their display order. Defaults to the one being viewed. */
 export function listBoards(seasonId = null) {
-    const season = seasonId ?? currentSeason()?.id ?? null;
+    const season = seasonId ?? viewedSeason()?.id ?? null;
     return repository
         .query(BOARDS_COLLECTION, { orderBy: { field: 'order' } })
         .filter(b => season == null || b.seasonId === season);
@@ -182,6 +212,8 @@ export async function startSeason(year) {
     if (outgoing) {
         await repository.set(SEASONS, outgoing.id, { ...outgoing, status: 'archived' });
     }
+    // You are looking at the season you just started, not the one you left.
+    setViewedSeason(season.id);
     return season;
 }
 
@@ -233,6 +265,8 @@ export async function scrapSeason() {
 
     await repository.remove(SEASONS, outgoing.id);
     await repository.set(SEASONS, previous.id, { ...previous, status: 'current' });
+    // The season being viewed has just been deleted, so move off it.
+    setViewedSeason(previous.id);
 
     // Evaluations are deliberately left alone. They are stamped with the
     // season they were written in, not owned by it, and what you learned about

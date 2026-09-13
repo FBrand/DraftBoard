@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import {
     openBoards, listBoards, allBoards, boardById, boardBySlug,
     authorOf, renameBoard, renameAuthor, createBoard, currentSeason, listSeasons,
+    startSeason, scrapSeason, viewedSeason, setViewedSeason, isFrozen,
 } from '../../src/utils/boardRegistry';
 import { repository } from '../../src/data/repository';
 
@@ -123,5 +124,137 @@ describe('making a board', () => {
 
     it('refuses a board with no name', async () => {
         expect(await createBoard({ label: '  ' })).toBeNull();
+    });
+});
+
+/**
+ * Seasons are a stack: start one on top, or pop the top one off.
+ *
+ * `startSeason` existed from the beginning and nothing ever called it, so
+ * neither half of this had ever run. The rollback half matters more than it
+ * looks — rolling over is one button at the time of year you are least sure
+ * last season is finished, so there has to be a way back, and it has to lead
+ * to exactly what was there rather than an approximation.
+ */
+describe('rolling a season over', () => {
+    it('makes the new one current and archives the one it replaced', async () => {
+        const before = currentSeason();
+        const made = await startSeason(before.year + 1);
+
+        expect(made.status).toBe('current');
+        expect(currentSeason().id).toBe(made.id);
+        expect(listSeasons().find(s => s.id === before.id).status).toBe('archived');
+    });
+
+    it('creates no boards — who is scouting this year is a decision', async () => {
+        const made = await startSeason(currentSeason().year + 1);
+        expect(listBoards(made.id)).toEqual([]);
+    });
+
+    it('opens on the season just started', async () => {
+        const made = await startSeason(currentSeason().year + 1);
+        expect(viewedSeason().id).toBe(made.id);
+    });
+
+    it('refuses a year that already exists, because the stack is ordered by year', async () => {
+        const year = currentSeason().year;
+        expect(await startSeason(year)).toBeNull();
+        expect(listSeasons().filter(s => s.year === year)).toHaveLength(1);
+    });
+
+    it('refuses something that is not a year', async () => {
+        for (const bad of ['', null, 'next', 12, 99999]) {
+            expect(await startSeason(bad)).toBeNull();
+        }
+    });
+});
+
+describe('rolling back', () => {
+    it('refuses when there is nothing underneath — a season stack always has one', async () => {
+        const out = await scrapSeason();
+        expect(out).toEqual({ ok: false, reason: 'nothing-underneath' });
+        expect(currentSeason()).not.toBeNull();
+    });
+
+    it('drops the current season and makes the previous one current again', async () => {
+        const first = currentSeason();
+        await startSeason(first.year + 1);
+
+        const out = await scrapSeason();
+
+        expect(out.ok).toBe(true);
+        expect(currentSeason().id).toBe(first.id);
+        expect(listSeasons().map(s => s.id)).not.toContain(out.dropped.id);
+    });
+
+    it('takes the scrapped season’s boards and their work with it', async () => {
+        const first = currentSeason();
+        const made = await startSeason(first.year + 1);
+        const board = await createBoard({ label: 'This Year', authorName: 'Alex' });
+        localStorage.setItem(`scouting_board_v1__${board.id}`, '{"version":1,"entries":[{"name":"X"}]}');
+
+        const out = await scrapSeason();
+
+        expect(out.boardsRemoved).toBe(1);
+        expect(boardById(board.id)).toBeNull();
+        expect(localStorage.getItem(`scouting_board_v1__${board.id}`)).toBeNull();
+        expect(listSeasons().map(s => s.id)).not.toContain(made.id);
+    });
+
+    it('leaves the season underneath exactly as it was', async () => {
+        const first = currentSeason();
+        const kept = listBoards(first.id).map(b => b.id).sort();
+        const keptWork = `scouting_board_v1__${kept[0]}`;
+        localStorage.setItem(keptWork, '{"version":1,"entries":[{"name":"Kept"}]}');
+
+        await startSeason(first.year + 1);
+        await scrapSeason();
+
+        expect(listBoards(first.id).map(b => b.id).sort()).toEqual(kept);
+        expect(localStorage.getItem(keptWork)).toContain('Kept');
+    });
+
+    it('moves off the season it just deleted', async () => {
+        const first = currentSeason();
+        await startSeason(first.year + 1);
+        await scrapSeason();
+        expect(viewedSeason().id).toBe(first.id);
+    });
+});
+
+describe('looking at an archived season', () => {
+    it('shows that season’s boards rather than the current one’s', async () => {
+        const first = currentSeason();
+        const made = await startSeason(first.year + 1);
+        await createBoard({ label: 'New Year Board', authorName: 'Alex' });
+
+        expect(listBoards().map(b => b.label)).toEqual(['New Year Board']);
+
+        setViewedSeason(first.id);
+        expect(viewedSeason().id).toBe(first.id);
+        expect(listBoards().map(b => b.label)).toContain('Consensus');
+        expect(listBoards().map(b => b.label)).not.toContain('New Year Board');
+        expect(made.id).not.toBe(viewedSeason().id);
+    });
+
+    it('freezes its boards — a record of what somebody thought at the time', async () => {
+        const first = currentSeason();
+        await startSeason(first.year + 1);
+        setViewedSeason(first.id);
+
+        listBoards().forEach(b => expect(isFrozen(b)).toBe(true));
+    });
+
+    it('does not freeze the current season’s boards', () => {
+        listBoards().forEach(b => expect(isFrozen(b)).toBe(false));
+    });
+
+    it('falls back to the current season when the stored one is gone', async () => {
+        const first = currentSeason();
+        const made = await startSeason(first.year + 1);
+        setViewedSeason(made.id);
+        await scrapSeason();
+
+        expect(viewedSeason().id).toBe(first.id);
     });
 });

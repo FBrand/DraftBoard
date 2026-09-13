@@ -3941,3 +3941,107 @@ body.export-mode .card-glow {
     font-size: 0.95rem;
   }
 }
+
+/* ── Seasons ───────────────────────────────────────────────────────────────
+   A stack: one season is current and writable, everything under it is a
+   record. The two moves are not symmetrical and do not look alike — starting
+   a season loses nothing, rolling back deletes one. */
+.season-modal { max-width: 560px; }
+
+.season-body { padding: 20px 24px 24px; }
+
+.season-list {
+  list-style: none;
+  margin: 0 0 24px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.season-open {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.season-open:hover:not(:disabled) { border-color: var(--chiefs-gold); }
+.season-open:disabled { cursor: default; }
+.season-row.viewing .season-open { border-color: var(--chiefs-gold); background: rgba(255, 184, 28, 0.08); }
+
+.season-year {
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.1rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.season-tag {
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.season-tag.live { background: var(--chiefs-gold); color: #000; }
+.season-tag.archived { border: 1px solid var(--border-color); color: var(--text-dim); }
+
+.season-boards { font-size: 0.78rem; color: var(--text-dim); }
+.season-viewing { margin-left: auto; font-size: 0.7rem; color: var(--chiefs-gold); }
+
+.season-new { border-top: 1px solid var(--border-color); padding-top: 18px; }
+
+.season-new > label {
+  display: block;
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+}
+
+.season-new-row { display: flex; gap: 10px; align-items: stretch; }
+.season-new-row .text-input { flex: 1; font-size: 1rem; padding: 10px 12px; }
+.season-new-row .action-button { flex-shrink: 0; }
+
+.season-note {
+  margin: 10px 0 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--text-dim);
+}
+
+.season-danger { border-top: 1px solid var(--border-color); margin-top: 22px; padding-top: 18px; }
+.season-danger .action-button { width: 100%; }
+
+.action-button.danger {
+  background: transparent;
+  border: 1px solid var(--chiefs-red);
+  color: var(--chiefs-red);
+}
+
+.action-button.danger:hover:not(:disabled) { background: var(--chiefs-red); color: #fff; }
+.action-button.danger:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.season-warning {
+  margin: 0 0 14px;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--text-main);
+  border-left: 2px solid var(--chiefs-red);
+  padding-left: 12px;
+}
+
+.season-confirm-row { display: flex; gap: 10px; }
+.season-confirm-row .action-button { flex: 1; }

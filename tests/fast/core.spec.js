@@ -499,3 +499,39 @@ test.describe('the draft board in normal view', () => {
         expect(rows).toBeGreaterThan(0);
     });
 });
+
+test.describe('seasons', () => {
+    test('roll over to a new season, then roll back and get the old one intact', async ({ page }) => {
+        await openWarm(page, 'scouting');
+        await page.waitForSelector('.sg-row', { timeout: 30_000 });
+
+        const boards = () => page.locator('.switcher-btn').allInnerTexts();
+        const before = await boards();
+        expect(before).toContain('Consensus');
+
+        const openSeasons = async () => {
+            await page.locator('.view-tabbar-actions .app-menu-trigger').click();
+            await page.getByRole('menuitem', { name: /Seasons/i }).click();
+            await page.waitForSelector('.season-modal', { timeout: 10_000 });
+        };
+
+        // Rolling over starts an empty season. It creates NO boards on purpose:
+        // who is scouting this year is a decision, and last year's placements
+        // are about players who have left.
+        await openSeasons();
+        await page.locator('#season-year').fill('2031');
+        await page.getByRole('button', { name: /Roll over/i }).click();
+        await page.waitForTimeout(1200);
+        expect(await boards(), 'a new season arrived with boards on it').not.toContain('Consensus');
+
+        // Rolling back is the destructive one, so it asks first and names what
+        // goes — and then the season underneath is exactly as it was left.
+        await openSeasons();
+        await page.getByRole('button', { name: /Roll back to/i }).click();
+        await expect(page.locator('.season-warning')).toContainText('cannot be undone');
+        await page.getByRole('button', { name: /^Delete /i }).click();
+        await page.waitForTimeout(1200);
+
+        expect(await boards()).toEqual(before);
+    });
+});

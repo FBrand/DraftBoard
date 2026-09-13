@@ -111,3 +111,28 @@ describe('acquisition suffixes come off the name', () => {
         expect(parseAcquisition('', 2026).name).toBe('');
     });
 });
+
+/**
+ * A projected round is not a draft round.
+ *
+ * `round` on a board player is where somebody PROJECTED him. For a player who
+ * was never taken those are different facts, and the roster slot printed the
+ * projection as if it were history: Diego Pounds sat in the fifth round of the
+ * board, signed as an undrafted free agent, and his card read "R5" — a round
+ * he was never picked in, among numbers that all otherwise mean something that
+ * happened.
+ */
+describe('telling a projection from a selection', () => {
+    const projectedFifth = { name: 'Diego Pounds', round: 5, pickNumber: 'UDFA' };
+
+    it('knows a player with a projected round and no pick was not drafted', () => {
+        expect(isUndraftedSigning(projectedFifth)).toBe(true);
+        expect(isDraftPick(projectedFifth)).toBe(false);
+    });
+
+    it('knows a real selection even when the projection disagrees with it', () => {
+        const reached = { name: 'Somebody', round: 5, pickNumber: 21 };
+        expect(isDraftPick(reached)).toBe(true);
+        expect(isUndraftedSigning(reached)).toBe(false);
+    });
+});

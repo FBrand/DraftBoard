@@ -29,6 +29,7 @@ const EXACT = [
     'prospects_v1',            // players added, corrected or hidden in-app
     'position_value_v1',       // appSettings.js
     'session_team_v1',         // appSettings.js
+    'viewed_season_v1',        // which season is open (boardRegistry.js)
 ];
 
 /**

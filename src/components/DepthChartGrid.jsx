@@ -6,6 +6,7 @@ import {
 import { SPECIALIST_IDS, POS_TRANSLATIONS } from '../utils/rosterState';
 import { buildNameIndex, findMatchingIndex } from '../utils/nameMatcher';
 import { slotIdentity } from '../utils/formatName';
+import { isUndraftedSigning, isDraftPick } from '../utils/draftPhase';
 
 const PS_SLOTS = 3;
 
@@ -57,11 +58,24 @@ function slotMeta(slot, masterPlayers, draftedPlayers) {
 
     let topLabel = suffix || '';
     if (draftData && (draftData.round || draftData.pickNumber)) {
-        const r = draftData.round || getRoundFromPick(draftData.pickNumber);
-        const p = draftData.pickNumber;
-        if (r && p && !isNaN(parseInt(p))) topLabel = `R${r}: ${p}`;
-        else if (r) topLabel = `R${r}`;
-        else if (p) topLabel = !isNaN(parseInt(p)) ? `PICK ${p}` : p;
+        // `round` on a board player is the round somebody PROJECTED him in, not
+        // the round he went in. For a player who was never taken those are not
+        // the same thing at all: Diego Pounds sat in the fifth round of the
+        // board and signed as an undrafted free agent, and the slot labelled
+        // him R5 — a round he was never picked in, on a roster card, where
+        // every other number means something that actually happened.
+        if (isUndraftedSigning(draftData)) {
+            topLabel = 'UDFA';
+        } else {
+            const r = draftData.round || getRoundFromPick(draftData.pickNumber);
+            const p = draftData.pickNumber;
+            if (r && p && !isNaN(parseInt(p))) topLabel = `R${r}: ${p}`;
+            else if (isDraftPick(draftData) && r) topLabel = `R${r}`;
+            else if (p) topLabel = !isNaN(parseInt(p)) ? `PICK ${p}` : p;
+            // No pick and no proof he was drafted: say nothing rather than
+            // present a projection as history.
+            else topLabel = suffix || '';
+        }
     } else if (suffix && /^\d+$/.test(suffix)) {
         topLabel = `R${suffix}`;
     }
