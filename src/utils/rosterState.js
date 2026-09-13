@@ -3,7 +3,7 @@
  * Stored in localStorage under key 'rosterState'.
  */
 import { parseCsvLine, csvField } from './csvUtils';
-import { readSeasonScoped, seasonScopedKey } from './appStorage';
+import { readStage, writeStage } from '../data/stageStore';
 import { viewedSeason, isReadOnly } from './boardRegistry';
 
 // Which season's copy of this stage. Read at call time, never cached: the
@@ -204,11 +204,10 @@ function migrate(parsed) {
 
 export function loadState() {
     try {
-        const raw = readSeasonScoped(STORAGE_KEY, seasonId());
-        if (raw) {
-            const parsed = JSON.parse(raw);
-            if (parsed?.positionConfig?.offense?.length > 0) return migrate(parsed);
-        }
+        // A document, not a string: the stage store hands back what was
+        // stored, already parsed.
+        const parsed = readStage(STORAGE_KEY, seasonId());
+        if (parsed?.positionConfig?.offense?.length > 0) return migrate(parsed);
     } catch { /* ignore */ }
     return null;
 }
@@ -218,7 +217,7 @@ export function saveState(state) {
     // on each control, because one forgotten button is all it takes and this is
     // the single door every change goes through.
     if (isReadOnly()) return;
-    localStorage.setItem(seasonScopedKey(STORAGE_KEY, seasonId()), JSON.stringify({ ...state, version: STATE_VERSION }));
+    writeStage(STORAGE_KEY, seasonId(), { ...state, version: STATE_VERSION });
 }
 
 // ---------------------------------------------------------------------------

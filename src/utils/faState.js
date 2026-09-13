@@ -11,7 +11,7 @@
  * /home/dev/.claude/plans/structured-growing-cat.md section 3 for why.
  */
 import { defaultState, parseCSV, exportCSV } from './rosterState';
-import { readSeasonScoped, seasonScopedKey } from './appStorage';
+import { readStage, writeStage } from '../data/stageStore';
 import { viewedSeason, isReadOnly, seasonIsSeeded } from './boardRegistry';
 
 // Which season's copy of this stage. Read at call time, never cached: the
@@ -26,7 +26,7 @@ export { parseCSV, exportCSV };
 
 export function hasSavedState() {
     try {
-        return readSeasonScoped(STORAGE_KEY, seasonId()) !== null;
+        return readStage(STORAGE_KEY, seasonId()) !== null;
     } catch {
         return false;
     }
@@ -94,11 +94,8 @@ function migrate(parsed) {
 
 export function loadState() {
     try {
-        const raw = readSeasonScoped(STORAGE_KEY, seasonId());
-        if (raw) {
-            const parsed = JSON.parse(raw);
-            if (parsed?.positionConfig) return migrate(parsed) ?? defaultState();
-        }
+        const parsed = readStage(STORAGE_KEY, seasonId());
+        if (parsed?.positionConfig) return migrate(parsed) ?? defaultState();
     } catch { /* ignore */ }
     return defaultState();
 }
@@ -108,7 +105,7 @@ export function saveState(state) {
     // on each control, because one forgotten button is all it takes and this is
     // the single door every change goes through.
     if (isReadOnly()) return;
-    localStorage.setItem(seasonScopedKey(STORAGE_KEY, seasonId()), JSON.stringify({ ...state, version: STATE_VERSION }));
+    writeStage(STORAGE_KEY, seasonId(), { ...state, version: STATE_VERSION });
 }
 
 /**

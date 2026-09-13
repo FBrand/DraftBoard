@@ -27,7 +27,7 @@
  * been set up yet" look identical in storage, and treating the first as the
  * second is what re-seeded a season somebody had deliberately cleared.
  */
-import { seasonScopedKey } from './appStorage';
+import { readStage, writeStage } from '../data/stageStore';
 import { STATE_VERSION as ROSTER_VERSION } from './rosterState';
 
 const DONE_KEY = 'season_init_v1';
@@ -51,7 +51,7 @@ export function forgetSeason(seasonId) {
     try { localStorage.setItem(DONE_KEY, JSON.stringify(read().filter(id => id !== seasonId))); } catch { /* ignore */ }
 }
 
-const EMPTY_ROSTER = JSON.stringify({
+const EMPTY_ROSTER = () => ({
     version: ROSTER_VERSION,
     positionConfig: { offense: [], defense: [] },
     depthChart: {},
@@ -59,7 +59,7 @@ const EMPTY_ROSTER = JSON.stringify({
     cuts: [],
 });
 
-const EMPTY_DRAFT = JSON.stringify({ draftedPlayers: [], ourPicksLeft: [] });
+const EMPTY_DRAFT = () => ({ draftedPlayers: [], ourPicksLeft: [] });
 
 /** The same depth chart with nobody standing in it. */
 function emptied(state) {
@@ -79,31 +79,22 @@ function emptied(state) {
 export function initialiseSeason(seasonId, { carryRosterFrom = null } = {}) {
     if (!seasonId || isInitialised(seasonId)) return false;
 
-    const put = (base, value) => {
-        try { localStorage.setItem(seasonScopedKey(base, seasonId), value); } catch { /* ignore */ }
-    };
+    const put = (base, value) => writeStage(base, seasonId, value);
 
-    let last = null;
-    if (carryRosterFrom) {
-        try {
-            const raw = localStorage.getItem(seasonScopedKey('rosterState', carryRosterFrom));
-            const parsed = raw ? JSON.parse(raw) : null;
-            if (parsed && typeof parsed === 'object') last = parsed;
-        } catch { /* start empty */ }
-    }
+    const last = carryRosterFrom ? readStage('rosterState', carryRosterFrom) : null;
 
     if (last) {
         // Free agency is where an offseason starts, and it starts with the
         // players whose futures are the question: last season's roster.
-        put('fa_state_v1', JSON.stringify(last));
+        put('fa_state_v1', last);
         // The 53 is what the offseason PRODUCES. It keeps the shape — the
         // position rows and how many each holds — and none of the players.
-        put('rosterState', JSON.stringify(emptied(last)));
+        put('rosterState', emptied(last));
     } else {
-        put('rosterState', EMPTY_ROSTER);
+        put('rosterState', EMPTY_ROSTER());
     }
 
-    put('nfl_draft_board_state', EMPTY_DRAFT);
+    put('nfl_draft_board_state', EMPTY_DRAFT());
     // The prospect pool is left ABSENT rather than written empty: it seeds
     // itself on first use, gated on whether this is the shipped season, and an
     // empty written state is indistinguishable from one somebody cleared.

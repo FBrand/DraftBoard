@@ -3,6 +3,7 @@ import {
     classify, addProspect, savePlayerEdit, deletePlayer,
     restorePlayer, hiddenPlayers, applyProspects, loadProspects,
 } from '../../src/utils/prospects';
+import { repository } from '../../src/data/repository';
 
 /**
  * Adding, correcting and removing players.
@@ -23,7 +24,12 @@ const FILE = [
     { name: 'Arvell Reese', position: 'EDGE', school: 'Ohio State' },
 ];
 
-beforeEach(() => { globalThis.resetStorage(); });
+beforeEach(() => {
+    globalThis.resetStorage();
+    // State lives in the repository now, which keeps its own copy — clearing
+    // storage underneath it would leave the previous test's pool in memory.
+    repository.invalidate();
+});
 
 describe('deciding whether a typed name is new', () => {
     it('calls an unknown name new', () => {

@@ -483,10 +483,14 @@ test.describe('the draft board in normal view', () => {
         // Wind the seeded, completed draft back to a handful of picks so there
         // are drafted and undrafted players sharing a tier.
         await page.evaluate(() => {
-            // Season-scoped now: the stage keys carry the season id, so no
-            // literal names one. Find the season's copy rather than assuming.
-            const KEY = Object.keys(localStorage).find(k => k.startsWith('nfl_draft_board_state'));
-            const st = JSON.parse(localStorage.getItem(KEY));
+            // A document in the stages collection now, not a key of its own:
+            // the four stages went through the repository so the backend can
+            // be swapped. Reach in the same way the app does — by stage name,
+            // not by guessing a key.
+            const COLLECTION = 'db_stages';
+            const docs = JSON.parse(localStorage.getItem(COLLECTION) || '{}');
+            const entry = Object.values(docs).find(d => d.stage === 'nfl_draft_board_state');
+            const st = entry.value;
             const kept = (st.draftedPlayers || []).filter(d => Number(d.pickNumber) <= 9);
             const names = new Set(kept.map(d => `${d.name}|${d.position}`));
             st.draftedPlayers = kept;
@@ -495,7 +499,8 @@ test.describe('the draft board in normal view', () => {
             st.players = (st.players || []).map(pl => names.has(`${pl.name}|${pl.position}`)
                 ? pl
                 : { ...pl, drafted: false, draftedByUs: false, pickNumber: undefined, team: undefined });
-            localStorage.setItem(KEY, JSON.stringify(st));
+            docs[entry.id] = { ...entry, value: st };
+            localStorage.setItem(COLLECTION, JSON.stringify(docs));
         });
         await page.reload();
         await page.waitForSelector('.player-card', { timeout: 45_000 });

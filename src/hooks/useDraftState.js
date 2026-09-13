@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { readSeasonScoped, seasonScopedKey } from '../utils/appStorage';
+import { readStage, writeStage, removeStage, openStages } from '../data/stageStore';
 import { viewedSeason, seasonIsSeeded } from '../utils/boardRegistry';
 
 // Which season's copy of this stage. Read at call time, never cached: the
@@ -158,7 +158,7 @@ export const useDraftState = () => {
                 // whose file was renamed, or one made in the app, could not be
                 // linked to at all. The path is gone; the board knows its own
                 // file.
-                await openBoards();
+                await Promise.all([openBoards(), openStages()]);
                 const slug = params.get('board');
                 const board = slug ? boardBySlug(slug) : null;
                 const fromBoard = board?.rankingsFile ? `${base}${board.rankingsFile}` : null;
@@ -194,7 +194,7 @@ export const useDraftState = () => {
                 const parsedPlayers = parseRankings(rankingsText) || [];
                 const parsedOurPicks = parsePicks(picksText) || [];
 
-                const savedState = readSeasonScoped(DRAFT_STORAGE_KEY, seasonId());
+                const savedState = readStage(DRAFT_STORAGE_KEY, seasonId());
 
                 let seedDrafted = [];
                 let seedKCLeft = parsedOurPicks;
@@ -217,10 +217,9 @@ export const useDraftState = () => {
 
                 if (savedState || seedDrafted.length > 0 || seedKCLeft !== parsedOurPicks) {
                     try {
-                        let parsedState = {};
-                        if (savedState) {
-                            parsedState = JSON.parse(savedState);
-                        }
+                        // Already a document — the stage store parses on the
+                        // way out, so there is nothing left to parse here.
+                        const parsedState = savedState ?? {};
                         const savedDrafted = Array.isArray(parsedState.draftedPlayers) ? parsedState.draftedPlayers : seedDrafted;
                         const savedKCLeft = Array.isArray(parsedState.ourPicksLeft) ? parsedState.ourPicksLeft : seedKCLeft;
 
@@ -311,7 +310,7 @@ export const useDraftState = () => {
     useEffect(() => {
         if (!loading) {
             const state = { players, ourPicksLeft, currentPick, draftedPlayers, yourPicks, remotePicks };
-            localStorage.setItem(seasonScopedKey(DRAFT_STORAGE_KEY, seasonId()), JSON.stringify(state));
+            writeStage(DRAFT_STORAGE_KEY, seasonId(), state);
         }
     }, [players, ourPicksLeft, currentPick, draftedPlayers, yourPicks, remotePicks, loading]);
 
@@ -427,8 +426,8 @@ export const useDraftState = () => {
     // state key, which worked only because it is truthy enough to skip seeding
     // and then throws inside the JSON.parse try/catch.)
     const resetDraft = useCallback(() => {
-        localStorage.removeItem(seasonScopedKey(DRAFT_STORAGE_KEY, seasonId()));
-        localStorage.setItem(seasonScopedKey(DRAFT_STORAGE_KEY, seasonId()), JSON.stringify({ draftedPlayers: [], ourPicksLeft: [] }));
+        removeStage(DRAFT_STORAGE_KEY, seasonId());
+        writeStage(DRAFT_STORAGE_KEY, seasonId(), { draftedPlayers: [], ourPicksLeft: [] });
         window.location.reload();
     }, []);
 

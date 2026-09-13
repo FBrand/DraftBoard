@@ -38,7 +38,7 @@ const EXACT = [
  * allowlist — it just names a shape instead of an instance.
  */
 const PREFIXES = [
-    'rosterState__',           // one per season (see seasonScopedKey)
+    'rosterState__',           // legacy, pre-stageStore: migrated on first read
     'fa_state_v1__',           // the same
     'nfl_draft_board_state__', // the same
     'prospects_v1__',          // the same

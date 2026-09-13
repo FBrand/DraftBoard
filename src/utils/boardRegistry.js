@@ -30,7 +30,8 @@
  */
 import { repository } from '../data/repository';
 import { DRAFT_YEAR } from '../constants';
-import { boardStateKey, seasonScopedKey } from './appStorage';
+import { boardStateKey } from './appStorage';
+import { removeSeasonStages } from '../data/stageStore';
 import { initialiseSeason, forgetSeason } from './seasonInit';
 
 export const SEASONS = 'seasons';
@@ -301,9 +302,7 @@ export async function scrapSeason() {
         try { localStorage.removeItem(boardStateKey(b.id)); } catch { /* ignore */ }
     });
 
-    ['rosterState', 'fa_state_v1', 'nfl_draft_board_state', 'prospects_v1'].forEach(base => {
-        try { localStorage.removeItem(seasonScopedKey(base, outgoing.id)); } catch { /* ignore */ }
-    });
+    await removeSeasonStages(outgoing.id);
     forgetSeason(outgoing.id);
 
     await repository.remove(SEASONS, outgoing.id);

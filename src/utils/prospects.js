@@ -12,7 +12,7 @@
  * that he exists is a fact, where he belongs is an opinion.
  */
 import { buildNameIndex, findMatchingIndex } from './nameMatcher';
-import { readSeasonScoped, seasonScopedKey } from './appStorage';
+import { readStage, writeStage } from '../data/stageStore';
 import { viewedSeason } from './boardRegistry';
 
 // Which season's copy of this stage. Read at call time, never cached: the
@@ -30,9 +30,8 @@ const EMPTY = () => ({ version: STATE_VERSION, players: [], edits: [], hidden: [
 
 function read() {
     try {
-        const raw = readSeasonScoped(STORAGE_KEY, seasonId());
-        if (!raw) return EMPTY();
-        const parsed = JSON.parse(raw);
+        const parsed = readStage(STORAGE_KEY, seasonId());
+        if (!parsed) return EMPTY();
         if (typeof parsed?.version === 'number' && parsed.version > STATE_VERSION) {
             return EMPTY(); // written by a newer build
         }
@@ -58,7 +57,7 @@ const originOf = (p) => p?.sourceIdentity ?? identityOf(p);
 
 function write(state) {
     try {
-        localStorage.setItem(seasonScopedKey(STORAGE_KEY, seasonId()), JSON.stringify({ ...state, version: STATE_VERSION }));
+        writeStage(STORAGE_KEY, seasonId(), { ...state, version: STATE_VERSION });
     } catch { /* ignore */ }
 }
 

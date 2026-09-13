@@ -131,9 +131,54 @@ export function createRepository(adapter = localAdapter) {
         notify(collection);
     }
 
+    // ── Writes that can fail ──────────────────────────────────────────────
+    //
+    // A write updates memory first, notifies, and reaches the adapter after —
+    // which is right for a UI that must not wait, and a lie if the write then
+    // fails. Against localStorage it could only fail on a full quota, and the
+    // adapter swallowed that: the app had already been told it worked.
+    //
+    // Over a network it will fail routinely — offline, a rule rejecting it, a
+    // timeout. So a failed write puts back what was there before and says so.
+    // The put-back is why the previous value is captured before the change
+    // rather than re-read after: by then it is the new one.
+    const writeErrorListeners = new Set();
+
+    /** Notified when a write did not reach the adapter. Returns an unsubscribe. */
+    function onWriteError(fn) {
+        writeErrorListeners.add(fn);
+        return () => writeErrorListeners.delete(fn);
+    }
+
+    function reportWriteError(detail) {
+        writeErrorListeners.forEach(fn => {
+            try { fn(detail); } catch { /* a listener must not break the rollback */ }
+        });
+    }
+
+    /**
+     * Runs an adapter write, and undoes the local change if it is rejected.
+     *
+     * `restore` is applied rather than a whole-collection snapshot being put
+     * back: another write may have landed in between, and reverting the
+     * collection would discard it too.
+     */
+    function guard(promise, { collection, restore, op, id }) {
+        return Promise.resolve(promise).catch(err => {
+            restore();
+            notify(collection);
+            reportWriteError({ collection, id, op, error: err });
+            throw err;
+        });
+    }
+
     function set(collection, id, doc) {
+        const before = get(collection, id);
         applyLocal(collection, id, doc);
-        return adapter.set(collection, id, doc);
+        return guard(adapter.set(collection, id, doc), {
+            collection, id, op: 'set',
+            restore: () => applyLocal(collection, id, before ?? null),
+        });
     }
 
     function update(collection, id, patch) {
@@ -142,8 +187,12 @@ export function createRepository(adapter = localAdapter) {
     }
 
     function remove(collection, id) {
+        const before = get(collection, id);
         applyLocal(collection, id, null);
-        return adapter.remove(collection, id);
+        return guard(adapter.remove(collection, id), {
+            collection, id, op: 'remove',
+            restore: () => { if (before) applyLocal(collection, id, before); },
+        });
     }
 
     /** Several documents in one go — one adapter round trip, one notify. */
@@ -156,11 +205,20 @@ export function createRepository(adapter = localAdapter) {
         });
         cache.set(collection, next);
         notify(collection);
-        return adapter.commit
+
+        // A batch is one write, so it fails as one: every document in it goes
+        // back, not the ones that happened to be attempted first.
+        const before = changes.map(c => ({ id: c.id, doc: current[c.id] ?? null }));
+        const write = adapter.commit
             ? adapter.commit(collection, changes)
             : Promise.all(changes.map(c => (c.doc === null
                 ? adapter.remove(collection, c.id)
                 : adapter.set(collection, c.id, c.doc))));
+
+        return guard(write, {
+            collection, id: null, op: 'commit',
+            restore: () => before.forEach(({ id, doc }) => applyLocal(collection, id, doc)),
+        });
     }
 
     function clear(collection) {
@@ -183,7 +241,7 @@ export function createRepository(adapter = localAdapter) {
         else { cache.delete(collection); loading.delete(collection); }
     }
 
-    return { ready, ensureLoaded, docs, get, all, query, set, update, remove, commit, clear, subscribe, invalidate, adapter };
+    return { ready, ensureLoaded, docs, get, all, query, set, update, remove, commit, clear, subscribe, invalidate, onWriteError, adapter };
 }
 
 export const repository = createRepository();

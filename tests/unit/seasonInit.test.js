@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { initialiseSeason, isInitialised, forgetSeason } from '../../src/utils/seasonInit';
-import { seasonScopedKey } from '../../src/utils/appStorage';
+import { readStage, writeStage } from '../../src/data/stageStore';
+import { repository } from '../../src/data/repository';
 
 /**
  * What a season starts with.
@@ -16,9 +17,10 @@ import { seasonScopedKey } from '../../src/utils/appStorage';
  * look identical in storage, and reading the first as the second is what
  * re-seeded a season somebody had deliberately cleared.
  */
-const key = (base, season) => seasonScopedKey(base, season);
-
-beforeEach(() => { globalThis.resetStorage(); });
+beforeEach(() => {
+    globalThis.resetStorage();
+    repository.invalidate();
+});
 
 describe('setting a season up', () => {
     it('does it once and says so', () => {
@@ -29,22 +31,22 @@ describe('setting a season up', () => {
 
     it('does not run again, so a season somebody cleared stays cleared', () => {
         initialiseSeason('s1');
-        localStorage.setItem(key('nfl_draft_board_state', 's1'), '{"draftedPlayers":[{"name":"Somebody"}]}');
+        writeStage('nfl_draft_board_state', 's1', { draftedPlayers: [{ name: 'Somebody' }] });
 
         expect(initialiseSeason('s1')).toBe(false);
-        expect(localStorage.getItem(key('nfl_draft_board_state', 's1'))).toContain('Somebody');
+        expect(JSON.stringify(readStage('nfl_draft_board_state', 's1'))).toContain('Somebody');
     });
 
     it('starts the draft empty', () => {
         initialiseSeason('s1');
-        expect(JSON.parse(localStorage.getItem(key('nfl_draft_board_state', 's1')))).toEqual({
+        expect(readStage('nfl_draft_board_state', 's1')).toEqual({
             draftedPlayers: [], ourPicksLeft: [],
         });
     });
 
     it('starts the roster empty when there is nothing to carry', () => {
         initialiseSeason('s1');
-        const roster = JSON.parse(localStorage.getItem(key('rosterState', 's1')));
+        const roster = readStage('rosterState', 's1');
         expect(roster.depthChart).toEqual({});
         expect(roster.cuts).toEqual([]);
     });
@@ -53,7 +55,7 @@ describe('setting a season up', () => {
         // It seeds itself on first use, and an empty written state is
         // indistinguishable from one somebody cleared.
         initialiseSeason('s1');
-        expect(localStorage.getItem(key('prospects_v1', 's1'))).toBeNull();
+        expect(readStage('prospects_v1', 's1')).toBeNull();
     });
 
     it('refuses without a season', () => {
@@ -67,27 +69,27 @@ describe('what a rollover hands the new season', () => {
     // futures are the question. The new roster keeps its shape and none of its
     // players, which is the same split the shipped files make: one file gives
     // the structure, another gives free agency its candidates.
-    const LAST_YEAR = JSON.stringify({
+    const LAST_YEAR = {
         version: 1,
         positionConfig: { offense: [{ id: 'qb', label: 'QB', slots53: 2 }], defense: [] },
         depthChart: { qb: [{ name: 'Patrick Mahomes', zone: '53' }] },
         reserve: [{ name: 'Somebody Hurt', zone: 'ir' }],
         cuts: [{ name: 'Somebody Cut', zone: 'cut' }],
-    });
+    };
 
     it('puts last season’s roster into free agency, where the offseason starts', () => {
-        localStorage.setItem(key('rosterState', 's1'), LAST_YEAR);
+        writeStage('rosterState', 's1', LAST_YEAR);
         initialiseSeason('s2', { carryRosterFrom: 's1' });
 
-        const fa = JSON.parse(localStorage.getItem(key('fa_state_v1', 's2')));
+        const fa = readStage('fa_state_v1', 's2');
         expect(fa.depthChart.qb.map(s => s.name)).toEqual(['Patrick Mahomes']);
     });
 
     it('gives the new roster the shape and none of the players', () => {
-        localStorage.setItem(key('rosterState', 's1'), LAST_YEAR);
+        writeStage('rosterState', 's1', LAST_YEAR);
         initialiseSeason('s2', { carryRosterFrom: 's1' });
 
-        const roster = JSON.parse(localStorage.getItem(key('rosterState', 's2')));
+        const roster = readStage('rosterState', 's2');
         expect(roster.positionConfig.offense).toEqual([{ id: 'qb', label: 'QB', slots53: 2 }]);
         expect(roster.depthChart).toEqual({ qb: [] });
         expect(roster.reserve).toEqual([]);
@@ -95,24 +97,24 @@ describe('what a rollover hands the new season', () => {
     });
 
     it('does not carry last season’s injuries or cuts into either', () => {
-        localStorage.setItem(key('rosterState', 's1'), LAST_YEAR);
+        writeStage('rosterState', 's1', LAST_YEAR);
         initialiseSeason('s2', { carryRosterFrom: 's1' });
 
-        expect(JSON.parse(localStorage.getItem(key('rosterState', 's2'))).reserve).toEqual([]);
+        expect(readStage('rosterState', 's2').reserve).toEqual([]);
     });
 
     it('copies rather than shares, so this year does not rewrite last year', () => {
-        localStorage.setItem(key('rosterState', 's1'), LAST_YEAR);
+        writeStage('rosterState', 's1', LAST_YEAR);
         initialiseSeason('s2', { carryRosterFrom: 's1' });
 
-        localStorage.setItem(key('rosterState', 's2'), '{"version":1,"depthChart":{},"reserve":[],"cuts":[]}');
-        expect(localStorage.getItem(key('rosterState', 's1'))).toBe(LAST_YEAR);
+        writeStage('rosterState', 's2', { version: 1, depthChart: {}, reserve: [], cuts: [] });
+        expect(readStage('rosterState', 's1')).toEqual(LAST_YEAR);
     });
 
     it('starts empty when the season it came from has no roster', () => {
         initialiseSeason('s2', { carryRosterFrom: 's1' });
-        expect(JSON.parse(localStorage.getItem(key('rosterState', 's2'))).depthChart).toEqual({});
-        expect(localStorage.getItem(key('fa_state_v1', 's2'))).toBeNull();
+        expect(readStage('rosterState', 's2').depthChart).toEqual({});
+        expect(readStage('fa_state_v1', 's2')).toBeNull();
     });
 });
 

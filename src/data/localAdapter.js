@@ -29,9 +29,12 @@ function readAll(collection) {
 }
 
 function writeAll(collection, docs) {
-    try {
-        localStorage.setItem(keyFor(collection), JSON.stringify(docs));
-    } catch { /* quota or private mode — the in-memory copy still stands */ }
+    // Throws rather than swallowing. A full quota or a private-mode window is
+    // a write that did not happen, and the repository now puts the local
+    // change back and says so — which it cannot do if the failure is hidden
+    // here. This was the one way a local write could fail, and it was silent:
+    // the app had already been told it worked.
+    localStorage.setItem(keyFor(collection), JSON.stringify(docs));
 }
 
 export const localAdapter = {
