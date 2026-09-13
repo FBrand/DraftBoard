@@ -139,7 +139,7 @@ export default function RosterView({ masterPlayers, draftedPlayers, onInfoOpen }
     // touches draft state; the arrival tag beside the name records how they
     // arrived, the same thing roster.csv encodes in its suffix.
     const handleSignPlayer = (customPlayer) => {
-        const { id: linkedId, name, position, arrival = null, team, previousTeam, draftYear, draftRound } = customPlayer;
+        const { id: linkedId, name, position, rosterRow, arrival = null, team, previousTeam, draftYear, draftRound } = customPlayer;
         const displayName = String(name).split(':')[0];
 
         // Team and previous team are facts about the player, so they go on his
@@ -185,7 +185,10 @@ export default function RosterView({ masterPlayers, draftedPlayers, onInfoOpen }
         // Computed outside setState: an updater is deferred to the render
         // phase, so a result read back straight after it would be stale.
         const next = { ...state, depthChart: { ...state.depthChart } };
-        const rowId = resolvePosition(position, state.positionConfig, next.depthChart);
+        // Where he STANDS, which the form asked for outright rather than the
+        // app inferring it from what he plays. Falling back to the position
+        // for the paths that do not ask — an import, a sync.
+        const rowId = resolvePosition(rosterRow || position, state.positionConfig, next.depthChart);
 
         if (!rowId) {
             setToast({
@@ -510,7 +513,8 @@ export default function RosterView({ masterPlayers, draftedPlayers, onInfoOpen }
                 onInfoOpen={onInfoOpen}
             />
 
-            <UnrankedModal key={`sign-${isSignModalOpen}`} isOpen={isSignModalOpen} onClose={() => setIsSignModalOpen(false)} onDraft={handleSignPlayer} mode="roster" />
+            <UnrankedModal key={`sign-${isSignModalOpen}`} isOpen={isSignModalOpen} onClose={() => setIsSignModalOpen(false)} onDraft={handleSignPlayer} mode="roster"
+                rosterRows={[...state.positionConfig.offense, ...state.positionConfig.defense]} />
 
             {addPositionPhase && (
                 <TextPromptDialog

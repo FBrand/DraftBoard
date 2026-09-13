@@ -370,6 +370,40 @@ test.describe('adding players', () => {
     });
 });
 
+test.describe('what he plays and where he stands', () => {
+    test('a position no row is called asks, rather than guessing a row', async ({ page }) => {
+        await openWarm(page, 'roster');
+        await page.waitForSelector('.roster-grid', { timeout: 45_000 });
+
+        await page.getByRole('button', { name: /Sign Player|\+ Sign/i }).first().click();
+        const modal = page.locator('.modal-content');
+        await modal.waitFor({ timeout: 10_000 });
+
+        // A board says a man is an OT. A depth chart has an LT and an RT and
+        // nothing called OT. The app could decide tackles play at tackle —
+        // a judgement dressed up as a lookup, and wrong the moment a row is
+        // named differently. It asks instead.
+        await modal.locator('input').nth(0).fill('Test Tackle');
+        await page.locator('.up-position-pair input').fill('OT');
+        await page.getByRole('button', { name: /^Sign FA$/i }).click();
+
+        await expect(page.locator('.up-position-pair .ap-error')).toContainText('OT');
+        await expect(modal, 'it closed and guessed').toBeVisible();
+
+        // Answer it, and he goes where you said — still an OT, because that is
+        // what he plays. Where he stands belongs to the depth chart.
+        await page.locator('.up-position-pair select').selectOption('LT');
+        await page.getByRole('button', { name: /^Sign FA$/i }).click();
+        await expect(modal).toBeHidden();
+
+        expect(await slotNames(page)).toContain('Test Tackle');
+        const recorded = await page.evaluate(() => Object.values(
+            JSON.parse(localStorage.getItem('db_players') || '{}'),
+        ).find(p => p.name === 'Test Tackle')?.position);
+        expect(recorded, 'the depth chart overwrote what he plays').toBe('OT');
+    });
+});
+
 test.describe('session and init', () => {
     test('a clean slate empties every stage and survives a reload', async ({ page }) => {
         await openWarm(page, 'roster');

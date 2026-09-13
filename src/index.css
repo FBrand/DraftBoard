@@ -4087,3 +4087,46 @@ body.export-mode .card-glow {
 
 .up-linked-mark { color: var(--chiefs-gold); font-weight: 900; }
 .up-linked .ap-link { margin-left: auto; flex-shrink: 0; }
+
+/* ── What he plays, and where he stands ────────────────────────────────────
+   A board says a man is an OT; a depth chart has an LT and an RT and no row
+   called OT. Rather than the app deciding that tackles play at tackle — a
+   judgement dressed up as a lookup, and wrong the moment a row is named
+   differently — it asks. Either field alone is enough. */
+.up-position-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.up-position-pair .form-group {
+  grid-template-columns: 1fr;
+  gap: 6px;
+}
+
+.up-position-pair .form-group label {
+  text-align: left;
+  font-size: 0.95rem;
+}
+
+.up-position-pair select.text-input {
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--text-dim) 50%),
+                    linear-gradient(135deg, var(--text-dim) 50%, transparent 50%);
+  background-position: calc(100% - 18px) calc(50% + 2px), calc(100% - 13px) calc(50% + 2px);
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 34px;
+}
+
+.up-position-hint,
+.up-position-pair .ap-error {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+}
+
+@media (max-width: 640px) {
+  .up-position-pair { grid-template-columns: 1fr; gap: 0; }
+}

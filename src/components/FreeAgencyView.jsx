@@ -154,11 +154,16 @@ export default function FreeAgencyView({ masterPlayers, draftedPlayers, onInfoOp
         });
     };
 
-    const handleAddCandidate = ({ name, position, team, previousTeam, draftYear, draftRound }) => {
+    const handleAddCandidate = ({ id: linkedId, name, position, rosterRow, team, previousTeam, draftYear, draftRound }) => {
         // Where a candidate plays now is a fact about him, not about this
         // shortlist, so it goes on his record the same way a signing's does.
         if (team || previousTeam || draftYear || draftRound) {
-            const id = resolvePlayer({ name, position });
+            // The record the form was pointed at, when somebody picked one —
+            // then his name, then a new one. Qualifying by position here made
+            // a second record for a player the app already knew.
+            const id = linkedId
+                ?? resolvePlayer({ name }, { create: false })
+                ?? resolvePlayer({ name, position });
             if (id) setFacts(id, {
                 ...(team ? { team } : {}),
                 ...(previousTeam ? { previousTeam } : {}),
@@ -168,7 +173,10 @@ export default function FreeAgencyView({ masterPlayers, draftedPlayers, onInfoOp
         }
 
         setState(prev => {
-            let rowId = resolvePosition(position, prev.positionConfig, prev.depthChart);
+            // The row the form asked for outright, rather than inferred from
+            // what he plays — see UnrankedModal. Position is the fallback for
+            // paths that do not ask.
+            let rowId = resolvePosition(rosterRow || position, prev.positionConfig, prev.depthChart);
             const next = { ...prev, positionConfig: { ...prev.positionConfig }, depthChart: { ...prev.depthChart } };
             if (!rowId) {
                 const isDefense = ['ED', 'DT', 'DE', 'LB', 'CB', 'S', 'NT'].includes(position);
@@ -311,6 +319,7 @@ export default function FreeAgencyView({ masterPlayers, draftedPlayers, onInfoOp
                 onClose={() => setIsAddOpen(false)}
                 onDraft={handleAddCandidate}
                 mode="candidate"
+                rosterRows={[...state.positionConfig.offense, ...state.positionConfig.defense]}
             />
 
             {addPositionPhase && (

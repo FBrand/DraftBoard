@@ -71,6 +71,21 @@ export function createRepository(adapter = localAdapter) {
         return ensureLoaded(collection);
     }
 
+    /**
+     * Whether this collection can be read synchronously yet.
+     *
+     * "Nothing here" and "not loaded yet" are the same empty array to every
+     * caller, and against a local adapter they always will be — loadSync fills
+     * the cache on the spot. Against a remote one they are different answers
+     * to different questions, and a caller that cannot tell them apart reports
+     * the wrong one: the add form would show "no matching players" while the
+     * registry was still arriving, and let somebody add a duplicate of a player
+     * it simply had not seen yet.
+     */
+    function isLoaded(collection) {
+        return cache.has(collection) || !!adapter.loadSync;
+    }
+
     function get(collection, id) {
         return ensureLoaded(collection)?.[id] ?? null;
     }
@@ -241,7 +256,7 @@ export function createRepository(adapter = localAdapter) {
         else { cache.delete(collection); loading.delete(collection); }
     }
 
-    return { ready, ensureLoaded, docs, get, all, query, set, update, remove, commit, clear, subscribe, invalidate, onWriteError, adapter };
+    return { ready, ensureLoaded, docs, isLoaded, get, all, query, set, update, remove, commit, clear, subscribe, invalidate, onWriteError, adapter };
 }
 
 export const repository = createRepository();

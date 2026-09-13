@@ -17,7 +17,7 @@ import { resolve as resolvePlayer, byId, searchPlayers } from '../utils/playerRe
 //               — a free agent costs money and a trade costs picks. The verb
 //               differs from 'roster': FA records who you are considering, it
 //               does not sign anybody.
-const UnrankedModal = ({ isOpen, onClose, onDraft, mode = 'draft', initialPlayer = null }) => {
+const UnrankedModal = ({ isOpen, onClose, onDraft, mode = 'draft', initialPlayer = null, rosterRows = [] }) => {
     const [name, setName] = useState(() => initialPlayer?.name || '');
     const [position, setPosition] = useState(() => initialPlayer?.position || '');
     // School is part of the identity — two players sharing a name are told
@@ -34,6 +34,14 @@ const UnrankedModal = ({ isOpen, onClose, onDraft, mode = 'draft', initialPlayer
             ?? resolvePlayer({ name: initialPlayer.name }, { create: false });
         return (id && byId(id)?.school) || '';
     });
+    // Where he lines up, as opposed to what he plays. A board says a man is an
+    // OT; a depth chart has an LT and an RT and no row called OT. Rather than
+    // the app deciding that tackles play at tackle — a judgement dressed up as
+    // a lookup, and wrong the moment somebody names a row differently — it
+    // asks. Either field alone is enough and fills the other; the only case
+    // that needs a person is a position no row answers to.
+    const [rosterRow, setRosterRow] = useState('');
+    const [rowError, setRowError] = useState(null);
     const [team, setTeam] = useState(() => initialPlayer?.team || 'KC');
     // Where he came from. Only means anything for a move between clubs — a
     // draft pick and a UDFA are entering the league, not leaving somewhere.
@@ -53,19 +61,26 @@ const UnrankedModal = ({ isOpen, onClose, onDraft, mode = 'draft', initialPlayer
 
     if (!isOpen) return null;
 
-    const disabled = !name || !position;
+    // The dropdown exists where a depth chart does. The draft and UDFA forms
+    // are about entering the league, not about standing somewhere.
+    const asksForRow = rosterRows.length > 0;
+    const rowLabels = rosterRows.map(r => r.label);
+    const matchesARow = (p) => rowLabels.some(l => l.toUpperCase() === String(p).trim().toUpperCase());
+
+    const disabled = !name || (!position && !rosterRow);
 
     // Who the app already knows by that name. The form had no way of showing
     // this: nothing warned, nothing offered him, and the first feedback came
     // after saving — as a second record you could not see, because the card
     // that displays him resolves by name and finds the original.
     const matches = linkedId ? [] : searchPlayers(name);
+    const stillLoading = matches === null;
     const linked = linkedId ? byId(linkedId) : null;
 
     const pickExisting = (p) => {
         setLinkedId(p.id);
         setName(p.name);
-        if (p.position) setPosition(p.position);
+        if (p.position) { setPosition(p.position); setRowError(null); }
         if (p.school) setSchool(p.school);
         if (p.draftYear) setDraftYear(String(p.draftYear));
         if (p.draftRound) setDraftRound(String(p.draftRound));
@@ -83,6 +98,21 @@ const UnrankedModal = ({ isOpen, onClose, onDraft, mode = 'draft', initialPlayer
 
     const submit = (suffix = '', clubOverride) => {
         if (disabled) return;
+
+        // Whichever is blank takes the other. Typing "LT" in one box and
+        // nothing in the other is a complete answer, and so is typing "WR".
+        const typed = position.trim();
+        const chosen = rosterRow.trim();
+        const playsAs = typed || chosen;
+        const standsAt = chosen || (matchesARow(typed) ? typed : '');
+
+        if (asksForRow && !standsAt) {
+            // The one case the app cannot answer: a position no row is called.
+            // Left open on purpose — closing it and guessing a row is how a
+            // tackle ended up wherever the alphabet put him.
+            setRowError(`Nothing on the depth chart is called "${typed}". Pick where he lines up.`);
+            return;
+        }
         const club = clubOverride !== undefined ? clubOverride : team;
         onDraft({
             // The record this is about, when you picked one. Without it the
@@ -91,7 +121,10 @@ const UnrankedModal = ({ isOpen, onClose, onDraft, mode = 'draft', initialPlayer
             // second him.
             ...(linkedId ? { id: linkedId } : {}),
             name: name.trim(),
-            position: position.toUpperCase(),
+            // What he plays, which is his — it goes on his record.
+            position: playsAs.toUpperCase(),
+            // Where he stands, which belongs to this depth chart.
+            ...(standsAt ? { rosterRow: standsAt.toUpperCase() } : {}),
             ...(school.trim() ? { school: school.trim() } : {}),
             arrival: suffix || null,
             // Blank is meaningful in the UDFA stage: signed, but not yet
@@ -141,7 +174,13 @@ const UnrankedModal = ({ isOpen, onClose, onDraft, mode = 'draft', initialPlayer
                         </div>
                     )}
 
-                    {matches.length > 0 && (
+                    {stillLoading && (
+                        <div className="up-matches">
+                            <div className="up-matches-label">Checking who is already known…</div>
+                        </div>
+                    )}
+
+                    {matches?.length > 0 && (
                         <div className="up-matches">
                             <div className="up-matches-label">
                                 Already known — pick him rather than adding a second
@@ -156,11 +195,34 @@ const UnrankedModal = ({ isOpen, onClose, onDraft, mode = 'draft', initialPlayer
                             ))}
                         </div>
                     )}
-                    <div className="form-group">
-                        <label>Position</label>
-                        <input type="text" value={position} onChange={e => setPosition(e.target.value)}
-                            placeholder="e.g. LB" className="text-input" />
-                    </div>
+                    {asksForRow ? (
+                        <div className="up-position-pair">
+                            <div className="form-group">
+                                <label>Position</label>
+                                <input type="text" value={position}
+                                    onChange={e => { setPosition(e.target.value); setRowError(null); }}
+                                    placeholder="e.g. OT — what he plays" className="text-input" />
+                            </div>
+                            <div className="form-group">
+                                <label>Roster Position</label>
+                                <select className="text-input" value={rosterRow}
+                                    onChange={e => { setRosterRow(e.target.value); setRowError(null); }}>
+                                    <option value="">— where he lines up —</option>
+                                    {rowLabels.map(l => <option key={l} value={l}>{l}</option>)}
+                                </select>
+                            </div>
+                            <p className="up-position-hint">
+                                Either one is enough — the empty one takes the other's value.
+                            </p>
+                            {rowError && <div className="ap-error">{rowError}</div>}
+                        </div>
+                    ) : (
+                        <div className="form-group">
+                            <label>Position</label>
+                            <input type="text" value={position} onChange={e => setPosition(e.target.value)}
+                                placeholder="e.g. LB" className="text-input" />
+                        </div>
+                    )}
                     <div className="form-group">
                         <label>School</label>
                         <input type="text" value={school} onChange={e => setSchool(e.target.value)}

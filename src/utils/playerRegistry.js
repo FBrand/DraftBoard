@@ -147,6 +147,8 @@ export function loadRegistry() {
  * only feedback came after saving — as a duplicate record you could not see,
  * because the card that displays him resolves by name and finds the original.
  *
+ * Returns null while the registry is still loading — see the note in the body.
+ *
  * Matched on the folded name — punctuation, case, suffixes and nicknames —
  * rather than the raw string, so "dj moore", "D.J. Moore" and "DJ  Moore" all
  * find him. A prefix match on any word, because people type a surname.
@@ -154,6 +156,10 @@ export function loadRegistry() {
 export function searchPlayers(term, limit = 6) {
     const typed = nameKey(String(term ?? '').trim());
     if (typed.length < 2) return [];
+    // Null, not an empty list: "nobody by that name" and "I have not read the
+    // registry yet" are different answers, and only one of them means it is
+    // safe to add him. See repository.isLoaded.
+    if (!repository.isLoaded(PLAYERS)) return null;
 
     const words = typed.split(/\s+/).filter(Boolean);
     const scored = [];

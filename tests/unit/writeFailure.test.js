@@ -155,3 +155,34 @@ describe('a batch that fails', () => {
         expect(repo.get('players', 'p1').name).toBe('One');
     });
 });
+
+/**
+ * "Nothing here" and "not loaded yet" are different answers.
+ *
+ * To every caller they are the same empty array, and against a local adapter
+ * they always will be — loadSync fills the cache on the spot. Against a remote
+ * one a caller that cannot tell them apart reports the wrong one: the add form
+ * would say "no matching players" while the registry was still arriving, and
+ * let somebody add a duplicate of a player it had simply not seen yet.
+ */
+describe('knowing whether a collection can be read yet', () => {
+    const remoteish = () => ({
+        name: 'remote',
+        async load() { return {}; },   // no loadSync, like a real remote adapter
+        async set() {},
+        async remove() {},
+    });
+
+    it('is always ready against a local adapter, which can read on the spot', () => {
+        const repo = createRepository(adapterThat());
+        expect(repo.isLoaded('players')).toBe(true);
+    });
+
+    it('is not ready against a remote one until it has been read', async () => {
+        const repo = createRepository(remoteish());
+        expect(repo.isLoaded('players')).toBe(false);
+
+        await repo.ready('players');
+        expect(repo.isLoaded('players')).toBe(true);
+    });
+});
