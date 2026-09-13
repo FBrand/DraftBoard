@@ -139,7 +139,7 @@ export default function RosterView({ masterPlayers, draftedPlayers, onInfoOpen }
     // touches draft state; the arrival tag beside the name records how they
     // arrived, the same thing roster.csv encodes in its suffix.
     const handleSignPlayer = (customPlayer) => {
-        const { name, position, arrival = null, team, previousTeam, draftYear, draftRound } = customPlayer;
+        const { id: linkedId, name, position, arrival = null, team, previousTeam, draftYear, draftRound } = customPlayer;
         const displayName = String(name).split(':')[0];
 
         // Team and previous team are facts about the player, so they go on his
@@ -159,7 +159,10 @@ export default function RosterView({ masterPlayers, draftedPlayers, onInfoOpen }
         // lookup is for; it stays as the fallback when the name alone finds
         // nobody and a record has to be created.
         if (team || previousTeam || draftYear || draftRound) {
-            const id = resolvePlayer({ name: displayName }, { create: false })
+            // The record the form was pointed at, when somebody picked one.
+            // Falling back to the name, then to creating one — see below.
+            const id = linkedId
+                ?? resolvePlayer({ name: displayName }, { create: false })
                 ?? resolvePlayer({ name: displayName, position });
 
             // Signing him HERE is what makes this his team — and it is also the

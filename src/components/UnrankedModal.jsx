@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import useEscapeKey from '../hooks/useEscapeKey';
-import { resolve as resolvePlayer, byId } from '../utils/playerRegistry';
+import { resolve as resolvePlayer, byId, searchPlayers } from '../utils/playerRegistry';
 
 // mode: 'draft' | 'roster' | 'postdraft'
 // 'draft'     → draft board during the draft: Name+Pos, Draft
@@ -44,11 +44,37 @@ const UnrankedModal = ({ isOpen, onClose, onDraft, mode = 'draft', initialPlayer
     // suffix to read it from, so his card said "????" for good.
     const [draftYear, setDraftYear] = useState(() => initialPlayer?.draftYear || '');
     const [draftRound, setDraftRound] = useState(() => initialPlayer?.draftRound || '');
+    // Which known player this form is about, once you have said so. Null while
+    // you are typing somebody new — and that is the honest default, because a
+    // name is not an identity.
+    const [linkedId, setLinkedId] = useState(() => initialPlayer?.id ?? null);
+
     useEscapeKey(onClose, isOpen);
 
     if (!isOpen) return null;
 
     const disabled = !name || !position;
+
+    // Who the app already knows by that name. The form had no way of showing
+    // this: nothing warned, nothing offered him, and the first feedback came
+    // after saving — as a second record you could not see, because the card
+    // that displays him resolves by name and finds the original.
+    const matches = linkedId ? [] : searchPlayers(name);
+    const linked = linkedId ? byId(linkedId) : null;
+
+    const pickExisting = (p) => {
+        setLinkedId(p.id);
+        setName(p.name);
+        if (p.position) setPosition(p.position);
+        if (p.school) setSchool(p.school);
+        if (p.draftYear) setDraftYear(String(p.draftYear));
+        if (p.draftRound) setDraftRound(String(p.draftRound));
+        // His CURRENT club is where he is leaving from, which is what a
+        // signing wants in "previous team".
+        if (p.team) setPreviousTeam(p.team);
+    };
+
+    const unlink = () => setLinkedId(null);
 
     // How he arrived is passed alongside the name, not inside it. It used to
     // be appended as ":FA" — and the name is the identity key, so that made
@@ -59,6 +85,11 @@ const UnrankedModal = ({ isOpen, onClose, onDraft, mode = 'draft', initialPlayer
         if (disabled) return;
         const club = clubOverride !== undefined ? clubOverride : team;
         onDraft({
+            // The record this is about, when you picked one. Without it the
+            // caller looks him up by name and position — and a roster row is
+            // an alignment, not a position, so it found nobody and made a
+            // second him.
+            ...(linkedId ? { id: linkedId } : {}),
             name: name.trim(),
             position: position.toUpperCase(),
             ...(school.trim() ? { school: school.trim() } : {}),
@@ -92,9 +123,39 @@ const UnrankedModal = ({ isOpen, onClose, onDraft, mode = 'draft', initialPlayer
                 <form onSubmit={e => { e.preventDefault(); submit(); }} className="picks-form">
                     <div className="form-group">
                         <label>Player Name</label>
-                        <input type="text" value={name} onChange={e => setName(e.target.value)}
-                            placeholder="e.g. John Doe" autoFocus className="text-input" />
+                        <input type="text" value={name}
+                            onChange={e => { setName(e.target.value); if (linkedId) setLinkedId(null); }}
+                            placeholder="e.g. John Doe" autoFocus className="text-input" autoComplete="off" />
                     </div>
+
+                    {linked && (
+                        <div className="up-linked">
+                            <span className="up-linked-mark" aria-hidden="true">✓</span>
+                            <span>
+                                Using <strong>{linked.name}</strong>
+                                {linked.school ? ` — ${linked.school}` : ''}
+                                {linked.team ? `, ${linked.team}` : ''}. His record is updated rather
+                                than a second one made.
+                            </span>
+                            <button type="button" className="ap-link" onClick={unlink}>Not him</button>
+                        </div>
+                    )}
+
+                    {matches.length > 0 && (
+                        <div className="up-matches">
+                            <div className="up-matches-label">
+                                Already known — pick him rather than adding a second
+                            </div>
+                            {matches.map(p => (
+                                <button key={p.id} type="button" className="up-match" onClick={() => pickExisting(p)}>
+                                    <span className="up-match-name">{p.name}</span>
+                                    <span className="up-match-meta">
+                                        {[p.position, p.school, p.team].filter(Boolean).join(' · ')}
+                                    </span>
+                                </button>
+                            ))}
+                        </div>
+                    )}
                     <div className="form-group">
                         <label>Position</label>
                         <input type="text" value={position} onChange={e => setPosition(e.target.value)}

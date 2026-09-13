@@ -4030,3 +4030,60 @@ body.export-mode .card-glow {
   .season-banner { flex-wrap: wrap; gap: 8px; font-size: 0.75rem; }
   .season-banner .action-pill { margin-left: 0; }
 }
+
+/* ── Who the app already knows ─────────────────────────────────────────────
+   The add and sign forms had no way of showing that the player being typed in
+   already exists. Nothing warned, nothing offered him, and the first feedback
+   came after saving — as a second record you could not see, because the card
+   that displays him resolves by name and finds the original. */
+.up-matches {
+  margin: -6px 0 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-left: 2px solid var(--chiefs-gold);
+  padding-left: 10px;
+}
+
+.up-matches-label {
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--text-dim);
+  padding-bottom: 2px;
+}
+
+.up-match {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.up-match:hover { background: rgba(255, 184, 28, 0.12); }
+.up-match-name { font-weight: 700; }
+.up-match-meta { font-size: 0.78rem; color: var(--text-dim); }
+
+.up-linked {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: -6px 0 4px;
+  padding: 8px 10px;
+  border-radius: 4px;
+  background: rgba(255, 184, 28, 0.1);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.up-linked-mark { color: var(--chiefs-gold); font-weight: 900; }
+.up-linked .ap-link { margin-left: auto; flex-shrink: 0; }
