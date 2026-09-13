@@ -275,43 +275,33 @@ function DepthRow({ posConfig, slots, idx, phase, onConfigChange, onDeletePositi
 // No explicit targetZone here (matches prior behavior): makeSlot()'s default
 // zone param ('53') is what a moved player lands with, since specialists
 // aren't tracked as a distinct zone.
-function SpecialistCell({ id, slot, masterPlayers, draftedPlayers, showNeeds }) {
+/**
+ * Punter, kicker, long snapper.
+ *
+ * They are one-slot position rows wearing a different layout, and they used to
+ * be a hand-rolled copy of SlotCell that had drifted: no click handler, so the
+ * only three players on the roster whose card could not be opened were these.
+ * The label stays; the card underneath is the same one every other player gets.
+ */
+function SpecialistCell({ id, slot, masterPlayers, draftedPlayers, onInfoOpen }) {
     const label = { P: 'Punter', K: 'Kicker', LS: 'Long Snapper' }[id] ?? id;
-    const meta = slotMeta(slot, masterPlayers, draftedPlayers);
-
-    const { setNodeRef: setDropRef, isOver } = useDroppable({
-        id: `drop-spec-${id}`,
-        data: { kind: 'item', posId: id, slotIdx: 0, targetZone: undefined },
-    });
-    const { attributes, listeners, setNodeRef: setDragRef, isDragging } = useDraggable({
-        id: `drag-spec-${id}`,
-        disabled: !slot,
-        data: { kind: 'item', posId: id, slotIdx: 0, slot },
-    });
 
     return (
-        <div
-            ref={setDropRef}
-            className={`rv-specialist ${slot ? 'filled' : ''} ${isOver ? 'drag-over' : ''}`}
-        >
+        <div className={`rv-specialist ${slot ? 'filled' : ''}`}>
             <div className="rv-specialist-label">{label}</div>
-            {slot ? (
-                <div
-                    ref={setDragRef}
-                    {...listeners}
-                    {...attributes}
-                    className={`rv-slot-content ${isDragging ? 'dragging-source' : ''}`}
-                    style={{ cursor: 'grab' }}
-                >
-                    <span className="rv-slot-name" style={{ color: meta.nameColor, fontSize: '0.85rem', fontWeight: 800 }}>{meta.displayName}</span>
-                    <div className="rv-slot-meta">
-                        <span className="rv-slot-tag">{meta.topLabel}</span>
-                        <span className="rv-slot-pos">{meta.displayPos}</span>
-                    </div>
-                </div>
-            ) : (
-                showNeeds && <div className="rv-specialist-need">NEED</div>
-            )}
+            {/* Always a cell, filled or not. Rendering a "NEED" label instead of
+                one when the slot was empty left the three positions you are
+                most likely to be filling with nowhere to drop a player. An
+                empty 53 cell already reads as a need on its own. */}
+            <SlotCell
+                slot={slot}
+                zone="53"
+                posId={id}
+                slotIdx={0}
+                masterPlayers={masterPlayers}
+                draftedPlayers={draftedPlayers}
+                onInfoOpen={onInfoOpen}
+            />
         </div>
     );
 }
@@ -347,47 +337,33 @@ function RosterSidebar({ cuts, onSign, signLabel, masterPlayers, draftedPlayers,
     );
 }
 
-function IRDropZone({ reserve, masterPlayers, draftedPlayers, onInfoOpen, onActivate }) {
+function IRDropZone({ reserve, masterPlayers, draftedPlayers, onInfoOpen }) {
     const { setNodeRef, isOver } = useDroppable({
         id: 'drop-ir-zone',
         data: { kind: 'item', posId: '__ir__', slotIdx: reserve.length, targetZone: 'ir' },
     });
     return (
         <div ref={setNodeRef} className={`roster-ir ${isOver ? 'drag-over' : ''}`}>
+            {/* Being in this list IS the injury. Dropping a player here puts him
+                on it and dragging him out takes him off, which is the whole
+                interaction — there was briefly a button here doing the second
+                half, which is a second way to say something the drag already
+                says. */}
             <div className="roster-ir-label">INJURY RESERVE — {reserve.length}</div>
             <div className="roster-ir-list">
-                {reserve.map((entry, i) => {
-                    // Slots now, names in older saves — see the cut panel.
-                    const slot = typeof entry === 'string' ? { name: entry, zone: 'ir' } : { ...entry, zone: 'ir' };
-                    return (
-                        <div key={i} className="roster-ir-entry">
-                            <SlotCell
-                                slot={slot}
-                                zone="ir" posId="__ir__" slotIdx={i} targetZone="ir"
-                                masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} onInfoOpen={onInfoOpen} />
-                            {onActivate && (
-                                // Dragging him out has always worked; this is
-                                // for when it should not need aim. A player
-                                // came back from injury by being dropped in
-                                // exactly the right cell or not at all.
-                                <button
-                                    type="button"
-                                    className="roster-ir-activate"
-                                    title={`${slot.name} is healthy — put him back on the depth chart`}
-                                    aria-label={`Activate ${slot.name}`}
-                                    onPointerDown={e => e.stopPropagation()}
-                                    onClick={e => { e.stopPropagation(); onActivate(i, slot); }}
-                                >Activate</button>
-                            )}
-                        </div>
-                    );
-                })}
+                {reserve.map((entry, i) => (
+                    <SlotCell
+                        key={i}
+                        // Slots now, names in older saves — see the cut panel.
+                        slot={typeof entry === 'string' ? { name: entry, zone: 'ir' } : { ...entry, zone: 'ir' }}
+                        zone="ir" posId="__ir__" slotIdx={i} targetZone="ir"
+                        masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} onInfoOpen={onInfoOpen} />
+                ))}
             </div>
         </div>
     );
 }
 
-// DepthHeader — 4 cells matching the row grid
 function DepthHeader({ showPracticeSquad = true }) {
     return (
         <React.Fragment>
@@ -415,7 +391,7 @@ function DepthHeader({ showPracticeSquad = true }) {
 export default function DepthChartGrid({
     positionConfig, depthChart, reserve, cuts,
     masterPlayers, draftedPlayers,
-    onMove, onRowMove, onDeletePosition, onSlotsChange, onAddPosition, onActivateReserve,
+    onMove, onRowMove, onDeletePosition, onSlotsChange, onAddPosition,
     onSignClick, signButtonLabel = '+ SIGN PLAYER',
     zoomLevel = 1, showNeeds = true, onInfoOpen, showPracticeSquad = true,
 }) {
@@ -492,7 +468,7 @@ export default function DepthChartGrid({
                     <div className="roster-specialists">
                         <div style={{ display: 'flex', gap: 12 }}>
                             {SPECIALIST_IDS.map(id => (
-                                <SpecialistCell key={id} id={id} slot={depthChart[id]?.[0] ?? null} masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} showNeeds={showNeeds} />
+                                <SpecialistCell key={id} id={id} slot={depthChart[id]?.[0] ?? null} masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} onInfoOpen={onInfoOpen} />
                             ))}
                         </div>
                         <div style={{ flex: 1 }} />
@@ -500,7 +476,7 @@ export default function DepthChartGrid({
                     </div>
 
                     {/* IR — bottom */}
-                    <IRDropZone reserve={reserve} masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} onInfoOpen={onInfoOpen} onActivate={onActivateReserve} showPracticeSquad={showPracticeSquad} />
+                    <IRDropZone reserve={reserve} masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} onInfoOpen={onInfoOpen} showPracticeSquad={showPracticeSquad} />
                 </div>
 
                 <RosterSidebar cuts={cuts} onSign={onSignClick} signLabel={signButtonLabel} masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} onInfoOpen={onInfoOpen} showPracticeSquad={showPracticeSquad} />

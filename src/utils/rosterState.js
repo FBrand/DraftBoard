@@ -142,41 +142,16 @@ export function firstFreeSlot(slots, limit53) {
 }
 
 /**
- * Takes a player off injured reserve and puts him back in the depth chart.
+ * The arrival a player keeps when he comes off injured reserve.
  *
- * Going onto IR was a drag and coming back off was nothing, so a roster could
- * only ever accumulate injuries. Being IN the reserve list is what "injured"
- * means here — there is no separate flag — so activating him is a move, and
- * the only subtlety is the tag he carries.
- *
- * `arrival` records how a player ARRIVED, and for most of the reserve list
- * that is still true: a free agent who got hurt is a free agent, and keeps his
- * tag through IR and back. But a player imported as `Name:IR` has "IR" as his
- * arrival, because the file had nothing else to say about him — and once he is
- * healthy that tag is simply wrong. It is dropped, leaving a plain veteran,
- * which is the honest answer to "how did he get here" when nobody recorded it.
- *
- * @returns {{next: object, placed: {label: string, zone: string}|null, reason: string|null}}
+ * "IR" as an arrival only ever meant the file had nothing else to say about
+ * him — it is a status wearing an arrival's clothes — and once he is healthy
+ * it is simply wrong. Every other arrival is a fact about how he got here: a
+ * free agent who got hurt is still a free agent, and keeps his tag through IR
+ * and back out again.
  */
-export function activateFromReserve(state, index, position) {
-    const entry = (state.reserve ?? [])[index];
-    if (!entry) return { next: state, placed: null, reason: 'not-on-reserve' };
-
-    const slot = typeof entry === 'string' ? { name: entry } : entry;
-    const rowId = position ? resolvePosition(position, state.positionConfig, state.depthChart) : null;
-    if (!rowId) return { next: state, placed: null, reason: 'no-row' };
-
-    const chip = [...state.positionConfig.offense, ...state.positionConfig.defense]
-        .find(x => x.id === rowId);
-
-    const next = { ...state, depthChart: { ...state.depthChart }, reserve: [...state.reserve] };
-    next.reserve.splice(index, 1);
-
-    const arr = next.depthChart[rowId] = [...(next.depthChart[rowId] ?? [])];
-    const { index: at, zone, label } = firstFreeSlot(arr, chip?.slots53);
-    arr[at] = makeSlot(slot.name, zone, slot.arrival === 'IR' ? null : (slot.arrival ?? null));
-
-    return { next, placed: { label, zone, row: chip?.label ?? rowId }, reason: null };
+export function clearInjuryArrival(arrival) {
+    return arrival === 'IR' ? null : (arrival ?? null);
 }
 
 export function deletePositionRow(state, phase, posId) {

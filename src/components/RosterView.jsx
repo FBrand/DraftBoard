@@ -3,7 +3,7 @@ import useIsMobile from '../hooks/useIsMobile';
 import { CSV_TEMPLATE } from '../utils/rosterState';
 import {
     loadState, saveState, defaultState,
-    parseCSV, exportCSV, makeSlot, resolvePosition, deletePositionRow, activateFromReserve,
+    parseCSV, exportCSV, makeSlot, resolvePosition, deletePositionRow, clearInjuryArrival,
     SPECIALIST_IDS, hasRosterSourceAdapter, fetchAdapterRoster, fetchLocalRoster, fetchSeasonStartStructure, parseHTMLToRoster
 } from '../utils/rosterState';
 import * as faState from '../utils/faState';
@@ -245,7 +245,13 @@ export default function RosterView({ masterPlayers, draftedPlayers, onInfoOpen }
             else {
                 if (!dc[dst.posId]) dc[dst.posId] = [];
                 dc[dst.posId] = [...dc[dst.posId]];
-                dc[dst.posId][dst.slotIdx] = makeSlot(src.slot.name, dst.targetZone, src.slot.arrival ?? null);
+                // Leaving injured reserve is being activated. "IR" as an
+                // arrival only ever meant the file had nothing else to say
+                // about him, and once he is healthy it is wrong — an arrival
+                // that is really a status. Every other arrival is a fact about
+                // how he got here and survives the trip.
+                const arrival = src.posId === '__ir__' ? clearInjuryArrival(src.slot.arrival) : (src.slot.arrival ?? null);
+                dc[dst.posId][dst.slotIdx] = makeSlot(src.slot.name, dst.targetZone, arrival);
             }
 
             // Swap displaced back to source
@@ -277,39 +283,6 @@ export default function RosterView({ masterPlayers, draftedPlayers, onInfoOpen }
                 next.positionConfig[p] = next.positionConfig[p].map(x => x.id === id ? { ...x, slots53: val } : x);
             });
             return next;
-        });
-    };
-
-    // Off injured reserve and back onto the depth chart.
-    //
-    // His position is not on the slot — a slot is a name and a zone — so it
-    // comes from his registry record, which is where the roster import put it.
-    const handleActivateReserve = (index, slot) => {
-        const id = resolvePlayer({ name: slot.name }, { create: false });
-        const position = id ? byId(id)?.position : null;
-
-        if (!position) {
-            setToast({
-                message: `No position recorded for ${slot.name} — open his card and set one, then activate him.`,
-                tone: 'error',
-            });
-            return;
-        }
-
-        const result = activateFromReserve(state, index, position);
-        if (result.reason === 'no-row') {
-            setToast({
-                message: `No ${position} row on the depth chart — add one, then activate ${slot.name}.`,
-                tone: 'error',
-            });
-            return;
-        }
-        if (!result.placed) return;
-
-        setState(result.next);
-        setToast({
-            message: `${slot.name} is off injured reserve — ${result.placed.row}, ${result.placed.label}.`,
-            tone: 'success',
         });
     };
 
@@ -528,7 +501,6 @@ export default function RosterView({ masterPlayers, draftedPlayers, onInfoOpen }
                 onMove={performMove}
                 onRowMove={performRowMove}
                 onDeletePosition={handleDeletePosition}
-                onActivateReserve={handleActivateReserve}
                 onSlotsChange={handleSlotsChange}
                 onAddPosition={setAddPositionPhase}
                 zoomLevel={zoomLevel}
