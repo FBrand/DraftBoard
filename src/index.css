@@ -3552,7 +3552,14 @@ body.export-mode .card-glow {
   flex: 1;
   min-width: 0;
   overflow-y: auto;
-  padding-bottom: 32px;
+  /* No padding at the TOP. This is a scroll container with a sticky heading,
+     and `top: 0` on a sticky element means the top of the scrollPORT — which
+     sits inside the padding. The 8px inherited from .scroll-container put the
+     heading 8px down and left a band above it that was not covered by
+     anything, so player names scrolled through the gap in plain sight.
+     The sides stay: the column-width thresholds in useScoutingLayout are
+     measured against them. */
+  padding: 0 0.5rem 32px;
 }
 
 .sg-group { padding-bottom: 10px; }

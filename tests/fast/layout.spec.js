@@ -63,6 +63,29 @@ test('scouting keeps a readable column at every width', async ({ page }) => {
         expect(l.rowW, `row at ${c.w}`).toBeGreaterThanOrEqual(Math.min(ROW, l.listW - PAD) - 2);
         expect(l.rowW, `row at ${c.w}`).toBeLessThanOrEqual(2 * ROW + 2);
     }
+
+    // The group heading is sticky, and `top: 0` means the top of the
+    // scrollPORT — which is inside the container's padding. 8px of it, picked
+    // up from .scroll-container, parked the heading 8px down and left a band
+    // above it covered by nothing, so names scrolled through the gap.
+    await page.setViewportSize({ width: 1600, height: 900 });
+    await page.evaluate(() => { document.querySelector('.sg-list').scrollTop = 300; });
+    await page.waitForTimeout(200);
+
+    const stuck = await page.evaluate(() => {
+        const list = document.querySelector('.sg-list');
+        const hdr = document.querySelector('.sg-group-header');
+        const listTop = list.getBoundingClientRect().top;
+        const hdrTop = hdr.getBoundingClientRect().top;
+        const seen = [];
+        for (let y = listTop + 1; y < hdrTop; y += 3) {
+            const el = document.elementFromPoint(list.getBoundingClientRect().left + 60, y);
+            if (el) seen.push(el.className || el.tagName);
+        }
+        return { gap: Math.round(hdrTop - listTop), through: [...new Set(seen)] };
+    });
+    expect(stuck.gap, 'a band above the sticky heading').toBeLessThanOrEqual(1);
+    expect(stuck.through, 'rows are visible above the sticky heading').toEqual([]);
 });
 
 test.describe('on a phone', () => {
