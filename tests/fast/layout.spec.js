@@ -90,6 +90,20 @@ test.describe('on a phone', () => {
         expect(fa.main.h, 'the depth chart was starved by the cut panel').toBeGreaterThan(200);
         expect(fa.side.top, 'the cut panel overlaps the depth chart').toBeGreaterThanOrEqual(fa.main.bottom - 2);
 
+        // Roster: the specialists box holds its own cards. The row it sits in
+        // scrolls sideways and the cards are a fixed width, so sized to the
+        // container the box stopped at the viewport edge and the kicker's card
+        // carried on through its border.
+        await gotoTab(page, 'roster');
+        await page.waitForSelector('.roster-specialists', { timeout: 45_000 });
+        const spec = await page.evaluate(() => {
+            const box = document.querySelector('.roster-specialists');
+            const b = box.getBoundingClientRect();
+            const cells = [...box.querySelectorAll('.rv-specialist')].map(c => c.getBoundingClientRect().right);
+            return { right: b.right, worst: Math.max(...cells) };
+        });
+        expect(spec.worst, 'a specialist card draws through the box').toBeLessThanOrEqual(spec.right + 1);
+
         // Roster: a row can be removed. The control is revealed on hover, and
         // a touch screen has none, so it was invisible for good.
         await gotoTab(page, 'roster');
@@ -100,16 +114,19 @@ test.describe('on a phone', () => {
         });
         expect(deleteOpacity, 'no way to remove a position row on a touch screen').toBeGreaterThan(0);
 
-        // Draft: the picks bar folds to its heading rather than spending ~100px
-        // of an 844px screen on a row you glance at between picks.
+        // Draft: the picks bar's heading is stationary on purpose — it must not
+        // scroll away with the cards — but it was 120px of a 390px bar, spent
+        // on the word "Picks" before the first card started.
         await gotoTab(page, 'draft');
         await page.waitForSelector('.player-card', { timeout: 45_000 });
         const bar = await page.evaluate(() => {
-            const el = document.querySelector('.bottom-panel');
-            return el && { h: el.getBoundingClientRect().height, collapsed: el.classList.contains('collapsed') };
+            const g = (s) => { const b = document.querySelector(s)?.getBoundingClientRect(); return b && { x: b.x, w: b.width, top: b.top, bottom: b.bottom }; };
+            return { panel: g('.bottom-panel'), title: g('.bp-title'), row: g('.bp-picks-row') };
         });
-        expect(bar.collapsed).toBe(true);
-        expect(bar.h).toBeLessThan(90);
+        // Above the cards, not beside them: beside, it took width from the one
+        // row whose whole job is showing cards.
+        expect(bar.title.bottom, 'the heading is beside the cards').toBeLessThanOrEqual(bar.row.top + 1);
+        expect(bar.row.w, 'the cards do not get the full width').toBeGreaterThanOrEqual(bar.panel.w - 32);
 
         // UDFA: the board shows who is LEFT, so a signing disappears from it.
         // The panel is where they go, and it used to be display:none here —
@@ -125,6 +142,19 @@ test.describe('on a phone', () => {
         await expect(input).toBeVisible();
         const box = await input.boundingBox();
         expect(box.width, 'the name field is too narrow to read a name in').toBeGreaterThan(240);
+
+        // And every action is inside the modal. Three buttons that cannot
+        // shrink below their own text overflowed a 353px modal, and since the
+        // row is justified to the end the primary one went off the LEFT edge:
+        // a form that looked complete and could not be submitted.
+        const escaped = await page.evaluate(() => {
+            const el = document.querySelector('.modal-content');
+            const b = el.getBoundingClientRect();
+            return [...el.querySelectorAll('.action-button')]
+                .filter(n => { const r = n.getBoundingClientRect(); return r.right > b.right + 1 || r.left < b.left - 1; })
+                .map(n => n.textContent.trim());
+        });
+        expect(escaped, 'an action button is outside the modal').toEqual([]);
         await page.keyboard.press('Escape');
     });
 

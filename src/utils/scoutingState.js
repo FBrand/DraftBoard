@@ -27,6 +27,7 @@
 import { parseCsvLine, csvField } from './csvUtils';
 import { buildNameIndex, findMatchingIndex } from './nameMatcher';
 import { parseTier, tierLabel, spaceEvenly } from './boardRanking';
+import { boardStateKey } from './appStorage';
 import { boardById } from './boardRegistry';
 import { ownerIdFor, remarksFor, REMARK_KINDS } from './evaluations';
 
@@ -39,7 +40,7 @@ import { ownerIdFor, remarksFor, REMARK_KINDS } from './evaluations';
 // Which boards exist is no longer a constant here: see boardRegistry.js. A
 // board is a record with an id, so an analyst can be renamed or replaced
 // without the work moving.
-const storageKey = (boardId) => `scouting_board_v1__${boardId}`;
+const storageKey = boardStateKey;
 
 // What the key was when a board was its own name.
 const legacyKey = (slug) => `scouting_overlay_v1__${slug}`;

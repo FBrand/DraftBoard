@@ -30,6 +30,7 @@
  */
 import { repository } from '../data/repository';
 import { DRAFT_YEAR } from '../constants';
+import { boardStateKey } from './appStorage';
 
 export const SEASONS = 'seasons';
 export const AUTHORS = 'authors';
@@ -166,9 +167,15 @@ export function renameAuthor(id, name) {
  * new players, so it would assert judgements about people nobody has watched.
  */
 export async function startSeason(year) {
+    const n = Number(year);
+    if (!Number.isInteger(n) || n < 2000 || n > 2999) return null;
+    // One season per year. Two seasons both called 2027 make "which board is
+    // this" unanswerable, and the stack is ordered by year.
+    if (listSeasons().some(s => s.year === n)) return null;
+
     const outgoing = currentSeason();
     const season = {
-        id: newId('s'), year, status: 'current', createdAt: new Date().toISOString(),
+        id: newId('s'), year: n, status: 'current', createdAt: new Date().toISOString(),
     };
 
     await repository.set(SEASONS, season.id, season);
@@ -190,6 +197,49 @@ export async function startSeason(year) {
  * it and two boards answering to one slug would make a link ambiguous. The
  * label itself is free to repeat and free to change; nothing keys on it.
  */
+/**
+ * Undoes a rollover.
+ *
+ * Seasons are a stack, and this is the pop. Rolling over is cheap to do by
+ * accident — one button, at the point in the year when you are least sure the
+ * last one is finished — so there has to be a way back, and it has to be a way
+ * back to exactly what was there rather than an approximation.
+ *
+ * What it removes is only ever the CURRENT season: its boards and the work on
+ * them. Everything archived is untouched, which is the whole point of
+ * archiving it. The season it drops back to becomes current again, and its
+ * boards unfreeze with their placements exactly as they were left — nothing
+ * was rewritten when they froze, they were only closed to writing.
+ *
+ * Refuses when there is nothing underneath. A season stack with one season is
+ * not a stack you can pop; scrapping it would leave the app with no season at
+ * all, and every board belongs to one.
+ */
+export async function scrapSeason() {
+    const outgoing = currentSeason();
+    if (!outgoing) return { ok: false, reason: 'no-current-season' };
+
+    const previous = listSeasons()
+        .filter(s => s.id !== outgoing.id && s.status === 'archived')
+        .sort((a, b) => b.year - a.year)[0];
+    if (!previous) return { ok: false, reason: 'nothing-underneath' };
+
+    const doomed = listBoards(outgoing.id);
+
+    await Promise.all(doomed.map(b => repository.remove(BOARDS_COLLECTION, b.id)));
+    doomed.forEach(b => {
+        try { localStorage.removeItem(boardStateKey(b.id)); } catch { /* ignore */ }
+    });
+
+    await repository.remove(SEASONS, outgoing.id);
+    await repository.set(SEASONS, previous.id, { ...previous, status: 'current' });
+
+    // Evaluations are deliberately left alone. They are stamped with the
+    // season they were written in, not owned by it, and what you learned about
+    // a player does not stop being true because the board is gone.
+    return { ok: true, dropped: outgoing, now: previous, boardsRemoved: doomed.length };
+}
+
 export async function createBoard({ label, authorName = '' } = {}) {
     const name = String(label ?? '').trim();
     if (!name) return null;

@@ -1874,6 +1874,13 @@ body.export-mode .card-glow {
   display: flex;
   align-items: center;
   gap: 24px;
+  /* The row it sits in scrolls sideways, and the cards inside are a fixed
+     width. Sized to the container instead of its contents, the box stopped at
+     the viewport edge and the kicker's card carried on straight through its
+     border. Grows to hold what is in it; never narrower than the column. */
+  width: max-content;
+  min-width: 100%;
+  box-sizing: border-box;
   margin-top: 60px;
   padding: 24px;
   background: rgba(0, 0, 0, 0.3);
@@ -2131,8 +2138,15 @@ body.export-mode .card-glow {
      stage looked like it had nothing but cuts on it. Roster hid this because
      its cut panel is usually empty. */
   .roster-main {
+    /* `flex: none` is the part that stops the cut panel starving it: it sizes
+       to its content and the COLUMN scrolls. The overflow must stay on the
+       horizontal axis though — the depth chart is wider than a phone by
+       design, and `overflow: visible` took that scroll away, which cut the
+       specialists row off with no way to reach it. Height is content height
+       here, so the vertical axis never has anything to scroll. */
     flex: none;
-    overflow: visible;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
     min-height: 0;
   }
 
@@ -3850,43 +3864,34 @@ body.export-mode .card-glow {
   border-color: var(--chiefs-gold);
 }
 
-/* ── The picks bar on a phone ──────────────────────────────────────────────
-   It was a fixed ~100px of an 844px screen, permanently, for a row you glance
-   at between picks. It folds to its heading now and starts folded. */
-.bottom-panel.collapsed {
-  height: auto !important;
-  min-height: 0;
-  padding: 0 !important;
+/* ── The picks bar's heading ───────────────────────────────────────────────
+   Stationary is right — it must not scroll away with the cards. Big is not:
+   120px of a 390px screen went to the word "Picks" before the first card
+   started, on the one bar whose whole job is showing cards. */
+.bp-title {
+  margin: 0;
+  min-width: 120px;
 }
 
-/* .panel-title brings its own 1rem of padding, which is right for a heading
-   at the top of a column and wrong for one inside a 40px bar. */
-.bp-toggle .panel-title { padding: 0; }
+/* On a narrow screen the heading goes ABOVE the cards. Beside them it takes
+   width from the one row whose whole job is showing cards, and shrinking it
+   only made a small label that still did. Above, it costs a line of height and
+   the cards get the full width. It stays outside the scrolling row either way,
+   so it does not scroll off with them. */
+@media (max-width: 1024px) {
+  .bottom-panel {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+  }
 
-.bp-toggle {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 10px 16px;
-  border: 0;
-  background: none;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
+  .bp-title {
+    min-width: 0;
+    padding: 0;
+    font-size: 0.62rem;
+  }
 
-.bp-count {
-  font-size: 0.75rem;
-  font-variant-numeric: tabular-nums;
-  color: var(--text-dim);
-}
-
-.bp-chevron {
-  margin-left: auto;
-  color: var(--text-dim);
-  font-size: 0.8rem;
+  .bottom-panel .bp-picks-row { width: 100%; }
 }
 
 /* ── Modal forms on a narrow screen ───────────────────────────────────────
@@ -3912,4 +3917,27 @@ body.export-mode .card-glow {
   /* Draft year and round were a pair side by side; two half-width boxes on a
      phone is two boxes too narrow to read. */
   .form-row-pair { flex-direction: column; gap: 0; }
+
+  /* The actions stack. UDFA offers three — Sign UDFA, Sign · No Team,
+     Minicamp Invite — each flex:1 and none of them able to shrink below its
+     own text. On a 353px modal with 64px of padding they did not fit, and
+     because the row is justified to the end the overflow went off the LEFT:
+     the gold Sign UDFA button, the primary action, was a sliver past the edge
+     of the screen. The form looked complete and could not be submitted. */
+  .modal-actions {
+    padding: 16px;
+    flex-wrap: wrap;
+  }
+
+  .modal-actions > div {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .modal-actions .action-button {
+    width: 100%;
+    min-width: 0;
+    padding: 12px 14px;
+    font-size: 0.95rem;
+  }
 }

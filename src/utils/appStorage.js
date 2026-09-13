@@ -41,6 +41,14 @@ const PREFIXES = [
     'db_',                     // repository collections (data/localAdapter.js)
 ];
 
+/**
+ * Where one board's work is stored. Here rather than in scoutingState because
+ * boardRegistry needs it too — to drop a scrapped season's boards — and cannot
+ * import scoutingState, which imports boardRegistry. Two copies of this string
+ * is how the session bundle came to name boards that no longer existed.
+ */
+export const boardStateKey = (boardId) => `scouting_board_v1__${boardId}`;
+
 /** Whether the app owns this key, and may therefore write it on import. */
 export function isOwnedKey(key) {
     return EXACT.includes(key) || PREFIXES.some(p => key.startsWith(p));

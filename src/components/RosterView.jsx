@@ -145,8 +145,22 @@ export default function RosterView({ masterPlayers, draftedPlayers, onInfoOpen }
         // Team and previous team are facts about the player, so they go on his
         // record. How he arrived HERE is a fact about this roster, so it stays
         // on the slot.
+        //
+        // Look him up by NAME first. The position typed here is a depth-chart
+        // ALIGNMENT — LT, WR.Z, DL.3T — and a player's position is what he
+        // plays, OT or WR. Qualifying the lookup by the alignment therefore
+        // matched nobody: signing Diego Pounds at LT, who is already in the
+        // registry as an OT out of Ole Miss drafted in 2026, minted a SECOND
+        // Diego Pounds with no school and no draft history. On screen it
+        // looked right, because the card resolves by name and found the
+        // original — the duplicate was only visible in storage.
+        //
+        // Two players really can share a name, which is what the qualified
+        // lookup is for; it stays as the fallback when the name alone finds
+        // nobody and a record has to be created.
         if (team || previousTeam || draftYear || draftRound) {
-            const id = resolvePlayer({ name: displayName, position });
+            const id = resolvePlayer({ name: displayName }, { create: false })
+                ?? resolvePlayer({ name: displayName, position });
             if (id) setFacts(id, {
                 ...(team ? { team } : {}),
                 ...(previousTeam ? { previousTeam } : {}),
