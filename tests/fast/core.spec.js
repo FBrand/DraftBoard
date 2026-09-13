@@ -517,13 +517,23 @@ test.describe('seasons', () => {
             await page.waitForSelector('.season-modal', { timeout: 10_000 });
         };
 
+        // A season change RELOADS — it swaps five stores at once and most hold
+        // their state in memory. Waiting a fixed moment instead of waiting for
+        // the load raced under parallel workers: the assertions ran against a
+        // half-rebuilt page and the test failed only when the box was busy.
+        const settle = async () => {
+            await page.waitForLoadState('load');
+            await page.waitForSelector('.view-tabbar', { timeout: 45_000 });
+            await page.waitForSelector('.switcher-btn, .scouting-empty', { timeout: 45_000 });
+        };
+
         // Rolling over starts an empty season. It creates NO boards on purpose:
         // who is scouting this year is a decision, and last year's placements
         // are about players who have left.
         await openSeasons();
         await page.locator('#season-year').fill('2031');
         await page.getByRole('button', { name: /Roll over/i }).click();
-        await page.waitForTimeout(1200);
+        await settle();
         expect(await boards(), 'a new season arrived with boards on it').not.toContain('Consensus');
 
         // Rolling back is the destructive one, so it asks first and names what
@@ -532,7 +542,7 @@ test.describe('seasons', () => {
         await page.getByRole('button', { name: /Roll back to/i }).click();
         await expect(page.locator('.season-warning')).toContainText('cannot be undone');
         await page.getByRole('button', { name: /^Delete /i }).click();
-        await page.waitForTimeout(1200);
+        await settle();
 
         expect(await boards()).toEqual(before);
     });
