@@ -32,6 +32,7 @@ import { repository } from '../data/repository';
 import { DRAFT_YEAR } from '../constants';
 import { boardStateKey } from './appStorage';
 import { removeSeasonStages } from '../data/stageStore';
+import { removeBoardEntries } from '../data/boardEntries';
 import { initialiseSeason, forgetSeason } from './seasonInit';
 
 export const SEASONS = 'seasons';
@@ -297,10 +298,12 @@ export async function scrapSeason() {
 
     const doomed = listBoards(outgoing.id);
 
-    await Promise.all(doomed.map(b => repository.remove(BOARDS_COLLECTION, b.id)));
-    doomed.forEach(b => {
+    await Promise.all(doomed.map(async (b) => {
+        await removeBoardEntries(b.id);
+        await repository.remove(BOARDS_COLLECTION, b.id);
+        // The pre-document blob, for a board that was never opened since.
         try { localStorage.removeItem(boardStateKey(b.id)); } catch { /* ignore */ }
-    });
+    }));
 
     await removeSeasonStages(outgoing.id);
     forgetSeason(outgoing.id);

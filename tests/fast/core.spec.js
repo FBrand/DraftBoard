@@ -218,24 +218,35 @@ test.describe('drag and drop', () => {
         expect(await slotNames(page)).toEqual(after);
     });
 
-    test('roster: injured reserve and the specialists take drops both ways', async ({ page }) => {
+    test('roster: dragging a player off injured reserve activates him', async ({ page }) => {
+        await openWarm(page, 'roster');
+        await page.waitForSelector('.roster-grid', { timeout: 45_000 });
+
+        // Injured reserve is a place, not a flag: dropping a player there puts
+        // him on it and dragging him out takes him off. That drag IS the
+        // activation — there is deliberately no button saying so twice.
+        const ir = page.locator('.roster-ir .rv-slot').first();
+        await ir.scrollIntoViewIfNeeded();
+        await expect(ir).toBeVisible();
+        await dragTo(page, ir, page.locator('.roster-cuts').first());
+        await expect(page.locator('.roster-ir .rv-slot-name')).toHaveCount(0, { timeout: 15_000 });
+    });
+
+    test('roster: a specialist slot takes a drop, empty or not', async ({ page }) => {
         await openWarm(page, 'roster');
         await page.waitForSelector('.roster-grid', { timeout: 45_000 });
 
         // Polled, not slept on. A drag lands when it lands, and under four
-        // workers a fixed wait is a coin toss — this test passed alone and
-        // timed out in the full run twice before it was written this way.
+        // workers a fixed wait is a coin toss.
         const spec = () => page.evaluate(() =>
             [...document.querySelectorAll('.rv-specialist')].map(s =>
                 `${s.querySelector('.rv-specialist-label')?.textContent}=${s.querySelector('.rv-slot-name')?.textContent ?? '-'}`).join('|'));
         const cell = (label) => page.locator('.rv-specialist').filter({ hasText: label }).locator('.rv-slot').first();
-        const cuts = () => page.locator('.roster-cuts').first();
 
         await page.locator('.roster-specialists').scrollIntoViewIfNeeded();
         const punter = (await spec()).split('|').find(s => s.startsWith('Punter=')).split('=')[1];
 
-        // Out of a specialist slot.
-        await dragTo(page, cell('Kicker'), cuts());
+        await dragTo(page, cell('Kicker'), page.locator('.roster-cuts').first());
         await expect.poll(spec, { timeout: 15_000 }).toContain('Kicker=-');
 
         // And back INTO the empty one. An empty specialist used to render a
@@ -244,15 +255,6 @@ test.describe('drag and drop', () => {
         await page.locator('.roster-specialists').scrollIntoViewIfNeeded();
         await dragTo(page, cell('Punter'), cell('Kicker'));
         await expect.poll(spec, { timeout: 15_000 }).toContain(`Kicker=${punter}`);
-
-        // Injured reserve is a place, not a flag: dropping a player there puts
-        // him on it and dragging him out takes him off. That drag IS the
-        // activation — there is deliberately no button saying so twice.
-        const ir = page.locator('.roster-ir .rv-slot').first();
-        await ir.scrollIntoViewIfNeeded();
-        await expect(ir).toBeVisible();
-        await dragTo(page, ir, cuts());
-        await expect(page.locator('.roster-ir .rv-slot-name')).toHaveCount(0, { timeout: 15_000 });
     });
 });
 

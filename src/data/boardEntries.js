@@ -1,0 +1,115 @@
+/**
+ * One document per player per board.
+ *
+ * A board was a single JSON blob: every placement on it in one value, rewritten
+ * whole on every change. That is fine for one person and wrong for two. Two
+ * analysts moving different players on the same board are two whole-blob
+ * writes racing, and the later one wins with a copy that never saw the earlier
+ * one — the exact failure `localAdapter`'s own header warns about.
+ *
+ * So an entry is a document, addressed by the board and the player. Moving
+ * Arvell Reese writes Arvell Reese. Everything else on the board is untouched
+ * and cannot be clobbered by somebody who happened to save a moment later.
+ *
+ * The state SHAPE the rest of the app sees is unchanged — `{ version, entries }`
+ * in and out — because ten call sites read `state.entries` and none of them
+ * care where it came from. What changed is that saving diffs, and writes only
+ * what actually moved.
+ */
+import { repository } from './repository';
+import { identityKey } from '../utils/nameMatcher';
+
+export const BOARD_ENTRIES = 'board_entries';
+
+export function openBoardEntries() {
+    return repository.ready(BOARD_ENTRIES);
+}
+
+/**
+ * The document id for one player on one board.
+ *
+ * The registry id when there is one, because that is the app's answer to "who
+ * is this" and survives a correction to his name. Falling back to the identity
+ * key — name folded for punctuation and case, plus base position — which is
+ * the same thing nameMatcher uses to decide two entries are the same man.
+ */
+export function entryDocId(boardId, entry) {
+    const who = entry.playerId || identityKey(entry.name, entry.position);
+    return `${boardId}__${who}`;
+}
+
+/** Every entry on a board, in the order they were stored. */
+export function readEntries(boardId) {
+    return repository
+        .query(BOARD_ENTRIES, { where: [['boardId', '==', boardId]], orderBy: { field: 'order' } })
+        // The document's own fields come back off: an entry is what the board
+        // stores about a player, not where it is filed.
+        .map(doc => {
+            const entry = { ...doc };
+            delete entry.id;
+            delete entry.boardId;
+            delete entry.order;
+            return entry;
+        });
+}
+
+export function hasEntries(boardId) {
+    return repository.query(BOARD_ENTRIES, { where: [['boardId', '==', boardId]] }).length > 0;
+}
+
+/**
+ * Writes a board's entries, touching only the ones that differ.
+ *
+ * The diff is what makes this worth doing. Handed a whole board — which is
+ * what every caller has — it works out which players actually changed and
+ * commits those. A tier drag becomes one document; a re-seed becomes all of
+ * them, in one batch.
+ */
+export function writeEntries(boardId, entries) {
+    const current = new Map(
+        repository.query(BOARD_ENTRIES, { where: [['boardId', '==', boardId]] }).map(d => [d.id, d]),
+    );
+
+    const changes = [];
+    const seen = new Set();
+
+    entries.forEach((entry, order) => {
+        const id = entryDocId(boardId, entry);
+        seen.add(id);
+        const doc = { id, boardId, order, ...entry };
+        const before = current.get(id);
+        // Compared by value: a board is re-saved wholesale on every edit, and
+        // writing 328 identical documents because one of them moved is the
+        // thing this exists to stop.
+        if (!before || !same(before, doc)) changes.push({ id, doc });
+    });
+
+    // Gone from the board — removed players, or a re-seed that dropped some.
+    current.forEach((_doc, id) => { if (!seen.has(id)) changes.push({ id, doc: null }); });
+
+    if (!changes.length) return Promise.resolve();
+    return repository.commit(BOARD_ENTRIES, changes);
+}
+
+function same(a, b) {
+    const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+    for (const k of keys) {
+        const x = a[k], y = b[k];
+        if (x === y) continue;
+        if (Array.isArray(x) && Array.isArray(y)) {
+            if (x.length !== y.length || x.some((v, i) => v !== y[i])) return false;
+            continue;
+        }
+        if ((x ?? null) !== (y ?? null)) return false;
+    }
+    return true;
+}
+
+/** Drops a whole board — what scrapping a season has to do to each of its boards. */
+export function removeBoardEntries(boardId) {
+    const ids = repository
+        .query(BOARD_ENTRIES, { where: [['boardId', '==', boardId]] })
+        .map(d => d.id);
+    if (!ids.length) return Promise.resolve();
+    return repository.commit(BOARD_ENTRIES, ids.map(id => ({ id, doc: null })));
+}

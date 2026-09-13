@@ -197,16 +197,16 @@ it is the part that turns "we cannot both edit the same board" into a yes.
 
 ### What is in the way
 
-**1. Four stores are still single JSON blobs, not documents.**
-`scouting_board_v1__<boardId>`, `rosterState`, `fa_state_v1` and
-`nfl_draft_board_state` sit on raw `localStorage` keys, outside the
-repository. The board entries are the one that matters: two analysts editing
-different players on the same board are two whole-blob rewrites racing each
-other — exactly the failure `localAdapter`'s own header comment says the
-document shape exists to prevent. It wants to become
-`boards/<id>/entries/<playerId>`, one document per player. Roster and Free
-Agency are the same job (a document per slot); draft picks are already
-naturally one document per pick.
+**1. ✅ Done — every store goes through the repository.**
+The roster, free agency, the draft and the prospect pool are documents in a
+`stages` collection, one per stage per season. Board entries are documents in
+`board_entries`, one per player per board, and saving diffs so moving one
+player writes one document — which is what stops two analysts on one board
+overwriting each other. Old raw keys migrate on first read.
+
+Still one blob each: a roster, a free-agency board, a draft. Two people editing
+one ROSTER still race. That has not mattered yet — a roster has one editor —
+and the split is the same shape as the board one when it does.
 
 **2. `loadSync` has to go, and its absence will be loud.**
 The repository offers synchronous reads — `get`, `all`, `docs`, `query` —
@@ -225,11 +225,14 @@ a real uid. Anonymous auth is enough to start.
 **4. Security rules.**
 The board is going on a stream. Anything world-writable gets defaced.
 
-**5. Writes become fallible.**
-`set` currently cannot fail — the adapter swallows quota errors, and the
-repository has already told the UI the write succeeded. Over a network that
-needs retry, an offline queue, and something on screen when a save does not
-land. Nothing surfaces that today.
+**5. ✅ Partly done — writes can fail.**
+A rejected write puts back what was there, notifies so the screen follows it
+back, and reports what failed through `repository.onWriteError`. A batch
+reverts as a batch. `localAdapter` throws instead of swallowing quota errors,
+so the local path exercises the same machinery.
+
+Still missing: retry, an offline queue, and something on screen. The mechanism
+is there; nothing is listening to it yet.
 
 **6. Seeding moves off the client.**
 First load parses the CSVs in `public/` into storage per visitor. Remote, that

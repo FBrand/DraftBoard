@@ -42,7 +42,7 @@ const PREFIXES = [
     'fa_state_v1__',           // the same
     'nfl_draft_board_state__', // the same
     'prospects_v1__',          // the same
-    'scouting_board_v1__',     // one per board (boardRegistry.js gives the id)
+    'scouting_board_v1__',     // legacy, pre-boardEntries: migrated on first read
     'scouting_overlay_v1__',   // the same, when a board was its own name
     'db_',                     // repository collections (data/localAdapter.js)
 ];

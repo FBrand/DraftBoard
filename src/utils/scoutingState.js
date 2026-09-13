@@ -28,7 +28,9 @@ import { parseCsvLine, csvField } from './csvUtils';
 import { buildNameIndex, findMatchingIndex } from './nameMatcher';
 import { parseTier, tierLabel, spaceEvenly } from './boardRanking';
 import { boardStateKey } from './appStorage';
-import { boardById, isReadOnly } from './boardRegistry';
+import { readEntries, writeEntries, hasEntries, openBoardEntries } from '../data/boardEntries';
+import { boardById, isReadOnly, BOARDS_COLLECTION } from './boardRegistry';
+import { repository } from '../data/repository';
 import { ownerIdFor, remarksFor, REMARK_KINDS } from './evaluations';
 
 // Each analyst has their own rankings file, and they are genuinely different
@@ -120,22 +122,27 @@ function unfuseGroups(entries) {
 }
 
 export function loadState(boardId) {
-    const own = readKey(storageKey(boardId));
-    if (own) return own;
+    if (hasEntries(boardId)) {
+        return { version: 1, seeded: boardById(boardId)?.seeded ?? true, entries: readEntries(boardId) };
+    }
 
-    // A board written when the key was the analyst's name. Read once under the
-    // old key and saved under the new one, so the work moves with the board
-    // rather than being stranded by a rename.
+    // Two older homes, newest first: the board's own blob, and the one from
+    // when the key was the analyst's name. Either is read once, written out as
+    // documents, and the old key dropped — so the work moves with the board
+    // rather than being stranded by a rename or by this change.
     const slug = boardById(boardId)?.slug;
-    const legacy = slug ? readKey(legacyKey(slug)) : null;
-    if (legacy) {
-        saveState(boardId, legacy);
-        try { localStorage.removeItem(legacyKey(slug)); } catch { /* ignore */ }
-        return legacy;
+    for (const key of [storageKey(boardId), slug && legacyKey(slug)].filter(Boolean)) {
+        const old = readKey(key);
+        if (!old) continue;
+        saveState(boardId, old);
+        try { localStorage.removeItem(key); } catch { /* ignore */ }
+        return old;
     }
 
     return { version: 1, entries: [] };
 }
+
+export { openBoardEntries };
 
 /**
  * Materialises a board from the rankings file, once.
@@ -262,7 +269,15 @@ export function saveState(boardId, state) {
     // on each control, because one forgotten button is all it takes and this is
     // the single door every change goes through.
     if (isReadOnly()) return;
-    localStorage.setItem(storageKey(boardId), JSON.stringify(state));
+
+    // One document per player, and only the ones that moved — see
+    // data/boardEntries.js. The board-level "seeded" flag is a fact about the
+    // BOARD, so it lives on the board record rather than being repeated on
+    // every entry.
+    writeEntries(boardId, state.entries ?? []);
+    if (state.seeded && boardById(boardId) && !boardById(boardId).seeded) {
+        repository.update(BOARDS_COLLECTION, boardId, { seeded: true });
+    }
 }
 
 export function parseCSV(csvText) {
