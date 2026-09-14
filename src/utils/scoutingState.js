@@ -60,6 +60,9 @@ function readKey(key) {
     return null;
 }
 
+/**
+ * @returns {import('../data/types').BoardEntry}
+ */
 export function makeEntry(name, position, school = '', playerId = null) {
     return {
         // The player this entry is about. A name is not an identity — see

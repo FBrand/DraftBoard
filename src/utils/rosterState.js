@@ -80,6 +80,12 @@ const STORAGE_KEY = 'rosterState';
  * slot rather than on the player because it describes a roster, not a person:
  * the same player arrives at different clubs by different routes.
  */
+/**
+ * @param {string} name
+ * @param {import('../data/types').Slot['zone']} [zone]
+ * @param {string|null} [arrival]
+ * @returns {import('../data/types').Slot|null}
+ */
 export function makeSlot(name, zone = '53', arrival = null) {
     if (!name) return null;
     return arrival ? { name, zone, arrival } : { name, zone };

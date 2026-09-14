@@ -37,6 +37,7 @@ function writeAll(collection, docs) {
     localStorage.setItem(keyFor(collection), JSON.stringify(docs));
 }
 
+/** @type {import('./types').Adapter} */
 export const localAdapter = {
     name: 'local',
 

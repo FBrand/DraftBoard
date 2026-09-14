@@ -26,6 +26,9 @@
 import { localAdapter } from './localAdapter';
 import { createAdapter } from './backend';
 
+/**
+ * @param {import('./types').Adapter} adapter
+ */
 export function createRepository(adapter = localAdapter) {
     const cache = new Map();       // collection -> { [id]: doc }
     const loading = new Map();     // collection -> Promise
