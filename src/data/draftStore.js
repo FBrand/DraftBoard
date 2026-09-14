@@ -74,13 +74,43 @@ export function readDraft(seasonId) {
  */
 const KEPT = ['currentPick', 'ourPicksLeft', 'remotePicks'];
 
+/**
+ * A pick, as a pick — not as a copy of the board player who was taken.
+ *
+ * It used to store the whole player: his school, his tier, his tag, his
+ * position within the tier, his matrix scores, an empty remarks array, his
+ * overall rank, and `drafted: true` on every document in a collection called
+ * picks. 268 bytes to say four things.
+ *
+ * None of it was read back. On load each pick is matched against the rankings
+ * file by name and re-enriched from it, so everything about the PLAYER comes
+ * from the player; what must survive is what the draft did to him. The field
+ * that looks missing is `round`, and it is derived — getRoundFromPick reads it
+ * off the pick number, which was always the more truthful source anyway: the
+ * stored round was the round somebody PROJECTED him in, which is how a player
+ * who went undrafted came to have "R5" printed on his roster card.
+ *
+ * `position` stays because a pick can be somebody the current rankings file
+ * has never heard of — a UDFA, or a player from another class — and then this
+ * record is the only thing there is to show.
+ *
+ * The store does not have to look like the export. The export is rebuilt.
+ */
+const PICK_FIELDS = ['name', 'position', 'pickNumber', 'team', 'draftedByUs'];
+
+function leanPick(p) {
+    const out = {};
+    PICK_FIELDS.forEach(k => { if (p?.[k] !== undefined && p[k] !== null) out[k] = p[k]; });
+    return out;
+}
+
 export function writeDraft(seasonId, state) {
     const scope = draftScope(seasonId);
     const { draftedPlayers = [] } = state ?? {};
     const rest = {};
     KEPT.forEach(k => { if (state?.[k] !== undefined) rest[k] = state[k]; });
 
-    picks.write(scope, draftedPlayers);
+    picks.write(scope, draftedPlayers.map(leanPick));
 
     const id = scope;
     const before = repository.get(DRAFT_STATE, id);

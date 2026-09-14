@@ -64,12 +64,15 @@ my probe clicking "Import Positions from Roster".
 | A2 | Search box had no accessible name | Only a placeholder, which vanishes the moment anybody types. A screen reader announced an unnamed edit box on both Scouting and Draft. **Fixed.** |
 | A3 | A closed drawer kept keyboard focus | The draft's side panels are drawers at `translateX(-100%)`, and a transform takes nothing out of the tab order — Tab walked into a panel at x=-196, the page did not move, and the next keystroke went somewhere invisible. `visibility: hidden` while closed. **Fixed.** |
 | — | *Not a bug:* cards "clipped" by 8px | The tag marker is `position: absolute; top: -8px; right: -8px`, overhanging the corner by design. My checker was measuring intended layout on every card on every screen; the checker was wrong, not the app. |
+| — | *Closed, by design change:* the view not rolling back after a refused write | It no longer should. A refused write is kept and retried now, so the change staying on screen IS the intent, and the indicator says whether it has reached storage. The two facts — what you did, and whether it is saved — have two places to live. |
+| — | *Closed, verified:* unhandled rejection on a failed write | Gone. The queue rework catches internally instead of re-throwing, so nothing reaches the console. Checked with a real quota failure: no page errors, no console errors. |
 | — | *Not a bug:* off-screen panel at phone/tablet | Same drawers as A3, off-screen on purpose. Reported until the checker learned to ignore `visibility: hidden`. |
 
 ## Open
 
 | # | Reported | State |
 |---|---|---|
+| 23 | **Storage runs out at about five seasons** | Measured: one season is 834KB, of which board entries 349KB, the registry 263KB and picks 187KB. At 500 players a season that is ~1.05MB, against a localStorage quota of 5MB — so it fails somewhere in season three to five, and the failure is the app refusing to save. Trimming the records helps and does not solve it; the structural answer is archiving old seasons out of the browser, or a backend. A pick document is 268 bytes to say four things and could be ~60, which is worth ~150KB a season if it becomes the difference. |
 | 22 | Roster sync has the same what-he-plays / where-he-stands problem | `syncFromStages` places players with `resolvePosition(p.position)`, so an OT with only LT and RT rows counts as "no matching position row" instead of being placed. The add form solves this by asking; sync has nobody to ask, so it needs a different answer — probably leaving them unplaced and naming them, which is what it already does, but the message should say it is about the ROW rather than the position. Deferred by the user. |
 
 ## Fixed this round
