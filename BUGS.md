@@ -112,7 +112,45 @@ my probe clicking "Import Positions from Roster".
 
 - "What is that Activate button supposed to be?" — see the answer given in chat; if the answer is that it should not exist in that form, it goes here as a bug.
 
+## "Do we even need a dedicated picks store?" — measured
+
+Answer: yes, and not for the reason I first gave. The reason I gave was
+UDFA ordering; the user corrected that — there is no order to UDFAs, and
+the numbers the app assigns them (258, 259 …) are `isUndraftedSigning`'s
+flag wearing a number's clothes. That objection is void and the numbers
+should go.
+
+The real reason is that the two stores hold different things.
+
+Measured on a cold boot, before anybody makes a pick:
+
+| | count |
+|---|---|
+| registry records | 716 |
+| …with `draftYear` 2026 | 641 |
+| …with a `draftPick` | **295** |
+| pick documents | **631** |
+
+The pool knows the real 2026 draft, because `player_facts_2026.csv` seeds
+it on every load and covers 295 of 638 selections. The picks store knows
+what THIS session's draft did, which starts as the real one and stops
+being it the moment anybody mocks. Deriving picks from the pool would:
+
+1. lose the 336 selections the facts file has no row for, and
+2. make "clear the draft" impossible — emptying the picks would leave the
+   facts standing, so the real draft would reappear as this session's.
+
+A mock draft has to be able to disagree with reality and to be thrown
+away. That is what a separate store buys, and it is the app's whole job.
+
+What DOES follow from the question, and is worth doing:
+
+- drop the fake UDFA pick numbers; `isUdfa` already says it
+- the draft should WRITE facts for players it picks, so the pool learns
+  what the session did rather than only what the file said
+
 ## Standing work, ordered by the user
 
-1. Season rollover — in progress
-2. Firebase migration — documented in `ROADMAP.md`, not started
+1. Season rollover — done
+2. Deep audit, desktop and 390px — in progress
+3. Firebase migration — documented in `ROADMAP.md`, not started
