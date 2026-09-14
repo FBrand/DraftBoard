@@ -43,7 +43,7 @@ export async function openRegistry() {
     } catch { /* nothing to carry across */ }
 
     if (!legacy.length) return;
-    await repository.commit(PLAYERS, legacy.filter(p => p?.id).map(p => ({ id: p.id, doc: p })));
+    await repository.commit(PLAYERS, legacy.filter(p => p?.id).map(p => ({ id: p.id, doc: lean(p) })));
     try { localStorage.removeItem(LEGACY_KEY); } catch { /* ignore */ }
 }
 
@@ -51,12 +51,46 @@ export async function openRegistry() {
 // synchronous surface: a board ranks 328 players on every keystroke and cannot
 // await anything. Writes are fire-and-forget — the in-memory copy is updated
 // before the promise settles, so the UI is already correct.
+/**
+ * A record without the fields that say nothing.
+ *
+ * Measured on the shipped season, of 733 records: both athletic-matrix scores
+ * were null on every single one, so was previousTeam, `aliases` was an empty
+ * array on all of them and `hidden` was false on all of them. That is 75KB of
+ * a 246KB store spent writing down the absence of things.
+ *
+ * Safe because nothing reads these expecting null rather than nothing. Facts
+ * go through `factsFor`, which is `record[f] ?? null`; aliases are read as
+ * `(p.aliases ?? [])` in all three places; `hidden` is only ever tested for
+ * truth. Absent and empty have always been the same answer — only the storage
+ * disagreed.
+ *
+ * The timestamps are epoch milliseconds. Nothing reads them at all — they are
+ * provenance, kept for the day somebody asks when a record appeared — and an
+ * ISO string spends 24 characters carrying 13 characters of fact.
+ */
+function lean(record) {
+    const out = {};
+    Object.entries(record).forEach(([k, v]) => {
+        if (v === null || v === undefined) return;
+        if (k === 'aliases' && Array.isArray(v) && v.length === 0) return;
+        if (k === 'hidden' && v === false) return;
+        if ((k === 'createdAt' || k === 'updatedAt') && typeof v === 'string') {
+            const ms = Date.parse(v);
+            out[k] = Number.isFinite(ms) ? ms : Date.now();
+            return;
+        }
+        out[k] = v;
+    });
+    return out;
+}
+
 function writeOne(record) {
-    repository.set(PLAYERS, record.id, record);
+    repository.set(PLAYERS, record.id, lean(record));
 }
 
 function writeMany(records) {
-    repository.commit(PLAYERS, records.map(r => ({ id: r.id, doc: r })));
+    repository.commit(PLAYERS, records.map(r => ({ id: r.id, doc: lean(r) })));
 }
 
 let nextFallbackId = 0;
@@ -334,7 +368,7 @@ export function setFactsMany(updates) {
         }
     });
 
-    if (changes.length) repository.commit(PLAYERS, changes);
+    if (changes.length) repository.commit(PLAYERS, changes.map(c => ({ ...c, doc: c.doc ? lean(c.doc) : c.doc })));
     return changes.length;
 }
 
@@ -379,7 +413,7 @@ export function fillMany(updates) {
         }
     });
 
-    if (changes.length) repository.commit(PLAYERS, changes);
+    if (changes.length) repository.commit(PLAYERS, changes.map(c => ({ ...c, doc: c.doc ? lean(c.doc) : c.doc })));
     return changes.length;
 }
 
@@ -414,7 +448,7 @@ export function merge(keepId, mergeId) {
     // One commit: the survivor gains the aliases and the loser goes, and
     // neither half of that should ever be visible without the other.
     repository.commit(PLAYERS, [
-        { id: keepId, doc: { ...keep, aliases: deduped } },
+        { id: keepId, doc: lean({ ...keep, aliases: deduped }) },
         { id: mergeId, doc: null },
     ]);
     return true;

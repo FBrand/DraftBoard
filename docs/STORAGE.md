@@ -3,7 +3,7 @@
 What is stored, where, and what it costs. Measured on the shipped 2026 season:
 733 players, 984 board entries across three boards, 629 picks, a 91-man roster.
 
-**Total: 641KB for one season.** It was 925KB before the trims below.
+**Total: 531KB for one season.** It was 925KB before the trims below.
 
 ---
 
@@ -26,7 +26,7 @@ swap — see `backend.js`.
 
 ## Collections
 
-### `players` — 263KB, 733 documents, ~367 bytes each
+### `players` — 153KB, 733 documents, ~200 bytes each
 
 The registry. One record per human being the app has ever seen, across every
 season and every board. **Not season-scoped**: a player drafted in 2026 is the
@@ -35,20 +35,24 @@ exist.
 
 ```json
 { "id": "p_mu19eed31ih9mvy", "name": "Tyquan Thornton", "position": "WR",
-  "school": "Baylor", "aliases": [], "hidden": false,
-  "athleticMatrixTotal": null, "athleticMatrixPosition": null,
+  "school": "Baylor",
   "isUdfa": false, "draftYear": 2022, "draftRound": 2, "draftPick": 50,
-  "team": "KC", "previousTeam": null,
-  "createdAt": "…", "updatedAt": "…" }
+  "team": "KC",
+  "createdAt": 1789392351265, "updatedAt": 1789392352438 }
 ```
 
 `name`, `school`, `draftYear/Round/Pick`, `team` and `previousTeam` are FACTS —
 one answer, true everywhere. `position` here is his listed position; what a
 board thinks he plays is on the board entry, because that is an opinion.
 
-**Untrimmed.** Still writes nulls, still stores `id` as a field as well as the
-key, still ISO dates. The same three treatments applied to entries would take
-roughly 100KB off this. It is now the largest store.
+Both athletic-matrix scores were null on every one of the 733, so was
+`previousTeam`; `aliases` was an empty array on all of them and `hidden` was
+false on all of them. 75KB of a 246KB store spent writing down the absence of
+things. Timestamps are epoch — nothing reads them, they are provenance, and an
+ISO string spends 24 characters carrying 13 of fact.
+
+`id` stays as a field here, unlike on board entries: the registry's id is read
+all over the app off the record itself.
 
 ### `board_entries` — 216KB, 984 documents, ~225 bytes each
 
@@ -183,7 +187,6 @@ anything here.
 
 | change | saves | cost |
 |---|---|---|
-| Apply the entry treatment to `players` (nulls, id-as-field, epoch dates) | ~100KB | low — same change, done once |
 | Drop `id`/`scope` from `draft_picks` and `depth_rows` bodies | ~50KB | low, but `scope` is the season filter until collections carry the season |
 | Drop `name`/`school` from `board_entries` | 41KB | **moving name-based lookups onto playerId** |
 | Shorter ids | ~30KB | migrating every reference |
