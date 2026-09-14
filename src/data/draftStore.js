@@ -58,9 +58,27 @@ export function readDraft(seasonId) {
     };
 }
 
+/**
+ * What is worth keeping, listed rather than inferred.
+ *
+ * The draft record used to be whatever the hook happened to be holding, spread
+ * in — which meant it also stored `players`, the entire board, and
+ * `yourPicks`, a second copy of the picks that were already there. Neither is
+ * ever read back: the board is rebuilt from the rankings file reconciled with
+ * the saved picks, and yourPicks is recomputed from them on load.
+ *
+ * That was 91KB per season of a 925KB budget, for nothing, in a store that
+ * runs out at five megabytes — and the failure when it runs out is the app
+ * refusing to save. A list rather than a rest-spread, so the next field added
+ * to the hook does not quietly join it.
+ */
+const KEPT = ['currentPick', 'ourPicksLeft', 'remotePicks'];
+
 export function writeDraft(seasonId, state) {
     const scope = draftScope(seasonId);
-    const { draftedPlayers = [], ...rest } = state ?? {};
+    const { draftedPlayers = [] } = state ?? {};
+    const rest = {};
+    KEPT.forEach(k => { if (state?.[k] !== undefined) rest[k] = state[k]; });
 
     picks.write(scope, draftedPlayers);
 
