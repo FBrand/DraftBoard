@@ -72,7 +72,6 @@ my probe clicking "Import Positions from Roster".
 
 | # | Reported | State |
 |---|---|---|
-| 24 | A rankings file that contradicts itself is resolved silently | `rankings_dan.csv` had Jakobe Thomas twice, at 3.4 and 5.3. The app shows him once — the pool keeps the LAST row — so one of Dan's two opinions is discarded by line order with no notice. Meanwhile `writeEntries` documents the opposite rule ("two of the same thing; the first wins"). Two dedupe rules pointing opposite ways, neither of which says anything. The duplicate row is removed from the shipped file; the silent resolution is not fixed. An import should say "this file rates Jakobe Thomas twice" rather than picking one. |
 | 23 | **Storage runs out at about five seasons** | Measured: one season is 834KB, of which board entries 349KB, the registry 263KB and picks 187KB. At 500 players a season that is ~1.05MB, against a localStorage quota of 5MB — so it fails somewhere in season three to five, and the failure is the app refusing to save. Trimming the records helps and does not solve it; the structural answer is archiving old seasons out of the browser, or a backend. A pick document is 268 bytes to say four things and could be ~60, which is worth ~150KB a season if it becomes the difference. |
 | 22 | Roster sync has the same what-he-plays / where-he-stands problem | `syncFromStages` places players with `resolvePosition(p.position)`, so an OT with only LT and RT rows counts as "no matching position row" instead of being placed. The add form solves this by asking; sync has nobody to ask, so it needs a different answer — probably leaving them unplaced and naming them, which is what it already does, but the message should say it is about the ROW rather than the position. Deferred by the user. |
 
@@ -80,6 +79,7 @@ my probe clicking "Import Positions from Roster".
 
 | # | Reported | What it was |
 |---|---|---|
+| 24 | A rankings file that contradicts itself was resolved silently | `rankings_dan.csv` had Jakobe Thomas twice, at 3.4 and 5.3. The app showed him once and said nothing. Two dedupe rules eight lines apart in `useBoardRankings.js` pointed opposite ways: the shared pool (`unionOfFiles`) kept the FIRST row, the board's own placement map kept the LAST — so his identity came from one row and his tier from the other. FIXED: the placement map is first-wins, matching the pool and `writeEntries`; `duplicatesIn()` reports what a file rates twice and Scouting shows it above the board — "Dan rates Jakobe Thomas 2 times — 3.4 and 5.3. The first is used." The duplicate row is also out of the shipped file. |
 | 1 | Mobile: FA only shows cuts | Depth chart and cut panel are flex siblings; stacked they still competed for a fixed height, so 11 cuts left the chart ~20px tall and it was painted over. Both size to content now. |
 | 2 | Mobile: Draft "Unranked Player" broken | Same form as the sign modal — a 180px label beside a ~150px input. Label goes above the field below 640px. |
 | 3 | Mobile: stationary "Your Picks" label eats space | 120px of a 390px bar spent on the heading. Now 66px. Stationary was right; big was not. |

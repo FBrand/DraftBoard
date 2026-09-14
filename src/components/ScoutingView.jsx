@@ -65,7 +65,7 @@ export default function ScoutingView({ players }) {
     const setActiveBoard = (id) => setBoardSlug(boardById(id)?.slug ?? '');
     // Each analyst's own rankings file — switching board switches the actual
     // player pool, not just the overlay on top of one shared list.
-    const { pools } = useBoardRankings(players);
+    const { pools, duplicates } = useBoardRankings(players);
     const boardPlayers = pools?.[activeBoard] ?? players;
     const [selectedNameParam, setSelectedNameParam] = useUrlParam('player', '');
     const selectedName = selectedNameParam || null;
@@ -618,6 +618,22 @@ export default function ScoutingView({ players }) {
                     ]} />
                 </div>
             </div>
+
+            {/* A file that contradicts itself. It used to be resolved by line
+                order and never mentioned, so the board rendered as though the
+                file had said one thing. Say it instead. */}
+            {duplicates.length > 0 && (
+                <div className="sg-file-issues">
+                    <span className="sg-file-issues-label">In the rankings file</span>
+                    {duplicates.map(d => (
+                        <span key={`${d.boardId}-${d.name}`} className="sg-file-issue">
+                            <strong>{boardById(d.boardId)?.label ?? 'A board'}</strong> rates{' '}
+                            <strong>{d.name}</strong> {d.count} times — {d.placements.join(' and ')}.
+                            The first is used.
+                        </span>
+                    ))}
+                </div>
+            )}
 
             <div className="scouting-layout">
                 {showRanking && (

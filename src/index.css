@@ -4212,3 +4212,30 @@ body.export-mode .card-glow {
   /* On a phone the label and the two buttons are already the whole width. */
   .sync-advice { display: none; }
 }
+
+/* A rankings file that contradicts itself — the same man on two rows at one
+   position. It used to be resolved by line order and never mentioned. */
+.sg-file-issues {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 14px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--chiefs-red);
+  background: rgba(227, 24, 55, 0.08);
+}
+
+.sg-file-issues-label {
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--chiefs-red);
+  flex-shrink: 0;
+}
+
+.sg-file-issue {
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--text-main);
+}
