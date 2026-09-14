@@ -66,8 +66,12 @@ export function hasEntries(boardId) {
  * them, in one batch.
  */
 export function writeEntries(boardId, entries) {
+    // Keyed by the map key, not by an `id` field — the document no longer
+    // carries one. It was `boardId__playerId`, both of which are already
+    // fields, written 984 times: 42KB of saying the same thing three ways.
+    const all = repository.docs(BOARD_ENTRIES) ?? {};
     const current = new Map(
-        repository.query(BOARD_ENTRIES, { where: [['boardId', '==', boardId]] }).map(d => [d.id, d]),
+        Object.entries(all).filter(([, d]) => d.boardId === boardId),
     );
 
     const changes = [];
@@ -76,7 +80,7 @@ export function writeEntries(boardId, entries) {
     entries.forEach((entry, order) => {
         const id = entryDocId(boardId, entry);
         seen.add(id);
-        const doc = { id, boardId, order, ...entry };
+        const doc = { boardId, order, ...withoutNulls(entry) };
         const before = current.get(id);
         // Compared by value: a board is re-saved wholesale on every edit, and
         // writing 328 identical documents because one of them moved is the
@@ -89,6 +93,42 @@ export function writeEntries(boardId, entries) {
 
     if (!changes.length) return Promise.resolve();
     return repository.commit(BOARD_ENTRIES, changes);
+}
+
+/**
+ * A field with no value is left out rather than written as null.
+ *
+ * An entry declares fourteen fields and most players have a value for six of
+ * them. The two athletic-matrix scores were null on all 984 entries in the
+ * shipped season — 55KB of the word "null" — because the matrix is a
+ * measurement of the PLAYER and lives in its own store; the fields here exist
+ * for the rare board that overrides one. tag, tier and round are null for
+ * everybody nobody has got to yet.
+ *
+ * Safe because every reader already asks with a default: `entry?.tag ?? null`,
+ * `e?.round != null`. Absent and null have always been the same answer to
+ * them; only the storage disagreed. And the diff below compares `x ?? null`,
+ * so an entry that loses a null does not read as changed.
+ */
+/**
+ * When the entry was last touched, as epoch milliseconds.
+ *
+ * An ISO string is 24 characters of which 13 carry information, and there were
+ * 984 of them. It is read in two places — the board CSV, and the one-time
+ * migration of remarks off board entries — and both want a date, which this
+ * still is.
+ */
+function stamp(value) {
+    if (typeof value === 'number') return value;
+    const ms = Date.parse(value ?? '');
+    return Number.isFinite(ms) ? ms : Date.now();
+}
+
+function withoutNulls(entry) {
+    const out = {};
+    Object.entries(entry).forEach(([k, v]) => { if (v !== null && v !== undefined) out[k] = v; });
+    if (out.updatedAt !== undefined) out.updatedAt = stamp(out.updatedAt);
+    return out;
 }
 
 function same(a, b) {
@@ -107,9 +147,8 @@ function same(a, b) {
 
 /** Drops a whole board — what scrapping a season has to do to each of its boards. */
 export function removeBoardEntries(boardId) {
-    const ids = repository
-        .query(BOARD_ENTRIES, { where: [['boardId', '==', boardId]] })
-        .map(d => d.id);
+    const all = repository.docs(BOARD_ENTRIES) ?? {};
+    const ids = Object.entries(all).filter(([, d]) => d.boardId === boardId).map(([id]) => id);
     if (!ids.length) return Promise.resolve();
     return repository.commit(BOARD_ENTRIES, ids.map(id => ({ id, doc: null })));
 }

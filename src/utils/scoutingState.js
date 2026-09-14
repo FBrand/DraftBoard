@@ -342,7 +342,8 @@ export function exportCSV(state, board) {
                     .filter(r => r.kind === kind)
                     .map(r => r.text),
             )),
-            e.updatedAt,
+            // Written out as a date, whatever it is stored as.
+            e.updatedAt ? new Date(e.updatedAt).toISOString() : '',
         ].map(csvField).join(','));
     });
     return rows.join('\n');

@@ -143,7 +143,11 @@ export function migrateBoardRemarks(board, entries) {
                     kind,
                     text: body,
                     seasonId: board.seasonId ?? null,
-                    createdAt: entry.updatedAt ?? new Date().toISOString(),
+                    // Epoch milliseconds since entries stopped storing a
+                    // 24-character string to carry 13 characters of fact.
+                    createdAt: entry.updatedAt
+                        ? new Date(entry.updatedAt).toISOString()
+                        : new Date().toISOString(),
                 });
             });
         });
