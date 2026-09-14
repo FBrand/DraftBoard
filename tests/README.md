@@ -8,9 +8,15 @@ phases, the session bundle, board and author records, evaluations, the roster
 sync. No DOM. `setup.js` supplies a twenty-line `localStorage` — not jsdom,
 because nothing here touches a document.
 
-**`tests/fast/` — Playwright, ~6 minutes.** What only a browser can prove:
-drag-and-drop, clipping and stacking, a modal opening off-screen, a link
-restoring what it says, a layout collapsing at the wrong width.
+**`tests/fast/` — Playwright, 37 tests, ~8 minutes.** What only a browser can
+prove: drag-and-drop, clipping and stacking, a modal opening off-screen, a link
+restoring what it says, a layout collapsing at the wrong width — and **wiring**,
+which is the category that keeps costing real bugs. A rollover carried nothing
+into a new season while fifteen unit tests passed over it, because they read
+and wrote a store the app does not use. Unit tests cannot tell you that two
+modules disagree about where the data lives; only driving the app can.
+
+That is also why this suite is over its target — see The budget.
 
 **`tests/audit/` — the sweep. Not part of `npm test`.** It LOOKS for problems
 rather than asserting their absence: content escaping the viewport, controls
@@ -64,8 +70,22 @@ Two things keep the browser suite fast:
 being run, and a suite that is not run is not a suite. Targets: under 5
 minutes for Playwright, under 1 minute for the unit tests.
 
+Measured 2026-09-14: unit 52s, Playwright 8.0 min, **8.9 min all in**. Inside
+the hard limit, over the Playwright target.
+
 If the browser suite creeps up, the first question is whether the new test
-needed a browser at all — not whether to raise the limit.
+needed a browser at all — not whether to raise the limit. Four tests were
+added in the audit that found the rollover bug, at about two minutes:
+`seasonRollover`, `writeRefused`, `draftComplete` and `fileIssues`. Each was
+asked that question and each answered yes, because each proves a wiring
+claim — that the rollover reaches the store the roster reads, that a refused
+write reaches the widget, that `draftComplete` reaches the header, that
+`duplicatesIn` reaches the screen. The logic underneath all four is unit
+tested; it was the wiring that was broken.
+
+Getting back under 5 minutes therefore means making the EXISTING tests
+denser, not dropping these — several of the older ones pay a full boot to
+assert one thing. That is its own piece of work and has not been done.
 
 ## Writing a browser test
 
