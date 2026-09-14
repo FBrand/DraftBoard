@@ -1,184 +1,222 @@
 /**
- * The draft as documents: one per selection.
+ * The draft, as facts about players.
  *
- * A draft was one value holding every pick made, rewritten on each one. Two
- * people running a draft together — which is the point of putting it on a
- * shared backend — are two whole-value writes racing, and the pick that lands
- * second wins with a copy that never saw the first. In a draft that is not a
- * lost edit, it is a lost player.
+ * There used to be a `draft_picks` collection: one document per selection,
+ * saying who was taken, at which pick, by which club, in which season. Every
+ * one of those is already a field on the player's registry record —
+ * `draftPick`, `team`, `draftYear`, `isUdfa` — so the store was a second
+ * place recording the same event, and the two could disagree.
  *
- * So a selection is a document. Pick 21 is a document; making pick 22 does not
- * rewrite it. What is left over — whose turn it is, which picks you still own,
- * the board itself — stays as one small record, because those are single
- * values rather than a list anyone edits in parallel.
+ * They did. The registry knew a draft outcome for 295 players, seeded from
+ * `player_facts_2026.csv`; the picks collection held 631 selections, seeded
+ * from `DraftBoard_Picks.csv`. Same draft, two files, two stores, two answers,
+ * and 210KB of a 745KB budget spent on the duplicate.
+ *
+ * So a pick is not stored. It is *recorded on the player*, and the draft is
+ * read back by asking the registry who was taken in this season's year.
+ *
+ * What remains here is the only part that is genuinely the draft's own and not
+ * any player's: whose turn it is, and which picks we still hold. That is one
+ * small document per season, and it is not a list anyone edits in parallel —
+ * "which pick are we on" has one answer.
  */
-import { createDocSet } from './docSet';
 import { repository } from './repository';
-import { nameKey } from '../utils/nameMatcher';
-import { byId } from '../utils/playerRegistry';
 import { getSessionTeam } from '../utils/appSettings';
+import {
+    PLAYERS, byId, loadRegistry, setFactsMany, factsFor, resolveAll,
+} from '../utils/playerRegistry';
 
-export const DRAFT_PICKS = 'draft_picks';
 export const DRAFT_STATE = 'draft_state';
 
+/** The season a draft belongs to. Still the id; nothing else needs saying. */
 export const draftScope = (seasonId) => `${seasonId ?? '_'}`;
 
-const picks = createDocSet({
-    collection: DRAFT_PICKS,
-    /**
-     * Filed under the PLAYER, not the slot.
-     *
-     * It used to be the pick number, which reads as the obvious key — a pick
-     * is unique and numbered. But the number is what the document SAYS, and
-     * keying a document on a field it also stores means correcting that field
-     * writes a second document instead of the first one. Recording pick 41 as
-     * pick 14 and fixing it left two picks and one player.
-     *
-     * A player is drafted once. Keying on him makes that a property of the
-     * store rather than something the app has to remember, and it is the same
-     * key the registry uses — which is what a backend needs, since it cannot
-     * fuzzy-match ids server-side.
-     *
-     * Pre-registry rows have no playerId; they keep the old scheme so they are
-     * still found, and pick up a real id the first time they are written.
-     */
-    idOf: (scope, p) => {
-        if (p.playerId) return `${scope}__p_${p.playerId}`;
-        const n = Number(p.pickNumber);
-        if (Number.isFinite(n)) return `${scope}__pick_${n}`;
-        return `${scope}__udfa_${nameKey(p.name)}`;
-    },
-    scopeOf: (doc, scope) => doc.scope === scope,
-});
-
-export function openDraft() {
-    return Promise.all([repository.ready(DRAFT_PICKS), repository.ready(DRAFT_STATE)]);
+/**
+ * The calendar year of a season, read straight from the seasons collection.
+ *
+ * Deliberately not `boardRegistry.currentSeason()`: boardRegistry imports this
+ * module to scrap a season's draft, and importing it back would close the
+ * cycle. The collection is the same one either way.
+ */
+function yearOf(seasonId) {
+    if (!seasonId) return null;
+    const season = repository.get('seasons', seasonId);
+    return Number.isFinite(season?.year) ? season.year : null;
 }
 
+export function openDraft() {
+    return Promise.all([repository.ready(DRAFT_STATE), repository.ready(PLAYERS), repository.ready('seasons')]);
+}
+
+/**
+ * A player's draft record, in the shape the draft board has always used.
+ *
+ * `pickNumber` is the literal string `UDFA` for an undrafted signing, which is
+ * what `draftPhase.isUndraftedSigning` reads and what the card prints. It is
+ * not a number, and nothing should do arithmetic on it.
+ *
+ * `draftedByUs` is a comparison rather than a fact — the pick's club against
+ * whose offseason this is — so it is answered here rather than stored. An
+ * absent club is "signed, no club yet" and is nobody's.
+ */
+function asPick(record) {
+    const team = record.team ?? null;
+    return {
+        playerId: record.id,
+        name: record.name,
+        position: record.position ?? '',
+        pickNumber: record.draftPick ?? 'UDFA',
+        team,
+        draftedByUs: !!team && team === getSessionTeam(),
+        drafted: true,
+    };
+}
+
+/** Everyone the registry says entered the league in this season's year. */
+function draftedIn(seasonId) {
+    const year = yearOf(seasonId);
+    if (year == null) return [];
+    return loadRegistry()
+        .filter(r => r.draftYear === year && (r.draftPick != null || r.isUdfa === true))
+        .map(asPick)
+        // Drafted players in pick order, then the undrafted, who have no order
+        // at all — there is no sequence to who signed first.
+        .sort((a, b) => {
+            const an = Number(a.pickNumber), bn = Number(b.pickNumber);
+            const aNum = Number.isFinite(an), bNum = Number.isFinite(bn);
+            if (aNum && bNum) return an - bn;
+            if (aNum !== bNum) return aNum ? -1 : 1;
+            return String(a.name).localeCompare(String(b.name));
+        });
+}
+
+/**
+ * Whether this season's draft has been SET UP — not whether anybody in the
+ * registry happens to carry a draft year.
+ *
+ * Those are different questions and conflating them broke the seed.
+ * `player_facts_2026.csv` gives 295 players a 2026 draft outcome on first
+ * load, so asking the registry "is anyone drafted" answered yes before
+ * anything had been drafted. The app concluded a draft already existed, skipped
+ * seeding from DraftBoard_Picks.csv, and showed 386 drafted cards above a
+ * counter reading pick #1.
+ *
+ * The state document is the honest marker: it exists once this season's draft
+ * has been written, and not before.
+ */
 export function hasDraft(seasonId) {
-    const scope = draftScope(seasonId);
-    return picks.has(scope) || !!repository.get(DRAFT_STATE, scope);
+    return !!repository.get(DRAFT_STATE, draftScope(seasonId));
 }
 
 export function readDraft(seasonId) {
     const scope = draftScope(seasonId);
     const rest = repository.get(DRAFT_STATE, scope);
-    if (!rest && !picks.has(scope)) return null;
-
-    return {
-        ...(rest?.value ?? {}),
-        draftedPlayers: picks.read(scope).map(hydrate),
-    };
-}
-
-/**
- * Puts back the two fields the document deliberately does not carry.
- *
- * `name` is the registry's, and storing a copy beside the id means a rename
- * fixes the player everywhere except the record of who was drafted. It is kept
- * on the document ONLY for a pick with no playerId — a pre-registry row, where
- * the name is the only identity there is.
- *
- * `draftedByUs` is not a fact about the pick at all. It is a comparison
- * between the pick's team and whose offseason this is, and storing the answer
- * meant it stayed true after the session team changed. An absent team is
- * "signed, no club yet" and is nobody's — never ours by default.
- */
-function hydrate(p) {
-    const record = p.playerId ? byId(p.playerId) : null;
-    const team = p.team ?? null;
-    return {
-        ...p,
-        name: record?.name ?? p.name ?? '',
-        position: p.position ?? record?.position ?? '',
-        draftedByUs: !!team && team === getSessionTeam(),
-    };
+    const draftedPlayers = draftedIn(seasonId);
+    if (!rest && !draftedPlayers.length) return null;
+    return { ...(rest?.value ?? {}), draftedPlayers };
 }
 
 /**
  * What is worth keeping, listed rather than inferred.
  *
  * The draft record used to be whatever the hook happened to be holding, spread
- * in — which meant it also stored `players`, the entire board, and
- * `yourPicks`, a second copy of the picks that were already there. Neither is
- * ever read back: the board is rebuilt from the rankings file reconciled with
- * the saved picks, and yourPicks is recomputed from them on load.
- *
- * That was 91KB per season of a 925KB budget, for nothing, in a store that
- * runs out at five megabytes — and the failure when it runs out is the app
- * refusing to save. A list rather than a rest-spread, so the next field added
- * to the hook does not quietly join it.
+ * in — which meant it also stored `players`, the entire board, and `yourPicks`,
+ * a second copy of the picks already there. Neither is ever read back: the
+ * board is rebuilt from the rankings file reconciled with the picks, and
+ * yourPicks is recomputed on load. A list rather than a rest-spread, so the
+ * next field added to the hook does not quietly join it.
  */
 const KEPT = ['currentPick', 'ourPicksLeft', 'remotePicks'];
 
-/**
- * A pick, as a pick — not as a copy of the board player who was taken.
- *
- * It used to store the whole player: his school, his tier, his tag, his
- * position within the tier, his matrix scores, an empty remarks array, his
- * overall rank, and `drafted: true` on every document in a collection called
- * picks. 268 bytes to say four things.
- *
- * None of it was read back. On load each pick is matched against the rankings
- * file by name and re-enriched from it, so everything about the PLAYER comes
- * from the player; what must survive is what the draft did to him. The field
- * that looks missing is `round`, and it is derived — getRoundFromPick reads it
- * off the pick number, which was always the more truthful source anyway: the
- * stored round was the round somebody PROJECTED him in, which is how a player
- * who went undrafted came to have "R5" printed on his roster card.
- *
- * `position` stays because a pick can be somebody the current rankings file
- * has never heard of — a UDFA, or a player from another class — and then this
- * record is the only thing there is to show.
- *
- * `name` and `draftedByUs` are NOT stored. The name is the registry's, and a
- * copy of it beside the id is a second answer to "who is this" that a rename
- * leaves behind. `draftedByUs` is not about the pick — it compares the pick's
- * team to whose offseason this is, so storing the answer froze it against a
- * session team that can change. Both come back in `hydrate`.
- *
- * The stored round would be a fourth of this file's remaining bytes and is not
- * here either — but NOT because it can be derived. It cannot: compensatory
- * picks make ceil(pick/32) wrong from round three on, and the round sizes that
- * would fix it are a single global setting rather than one per season, so
- * reading a 2026 round off a 2027 draft is a real way to be confidently wrong.
- * The round is recorded on the PLAYER, by import or by hand, where it is a
- * fact about him rather than arithmetic on a slot. An earlier version of this
- * comment claimed the derivation was "the more truthful source"; it was wrong.
- *
- * The store does not have to look like the export. The export is rebuilt.
- */
-const PICK_FIELDS = ['playerId', 'name', 'position', 'pickNumber', 'team'];
+/** The fields a selection sets on a player. Everything else is his own. */
+const DRAFT_FACTS = ['draftYear', 'draftPick', 'team', 'isUdfa'];
 
-function leanPick(p) {
-    const out = {};
-    PICK_FIELDS.forEach(k => { if (p?.[k] !== undefined && p[k] !== null) out[k] = p[k]; });
-    // The name is the registry's once there is an id to look it up by. Kept
-    // only where there is no id, because then it is the only identity there is.
-    if (out.playerId) delete out.name;
-    return out;
+function pickFacts(p, year) {
+    const n = Number(p?.pickNumber);
+    const numbered = Number.isFinite(n);
+    return {
+        draftYear: year,
+        draftPick: numbered ? n : null,
+        // Explicitly false for a real selection and true for a signing, so
+        // "unknown" stays distinguishable from "went undrafted".
+        isUdfa: !numbered,
+        // An explicitly empty club is "signed, no club yet" and must survive.
+        team: p?.team ?? null,
+    };
 }
 
 export function writeDraft(seasonId, state) {
     const scope = draftScope(seasonId);
-    const { draftedPlayers = [] } = state ?? {};
+    const year = yearOf(seasonId);
+
+    // --- the picks, onto the players ---
+    if (year != null && Array.isArray(state?.draftedPlayers)) {
+        // A pick can be somebody no rankings file has ever heard of — a UDFA,
+        // or a player from another class. The old pick document carried his
+        // name and position for exactly that reason, and it was the only
+        // record of him there was. With the draft on the registry he has to BE
+        // in the registry, so an unregistered pick is registered here rather
+        // than dropped. Dropping them cost 300 players the first time.
+        const unknown = state.draftedPlayers.filter(p => p && !p.playerId && p.name);
+        const minted = unknown.length
+            ? resolveAll(unknown.map(p => ({ name: p.name, position: p.position, school: p.school })))
+            : [];
+        const idFor = new Map();
+        unknown.forEach((p, i) => { if (minted[i]) idFor.set(p, minted[i]); });
+
+        const wanted = new Map();
+        state.draftedPlayers.forEach(p => {
+            const id = p?.playerId ?? idFor.get(p) ?? null;
+            if (id) wanted.set(id, pickFacts(p, year));
+        });
+
+        const updates = [];
+        // Anyone the registry has in this year who is no longer in the list
+        // has been undrafted — undo, or a cleared draft.
+        draftedIn(seasonId).forEach(({ playerId }) => {
+            if (!wanted.has(playerId)) {
+                updates.push({ id: playerId, patch: Object.fromEntries(DRAFT_FACTS.map(f => [f, null])) });
+            }
+        });
+        wanted.forEach((facts, id) => {
+            const before = factsFor(id);
+            if (!before) return;
+            if (DRAFT_FACTS.every(f => (before[f] ?? null) === (facts[f] ?? null))) return;
+            updates.push({ id, patch: facts });
+        });
+        if (updates.length) setFactsMany(updates);
+    }
+
+    // --- whose turn it is ---
     const rest = {};
     KEPT.forEach(k => { if (state?.[k] !== undefined) rest[k] = state[k]; });
-
-    picks.write(scope, draftedPlayers.map(leanPick));
-
-    const id = scope;
-    const before = repository.get(DRAFT_STATE, id);
-    const next = { id, scope, value: rest };
-    // The leftovers are small and change together; comparing them whole is
-    // cheaper than diffing five fields, and they are not a concurrency
-    // surface — whose turn it is has one answer.
+    const before = repository.get(DRAFT_STATE, scope);
     if (!before || JSON.stringify(before.value ?? {}) !== JSON.stringify(rest)) {
-        repository.set(DRAFT_STATE, id, next);
+        repository.set(DRAFT_STATE, scope, { scope, value: rest });
     }
 }
 
+/**
+ * Scrapping a season's draft.
+ *
+ * This clears draft facts off the players it took, which is a destructive write
+ * to the registry and deliberately narrow: only records whose `draftYear` is
+ * this season's year. A roster veteran drafted in 2021 has his own draftYear
+ * and is not touched.
+ */
 export function removeDraft(seasonId) {
-    const scope = draftScope(seasonId);
-    return Promise.all([picks.removeAll(scope), repository.remove(DRAFT_STATE, scope)]);
+    const doomed = draftedIn(seasonId);
+    if (doomed.length) {
+        setFactsMany(doomed.map(({ playerId }) => ({
+            id: playerId,
+            patch: Object.fromEntries(DRAFT_FACTS.map(f => [f, null])),
+        })));
+    }
+    return repository.remove(DRAFT_STATE, draftScope(seasonId));
+}
+
+/** Kept so a caller can ask about one player without reading the whole draft. */
+export function pickFor(playerId) {
+    const record = byId(playerId);
+    return record && (record.draftPick != null || record.isUdfa === true) ? asPick(record) : null;
 }

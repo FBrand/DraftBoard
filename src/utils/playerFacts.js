@@ -13,6 +13,8 @@
  */
 import { parseCsvLine } from './csvUtils';
 import { loadRegistry, fillMany } from './playerRegistry';
+import { repository } from '../data/repository';
+import { viewedSeason, seasonIsSeeded } from './boardRegistry';
 
 const FILE = 'player_facts_2026.csv';
 
@@ -91,10 +93,41 @@ function index(rows) {
     return byName;
 }
 
+/**
+ * Whether the shipped facts have already been laid over this season.
+ *
+ * This used to run on every load and fill any record that was missing a school
+ * or a draft outcome. That was fine while the draft lived in its own store:
+ * the file described what really happened, the picks described what this
+ * session did, and neither touched the other.
+ *
+ * The draft is the player's record now — a pick IS `draftPick` on the player —
+ * so refilling blanks on every load means clearing the draft does not stick.
+ * Null out a player's pick, reload, and the file puts it straight back. The
+ * seed has to be a thing that happened once, not a thing that keeps happening.
+ *
+ * Recorded beside the data rather than in this browser, for the same reason
+ * the season marker is: whoever gets there first seeds, everybody else reads
+ * the marker and does nothing.
+ */
+const SEEDED = 'setup';
+const seedMarker = (seasonId) => `facts__${seasonId}`;
+
+export function factsSeeded(seasonId) {
+    return !!seasonId && !!repository.get(SEEDED, seedMarker(seasonId));
+}
+
 export async function applyPlayerFacts() {
+    const seasonId = viewedSeason()?.id ?? null;
+    await repository.ready(SEEDED);
+    // A season that has been seeded keeps whatever the app has since decided,
+    // including a deliberately emptied draft.
+    if (seasonId && factsSeeded(seasonId)) return false;
+
     const rows = await loadRows();
     if (!rows.length) return false;
 
+    const outcomesApply = seasonIsSeeded();
     const lookup = index(rows);
 
     // Only players we hold, and only the ones still missing something — a
@@ -102,21 +135,34 @@ export async function applyPlayerFacts() {
     // lookup, and this runs again whenever new players are registered.
     const updates = [];
     loadRegistry().forEach(record => {
-        if (record.school && record.team && (record.draftPick != null || record.isUdfa != null)) return;
+        if (outcomesApply
+            ? (record.school && record.team && (record.draftPick != null || record.isUdfa != null))
+            : !!record.school) return;
         const row = lookup.get(norm(record.name));
         if (!row) return;
         updates.push({
             id: record.id,
             base: { school: row.school },
-            facts: {
+            // The school is true whatever season you are in. The DRAFT OUTCOME
+            // is not: it is what happened in the shipped 2026 season, and with
+            // the draft living on the player record, seeding it into a season
+            // nobody has drafted yet would show that season's board as already
+            // complete. A season started in the app drafts its own class.
+            facts: outcomesApply ? {
                 draftYear: num(row.draftYear),
                 draftRound: num(row.draftRound),
                 draftPick: num(row.draftPick),
                 team: row.team || null,
                 isUdfa: num(row.draftPick) != null ? false : null,
-            },
+            } : {},
         });
     });
 
-    return fillMany(updates) > 0;
+    const filled = fillMany(updates) > 0;
+    if (seasonId) {
+        repository.set(SEEDED, seedMarker(seasonId), {
+            seasonId, at: new Date().toISOString(),
+        });
+    }
+    return filled;
 }

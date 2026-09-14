@@ -71,6 +71,9 @@ export function openSetup() {
 /** Forgets one season, so scrapping it does not leave its id behind forever. */
 export function forgetSeason(seasonId) {
     repository.remove(SETUP, markerId(seasonId));
+    // The shipped facts were laid over this season once; a season that no
+    // longer exists has not been seeded. See playerFacts.factsSeeded.
+    repository.remove(SETUP, `facts__${seasonId}`);
 }
 
 /**
