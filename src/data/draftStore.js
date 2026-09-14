@@ -15,6 +15,8 @@
 import { createDocSet } from './docSet';
 import { repository } from './repository';
 import { nameKey } from '../utils/nameMatcher';
+import { byId } from '../utils/playerRegistry';
+import { getSessionTeam } from '../utils/appSettings';
 
 export const DRAFT_PICKS = 'draft_picks';
 export const DRAFT_STATE = 'draft_state';
@@ -24,19 +26,27 @@ export const draftScope = (seasonId) => `${seasonId ?? '_'}`;
 const picks = createDocSet({
     collection: DRAFT_PICKS,
     /**
-     * A real pick is numbered and unique, so the number is the id. An
-     * undrafted signing has no number — "UDFA" is a label, not a slot — so it
-     * is filed under the player instead, which is the only thing that makes
-     * one undrafted signing different from another.
+     * Filed under the PLAYER, not the slot.
+     *
+     * It used to be the pick number, which reads as the obvious key — a pick
+     * is unique and numbered. But the number is what the document SAYS, and
+     * keying a document on a field it also stores means correcting that field
+     * writes a second document instead of the first one. Recording pick 41 as
+     * pick 14 and fixing it left two picks and one player.
+     *
+     * A player is drafted once. Keying on him makes that a property of the
+     * store rather than something the app has to remember, and it is the same
+     * key the registry uses — which is what a backend needs, since it cannot
+     * fuzzy-match ids server-side.
+     *
+     * Pre-registry rows have no playerId; they keep the old scheme so they are
+     * still found, and pick up a real id the first time they are written.
      */
     idOf: (scope, p) => {
+        if (p.playerId) return `${scope}__p_${p.playerId}`;
         const n = Number(p.pickNumber);
         if (Number.isFinite(n)) return `${scope}__pick_${n}`;
-        // An undrafted signing has no number, so he is filed under the player.
-        // By id where there is one: filed under his NAME, correcting a typo
-        // moved him to a new document and left the old one behind as a second
-        // signing of the same man.
-        return `${scope}__udfa_${p.playerId ?? nameKey(p.name)}`;
+        return `${scope}__udfa_${nameKey(p.name)}`;
     },
     scopeOf: (doc, scope) => doc.scope === scope,
 });
@@ -57,7 +67,31 @@ export function readDraft(seasonId) {
 
     return {
         ...(rest?.value ?? {}),
-        draftedPlayers: picks.read(scope),
+        draftedPlayers: picks.read(scope).map(hydrate),
+    };
+}
+
+/**
+ * Puts back the two fields the document deliberately does not carry.
+ *
+ * `name` is the registry's, and storing a copy beside the id means a rename
+ * fixes the player everywhere except the record of who was drafted. It is kept
+ * on the document ONLY for a pick with no playerId — a pre-registry row, where
+ * the name is the only identity there is.
+ *
+ * `draftedByUs` is not a fact about the pick at all. It is a comparison
+ * between the pick's team and whose offseason this is, and storing the answer
+ * meant it stayed true after the session team changed. An absent team is
+ * "signed, no club yet" and is nobody's — never ours by default.
+ */
+function hydrate(p) {
+    const record = p.playerId ? byId(p.playerId) : null;
+    const team = p.team ?? null;
+    return {
+        ...p,
+        name: record?.name ?? p.name ?? '',
+        position: p.position ?? record?.position ?? '',
+        draftedByUs: !!team && team === getSessionTeam(),
     };
 }
 
@@ -97,13 +131,31 @@ const KEPT = ['currentPick', 'ourPicksLeft', 'remotePicks'];
  * has never heard of — a UDFA, or a player from another class — and then this
  * record is the only thing there is to show.
  *
+ * `name` and `draftedByUs` are NOT stored. The name is the registry's, and a
+ * copy of it beside the id is a second answer to "who is this" that a rename
+ * leaves behind. `draftedByUs` is not about the pick — it compares the pick's
+ * team to whose offseason this is, so storing the answer froze it against a
+ * session team that can change. Both come back in `hydrate`.
+ *
+ * The stored round would be a fourth of this file's remaining bytes and is not
+ * here either — but NOT because it can be derived. It cannot: compensatory
+ * picks make ceil(pick/32) wrong from round three on, and the round sizes that
+ * would fix it are a single global setting rather than one per season, so
+ * reading a 2026 round off a 2027 draft is a real way to be confidently wrong.
+ * The round is recorded on the PLAYER, by import or by hand, where it is a
+ * fact about him rather than arithmetic on a slot. An earlier version of this
+ * comment claimed the derivation was "the more truthful source"; it was wrong.
+ *
  * The store does not have to look like the export. The export is rebuilt.
  */
-const PICK_FIELDS = ['playerId', 'name', 'position', 'pickNumber', 'team', 'draftedByUs'];
+const PICK_FIELDS = ['playerId', 'name', 'position', 'pickNumber', 'team'];
 
 function leanPick(p) {
     const out = {};
     PICK_FIELDS.forEach(k => { if (p?.[k] !== undefined && p[k] !== null) out[k] = p[k]; });
+    // The name is the registry's once there is an id to look it up by. Kept
+    // only where there is no id, because then it is the only identity there is.
+    if (out.playerId) delete out.name;
     return out;
 }
 
