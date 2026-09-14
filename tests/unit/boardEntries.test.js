@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { entryDocId } from '../../src/data/boardEntries';
+import { entryDocId, entriesPath, BOARD_ENTRIES } from '../../src/data/boardEntries';
 import { makeEntry, loadState, saveState } from '../../src/utils/scoutingState';
 import { openBoards, allBoards } from '../../src/utils/boardRegistry';
 import { repository } from '../../src/data/repository';
@@ -54,7 +54,7 @@ describe('what a board is stored as', () => {
     it('is one document per player, not one per board', () => {
         saveState(board(), { version: 1, entries: three() });
 
-        const docs = repository.all('board_entries');
+        const docs = repository.all(entriesPath(board()));
         expect(docs).toHaveLength(3);
         // The name is NOT among them — it is the registry's. What comes back
         // out of loadState still has it; see the next test.
@@ -75,9 +75,15 @@ describe('what a board is stored as', () => {
         expect(b).toBe(a);
     });
 
-    it('keeps two boards apart even for the same player', () => {
+    it('keeps two boards apart by their path, not by their key', () => {
+        // The board used to be half of every document id. It is the path now,
+        // so the same player on two boards is the same id in two different
+        // collections — which is what "this board's entries" means, and what a
+        // rule about one board can be written against.
         const e = makeEntry('Fernando Mendoza', 'QB', 'Indiana', 'p_mendoza');
-        expect(entryDocId('b1', e)).not.toBe(entryDocId('b2', e));
+        expect(entryDocId('b1', e)).toBe(entryDocId('b2', e));
+        expect(entriesPath('b1')).not.toBe(entriesPath('b2'));
+        expect(entriesPath('b1')).toBe('boards/b1/entries');
     });
 
     it('comes back as the shape every caller already reads', () => {
@@ -137,7 +143,7 @@ describe('saving a board writes only what moved', () => {
         saveState(id, { version: 1, entries: three().slice(0, 2) });
 
         expect(loadState(id).entries.map(e => e.name).sort()).toEqual(['Arvell Reese', 'Fernando Mendoza']);
-        expect(repository.all('board_entries')).toHaveLength(2);
+        expect(repository.all(entriesPath(board()))).toHaveLength(2);
     });
 
     it('does not touch another analyst’s board', () => {
@@ -185,7 +191,7 @@ describe('the board-level seeded flag', () => {
         saveState(id, { version: 1, seeded: true, entries: three() });
 
         expect(repository.get('boards', id).seeded).toBe(true);
-        expect(repository.all('board_entries').every(d => d.seeded === undefined)).toBe(true);
+        expect(repository.all(entriesPath(board())).every(d => d.seeded === undefined)).toBe(true);
     });
 });
 
@@ -204,11 +210,54 @@ describe('two analysts editing one board', () => {
         saveState(id, { version: 1, entries: dansView });
         // Ryan's save is built from the board as HE last saw it — without
         // Dan's move. As one blob it would erase it.
-        const ryansDocs = ryansView.map(e => ({ id: entryDocId(id, e), doc: { id: entryDocId(id, e), boardId: id, ...e } }));
-        await repository.commit('board_entries', ryansDocs.filter(c => c.doc.name === 'Caleb Downs'));
+        const ryansDocs = ryansView
+            .filter(e => e.name === 'Caleb Downs')
+            .map(e => ({ id: entryDocId(id, e), doc: { position: e.position, round: e.round, tier: e.tier } }));
+        await repository.commit(entriesPath(id), ryansDocs);
 
         const after = loadState(id);
         expect(after.entries.find(e => e.name === 'Fernando Mendoza').round, 'Dan\'s move was erased').toBe(1);
         expect(after.entries.find(e => e.name === 'Caleb Downs').round).toBe(3);
+    });
+});
+
+/**
+ * Boards written before the path existed.
+ *
+ * Everything an existing user has is in the flat `board_entries` collection,
+ * keyed `boardId__playerId`. Moving to a path per board is not worth losing a
+ * season of somebody's work over, so the old collection is read once, rewritten
+ * under the board's own path, and dropped — the same shape of migration the
+ * roster used going from a stage blob to rows.
+ */
+describe('a board saved by an older build', () => {
+    it('is found at the old address and moved to its own', () => {
+        const id = board();
+        // Exactly what the previous build wrote: the board in the key, and the
+        // fields it used to carry in the body.
+        repository.set(BOARD_ENTRIES, `${id}__p_mendoza`, {
+            boardId: id, order: 0, playerId: 'p_mendoza', name: 'Fernando Mendoza',
+            position: 'QB', school: 'Indiana', round: 1, withinGroup: 1,
+        });
+
+        const entries = loadState(id).entries;
+        expect(entries.map(e => e.name)).toEqual(['Fernando Mendoza']);
+        expect(entries[0].round).toBe(1);
+
+        // Moved, not copied: the old address is empty and the new one holds it
+        // under the player alone, because the board is the path now.
+        expect(repository.get(BOARD_ENTRIES, `${id}__p_mendoza`)).toBeNull();
+        expect(repository.get(entriesPath(id), 'p_mendoza')).toBeTruthy();
+    });
+
+    it('does not move another board’s entries while moving one', () => {
+        const [a, b] = allBoards().map(x => x.id);
+        repository.set(BOARD_ENTRIES, `${a}__p_mendoza`, { boardId: a, playerId: 'p_mendoza', round: 1 });
+        repository.set(BOARD_ENTRIES, `${b}__p_reese`, { boardId: b, playerId: 'p_reese', round: 2 });
+
+        loadState(a);
+
+        expect(repository.get(BOARD_ENTRIES, `${b}__p_reese`)).toBeTruthy();
+        expect(repository.get(entriesPath(b), 'p_reese')).toBeNull();
     });
 });

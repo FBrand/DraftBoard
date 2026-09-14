@@ -20,9 +20,34 @@ import { repository } from './repository';
 import { identityKey } from '../utils/nameMatcher';
 import { byId } from '../utils/playerRegistry';
 
+/**
+ * The flat collection every board's entries USED to share. Kept only so that
+ * a board saved by an older build is found once and moved.
+ */
 export const BOARD_ENTRIES = 'board_entries';
 
+/**
+ * One board's entries, at a path of their own.
+ *
+ * `boards/b1/entries` is how Firestore spells "this board's placements", and
+ * choosing it now rather than during the migration matters for three reasons:
+ *
+ *   - **A rule is written against a path.** "An expert may write his own
+ *     board" is one line about `boards/{id}/entries`; over a shared collection
+ *     with a boardId field it is a predicate that has to hold for every
+ *     document a query might touch.
+ *   - **Opening one board reads one board.** The flat collection meant loading
+ *     five seasons of everybody's placements and filtering in memory. Against
+ *     localStorage that is waste; against a network it is every request
+ *     instead of one.
+ *   - **The board stops being written into every key.** The path carries it,
+ *     so the document id is just the player — 78 characters down to 38.
+ */
+export const entriesPath = (boardId) => `boards/${boardId}/entries`;
+
 export function openBoardEntries() {
+    // The legacy flat collection, so a board written by an older build can be
+    // found and moved on first read. Per-board paths load on demand.
     return repository.ready(BOARD_ENTRIES);
 }
 
@@ -35,15 +60,32 @@ export function openBoardEntries() {
  * the same thing nameMatcher uses to decide two entries are the same man.
  */
 export function entryDocId(boardId, entry) {
-    const who = entry.playerId || identityKey(entry.name, entry.position);
-    return `${boardId}__${who}`;
+    return entry.playerId || identityKey(entry.name, entry.position);
 }
 
-/** The documents on one board, found by their key rather than by a field. */
+/**
+ * The documents on one board, moving them off the shared collection if that is
+ * still where they are.
+ *
+ * Read once, rewritten at the board's own path, and dropped from the old one —
+ * the same shape of migration the roster used moving from a stage blob to
+ * rows. It runs at most once per board, because after it the old collection
+ * has nothing under that prefix.
+ */
 function onBoard(boardId) {
-    const all = repository.docs(BOARD_ENTRIES) ?? {};
+    const path = entriesPath(boardId);
+    const own = repository.docs(path) ?? {};
+    if (Object.keys(own).length) return Object.entries(own).filter(([, doc]) => doc);
+
+    const legacy = repository.docs(BOARD_ENTRIES) ?? {};
     const prefix = `${boardId}__`;
-    return Object.entries(all).filter(([id, doc]) => doc && id.startsWith(prefix));
+    const mine = Object.entries(legacy).filter(([id, doc]) => doc && id.startsWith(prefix));
+    if (!mine.length) return [];
+
+    const moved = mine.map(([id, doc]) => [id.slice(prefix.length), doc]);
+    repository.commit(path, moved.map(([id, doc]) => ({ id, doc })));
+    repository.commit(BOARD_ENTRIES, mine.map(([id]) => ({ id, doc: null })));
+    return moved;
 }
 
 /**
@@ -68,7 +110,7 @@ export function readEntries(boardId) {
         delete entry.order;
         // Pre-registry rows keep the name they were written with, because for
         // them it is the only identity there is.
-        const playerId = doc.playerId ?? (id.startsWith(`${boardId}__p_`) ? id.slice(boardId.length + 2) : null);
+        const playerId = doc.playerId ?? (id.startsWith('p_') ? id : null);
         if (playerId) {
             entry.playerId = playerId;
             const record = byId(playerId);
@@ -108,6 +150,7 @@ export function writeEntries(boardId, entries) {
     // Keyed by the map key, not by an `id` field — the document no longer
     // carries one. It was `boardId__playerId`, both of which are already
     // fields, written 984 times: 42KB of saying the same thing three ways.
+    const path = entriesPath(boardId);
     const current = new Map(onBoard(boardId));
 
     const changes = [];
@@ -128,7 +171,7 @@ export function writeEntries(boardId, entries) {
     current.forEach((_doc, id) => { if (!seen.has(id)) changes.push({ id, doc: null }); });
 
     if (!changes.length) return Promise.resolve();
-    return repository.commit(BOARD_ENTRIES, changes);
+    return repository.commit(path, changes);
 }
 
 /**
@@ -206,5 +249,5 @@ function same(a, b) {
 export function removeBoardEntries(boardId) {
     const ids = onBoard(boardId).map(([id]) => id);
     if (!ids.length) return Promise.resolve();
-    return repository.commit(BOARD_ENTRIES, ids.map(id => ({ id, doc: null })));
+    return repository.commit(entriesPath(boardId), ids.map(id => ({ id, doc: null })));
 }
