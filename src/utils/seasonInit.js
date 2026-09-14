@@ -28,6 +28,7 @@
  * second is what re-seeded a season somebody had deliberately cleared.
  */
 import { readStage, writeStage } from '../data/stageStore';
+import { writeDraft } from '../data/draftStore';
 import { STATE_VERSION as ROSTER_VERSION } from './rosterState';
 
 const DONE_KEY = 'season_init_v1';
@@ -94,7 +95,7 @@ export function initialiseSeason(seasonId, { carryRosterFrom = null } = {}) {
         put('rosterState', EMPTY_ROSTER());
     }
 
-    put('nfl_draft_board_state', EMPTY_DRAFT());
+    writeDraft(seasonId, EMPTY_DRAFT());
     // The prospect pool is left ABSENT rather than written empty: it seeds
     // itself on first use, gated on whether this is the shipped season, and an
     // empty written state is indistinguishable from one somebody cleared.

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { openStages } from '../data/stageStore';
 import { openBoardEntries } from '../data/boardEntries';
+import { openDepthCharts } from '../data/depthChartStore';
 import { parseRankings } from '../utils/dataParser';
 import * as scoutingState from '../utils/scoutingState';
 import { applyProspects } from '../utils/prospects';
@@ -99,7 +100,7 @@ function unionOfFiles(files, keyOf) {
 
 function loadPools() {
     return openBoards()
-        .then(() => Promise.all([loadFiles(), openRegistry(), openEvaluations(), openStages(), openBoardEntries()]))
+        .then(() => Promise.all([loadFiles(), openRegistry(), openEvaluations(), openStages(), openBoardEntries(), openDepthCharts()]))
         .then(([files]) => {
         // Base data edited in-app — players added, corrected, or removed — is
         // shared by every board, so it is applied before anything ranks,

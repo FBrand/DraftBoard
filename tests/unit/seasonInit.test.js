@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { initialiseSeason, isInitialised, forgetSeason } from '../../src/utils/seasonInit';
 import { readStage, writeStage } from '../../src/data/stageStore';
+import { readDraft } from '../../src/data/draftStore';
 import { repository } from '../../src/data/repository';
 
 /**
@@ -38,10 +39,10 @@ describe('setting a season up', () => {
     });
 
     it('starts the draft empty', () => {
+        // Picks are documents now — see data/draftStore.js — so "empty" means
+        // no picks, not a blob containing an empty list.
         initialiseSeason('s1');
-        expect(readStage('nfl_draft_board_state', 's1')).toEqual({
-            draftedPlayers: [], ourPicksLeft: [],
-        });
+        expect(readDraft('s1')).toEqual({ ourPicksLeft: [], draftedPlayers: [] });
     });
 
     it('starts the roster empty when there is nothing to carry', () => {

@@ -24,6 +24,7 @@
  * happen for real, and this is where the rollback goes.
  */
 import { localAdapter } from './localAdapter';
+import { createAdapter } from './backend';
 
 export function createRepository(adapter = localAdapter) {
     const cache = new Map();       // collection -> { [id]: doc }
@@ -259,4 +260,8 @@ export function createRepository(adapter = localAdapter) {
     return { ready, ensureLoaded, docs, isLoaded, get, all, query, set, update, remove, commit, clear, subscribe, invalidate, onWriteError, adapter };
 }
 
-export const repository = createRepository();
+// The app's one repository, pointed at whatever VITE_BACKEND names. Chosen
+// here rather than passed down, because every store imports this directly and
+// threading an adapter through all of them would be a change to each of them
+// for a decision none of them make.
+export const repository = createRepository(createAdapter());

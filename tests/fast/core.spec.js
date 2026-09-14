@@ -519,14 +519,16 @@ test.describe('the draft board in normal view', () => {
         // Wind the seeded, completed draft back to a handful of picks so there
         // are drafted and undrafted players sharing a tier.
         await page.evaluate(() => {
-            // A document in the stages collection now, not a key of its own:
-            // the four stages went through the repository so the backend can
-            // be swapped. Reach in the same way the app does — by stage name,
-            // not by guessing a key.
-            const COLLECTION = 'db_stages';
-            const docs = JSON.parse(localStorage.getItem(COLLECTION) || '{}');
-            const entry = Object.values(docs).find(d => d.stage === 'nfl_draft_board_state');
-            const st = entry.value;
+            // Picks are documents of their own now, and what is left — whose
+            // turn it is, the board, the picks you still own — is one small
+            // record beside them. Wind the draft back by dropping the picks
+            // past nine and rewriting that record.
+            const PICKS = 'db_draft_picks';
+            const STATE = 'db_draft_state';
+            const pickDocs = JSON.parse(localStorage.getItem(PICKS) || '{}');
+            const stateDocs = JSON.parse(localStorage.getItem(STATE) || '{}');
+            const stateId = Object.keys(stateDocs)[0];
+            const st = { ...stateDocs[stateId].value, draftedPlayers: Object.values(pickDocs) };
             const kept = (st.draftedPlayers || []).filter(d => Number(d.pickNumber) <= 9);
             const names = new Set(kept.map(d => `${d.name}|${d.position}`));
             st.draftedPlayers = kept;
@@ -535,8 +537,16 @@ test.describe('the draft board in normal view', () => {
             st.players = (st.players || []).map(pl => names.has(`${pl.name}|${pl.position}`)
                 ? pl
                 : { ...pl, drafted: false, draftedByUs: false, pickNumber: undefined, team: undefined });
-            docs[entry.id] = { ...entry, value: st };
-            localStorage.setItem(COLLECTION, JSON.stringify(docs));
+            const keptIds = new Set(kept.map(d => {
+                const n = Number(d.pickNumber);
+                return Object.keys(pickDocs).find(k => pickDocs[k].name === d.name && Number(pickDocs[k].pickNumber) === n);
+            }).filter(Boolean));
+            Object.keys(pickDocs).forEach(k => { if (!keptIds.has(k)) delete pickDocs[k]; });
+            localStorage.setItem(PICKS, JSON.stringify(pickDocs));
+
+            const { draftedPlayers: _drop, ...rest } = st;
+            stateDocs[stateId] = { ...stateDocs[stateId], value: rest };
+            localStorage.setItem(STATE, JSON.stringify(stateDocs));
         });
         await page.reload();
         await page.waitForSelector('.player-card', { timeout: 45_000 });

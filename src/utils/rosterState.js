@@ -3,7 +3,8 @@
  * Stored in localStorage under key 'rosterState'.
  */
 import { parseCsvLine, csvField } from './csvUtils';
-import { readStage, writeStage } from '../data/stageStore';
+import { readStage, removeStage } from '../data/stageStore';
+import { readChart, writeChart, hasChart } from '../data/depthChartStore';
 import { viewedSeason, isReadOnly } from './boardRegistry';
 
 // Which season's copy of this stage. Read at call time, never cached: the
@@ -204,10 +205,17 @@ function migrate(parsed) {
 
 export function loadState() {
     try {
-        // A document, not a string: the stage store hands back what was
-        // stored, already parsed.
-        const parsed = readStage(STORAGE_KEY, seasonId());
-        if (parsed?.positionConfig?.offense?.length > 0) return migrate(parsed);
+        const sid = seasonId();
+        // Rows as documents — see data/depthChartStore.js. The blob is the
+        // older shape and is read once, written out as rows, and dropped.
+        if (hasChart(STORAGE_KEY, sid)) return migrate({ version: STATE_VERSION, ...readChart(STORAGE_KEY, sid) });
+
+        const parsed = readStage(STORAGE_KEY, sid);
+        if (parsed?.positionConfig?.offense?.length > 0) {
+            const state = migrate(parsed);
+            if (state) { writeChart(STORAGE_KEY, sid, state); removeStage(STORAGE_KEY, sid); }
+            return state;
+        }
     } catch { /* ignore */ }
     return null;
 }
@@ -217,7 +225,7 @@ export function saveState(state) {
     // on each control, because one forgotten button is all it takes and this is
     // the single door every change goes through.
     if (isReadOnly()) return;
-    writeStage(STORAGE_KEY, seasonId(), { ...state, version: STATE_VERSION });
+    writeChart(STORAGE_KEY, seasonId(), state);
 }
 
 // ---------------------------------------------------------------------------
