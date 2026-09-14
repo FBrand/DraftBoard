@@ -57,7 +57,12 @@ function writeRemarks(ownerId, playerId, remarks) {
         repository.remove(EVALUATIONS, id);
         return;
     }
-    repository.set(EVALUATIONS, id, { id, ownerId, playerId, remarks });
+    // The document is its remarks. It used to also carry `id`, `ownerId` and
+    // `playerId` — the whole key and both of its halves, 154 characters of
+    // saying where the document already is. Nothing reads them: every access
+    // goes through docId(ownerId, playerId), because you have to know both to
+    // ask in the first place.
+    repository.set(EVALUATIONS, id, { remarks });
 }
 
 /**
@@ -69,7 +74,10 @@ export function addRemark(ownerId, playerId, kind, text, seasonId) {
     const body = String(text ?? '').trim();
     if (!ownerId || !playerId || !body || !REMARK_KINDS.includes(kind)) return null;
 
-    const remark = { id: newId(), kind, text: body, seasonId: seasonId ?? null, createdAt: new Date().toISOString() };
+    // createdAt as epoch milliseconds: an ISO string spends 24 characters
+    // carrying 13 of information, and a Delane-standard evaluation runs to
+    // fifteen remarks. It is still a date to everything that reads it.
+    const remark = { id: newId(), kind, text: body, seasonId: seasonId ?? null, createdAt: Date.now() };
     writeRemarks(ownerId, playerId, [...remarksFor(ownerId, playerId), remark]);
     return remark;
 }
