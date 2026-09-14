@@ -3,6 +3,7 @@ import { entryDocId } from '../../src/data/boardEntries';
 import { makeEntry, loadState, saveState } from '../../src/utils/scoutingState';
 import { openBoards, allBoards } from '../../src/utils/boardRegistry';
 import { repository } from '../../src/data/repository';
+import { loadRegistry, PLAYERS } from '../../src/utils/playerRegistry';
 
 /**
  * One document per player per board.
@@ -17,10 +18,29 @@ import { repository } from '../../src/data/repository';
  * documents would be per-player in name only and the race would be exactly as
  * bad as before.
  */
+/**
+ * The players these entries point at have to exist.
+ *
+ * An entry no longer stores the player's name — the registry holds it, and a
+ * copy beside the id is a second answer that a rename leaves behind. So a
+ * board entry is now a reference, and a test that invents a playerId with no
+ * record behind it is testing a dangling one. The app never has those: every
+ * id comes from resolveAll, which mints the record.
+ */
+const CAST = [
+    { id: 'p_mendoza', name: 'Fernando Mendoza', position: 'QB', school: 'Indiana' },
+    { id: 'p_reese', name: 'Arvell Reese', position: 'EDGE', school: 'Ohio State' },
+    { id: 'p_downs', name: 'Caleb Downs', position: 'S', school: 'Ohio State' },
+    { id: 'p_love', name: 'Jeremiyah Love', position: 'RB', school: 'Notre Dame' },
+];
+
 beforeEach(async () => {
     globalThis.resetStorage();
     repository.invalidate();
     await openBoards();
+    await repository.ready(PLAYERS);
+    CAST.forEach(p => repository.set(PLAYERS, p.id, { ...p, aliases: [], hidden: false }));
+    loadRegistry();
 });
 
 const board = () => allBoards()[0].id;
@@ -36,7 +56,11 @@ describe('what a board is stored as', () => {
 
         const docs = repository.all('board_entries');
         expect(docs).toHaveLength(3);
-        expect(docs.map(d => d.name).sort()).toEqual(['Arvell Reese', 'Caleb Downs', 'Fernando Mendoza']);
+        // The name is NOT among them — it is the registry's. What comes back
+        // out of loadState still has it; see the next test.
+        expect(docs.every(d => d.name === undefined)).toBe(true);
+        expect(loadState(board()).entries.map(e => e.name).sort())
+            .toEqual(['Arvell Reese', 'Caleb Downs', 'Fernando Mendoza']);
     });
 
     it('addresses a player by his registry id, which survives a name correction', () => {
@@ -61,7 +85,11 @@ describe('what a board is stored as', () => {
         const state = loadState(board());
 
         expect(state.version).toBe(1);
-        expect(state.entries.map(e => e.name)).toEqual(['Fernando Mendoza', 'Arvell Reese', 'Caleb Downs']);
+        // Everybody is here, with the name the registry holds. Nobody has been
+        // placed, so the order is the last tiebreak — the same one rankBoard
+        // falls back to.
+        expect(state.entries.map(e => e.name).sort())
+            .toEqual(['Arvell Reese', 'Caleb Downs', 'Fernando Mendoza']);
         // And nothing about where it is filed leaks into the entry.
         expect(state.entries[0].boardId).toBeUndefined();
         expect(state.entries[0].order).toBeUndefined();
@@ -85,7 +113,9 @@ describe('saving a board writes only what moved', () => {
 
         const changes = commitsFrom(spy).flat();
         expect(changes).toHaveLength(1);
-        expect(changes[0].doc.name).toBe('Arvell Reese');
+        // Identified by the document key, since the name is the registry's now.
+        expect(changes[0].id).toContain('p_reese');
+        expect(changes[0].doc.round).toBe(1);
         spy.mockRestore();
     });
 
@@ -106,7 +136,7 @@ describe('saving a board writes only what moved', () => {
         saveState(id, { version: 1, entries: three() });
         saveState(id, { version: 1, entries: three().slice(0, 2) });
 
-        expect(loadState(id).entries.map(e => e.name)).toEqual(['Fernando Mendoza', 'Arvell Reese']);
+        expect(loadState(id).entries.map(e => e.name).sort()).toEqual(['Arvell Reese', 'Fernando Mendoza']);
         expect(repository.all('board_entries')).toHaveLength(2);
     });
 
@@ -121,16 +151,31 @@ describe('saving a board writes only what moved', () => {
         expect(loadState(b).entries.map(e => e.name)).toEqual(['Jeremiyah Love']);
     });
 
-    it('keeps the order the board was saved in', () => {
+    it('orders by where the board put people, not by the order they were saved', () => {
+        // There is no stored `order`. It was a second ordering sitting next to
+        // the tiers, free to disagree with them, and rankBoard never read it —
+        // it sorts by tier, then withinGroup, then the source rank, then
+        // positional value, then the name. Shuffling the array cannot change a
+        // board, because the array is not where the board's opinion lives.
         const id = board();
-        saveState(id, { version: 1, entries: three() });
-
-        const l = loadState(id).entries;
-        const reordered = [l[2], l[0], l[1]];
-        saveState(id, { version: 1, entries: reordered });
+        const [a, b, c] = three();
+        saveState(id, {
+            version: 1,
+            entries: [
+                { ...a, round: 2, tier: 1, withinGroup: 1 },
+                { ...b, round: 1, tier: 1, withinGroup: 1 },
+                { ...c, round: 1, tier: 1, withinGroup: 2 },
+            ],
+        });
 
         expect(loadState(id).entries.map(e => e.name))
-            .toEqual(['Caleb Downs', 'Fernando Mendoza', 'Arvell Reese']);
+            .toEqual(['Arvell Reese', 'Caleb Downs', 'Fernando Mendoza']);
+
+        // Saved in a different array order, same board, same answer.
+        const l = loadState(id).entries;
+        saveState(id, { version: 1, entries: [l[2], l[0], l[1]] });
+        expect(loadState(id).entries.map(e => e.name))
+            .toEqual(['Arvell Reese', 'Caleb Downs', 'Fernando Mendoza']);
     });
 });
 

@@ -18,6 +18,7 @@
  */
 import { repository } from './repository';
 import { identityKey } from '../utils/nameMatcher';
+import { byId } from '../utils/playerRegistry';
 
 export const BOARD_ENTRIES = 'board_entries';
 
@@ -38,23 +39,61 @@ export function entryDocId(boardId, entry) {
     return `${boardId}__${who}`;
 }
 
-/** Every entry on a board, in the order they were stored. */
+/** The documents on one board, found by their key rather than by a field. */
+function onBoard(boardId) {
+    const all = repository.docs(BOARD_ENTRIES) ?? {};
+    const prefix = `${boardId}__`;
+    return Object.entries(all).filter(([id, doc]) => doc && id.startsWith(prefix));
+}
+
+/**
+ * Every entry on a board, in the board's own order.
+ *
+ * Three things are put back here rather than stored:
+ *
+ * `playerId` and the board are the document key. `name` and `school` are the
+ * registry's — they were copied onto all 984 entries, which is 49KB of a
+ * second answer to "who is this" that a rename leaves behind. The registry is
+ * loaded before any board is read, so this costs a map lookup.
+ *
+ * The order is DERIVED from round and withinGroup instead of stored beside
+ * them. A stored order is a second ordering that can disagree with the tiers
+ * it sits next to, and the board already has an opinion about where everybody
+ * goes; players nobody has placed sort last, which is what `???` means.
+ */
 export function readEntries(boardId) {
-    return repository
-        .query(BOARD_ENTRIES, { where: [['boardId', '==', boardId]], orderBy: { field: 'order' } })
-        // The document's own fields come back off: an entry is what the board
-        // stores about a player, not where it is filed.
-        .map(doc => {
-            const entry = { ...doc };
-            delete entry.id;
-            delete entry.boardId;
-            delete entry.order;
-            return entry;
-        });
+    const entries = onBoard(boardId).map(([id, doc]) => {
+        const entry = { ...doc };
+        delete entry.boardId;
+        delete entry.order;
+        // Pre-registry rows keep the name they were written with, because for
+        // them it is the only identity there is.
+        const playerId = doc.playerId ?? (id.startsWith(`${boardId}__p_`) ? id.slice(boardId.length + 2) : null);
+        if (playerId) {
+            entry.playerId = playerId;
+            const record = byId(playerId);
+            if (record) {
+                entry.name = record.name;
+                if (record.school) entry.school = record.school;
+            }
+        }
+        return entry;
+    });
+
+    const key = (e) => [
+        e.round ?? Number.MAX_SAFE_INTEGER,
+        e.tier ?? 0,
+        e.withinGroup ?? Number.MAX_SAFE_INTEGER,
+    ];
+    return entries.sort((a, b) => {
+        const ka = key(a), kb = key(b);
+        for (let i = 0; i < ka.length; i++) if (ka[i] !== kb[i]) return ka[i] - kb[i];
+        return String(a.name ?? '').localeCompare(String(b.name ?? ''));
+    });
 }
 
 export function hasEntries(boardId) {
-    return repository.query(BOARD_ENTRIES, { where: [['boardId', '==', boardId]] }).length > 0;
+    return onBoard(boardId).length > 0;
 }
 
 /**
@@ -69,23 +108,20 @@ export function writeEntries(boardId, entries) {
     // Keyed by the map key, not by an `id` field — the document no longer
     // carries one. It was `boardId__playerId`, both of which are already
     // fields, written 984 times: 42KB of saying the same thing three ways.
-    const all = repository.docs(BOARD_ENTRIES) ?? {};
-    const current = new Map(
-        Object.entries(all).filter(([, d]) => d.boardId === boardId),
-    );
+    const current = new Map(onBoard(boardId));
 
     const changes = [];
     const seen = new Set();
 
-    entries.forEach((entry, order) => {
+    entries.forEach((entry) => {
         const id = entryDocId(boardId, entry);
         seen.add(id);
-        const doc = { boardId, order, ...withoutNulls(entry) };
+        const doc = filed(withoutNulls(entry));
         const before = current.get(id);
         // Compared by value: a board is re-saved wholesale on every edit, and
         // writing 328 identical documents because one of them moved is the
         // thing this exists to stop.
-        if (!before || !same(before, doc)) changes.push({ id, doc });
+        if (!before || !same(filed(before), doc)) changes.push({ id, doc });
     });
 
     // Gone from the board — removed players, or a re-seed that dropped some.
@@ -124,6 +160,27 @@ function stamp(value) {
     return Number.isFinite(ms) ? ms : Date.now();
 }
 
+/**
+ * An entry reduced to what is actually written.
+ *
+ * Out goes everything the key or the registry already states. `position` stays
+ * — it is an OPINION, and two analysts labelling the same player DL and EDGE
+ * are not disagreeing about a fact. `name` stays only for a row with no
+ * playerId, where it is the last thing identifying him.
+ */
+function filed(entry) {
+    const out = { ...entry };
+    delete out.id;
+    delete out.boardId;
+    delete out.order;
+    if (out.playerId) {
+        delete out.playerId;   // the key says it
+        delete out.name;       // the registry says it
+        delete out.school;
+    }
+    return out;
+}
+
 function withoutNulls(entry) {
     const out = {};
     Object.entries(entry).forEach(([k, v]) => { if (v !== null && v !== undefined) out[k] = v; });
@@ -147,8 +204,7 @@ function same(a, b) {
 
 /** Drops a whole board — what scrapping a season has to do to each of its boards. */
 export function removeBoardEntries(boardId) {
-    const all = repository.docs(BOARD_ENTRIES) ?? {};
-    const ids = Object.entries(all).filter(([, d]) => d.boardId === boardId).map(([id]) => id);
+    const ids = onBoard(boardId).map(([id]) => id);
     if (!ids.length) return Promise.resolve();
     return repository.commit(BOARD_ENTRIES, ids.map(id => ({ id, doc: null })));
 }

@@ -72,6 +72,11 @@ export async function openRegistry() {
 function lean(record) {
     const out = {};
     Object.entries(record).forEach(([k, v]) => {
+        // The id is the key this record is filed under. Writing it again cost
+        // 33KB across 733 records, and gave a rename two places to go wrong:
+        // a record whose id field disagrees with its key is a record nothing
+        // can find twice the same way. Reattached on read, below.
+        if (k === 'id') return;
         if (v === null || v === undefined) return;
         if (k === 'aliases' && Array.isArray(v) && v.length === 0) return;
         if (k === 'hidden' && v === false) return;
@@ -169,8 +174,17 @@ function lookupRows(players) {
     return rows;
 }
 
+/**
+ * Every player, each carrying its own id again.
+ *
+ * The id is not stored in the record — it is the key — so it is put back here.
+ * Every caller reads `record.id`, and threading the key separately through the
+ * matcher, the boards and the card would be a change to all of them for no
+ * gain. One object spread, once per load.
+ */
 export function loadRegistry() {
-    return repository.all(PLAYERS);
+    const map = repository.docs(PLAYERS) ?? {};
+    return Object.entries(map).map(([id, doc]) => (doc.id === id ? doc : { ...doc, id }));
 }
 
 /**
@@ -198,7 +212,7 @@ export function searchPlayers(term, limit = 6) {
     const words = typed.split(/\s+/).filter(Boolean);
     const scored = [];
 
-    repository.all(PLAYERS).forEach(p => {
+    loadRegistry().forEach(p => {
         if (p.hidden) return;
         const key = nameKey(p.name);
         if (key === typed) { scored.push({ player: p, score: 0 }); return; }
@@ -215,7 +229,8 @@ export function searchPlayers(term, limit = 6) {
 }
 
 export function byId(id) {
-    return repository.get(PLAYERS, id);
+    const doc = repository.get(PLAYERS, id);
+    return doc && doc.id !== id ? { ...doc, id } : doc;
 }
 
 /**
@@ -227,7 +242,7 @@ export function byId(id) {
  * Returns ids positionally matching `candidates`.
  */
 export function resolveAll(candidates, { create = true } = {}) {
-    const players = repository.all(PLAYERS);
+    const players = loadRegistry();
     const rows = lookupRows(players);
     const index = buildNameIndex(rows);
     const ids = [];
@@ -277,7 +292,7 @@ export function resolve(candidate, options) {
  * load.
  */
 export function rename(id, patch) {
-    const before = repository.get(PLAYERS, id);
+    const before = byId(id);
     if (!before) return false;
 
     const next = {
@@ -305,7 +320,7 @@ export function rename(id, patch) {
 
 /** The facts recorded for a player, with nulls for the ones nobody has. */
 export function factsFor(id) {
-    const record = id ? repository.get(PLAYERS, id) : null;
+    const record = id ? byId(id) : null;
     if (!record) return { ...BLANK_FACTS };
     return Object.fromEntries(FACT_FIELDS.map(f => [f, record[f] ?? null]));
 }
@@ -316,7 +331,7 @@ export function factsFor(id) {
  * null or '' for a field clears it.
  */
 export function setFacts(id, patch) {
-    const record = repository.get(PLAYERS, id);
+    const record = byId(id);
     if (!record) return false;
 
     const next = { ...record };
@@ -349,7 +364,7 @@ export function setFactsMany(updates) {
     const changes = [];
 
     (updates ?? []).forEach(({ id, patch }) => {
-        const record = repository.get(PLAYERS, id);
+        const record = byId(id);
         if (!record || !patch) return;
 
         const next = { ...record };
@@ -387,7 +402,7 @@ export function fillMany(updates) {
     const changes = [];
 
     (updates ?? []).forEach(({ id, base, facts }) => {
-        const record = repository.get(PLAYERS, id);
+        const record = byId(id);
         if (!record) return;
 
         const next = { ...record };
@@ -418,7 +433,7 @@ export function fillMany(updates) {
 }
 
 export function setHidden(id, hidden) {
-    const record = repository.get(PLAYERS, id);
+    const record = byId(id);
     if (!record) return false;
     writeOne({ ...record, hidden: !!hidden });
     return true;
@@ -431,8 +446,8 @@ export function setHidden(id, hidden) {
  */
 export function merge(keepId, mergeId) {
     if (keepId === mergeId) return false;
-    const keep = repository.get(PLAYERS, keepId);
-    const loser = repository.get(PLAYERS, mergeId);
+    const keep = byId(keepId);
+    const loser = byId(mergeId);
     if (!keep || !loser) return false;
 
     const aliases = [...(keep.aliases ?? []), ...(loser.aliases ?? []),

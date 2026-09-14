@@ -26,9 +26,50 @@ import { repository } from './repository';
  * @param {Function} [config.strip]     (doc) => the item, minus filing fields
  */
 export function createDocSet({ collection, idOf, scopeOf, strip }) {
-    const belongsTo = scopeOf ?? ((doc, scope) => doc.scope === scope);
+    /**
+     * Which documents are in a scope, answered from the KEY.
+     *
+     * It used to be answered from a `scope` field written into every body —
+     * which is the key's own left half, restated. Ids are all
+     * `${scope}__${rest}`, so the key already says it, and scopes here are a
+     * season id joined to a fixed stage name: neither can be a `__`-prefixed
+     * extension of another.
+     *
+     * Documents written by an older build still carry `scope`, so that is
+     * honoured where present — this reads both shapes and writes only the new
+     * one.
+     */
+    const belongsTo = scopeOf ?? ((doc, scope, id) => (
+        doc.scope !== undefined ? doc.scope === scope : String(id).startsWith(`${scope}__`)
+    ));
 
-    const mine = (scope) => repository.all(collection).filter(doc => belongsTo(doc, scope));
+    /** The documents in one scope, each carrying its own id again. */
+    const mine = (scope) => {
+        const map = repository.docs(collection) ?? {};
+        const out = [];
+        Object.entries(map).forEach(([id, doc]) => {
+            if (!doc) return;
+            const withId = doc.id === id ? doc : { ...doc, id };
+            if (belongsTo(withId, scope, id)) out.push(withId);
+        });
+        return out;
+    };
+
+    /**
+     * A stored document reduced to what is actually written.
+     *
+     * The diff compares what is in the store against what is about to be
+     * stored, and after this change those are no longer the same shape:
+     * documents written by an older build still carry `id` and `scope`.
+     * Comparing without reducing first would find every document different,
+     * every time, and rewrite the whole collection on every render.
+     */
+    const filed = (doc) => {
+        const out = { ...doc };
+        delete out.id;
+        delete out.scope;
+        return out;
+    };
 
     const unfile = strip ?? ((doc) => {
         const item = { ...doc };
@@ -62,9 +103,14 @@ export function createDocSet({ collection, idOf, scopeOf, strip }) {
                 const id = idOf(scope, item, order);
                 if (seen.has(id)) return; // two of the same thing; the first wins
                 seen.add(id);
-                const doc = { id, scope, order, ...item };
+                // Neither `id` nor `scope` is stored: the key states both, and
+                // a document that repeats its own key pays for it on every
+                // write, in every season, forever.
+                const doc = { order, ...item };
+                delete doc.id;
+                delete doc.scope;
                 const before = current.get(id);
-                if (!before || !shallowSame(before, doc)) changes.push({ id, doc });
+                if (!before || !shallowSame(filed(before), doc)) changes.push({ id, doc });
             });
 
             current.forEach((_doc, id) => { if (!seen.has(id)) changes.push({ id, doc: null }); });

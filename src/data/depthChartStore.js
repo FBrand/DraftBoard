@@ -32,7 +32,6 @@ const rows = createDocSet({
     // what it will be filed AS. Reading the wrong one gave every row the same
     // document and the chart collapsed to whichever row was written last.
     idOf: (scope, row) => `${scope}__${row.rowId}`,
-    scopeOf: (doc, scope) => doc.scope === scope,
     strip: (doc) => ({
         id: doc.rowId,
         label: doc.label,
@@ -99,10 +98,13 @@ export function writeChart(stage, seasonId, state) {
 
     rows.write(scope, list);
 
+    // A band document is its slots. It used to also carry `id`, `scope` and
+    // `band` — the whole key, its left half, and its right half — which was
+    // 111 of its 219 bytes spent restating where it is filed.
     const band = (name, slots) => {
         const id = `${scope}__${name}`;
         const before = repository.get(DEPTH_BANDS, id);
-        const next = { id, scope, band: name, slots: slots ?? [] };
+        const next = { slots: slots ?? [] };
         if (!before || JSON.stringify(before.slots ?? []) !== JSON.stringify(next.slots)) {
             repository.set(DEPTH_BANDS, id, next);
         }
