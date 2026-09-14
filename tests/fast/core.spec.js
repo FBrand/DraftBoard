@@ -397,11 +397,17 @@ test.describe('what he plays and where he stands', () => {
         await expect(modal).toBeHidden();
 
         expect(await slotNames(page)).toContain('Test Tackle');
-        // A root key holds a tree — { docs, sub } — since paths stopped being
-        // folded into the key. The documents are under `docs`.
-        const recorded = await page.evaluate(() => Object.values(
-            JSON.parse(localStorage.getItem('db_players') || '{}').docs ?? {},
-        ).find(p => p.name === 'Test Tackle')?.position);
+        // Read whatever shape the collection is in. This assertion has broken
+        // three times on storage layout alone — a flattened path key, then a
+        // root tree with the documents under `docs`, now a plain map again —
+        // without the app ever being at fault. `docs ?? raw` survives all of
+        // them, because the question here is about the registry, not about how
+        // the registry happens to be filed.
+        const recorded = await page.evaluate(() => {
+            const raw = JSON.parse(localStorage.getItem('db_players') || '{}');
+            return Object.values(raw.docs ?? raw)
+                .find(p => p && p.name === 'Test Tackle')?.position;
+        });
         expect(recorded, 'the depth chart overwrote what he plays').toBe('OT');
     });
 });
@@ -628,12 +634,17 @@ test.describe('when the store refuses', () => {
         await page.evaluate(() => {
             window.__realSet = Storage.prototype.setItem;
             Storage.prototype.setItem = function (k, v) {
-                // The depth chart lives under its season, and a season's whole tree is
-                // one key — db_seasons — because paths are no longer folded into the
-                // key. Naming anything more specific matches nothing, the write
-                // succeeds, and the test then asserts that a sync indicator appears
-                // for a save that worked. It has been wrong that way twice.
-                if (window.__broken && String(k) === 'db_seasons') throw new Error('backend unreachable');
+                // Anything the depth chart writes, wherever it happens to live.
+                //
+                // This has now been wrong three times by naming one exact key:
+                // db_depth_rows, then a flattened path, then db_seasons. Each
+                // time the address moved, the injection matched nothing, the
+                // write succeeded, and the test went on asserting that a sync
+                // indicator appears for a save that worked. Matching on what
+                // the value CONTAINS cannot rot the same way.
+                if (window.__broken && String(k).startsWith('db_') && /"slots"/.test(String(v))) {
+                    throw new Error('backend unreachable');
+                }
                 return window.__realSet.call(this, k, v);
             };
             window.__broken = true;
@@ -678,12 +689,17 @@ test.describe('when the store refuses', () => {
         await page.evaluate(() => {
             window.__realSet = Storage.prototype.setItem;
             Storage.prototype.setItem = function (k, v) {
-                // The depth chart lives under its season, and a season's whole tree is
-                // one key — db_seasons — because paths are no longer folded into the
-                // key. Naming anything more specific matches nothing, the write
-                // succeeds, and the test then asserts that a sync indicator appears
-                // for a save that worked. It has been wrong that way twice.
-                if (window.__broken && String(k) === 'db_seasons') throw new Error('backend unreachable');
+                // Anything the depth chart writes, wherever it happens to live.
+                //
+                // This has now been wrong three times by naming one exact key:
+                // db_depth_rows, then a flattened path, then db_seasons. Each
+                // time the address moved, the injection matched nothing, the
+                // write succeeded, and the test went on asserting that a sync
+                // indicator appears for a save that worked. Matching on what
+                // the value CONTAINS cannot rot the same way.
+                if (window.__broken && String(k).startsWith('db_') && /"slots"/.test(String(v))) {
+                    throw new Error('backend unreachable');
+                }
                 return window.__realSet.call(this, k, v);
             };
             window.__broken = true;

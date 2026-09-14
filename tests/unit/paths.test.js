@@ -43,21 +43,33 @@ describe('a path with slashes in it', () => {
         expect(repo.all('boards/b2/entries').map(d => d.name)).toEqual(['Two']);
     });
 
-    it('is one key per ROOT collection, with the hierarchy inside the value', () => {
-        // localStorage is flat and the data is not. This used to fold the
-        // slashes into the key — db_boards__b1__entries — which put a wall of
-        // __-joined strings in front of anyone opening a storage inspector,
-        // indistinguishable from the composite keys the data model had just
-        // got rid of. The nesting lives in the value now.
-        expect(collectionKey('boards/b1/entries')).toBe('db_boards');
-        expect(collectionKey('seasons/s_1/charts/rosterState/rows')).toBe('db_seasons');
+    it('is one key per collection, and the key is the path', () => {
+        // A localStorage key is an arbitrary string and may contain a slash.
+        // Folding the slashes into __ made storage look like the composite
+        // keys the data model had just got rid of; putting the hierarchy in
+        // the VALUE instead removed the __ and made one remark rewrite every
+        // evaluation — 557ms at a season's scale. The key is just the path.
+        expect(collectionKey('boards/b1/entries')).toBe('db_boards/b1/entries');
+        expect(collectionKey('seasons/s_1/charts/rosterState/rows'))
+            .toBe('db_seasons/s_1/charts/rosterState/rows');
         expect(collectionKey('players')).toBe('db_players');
+    });
+
+    it('writes only the collection that changed', async () => {
+        const repo = createRepository(localAdapter);
+        await repo.set('boards/b1/entries', 'p1', { round: 1 });
+        await repo.set('boards/b2/entries', 'p2', { round: 2 });
+
+        // Two keys, each holding one board — not one key holding both.
+        expect(localStorage.getItem('db_boards/b1/entries')).toContain('p1');
+        expect(localStorage.getItem('db_boards/b1/entries')).not.toContain('p2');
+        expect(localStorage.getItem('db_boards/b2/entries')).toContain('p2');
     });
 
     it('keeps a document and the collections under it apart', async () => {
         // A season is BOTH a document in `seasons` and the parent of
-        // seasons/{id}/charts. Without separating them, one would overwrite
-        // the other.
+        // seasons/{id}/charts. Separate keys, so neither can overwrite the
+        // other.
         const repo = createRepository(localAdapter);
         await repo.set('seasons', 's_1', { year: 2026 });
         await repo.set('seasons/s_1/charts/rosterState/rows', 'qb', { slots: ['Mahomes'] });
@@ -68,10 +80,6 @@ describe('a path with slashes in it', () => {
 
         expect(repo.get('seasons', 's_1').year).toBe(2026);
         expect(repo.get('seasons/s_1/charts/rosterState/rows', 'qb').slots).toEqual(['Mahomes']);
-
-        const raw = JSON.parse(localStorage.getItem('db_seasons'));
-        expect(raw.docs.s_1.year).toBe(2026);
-        expect(raw.sub.s_1.sub.charts.sub.rosterState.sub.rows.docs.qb.slots).toEqual(['Mahomes']);
     });
 
     it('leaves no __ keys in storage at all', () => {
@@ -119,9 +127,10 @@ describe('keys written by the flattened build', () => {
 
         expect(repo.get('seasons/s_1/charts/rosterState/rows', 'qb').slots).toEqual(['Mahomes']);
         expect(localStorage.getItem('db_seasons__s_1__charts__rosterState__rows')).toBeNull();
+        expect(localStorage.getItem('db_seasons/s_1/charts/rosterState/rows')).toContain('Mahomes');
     });
 
-    it('do not displace what is already in the tree', async () => {
+    it('do not displace a root collection stored at the same key', async () => {
         localStorage.setItem('db_seasons', JSON.stringify({ docs: { s_1: { year: 2026 } } }));
         localStorage.setItem('db_seasons__s_1__charts__rosterState__rows',
             JSON.stringify({ qb: { slots: ['Mahomes'] } }));
