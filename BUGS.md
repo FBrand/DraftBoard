@@ -11,6 +11,40 @@ a measurement has been wrong more than once here.
 
 ---
 
+## The audit, 2026-09-14
+
+What was walked, and what it found. Every stage at 1600, 1280, 900 and 390,
+plus the flows a person actually performs.
+
+**Three real bugs, all fixed** — A1, A2, A3 below. Plus the write-failure
+rework, which was a design fault rather than a bug: a refused write threw the
+change away.
+
+**Clean, verified rather than assumed:**
+
+| Flow | Result |
+|---|---|
+| Scouting: drag the ranking | moves, survives reload, no console errors |
+| Draft: click while running / once over | drafts him / opens his card — both correct |
+| Roster: cut a player | lands in cuts, survives reload |
+| Free agency: add a candidate | 77 → 78, visible immediately |
+| UDFA: sign somebody | leaves the board, appears in the signed panel |
+| Session export → wipe → import | 13 keys, all 91 roster players back |
+| Roster CSV out and in | identical, 91/91, IR and cuts preserved |
+| Free agency CSV out and in | identical, 77/77 |
+| Board CSV export | 409 rows, covers the whole board |
+| Overlays (help, seasons, add players) | all close on Escape **and** on the backdrop |
+| Evaluations | written, survive reload, do **not** leak to another analyst |
+| Roster sync, run twice | idempotent, no duplicates |
+| Archived season | refuses writes on every stage, banner says why |
+| Console errors across all stages and sizes | none |
+
+**Four of my own findings turned out to be the checker, not the app** — worth
+recording, because each cost time: cards "clipped" by 8px are the tag marker
+overhanging on purpose; the "off-screen panel" is a closed drawer; the missing
+toast was `.app-toast` looked up as `.toast`; and the FA import "failure" was
+my probe clicking "Import Positions from Roster".
+
 ## Found by the audit
 
 | # | What | State |
