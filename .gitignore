@@ -33,3 +33,4 @@ dist-test/
 
 # Screenshots from ad-hoc browser probes
 .shots/
+.audit/

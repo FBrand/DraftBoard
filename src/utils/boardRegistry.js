@@ -211,11 +211,6 @@ export function seasonIsSeeded() {
     return viewedSeason()?.seeded !== false;
 }
 
-export function isReadOnly() {
-    const viewing = viewedSeason();
-    return !!viewing && viewing.status !== 'current';
-}
-
 export function renameBoard(id, label) {
     const board = boardById(id);
     const next = String(label ?? '').trim();

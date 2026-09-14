@@ -112,6 +112,43 @@ my probe clicking "Import Positions from Roster".
 
 - "What is that Activate button supposed to be?" — see the answer given in chat; if the answer is that it should not exist in that form, it goes here as a bug.
 
+## The deep audit, desktop and 390px — 2026-09-14
+
+Walked all five stages at 390x844 and 1600x1000, driving real flows rather
+than screenshotting: switch board, open a player, open the Seasons modal,
+draft a card, count roster slots. Then looked at every screenshot.
+
+**Found and fixed**
+
+| # | What | State |
+|---|---|---|
+| 25 | **A finished draft announced a pick that cannot happen** | The counter runs one past the final selection, so the header read `NOW DRAFTING #258` on a draft that ends at 257 — in the biggest text on the screen, which is the line a broadcast puts on air. Every other part of the view had already switched over: a card click signs a UDFA, the board is in post-draft mode, the tracker says "none left". Only the headline disagreed. `DraftView` already computed `draftComplete` and never passed it to the header. FIXED: reads `DRAFT COMPLETE / UDFA`, and the OURS badge no longer appears for a pick nobody owns. Covered by `tests/fast/draftComplete.spec.js`. |
+
+**Found, open, not fixed unprompted**
+
+| # | What | State |
+|---|---|---|
+| 27 | The draft and UDFA boards are a 2160px canvas in a 390px window | Measured: `scrollWidth` is 2160 at every viewport. A phone shows 18% of the board and needs 5.5 screen-widths of horizontal scrolling to reach the last position column; a 1600px desktop shows 74%. Scouting solved exactly this by collapsing to a single column at narrow widths (`useScoutingLayout`); Draft and UDFA never got that treatment. Not touched because it is a redesign of the app's core view and nobody has complained about it — naming it rather than acting. |
+| 26 | Tap targets under 28px on a phone | The slot steppers are 16x16 (`−` / `+` in FA and Roster), the row-delete `✕` is 22x25, and the board tabs are 18px tall. Guidance is 44px. Real, but a judgement call against a dense tool built for a broadcast — listed so it is a decision rather than an oversight. |
+
+**Checked and NOT bugs** — recorded so they are not re-chased
+
+- Long names cut off in the side panels and depth-chart slots
+  ("John Michael Gyllenborg" loses 29px): `text-overflow: ellipsis`,
+  deliberate and graceful, not a hard clip.
+- The top panel and tab bar cut off at 390px: both `overflow-x: auto`
+  and genuinely scrollable — after scrolling, the Manage menu is fully on
+  screen and opens all five items. Reachable, if without an affordance.
+- A draft card "blocked" by an overlay: it is the bottom panel, which
+  cards correctly scroll underneath.
+- No horizontal page overflow, no console or page errors, and no control
+  without an accessible name, at either width, on any of the five stages.
+
+**On the method.** Four of my six automated findings were false positives —
+my checkers, not the app. The ones that held up came from looking at a
+screenshot and from driving a flow. That matches what the user said:
+sweeps find almost nothing; using the app finds the bugs.
+
 ## "Do we even need a dedicated picks store?" — measured
 
 Answer: yes, and not for the reason I first gave. The reason I gave was
