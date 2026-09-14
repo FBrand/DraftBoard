@@ -15,6 +15,7 @@ import { parseCsvLine } from './csvUtils';
 import { loadRegistry, fillMany } from './playerRegistry';
 import { repository } from '../data/repository';
 import { viewedSeason, seasonIsSeeded } from './boardRegistry';
+import { setupPath } from './seasonInit';
 
 const FILE = 'player_facts_2026.csv';
 
@@ -111,10 +112,12 @@ function index(rows) {
  * the marker and does nothing.
  */
 const SEEDED = 'setup';
-const seedMarker = (seasonId) => `facts__${seasonId}`;
+const legacySeedMarker = (seasonId) => `facts__${seasonId}`;
 
 export function factsSeeded(seasonId) {
-    return !!seasonId && !!repository.get(SEEDED, seedMarker(seasonId));
+    if (!seasonId) return false;
+    return !!repository.get(setupPath(seasonId), 'facts')
+        || !!repository.get(SEEDED, legacySeedMarker(seasonId));
 }
 
 export async function applyPlayerFacts() {
@@ -160,9 +163,8 @@ export async function applyPlayerFacts() {
 
     const filled = fillMany(updates) > 0;
     if (seasonId) {
-        repository.set(SEEDED, seedMarker(seasonId), {
-            seasonId, at: new Date().toISOString(),
-        });
+        // The body is when. The season and what this marks are the address.
+        repository.set(setupPath(seasonId), 'facts', { at: Date.now() });
     }
     return filled;
 }

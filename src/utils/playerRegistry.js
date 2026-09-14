@@ -19,6 +19,7 @@
  */
 import { buildNameIndex, findMatchingIndex, nameKey } from './nameMatcher';
 import { repository } from '../data/repository';
+import { prefixedId } from './ids';
 
 /** One document per player. See data/repository.js. */
 export const PLAYERS = 'players';
@@ -98,14 +99,8 @@ function writeMany(records) {
     repository.commit(PLAYERS, records.map(r => ({ id: r.id, doc: lean(r) })));
 }
 
-let nextFallbackId = 0;
-function newId() {
-    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-        return `p_${crypto.randomUUID()}`;
-    }
-    nextFallbackId += 1;
-    return `p_${Date.now().toString(36)}${nextFallbackId.toString(36)}${Math.random().toString(36).slice(2, 8)}`;
-}
+// A uuid on every origin, not only the secure ones — see utils/ids.js.
+const newId = () => prefixedId('p');
 
 const clean = (v) => String(v ?? '').trim();
 

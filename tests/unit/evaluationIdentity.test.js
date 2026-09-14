@@ -23,6 +23,11 @@ beforeEach(async () => {
     globalThis.resetStorage();
     repository.invalidate();
     await openBoards();
+    // Remarks are filed under the season in their path, and a read visits the
+    // seasons that exist — so 's1' has to be one. See remarkStorage.test.js,
+    // which has this as its own case.
+    await repository.ready('seasons');
+    repository.set('seasons', 's1', { id: 's1', year: 2026, status: 'current' });
     await openEvaluations();
 });
 

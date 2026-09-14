@@ -29,6 +29,7 @@
  * make "who said this" a lie.
  */
 import { repository } from '../data/repository';
+import { prefixedId } from './ids';
 import { DRAFT_YEAR } from '../constants';
 import { boardStateKey } from './appStorage';
 import { removeSeasonStages } from '../data/stageStore';
@@ -41,12 +42,8 @@ export const SEASONS = 'seasons';
 export const AUTHORS = 'authors';
 export const BOARDS_COLLECTION = 'boards';
 
-const newId = (prefix) => {
-    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-        return `${prefix}_${crypto.randomUUID()}`;
-    }
-    return `${prefix}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
-};
+// A uuid on every origin, not only the secure ones — see utils/ids.js.
+const newId = (prefix) => prefixedId(prefix);
 
 /**
  * The boards the app shipped with, and the shape the migration gives them.

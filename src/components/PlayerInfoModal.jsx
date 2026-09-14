@@ -6,7 +6,7 @@ import { rankBoard } from '../utils/boardRanking';
 import useBoardRankings from '../hooks/useBoardRankings';
 
 import { allBoards, boardById, currentSeason, listSeasons } from '../utils/boardRegistry';
-import { ownerIdFor, remarksFor, addRemark, removeRemark } from '../utils/evaluations';
+import { ownerIdFor, remarksFor, allRemarksFor, addRemark, removeRemark } from '../utils/evaluations';
 import { resolve as resolvePlayer } from '../utils/playerRegistry';
 
 // The player card, opened by right-click / long-press on a player anywhere
@@ -141,10 +141,20 @@ export default function PlayerInfoModal({ player, players = [], onClose, editsOp
      */
     const allBoardNotes = useMemo(() => {
         if (!player || !playerId) return [];
+        // One read, not one per board. Remarks are filed under the player, so
+        // everything ever written about him is a single collection — this used
+        // to call remarksFor once for every board that has ever existed, each
+        // of which was its own scan.
+        const mine = allRemarksFor(playerId, boardList.map(ownerIdFor));
+        const byOwner = new Map();
+        mine.forEach(r => {
+            if (!byOwner.has(r.ownerId)) byOwner.set(r.ownerId, []);
+            byOwner.get(r.ownerId).push(r);
+        });
         return boardList.map(board => ({
             board: board.id,
             label: board.label,
-            remarks: remarksFor(ownerIdFor(board), playerId),
+            remarks: byOwner.get(ownerIdFor(board)) ?? [],
         }));
         // remarkTick: the store changed under us.
         // eslint-disable-next-line react-hooks/exhaustive-deps

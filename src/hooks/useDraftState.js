@@ -20,6 +20,16 @@ import { resolve as resolvePlayer, resolveAll, setFacts, setFactsMany, rename as
 import { getSessionTeam as sessionTeam } from '../utils/appSettings';
 
 /**
+ * Whose pick this is, asked of the club that made it.
+ *
+ * The app used to answer this from picks.txt — the picks we owned going INTO
+ * the draft — which is a different question. Picks get traded: five of the
+ * nine in the shipped season went elsewhere, so Spencer Fano, taken ninth by
+ * Cleveland, painted as a Chief on the board.
+ */
+const isOurs = (team) => !!team && String(team).toUpperCase() === sessionTeam();
+
+/**
  * Writes what a completed draft says about the players in it.
  *
  * A draft read from DraftBoard_Picks.csv never passes through draftPlayer, so
@@ -266,7 +276,14 @@ export const useDraftState = () => {
                                     drafted: true,
                                     pickNumber: match.pickNumber,
                                     team: match.team,
-                                    draftedByUs: savedKCLeft.includes(match.pickNumber)
+                                    // Who MADE the pick, not whose list the
+                                    // number was on. picks.txt is what we
+                                    // owned going in; the draft file is what
+                                    // happened after trades, and they differ
+                                    // for five of nine picks in the shipped
+                                    // season — so Spencer Fano, taken 9th by
+                                    // Cleveland, painted as a Chief.
+                                    draftedByUs: isOurs(match.team),
                                 };
                             }
                             return p;
@@ -278,7 +295,11 @@ export const useDraftState = () => {
                         const parsedPlayersIndex = joinIndex(parsedPlayers);
                         const enrichedDrafted = savedDrafted.map(sd => {
                             const matchIdx = findJoin(sd, parsedPlayersIndex);
-                            const draftedByUs = sd.draftedByUs === true || sd.team === TEAM_CONFIG.abbreviation; // Trust persisted or evaluate from CSV team string
+                            // The club on the pick is the answer, and it is
+                            // always present on a real pick. Only a pick with
+                            // no club at all falls back to what was persisted
+                            // — an undrafted signing nobody has placed yet.
+                            const draftedByUs = sd.team ? isOurs(sd.team) : sd.draftedByUs === true;
                             if (matchIdx !== -1) {
                                 const updatedMetadata = parsedPlayers[matchIdx];
                                 return {

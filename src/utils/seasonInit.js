@@ -45,35 +45,54 @@ import { repository } from '../data/repository';
  * So it is a document beside the data it describes. Whoever gets there first
  * writes it; everybody else reads it and does nothing.
  */
+/** The pre-path collection. Read once for migration; never written. */
 export const SETUP = 'setup';
 
-const markerId = (seasonId) => `season__${seasonId}`;
+/**
+ * The markers live under the season they are about.
+ *
+ *     seasons/{seasonId}/setup/season
+ *     seasons/{seasonId}/setup/facts
+ *
+ * They were `setup/season__{id}` and `setup/facts__{id}` in one shared
+ * collection. Nothing ever scanned it — both reads are exact — so the
+ * composite key was ugly rather than wrong. What it cost is that a season was
+ * not deletable as a subtree: every other thing a season owns is under it now,
+ * and two markers in a collection of their own were the last exception.
+ */
+export const setupPath = (seasonId) => `seasons/${seasonId ?? '_'}/setup`;
+
+const MARKER = 'season';
+const legacyMarkerId = (seasonId) => `season__${seasonId}`;
 
 /** Whether this season's stages have been set up — by anyone, anywhere. */
 export function isInitialised(seasonId) {
-    return !!seasonId && !!repository.get(SETUP, markerId(seasonId));
+    if (!seasonId) return false;
+    return !!repository.get(setupPath(seasonId), MARKER)
+        || !!repository.get(SETUP, legacyMarkerId(seasonId));
 }
 
 export function markInitialised(seasonId) {
     if (!seasonId || isInitialised(seasonId)) return;
-    repository.set(SETUP, markerId(seasonId), {
-        id: markerId(seasonId),
-        seasonId,
-        at: new Date().toISOString(),
-    });
+    // The body is when. The season and what this marks are the address.
+    repository.set(setupPath(seasonId), MARKER, { at: Date.now() });
 }
 
-/** Loads the markers. Must resolve before anything asks. */
+/** Loads the legacy markers, so a season set up by an older build is known. */
 export function openSetup() {
     return repository.ready(SETUP);
 }
 
 /** Forgets one season, so scrapping it does not leave its id behind forever. */
 export function forgetSeason(seasonId) {
-    repository.remove(SETUP, markerId(seasonId));
+    // Both addresses: a season scrapped before it was ever read may still be
+    // marked at the old one.
+    repository.remove(SETUP, legacyMarkerId(seasonId));
+    repository.remove(SETUP, `facts__${seasonId}`);
     // The shipped facts were laid over this season once; a season that no
     // longer exists has not been seeded. See playerFacts.factsSeeded.
-    repository.remove(SETUP, `facts__${seasonId}`);
+    repository.remove(setupPath(seasonId), MARKER);
+    repository.remove(setupPath(seasonId), 'facts');
 }
 
 /**

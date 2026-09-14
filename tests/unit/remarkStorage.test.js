@@ -1,27 +1,27 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
-    EVALUATIONS, remarksFor, addRemark, removeRemark, updateRemarkText, openEvaluations,
+    EVALUATIONS, remarksPath, remarksFor, allRemarksFor,
+    addRemark, removeRemark, updateRemarkText, openEvaluations,
 } from '../../src/utils/evaluations';
 import { repository } from '../../src/data/repository';
 
 /**
  * Where a remark actually lives.
  *
- * A player scouted properly carries about fourteen remarks, and each one used
- * to spend 52 bytes on a season id identical to its neighbours', 18 more
- * spelling out one of three words, and 46 on a v4 uuid used only to find it
- * inside its own document. That is 116 of roughly 209 bytes saying what the
- * ADDRESS can say once.
+ *     evaluations/{playerId}/{kind}/{ownerId}/{seasonId}/{remarkId}
  *
- * So season and kind are the document id, and the document is a map of short
- * id to `[text, writtenAt]`.
+ * There is no composite key anywhere in it. Every part of a remark's identity
+ * is something you select BY — the card wants one player's, a section wants
+ * one kind's, a board wants one author's, the log wants one season's — and a
+ * key that always has to be taken apart again was earning nothing.
  *
- * The public API is deliberately unchanged — six call sites read
- * `remarksFor(ownerId, playerId)` and get a flat array of
- * `{ id, kind, text, seasonId, createdAt }` — so the handle is composed from
- * the address rather than stored.
+ * A document is one remark: `{ t: text, a: writtenAt }`, repeating none of the
+ * five things the address states. Each remark used to carry a 46-byte uuid, a
+ * 52-byte season id identical to its neighbours', and one of three words
+ * spelled out: 116 of roughly 209 bytes.
  */
 const OWNER = 'a_dan';
+const RYAN = 'a_ryan';
 const PLAYER = 'p_delane';
 const S26 = 's_2026';
 const S27 = 's_2027';
@@ -30,65 +30,79 @@ beforeEach(async () => {
     globalThis.resetStorage();
     repository.invalidate();
     await openEvaluations();
+    await repository.ready('seasons');
+    // Reads walk the seasons that exist — see seasonCandidates. Writing into a
+    // season the registry has never heard of is a real property with its own
+    // test below, not something to leave lying under every other one.
+    repository.set('seasons', S26, { id: S26, year: 2026, status: 'archived' });
+    repository.set('seasons', S27, { id: S27, year: 2027, status: 'current' });
 });
 
-const ids = () => Object.keys(repository.docs(EVALUATIONS) ?? {});
+const docsAt = (kind, owner, season) =>
+    Object.keys(repository.docs(remarksPath(PLAYER, kind, owner, season)) ?? {});
 
 describe('the address', () => {
-    it('carries the owner, the player, the season and the kind', () => {
-        addRemark(OWNER, PLAYER, 'strength', 'Sticky in man coverage', S26);
-        expect(ids()).toEqual([`${OWNER}__${PLAYER}__${S26}__s`]);
+    it('puts the player, the kind, the owner and the season in the path', () => {
+        expect(remarksPath(PLAYER, 'strength', OWNER, S26))
+            .toBe(`evaluations/${PLAYER}/s/${OWNER}/${S26}`);
+        expect(remarksPath(PLAYER, 'note', OWNER, null))
+            .toBe(`evaluations/${PLAYER}/n/${OWNER}/-`);
     });
 
-    it('gives each kind its own document', () => {
+    it('files a remark at its own address and nowhere else', () => {
+        addRemark(OWNER, PLAYER, 'strength', 'Sticky in man coverage', S26);
+
+        expect(docsAt('strength', OWNER, S26)).toHaveLength(1);
+        expect(docsAt('weakness', OWNER, S26)).toHaveLength(0);
+        expect(docsAt('strength', OWNER, S27)).toHaveLength(0);
+        expect(docsAt('strength', RYAN, S26)).toHaveLength(0);
+    });
+
+    it('separates the kinds', () => {
         addRemark(OWNER, PLAYER, 'strength', 'Sticky in man coverage', S26);
         addRemark(OWNER, PLAYER, 'weakness', 'Pursuit angles need work', S26);
         addRemark(OWNER, PLAYER, 'note', 'Compares to Quinyon Mitchell', S26);
 
-        expect(ids().sort()).toEqual([
-            `${OWNER}__${PLAYER}__${S26}__n`,
-            `${OWNER}__${PLAYER}__${S26}__s`,
-            `${OWNER}__${PLAYER}__${S26}__w`,
-        ]);
+        expect(docsAt('strength', OWNER, S26)).toHaveLength(1);
+        expect(docsAt('weakness', OWNER, S26)).toHaveLength(1);
+        expect(docsAt('note', OWNER, S26)).toHaveLength(1);
     });
 
-    it('gives each season its own document, which is what makes a log a log', () => {
+    it('separates the seasons, which is what makes a log a log', () => {
         addRemark(OWNER, PLAYER, 'note', 'Bends the corner', S26);
         addRemark(OWNER, PLAYER, 'note', 'Lost a step after the knee', S27);
 
-        expect(ids().sort()).toEqual([
-            `${OWNER}__${PLAYER}__${S26}__n`,
-            `${OWNER}__${PLAYER}__${S27}__n`,
-        ]);
+        expect(docsAt('note', OWNER, S26)).toHaveLength(1);
+        expect(docsAt('note', OWNER, S27)).toHaveLength(1);
     });
 
-    it('files an unstamped remark rather than dropping it', () => {
+    it('files an unstamped remark under a named sentinel, since a segment cannot be empty', () => {
         addRemark(OWNER, PLAYER, 'note', 'No season to hand', null);
-        expect(ids()).toEqual([`${OWNER}__${PLAYER}_____n`]);
+        expect(docsAt('note', OWNER, null)).toHaveLength(1);
         expect(remarksFor(OWNER, PLAYER)[0].seasonId).toBeNull();
     });
 });
 
 describe('the stored document', () => {
-    it('is a map of short id to text and time, and nothing else', () => {
+    it('is the text and when it was written, and nothing else', () => {
         addRemark(OWNER, PLAYER, 'strength', 'Sticky in man coverage', S26);
-        const doc = repository.get(EVALUATIONS, `${OWNER}__${PLAYER}__${S26}__s`);
+        const docs = repository.docs(remarksPath(PLAYER, 'strength', OWNER, S26));
+        const [id, doc] = Object.entries(docs)[0];
 
-        const entries = Object.entries(doc);
-        expect(entries).toHaveLength(1);
-        const [id, value] = entries[0];
         expect(id).toMatch(/^[a-z0-9]{6}$/);
-        expect(value[0]).toBe('Sticky in man coverage');
-        expect(typeof value[1]).toBe('number');
+        expect(Object.keys(doc).sort()).toEqual(['a', 't']);
+        expect(doc.t).toBe('Sticky in man coverage');
+        expect(typeof doc.a).toBe('number');
     });
 
-    it('does not repeat the season or the kind it is filed under', () => {
+    it('repeats nothing the address already says', () => {
         addRemark(OWNER, PLAYER, 'weakness', 'Pursuit angles need work', S26);
-        const raw = JSON.stringify(repository.get(EVALUATIONS, `${OWNER}__${PLAYER}__${S26}__w`));
+        const raw = JSON.stringify(repository.docs(remarksPath(PLAYER, 'weakness', OWNER, S26)));
 
         expect(raw).not.toContain(S26);
+        expect(raw).not.toContain(OWNER);
+        expect(raw).not.toContain(PLAYER);
         expect(raw).not.toContain('weakness');
-        expect(raw).not.toContain('seasonId');
     });
 
     it('keeps several remarks of one kind apart', () => {
@@ -96,8 +110,7 @@ describe('the stored document', () => {
         addRemark(OWNER, PLAYER, 'strength', 'Two', S26);
         addRemark(OWNER, PLAYER, 'strength', 'Three', S26);
 
-        const doc = repository.get(EVALUATIONS, `${OWNER}__${PLAYER}__${S26}__s`);
-        expect(Object.keys(doc)).toHaveLength(3);
+        expect(docsAt('strength', OWNER, S26)).toHaveLength(3);
         expect(remarksFor(OWNER, PLAYER).map(r => r.text)).toEqual(['One', 'Two', 'Three']);
     });
 });
@@ -118,16 +131,7 @@ describe('reading back', () => {
         addRemark(OWNER, PLAYER, 'note', 'Bends the corner', S26);
         addRemark(OWNER, PLAYER, 'note', 'Lost a step after the knee', S27);
 
-        const seasons = remarksFor(OWNER, PLAYER).map(r => r.seasonId).sort();
-        expect(seasons).toEqual([S26, S27]);
-    });
-
-    it('still finds remarks from a season that no longer exists', () => {
-        // The reason this reads by key prefix rather than looping over the
-        // seasons the registry knows about: scrapping a season must not make
-        // what you learned unreachable.
-        addRemark(OWNER, PLAYER, 'note', 'Written in a season since scrapped', 's_gone');
-        expect(remarksFor(OWNER, PLAYER).map(r => r.text)).toEqual(['Written in a season since scrapped']);
+        expect(remarksFor(OWNER, PLAYER).map(r => r.seasonId).sort()).toEqual([S26, S27]);
     });
 
     it('orders by kind, then oldest first within a kind', () => {
@@ -139,18 +143,40 @@ describe('reading back', () => {
             .toEqual(['strength', 'weakness', 'note']);
     });
 
-    it('keeps two players apart, and two owners', () => {
+    it('keeps two owners apart', () => {
+        addRemark(OWNER, PLAYER, 'note', 'Dan on Delane', S26);
+        addRemark(RYAN, PLAYER, 'note', 'Ryan on Delane', S26);
+
+        expect(remarksFor(OWNER, PLAYER).map(r => r.text)).toEqual(['Dan on Delane']);
+        expect(remarksFor(RYAN, PLAYER).map(r => r.text)).toEqual(['Ryan on Delane']);
+    });
+
+    it('keeps two players apart', () => {
         addRemark(OWNER, PLAYER, 'note', 'about Delane', S26);
         addRemark(OWNER, 'p_other', 'note', 'about somebody else', S26);
-        addRemark('a_ryan', PLAYER, 'note', 'Ryan on Delane', S26);
 
         expect(remarksFor(OWNER, PLAYER).map(r => r.text)).toEqual(['about Delane']);
-        expect(remarksFor('a_ryan', PLAYER).map(r => r.text)).toEqual(['Ryan on Delane']);
     });
 
     it('is empty for a player nobody has written about', () => {
         expect(remarksFor(OWNER, 'p_nobody')).toEqual([]);
         expect(remarksFor(null, PLAYER)).toEqual([]);
+    });
+
+    it('cannot reach a season the registry no longer lists — the cost of the path', () => {
+        // With every part of the address a path segment there is no key left
+        // to scan, and Firestore cannot list subcollections from a browser. So
+        // a read visits the seasons that EXIST. The remark is still stored and
+        // comes straight back the moment the season is listed again: it is
+        // unlisted, not lost. The previous shape scanned a key prefix and found
+        // it regardless. Written down rather than discovered later.
+        addRemark(OWNER, PLAYER, 'note', 'Written in a season since scrapped', 's_gone');
+        expect(docsAt('note', OWNER, 's_gone')).toHaveLength(1);
+        expect(remarksFor(OWNER, PLAYER)).toEqual([]);
+
+        repository.set('seasons', 's_gone', { id: 's_gone', year: 2025, status: 'archived' });
+        expect(remarksFor(OWNER, PLAYER).map(r => r.text))
+            .toEqual(['Written in a season since scrapped']);
     });
 });
 
@@ -173,19 +199,13 @@ describe('editing and removing', () => {
         expect(remarksFor(OWNER, PLAYER).map(r => r.text)).toEqual(['Two']);
     });
 
-    it('drops the document once its last remark goes, rather than leaving a husk', () => {
-        const only = addRemark(OWNER, PLAYER, 'note', 'Only one', S26);
-        removeRemark(OWNER, PLAYER, only.id);
-        expect(ids()).toEqual([]);
-    });
-
     it('treats an emptied edit as a removal', () => {
         const made = addRemark(OWNER, PLAYER, 'note', 'Something', S26);
         updateRemarkText(OWNER, PLAYER, made.id, '   ');
         expect(remarksFor(OWNER, PLAYER)).toEqual([]);
     });
 
-    it('says no to a handle that does not match anything', () => {
+    it('says no to a handle that matches nothing', () => {
         addRemark(OWNER, PLAYER, 'note', 'Something', S26);
         expect(removeRemark(OWNER, PLAYER, `${S26}:n:zzzzzz`)).toBe(false);
         expect(updateRemarkText(OWNER, PLAYER, 'nonsense', 'x')).toBe(false);
@@ -199,6 +219,38 @@ describe('editing and removing', () => {
         removeRemark(OWNER, PLAYER, old.id);
         expect(remarksFor(OWNER, PLAYER).map(r => r.text)).toEqual(['From 2027']);
     });
+
+    it('does not reach another owner with a matching handle', () => {
+        const mine = addRemark(OWNER, PLAYER, 'note', 'Dan on Delane', S26);
+        addRemark(RYAN, PLAYER, 'note', 'Ryan on Delane', S26);
+
+        removeRemark(OWNER, PLAYER, mine.id);
+        expect(remarksFor(RYAN, PLAYER).map(r => r.text)).toEqual(['Ryan on Delane']);
+    });
+});
+
+describe('everybody on one player', () => {
+    it('gathers the owners it is given', () => {
+        addRemark(OWNER, PLAYER, 'strength', 'Dan likes the feet', S26);
+        addRemark(RYAN, PLAYER, 'weakness', 'Ryan wants better angles', S26);
+
+        const all = allRemarksFor(PLAYER, [OWNER, RYAN]);
+        expect(all).toHaveLength(2);
+        expect(all.map(r => r.ownerId).sort()).toEqual([OWNER, RYAN]);
+        expect(all.find(r => r.ownerId === RYAN).text).toBe('Ryan wants better angles');
+    });
+
+    it('does not reach into another player', () => {
+        addRemark(OWNER, PLAYER, 'note', 'about Delane', S26);
+        addRemark(OWNER, 'p_other', 'note', 'about somebody else', S26);
+
+        expect(allRemarksFor(PLAYER, [OWNER]).map(r => r.text)).toEqual(['about Delane']);
+    });
+
+    it('is empty rather than throwing when asked for nobody', () => {
+        expect(allRemarksFor(PLAYER, [])).toEqual([]);
+        expect(allRemarksFor(null, [OWNER])).toEqual([]);
+    });
 });
 
 describe('remarks written by the older build', () => {
@@ -206,42 +258,33 @@ describe('remarks written by the older build', () => {
         remarks: [
             { id: 'r_long-uuid-1', kind: 'strength', text: 'Old strength', seasonId: S26, createdAt: 1700000000000 },
             { id: 'r_long-uuid-2', kind: 'note', text: 'Old note', seasonId: S26, createdAt: 1700000000001 },
-            { id: 'r_long-uuid-3', kind: 'note', text: 'Older season note', seasonId: S27, createdAt: 1700000000002 },
+            { id: 'r_long-uuid-3', kind: 'note', text: 'Later season note', seasonId: S27, createdAt: 1700000000002 },
         ],
     });
 
     it('are read without being touched, so looking at a card writes nothing', () => {
         legacy();
         expect(remarksFor(OWNER, PLAYER).map(r => r.text).sort())
-            .toEqual(['Old note', 'Old strength', 'Older season note']);
+            .toEqual(['Later season note', 'Old note', 'Old strength']);
         // Converting on read would turn opening a player card into a write,
         // which is how a quota fills while somebody is only looking.
-        expect(ids()).toEqual([`${OWNER}__${PLAYER}`]);
+        expect(Object.keys(repository.docs(EVALUATIONS) ?? {})).toEqual([`${OWNER}__${PLAYER}`]);
+        expect(docsAt('strength', OWNER, S26)).toHaveLength(0);
     });
 
-    it('are split into the new addresses on the first write', () => {
+    it('are moved to their addresses on the first write, keeping everything', () => {
         legacy();
         addRemark(OWNER, PLAYER, 'weakness', 'A new one', S26);
 
-        expect(ids().sort()).toEqual([
-            `${OWNER}__${PLAYER}__${S26}__n`,
-            `${OWNER}__${PLAYER}__${S26}__s`,
-            `${OWNER}__${PLAYER}__${S26}__w`,
-            `${OWNER}__${PLAYER}__${S27}__n`,
-        ]);
-    });
-
-    it('keep their text, their kind, their season and when they were written', () => {
-        legacy();
-        addRemark(OWNER, PLAYER, 'weakness', 'A new one', S26);
+        expect(docsAt('strength', OWNER, S26)).toHaveLength(1);
+        expect(docsAt('note', OWNER, S26)).toHaveLength(1);
+        expect(docsAt('note', OWNER, S27)).toHaveLength(1);
+        expect(docsAt('weakness', OWNER, S26)).toHaveLength(1);
 
         const all = remarksFor(OWNER, PLAYER);
-        const old = all.find(r => r.text === 'Old strength');
-        expect(old.kind).toBe('strength');
-        expect(old.seasonId).toBe(S26);
-        expect(old.createdAt).toBe(1700000000000);
         expect(all.map(r => r.text).sort())
-            .toEqual(['A new one', 'Old note', 'Old strength', 'Older season note']);
+            .toEqual(['A new one', 'Later season note', 'Old note', 'Old strength']);
+        expect(all.find(r => r.text === 'Old strength').createdAt).toBe(1700000000000);
     });
 
     it('leave nothing behind at the old address', () => {
@@ -257,30 +300,5 @@ describe('remarks written by the older build', () => {
         const target = remarksFor(OWNER, PLAYER).find(r => r.text === 'Old note');
         expect(removeRemark(OWNER, PLAYER, target.id)).toBe(true);
         expect(remarksFor(OWNER, PLAYER).map(r => r.text)).not.toContain('Old note');
-    });
-});
-
-describe('what it costs', () => {
-    it('is under half what the old shape cost for the same fourteen remarks', () => {
-        // The real unit: the richest evaluation in the shipped season carries
-        // fourteen remarks. This is the measurement the whole change is for.
-        const texts = Array.from({ length: 14 }, (_, i) =>
-            `Remark number ${i} about this player, roughly the length of a real one`);
-        const kinds = ['strength', 'weakness', 'note'];
-        texts.forEach((t, i) => addRemark(OWNER, PLAYER, kinds[i % 3], t, S26));
-
-        const stored = Object.entries(repository.docs(EVALUATIONS) ?? {})
-            .reduce((sum, [id, doc]) => sum + id.length + JSON.stringify(doc).length, 0);
-
-        // What the same fourteen would have cost in the old shape: one
-        // document, every remark carrying a uuid, the season id and the kind.
-        const oldShape = `${OWNER}__${PLAYER}`.length + JSON.stringify({
-            remarks: texts.map((t, i) => ({
-                id: `r_${'x'.repeat(36)}`, kind: kinds[i % 3], text: t,
-                seasonId: S26, createdAt: 1789408507998,
-            })),
-        }).length;
-
-        expect(stored).toBeLessThan(oldShape * 0.55);
     });
 });

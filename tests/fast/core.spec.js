@@ -397,8 +397,10 @@ test.describe('what he plays and where he stands', () => {
         await expect(modal).toBeHidden();
 
         expect(await slotNames(page)).toContain('Test Tackle');
+        // A root key holds a tree — { docs, sub } — since paths stopped being
+        // folded into the key. The documents are under `docs`.
         const recorded = await page.evaluate(() => Object.values(
-            JSON.parse(localStorage.getItem('db_players') || '{}'),
+            JSON.parse(localStorage.getItem('db_players') || '{}').docs ?? {},
         ).find(p => p.name === 'Test Tackle')?.position);
         expect(recorded, 'the depth chart overwrote what he plays').toBe('OT');
     });
@@ -519,33 +521,33 @@ test.describe('the draft board in normal view', () => {
         // Wind the seeded, completed draft back to a handful of picks so there
         // are drafted and undrafted players sharing a tier.
         await page.evaluate(() => {
-            // Picks are documents of their own now, and what is left — whose
-            // turn it is, the board, the picks you still own — is one small
-            // record beside them. Wind the draft back by dropping the picks
-            // past nine and rewriting that record.
-            const PICKS = 'db_draft_picks';
+            // A pick is a FACT ON THE PLAYER now — draftPick, team, draftYear on
+            // his registry record — so winding the draft back to pick nine means
+            // clearing those facts, not deleting documents from a picks
+            // collection. This named db_draft_picks, which no longer exists: the
+            // read returned {}, the draft wound back to nothing, and the test went
+            // on asserting about a board with no drafted players on it.
+            const PLAYERS = 'db_players';
             const STATE = 'db_draft_state';
-            const pickDocs = JSON.parse(localStorage.getItem(PICKS) || '{}');
+            const players = JSON.parse(localStorage.getItem(PLAYERS) || '{}');
             const stateDocs = JSON.parse(localStorage.getItem(STATE) || '{}');
             const stateId = Object.keys(stateDocs)[0];
-            const st = { ...stateDocs[stateId].value, draftedPlayers: Object.values(pickDocs) };
-            const kept = (st.draftedPlayers || []).filter(d => Number(d.pickNumber) <= 9);
-            const names = new Set(kept.map(d => `${d.name}|${d.position}`));
-            st.draftedPlayers = kept;
-            st.currentPick = 10;
-            st.yourPicks = kept.filter(d => d.draftedByUs);
-            st.players = (st.players || []).map(pl => names.has(`${pl.name}|${pl.position}`)
-                ? pl
-                : { ...pl, drafted: false, draftedByUs: false, pickNumber: undefined, team: undefined });
-            const keptIds = new Set(kept.map(d => {
-                const n = Number(d.pickNumber);
-                return Object.keys(pickDocs).find(k => pickDocs[k].name === d.name && Number(pickDocs[k].pickNumber) === n);
-            }).filter(Boolean));
-            Object.keys(pickDocs).forEach(k => { if (!keptIds.has(k)) delete pickDocs[k]; });
-            localStorage.setItem(PICKS, JSON.stringify(pickDocs));
 
-            const { draftedPlayers: _drop, ...rest } = st;
-            stateDocs[stateId] = { ...stateDocs[stateId], value: rest };
+            Object.entries(players).forEach(([id, rec]) => {
+                const n = Number(rec.draftPick);
+                const drafted = Number.isFinite(n) || rec.isUdfa === true;
+                if (!drafted) return;
+                if (Number.isFinite(n) && n <= 9) return;
+                players[id] = { ...rec };
+                delete players[id].draftPick;
+                delete players[id].draftYear;
+                delete players[id].team;
+                delete players[id].isUdfa;
+            });
+            localStorage.setItem(PLAYERS, JSON.stringify(players));
+
+            const st = { ...stateDocs[stateId].value, currentPick: 10 };
+            stateDocs[stateId] = { ...stateDocs[stateId], value: st };
             localStorage.setItem(STATE, JSON.stringify(stateDocs));
         });
         await page.reload();
@@ -626,7 +628,12 @@ test.describe('when the store refuses', () => {
         await page.evaluate(() => {
             window.__realSet = Storage.prototype.setItem;
             Storage.prototype.setItem = function (k, v) {
-                if (window.__broken && String(k).startsWith('db_depth_rows')) throw new Error('backend unreachable');
+                // The depth chart lives under its season, and a season's whole tree is
+                // one key — db_seasons — because paths are no longer folded into the
+                // key. Naming anything more specific matches nothing, the write
+                // succeeds, and the test then asserts that a sync indicator appears
+                // for a save that worked. It has been wrong that way twice.
+                if (window.__broken && String(k) === 'db_seasons') throw new Error('backend unreachable');
                 return window.__realSet.call(this, k, v);
             };
             window.__broken = true;
@@ -671,7 +678,12 @@ test.describe('when the store refuses', () => {
         await page.evaluate(() => {
             window.__realSet = Storage.prototype.setItem;
             Storage.prototype.setItem = function (k, v) {
-                if (window.__broken && String(k).startsWith('db_depth_rows')) throw new Error('backend unreachable');
+                // The depth chart lives under its season, and a season's whole tree is
+                // one key — db_seasons — because paths are no longer folded into the
+                // key. Naming anything more specific matches nothing, the write
+                // succeeds, and the test then asserts that a sync indicator appears
+                // for a save that worked. It has been wrong that way twice.
+                if (window.__broken && String(k) === 'db_seasons') throw new Error('backend unreachable');
                 return window.__realSet.call(this, k, v);
             };
             window.__broken = true;

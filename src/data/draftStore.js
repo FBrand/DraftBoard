@@ -192,7 +192,9 @@ export function writeDraft(seasonId, state) {
     KEPT.forEach(k => { if (state?.[k] !== undefined) rest[k] = state[k]; });
     const before = repository.get(DRAFT_STATE, scope);
     if (!before || JSON.stringify(before.value ?? {}) !== JSON.stringify(rest)) {
-        repository.set(DRAFT_STATE, scope, { scope, value: rest });
+        // The season is the key. It was in the body too — the last document in
+        // the app still stating its own address.
+        repository.set(DRAFT_STATE, scope, { value: rest });
     }
 }
 

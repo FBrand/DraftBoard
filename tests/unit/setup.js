@@ -1,3 +1,4 @@
+import { resetLegacyFold } from '../../src/data/localAdapter';
 /**
  * A localStorage good enough for the modules under test.
  *
@@ -19,4 +20,13 @@ class MemoryStorage {
 globalThis.localStorage = new MemoryStorage();
 
 // Object.keys(localStorage) is used in places; back it with real properties.
-globalThis.resetStorage = () => { globalThis.localStorage = new MemoryStorage(); };
+//
+// The adapter folds keys written by the flattened build into the tree once per
+// root, and remembers that it has. That memory is module state and outlives a
+// storage swap, so a test that plants legacy keys would find the fold already
+// "done" if an earlier test had triggered it. Clearing it here keeps each test
+// starting from the same place.
+globalThis.resetStorage = () => {
+    globalThis.localStorage = new MemoryStorage();
+    resetLegacyFold();
+};
