@@ -11,6 +11,16 @@ a measurement has been wrong more than once here.
 
 ---
 
+## Found by the audit
+
+| # | What | State |
+|---|---|---|
+| A1 | **Scouting's More menu unreachable at 1280px** | `.top-panel` was `nowrap` with `overflow-x: visible`; the bar wanted 1365px and had 1280, so the actions block sat from 1100 to 1365 and the menu was entirely past the right edge with nothing able to scroll to it. Settings, Add Players, Export and Restore were silently unreachable at one of the commonest laptop widths. The bar scrolls now, and its children keep their size rather than being squeezed unreadable. **Fixed** — menu reaches 1171–1248 and opens. |
+| A2 | Search box had no accessible name | Only a placeholder, which vanishes the moment anybody types. A screen reader announced an unnamed edit box on both Scouting and Draft. **Fixed.** |
+| A3 | A closed drawer kept keyboard focus | The draft's side panels are drawers at `translateX(-100%)`, and a transform takes nothing out of the tab order — Tab walked into a panel at x=-196, the page did not move, and the next keystroke went somewhere invisible. `visibility: hidden` while closed. **Fixed.** |
+| — | *Not a bug:* cards "clipped" by 8px | The tag marker is `position: absolute; top: -8px; right: -8px`, overhanging the corner by design. My checker was measuring intended layout on every card on every screen; the checker was wrong, not the app. |
+| — | *Not a bug:* off-screen panel at phone/tablet | Same drawers as A3, off-screen on purpose. Reported until the checker learned to ignore `visibility: hidden`. |
+
 ## Open
 
 | # | Reported | State |

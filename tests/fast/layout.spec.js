@@ -141,7 +141,7 @@ test.describe('on a phone', () => {
         // scroll away with the cards — but it was 120px of a 390px bar, spent
         // on the word "Picks" before the first card started.
         await gotoTab(page, 'draft');
-        await page.waitForSelector('.player-card', { timeout: 45_000 });
+        await page.waitForSelector('.center-board-container .player-card', { timeout: 45_000 });
         const bar = await page.evaluate(() => {
             const g = (s) => { const b = document.querySelector(s)?.getBoundingClientRect(); return b && { x: b.x, w: b.width, top: b.top, bottom: b.bottom }; };
             return { panel: g('.bottom-panel'), title: g('.bp-title'), row: g('.bp-picks-row') };
@@ -155,7 +155,7 @@ test.describe('on a phone', () => {
         // The panel is where they go, and it used to be display:none here —
         // the one stage about signings could not show a single one.
         await gotoTab(page, 'udfa');
-        await page.waitForSelector('.player-card', { timeout: 45_000 });
+        await page.waitForSelector('.center-board-container .player-card', { timeout: 45_000 });
         await expect(page.locator('.udfa-signed-panel')).toBeVisible();
 
         // And the sign form is legible: label above the field, not a 180px

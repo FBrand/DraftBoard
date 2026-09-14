@@ -65,7 +65,23 @@ body {
   border-bottom: 2px solid var(--gold);
   height: 80px;
   box-sizing: border-box;
+  /* It scrolls when it does not fit, rather than running off the edge.
+     Measured on Scouting at 1280 — an ordinary laptop — the bar wanted 1365px
+     and had 1280, so the actions block sat from 1100 to 1365 and the More menu
+     was entirely past the right edge with nothing able to scroll to it. Every
+     action behind it — settings, add players, export, restore — was
+     unreachable, silently, at one of the commonest widths there is.
+     The same swipeable pattern the tab bar and the roster toolbar already
+     use; this only widens it to every width rather than below 1024. */
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
 }
+
+/* The pieces keep their size and let the bar scroll, rather than being
+   squeezed to fit and becoming unreadable. */
+.top-panel > * { flex-shrink: 0; }
 
 .board-switcher {
   display: flex;
@@ -1307,9 +1323,23 @@ body.export-mode .card-glow {
     border-radius: 12px 0 0 12px;
   }
 
+  /* A closed drawer is off-screen, not gone, and a transform takes nothing
+     out of the tab order. So Tab walked into a drawer nobody could see: focus
+     landed in the search box of a panel sitting at x = -196, the page did not
+     move, and the next keystroke went somewhere invisible. visibility:hidden
+     is what removes it, and unlike display:none it still animates — delayed on
+     the way out so the slide is still seen. */
+  .left-sidebar-wrapper,
+  .right-sidebar-wrapper {
+    visibility: hidden;
+    transition: transform 0.2s ease-out, visibility 0s linear 0.2s;
+  }
+
   .left-sidebar-wrapper.mobile-open,
   .right-sidebar-wrapper.mobile-open {
     transform: translateX(0);
+    visibility: visible;
+    transition: transform 0.2s ease-out, visibility 0s;
   }
 
   /* Floating Toggles */

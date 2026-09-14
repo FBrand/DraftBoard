@@ -479,7 +479,7 @@ test.describe('the board CSV', () => {
 test.describe('the draft board in normal view', () => {
     test('scrolls down its own column without taking the side panels with it', async ({ page }) => {
         await openWarm(page, 'draft');
-        await page.waitForSelector('.player-card', { timeout: 45_000 });
+        await page.waitForSelector('.center-board-container .player-card', { timeout: 45_000 });
 
         const before = await page.evaluate(() => {
             const el = (s) => document.querySelector(s);
@@ -514,7 +514,7 @@ test.describe('the draft board in normal view', () => {
 
     test('keeps drafted players in place and collapses only emptied tiers', async ({ page }) => {
         await openWarm(page, 'draft');
-        await page.waitForSelector('.player-card', { timeout: 45_000 });
+        await page.waitForSelector('.center-board-container .player-card', { timeout: 45_000 });
 
         // Wind the seeded, completed draft back to a handful of picks so there
         // are drafted and undrafted players sharing a tier.
@@ -549,7 +549,7 @@ test.describe('the draft board in normal view', () => {
             localStorage.setItem(STATE, JSON.stringify(stateDocs));
         });
         await page.reload();
-        await page.waitForSelector('.player-card', { timeout: 45_000 });
+        await page.waitForSelector('.center-board-container .player-card', { timeout: 45_000 });
 
         // A drafted player stays on the board, showing the pick that took him.
         // Removing players one at a time emptied a cell while its row lived on

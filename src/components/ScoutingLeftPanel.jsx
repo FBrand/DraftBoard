@@ -94,8 +94,12 @@ export default function ScoutingLeftPanel({ orderedPlayers, selectedName, onSele
             <h3 className="panel-title text-center">My Board</h3>
 
             <div className="search-bar">
+                {/* A placeholder is not a label: it vanishes as soon as
+                    anybody types, and a screen reader announces an edit box
+                    with no name at all. */}
                 <input
                     type="text"
+                    aria-label="Search players by name or position"
                     placeholder="Search name or position..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
