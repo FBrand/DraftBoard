@@ -27,20 +27,66 @@ freely and go back at any time; nothing locks.
 
 ## Starting a session
 
-**Session → Load Current State** loads the 2026 offseason as it actually
+Everything below lives in the **Manage** menu, at the top right. It used to be
+called Session; it holds the season stack too now, and a season outlasts any
+session.
+
+**Manage → Load Current State** loads the 2026 offseason as it actually
 happened: free agency done, the draft completed, UDFAs signed, and the roster
 as it stood going into cutdowns. Use this when you want to talk about the real
 offseason, or to demo the app with real data in it.
 
-**Session → Start Clean Slate** empties every stage so you can build a season
+**Manage → Start Clean Slate** empties every stage so you can build a season
 from scratch. It asks first, and it clears everything — this is the one action
 you cannot undo.
 
-**Session → Export Full Session** writes every stage to a single JSON file, and
+**Manage → Export Full Session** writes every stage to a single JSON file, and
 **Import Full Session** reads one back. Use it to move your work to another
 machine, to hand a board to someone else, or to keep a snapshot before you try
 something drastic. The per-tab CSV exports are separate and narrower; the
 session file is the whole thing.
+
+**Manage → Seasons…** is the season stack. One season is *current* and
+writable; the ones under it are kept and read-only, because a board is the
+record of where somebody had a player at the time and history does not get
+edited. Opening an old season shows it with a banner saying so — you can still
+add evaluations, because what you know about a player keeps growing after the
+board that ranked him is done.
+
+**Rolling over** starts a new year. Last season freezes and stays. The new one
+begins where an offseason begins: last season's roster becomes free agency's
+candidate pool, and the new roster keeps that roster's shape — its position
+rows and slot counts — and none of its players, because the 53 is what the
+offseason produces rather than what it starts from. It creates no boards; who
+is scouting this year is a decision, and last year's placements are about
+players who have left.
+
+**Rolling back** deletes the current season and everything on it, and asks
+first, naming the boards that go. Evaluations are kept.
+
+---
+
+## Is my work saved?
+
+Nothing is uploaded anywhere (see *Where your work is kept*), but the app still
+writes to storage, and storage can refuse — a full disk is the usual reason.
+
+Most of the time there is nothing to see. When there is, a small marker appears
+next to the Manage menu:
+
+- **Saving…** — in passing, and not worth reading.
+- **N unsaved — retrying** — your changes are on screen and have not reached
+  storage. The app keeps trying, waiting a little longer each time.
+- **N unsaved — could not save** — it has stopped trying.
+
+In either of the last two it offers **Try again** and **Save to a file**.
+"Save to a file" is the session export, and it is the one thing that does not
+need storage to be working. Take it.
+
+Your changes are not thrown away when a save fails, and they survive a reload —
+the app remembers what it still owes and picks up where it left off. But
+nothing leaves the machine until it is exported, so if the marker is red before
+a show, export.
 
 ---
 
@@ -134,6 +180,13 @@ like any other.
 Two players may share a name as long as the position or the school differs —
 that really happens in a draft class, and the app will not merge them.
 
+**While you type a name, anyone the app already knows by it appears underneath**
+with his position, school and club. Pick him and the form fills itself from his
+record — and, more importantly, the player you end up with is *him* rather than
+a second copy carrying the same name and none of his history. This is worth
+using: without it, signing somebody the app already had produced two records,
+and the card on screen went on showing the original, so nothing looked wrong.
+
 ### Settings
 
 **Scouting → Settings** holds the **positional value** order and the
@@ -155,7 +208,7 @@ Position columns across, rounds and tiers down. Click a player to draft him.
 - Your own picks run along the bottom — scroll them with the wheel. UDFA
   signings are not among them; those belong to the UDFA tab.
 - **More → Save Picks / Load Picks** writes this draft's picks to a CSV and
-  reads them back. That is the *picks*, not the whole app — Session in the tab
+  reads them back. That is the *picks*, not the whole app — Manage in the tab
   bar is the one that covers every stage.
 
 **✎ Edit Board** makes the board itself draggable during the draft, because a
@@ -164,8 +217,11 @@ the clock. Drop a card:
 
 - **on empty space in a cell** to move him to that round and tier;
 - **on another player** to put him directly above that man;
-- **in a different column** to correct his position — that is a fact about
-  him, so it follows him onto every board.
+- **in a different column** to change his position **on this board**. His name
+  and his school are facts and are the same everywhere; his position is a
+  read, and analysts disagree about it — Rueben Bain Jr. sits at DL.3T on one
+  board and EDGE on another. Moving him here says what *you* think, and leaves
+  everybody else's board alone.
 
 It is off by default. Mid-draft, a stray drag is expensive.
 
@@ -214,6 +270,25 @@ picks, UDFA signings and FA choices, filling empty slots only: it never
 overwrites a slot you have already filled and never removes anyone. Run it as
 often as you like — after the draft, again after UDFAs, again later — and your
 hand edits survive every time.
+
+### What he plays, and where he lines up
+
+Signing or adding somebody asks for two things side by side, and **either one
+on its own is enough** — the empty one takes the other's value.
+
+- **Position** is what he plays. It goes on his record: OT, WR, EDGE.
+- **Roster Position** is a dropdown of the rows your depth chart actually has,
+  and it is where he stands: LT, WR.Z, DL.3T.
+
+Most of the time they are the same word and you fill in one. They come apart on
+the offensive line, where a board says a man is an **OT** and a depth chart has
+an **LT** and an **RT** and nothing called OT. The app will not decide that for
+you — it asks, because which side he plays is a judgement and guessing it
+silently is worse than asking. If you type a position no row answers to, the
+form stays open and tells you which word it could not place.
+
+So signing an OT at left tackle leaves him an OT who is standing at LT, rather
+than quietly rewriting what he plays.
 
 Both import and export CSV, so a roster can be bulk-edited in a spreadsheet.
 
@@ -322,6 +397,6 @@ in one.
 from that on startup, which most browsers grant silently — but it is a request,
 not a guarantee.
 
-So before anything that matters, use **Session → Export Full Session**. It is
+So before anything that matters, use **Manage → Export Full Session**. It is
 one file holding every stage, it takes a second, and it is the only copy that
 survives the browser being wrong. Keep the one from the night before a draft.
