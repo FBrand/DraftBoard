@@ -1,9 +1,11 @@
 # Storage schema
 
-What is stored, where, and what it costs. Measured on the shipped 2026 season:
-733 players, 984 board entries across three boards, 629 picks, a 91-man roster.
+What is stored, where, and what it costs. Measured on a cold boot of the
+shipped 2026 season: 733 players, 328 prospects on each of three boards, a
+91-man roster, the completed draft.
 
-**Total: 531KB for one season.** It was 925KB before the trims below.
+**Total: 295KB for one season.** It was 925KB before the trims below, and
+686KB as recently as the picks store.
 
 ---
 
@@ -11,182 +13,195 @@ What is stored, where, and what it costs. Measured on the shipped 2026 season:
 
 Everything goes through `src/data/repository.js`, which stores **documents in
 named collections**. A collection is a map of id to document. The interface is
-Firestore's, narrowed to what this app does, so the backend is an adapter
-swap — see `backend.js`.
+Firestore's, narrowed to what this app does, so the backend is an adapter swap
+— see `backend.js`.
 
 `localAdapter` writes one localStorage key per collection: `db_<name>`, with
-`/` folded to `__` so `boards/b1/entries` is a legal key.
+`/` folded to `__`, so `boards/b1/entries` becomes `db_boards__b1__entries`.
+
+Two rules decide what a document holds.
 
 > **The store does not have to look like the export.** Exports are rebuilt from
 > the registry and the rankings files, so a stored document holds only what
-> cannot be derived. Several fields below were removed on exactly that
-> argument.
+> cannot be derived.
+
+> **A document never states its own key.** The id is what it is filed under;
+> writing it again costs bytes on every write forever and gives a rename two
+> places to disagree. Ids are reattached on read. This removed 125KB.
+
+---
+
+## Paths
+
+Collections nest where the data does. A path is chosen for three reasons, in
+this order:
+
+1. **A security rule is written against a path.** "An expert may write his own
+   board" is one line about `boards/{id}/entries`; over a shared collection
+   with a `boardId` field it is a predicate that must hold for every document
+   a query might touch.
+2. **Reading one thing reads one thing.** A flat collection means loading five
+   seasons of everybody's placements and filtering in memory.
+3. **The parent stops being half of every key.**
+
+| path | what | adopted |
+|---|---|---|
+| `players/{playerId}` | the registry — global, a player spans seasons | yes |
+| `authors/{authorId}` | people — global, a person outlives a season | yes |
+| `seasons/{seasonId}` | the season stack | yes |
+| `boards/{boardId}` | board records: label, slug, season, owner | yes |
+| `boards/{boardId}/entries/{playerId}` | one board's placements | **yes** |
+| `evaluations/{boardId}__{playerId}` | remarks — deliberately global | flat, on purpose |
+| `seasons/{seasonId}/charts/{stage}/rows/{rowId}` | depth-chart rows | decided, not adopted |
+| `seasons/{seasonId}/charts/{stage}/bands/{band}` | reserve and cuts | decided, not adopted |
+| `seasons/{seasonId}/picks` | — | **no such thing**, see below |
+| `seasons/{seasonId}/draftState` | whose turn it is | decided, not adopted |
+| `seasons/{seasonId}/stages/{base}` | the prospect pool and its like | decided, not adopted |
+| `seasons/{seasonId}/setup` | the "already seeded" markers | decided, not adopted |
+
+**Evaluations stay global on purpose.** They are stamped with the season they
+were written in rather than owned by it — what you learned about a player does
+not stop being true because the board is gone, and the player card reaches back
+through every season to show it. Nesting them under a season would make that
+read a fan-out over the whole stack.
+
+The unadopted paths are recorded so the choice is made once. Everything
+season-scoped still uses a flat collection with the season in the document key,
+which is the same information in a less convenient place.
 
 ---
 
 ## Collections
 
-### `players` — 153KB, 733 documents, ~200 bytes each
+### `players` — 184KB, 733 documents, ~250 bytes each
 
-The registry. One record per human being the app has ever seen, across every
-season and every board. **Not season-scoped**: a player drafted in 2026 is the
-same player when he appears on a 2028 roster, which is the whole reason ids
-exist.
+The registry. One document per player, keyed by an opaque permanent id.
 
-```json
-{ "id": "p_mu19eed31ih9mvy", "name": "Tyquan Thornton", "position": "WR",
-  "school": "Baylor",
-  "isUdfa": false, "draftYear": 2022, "draftRound": 2, "draftPick": 50,
-  "team": "KC",
-  "createdAt": 1789392351265, "updatedAt": 1789392352438 }
+```
+{ name, position, school, aliases[], hidden,
+  isUdfa, draftYear, draftRound, draftPick, team, previousTeam,
+  athleticMatrixTotal, athleticMatrixPosition,
+  createdAt, updatedAt }          // epoch ms, not ISO
 ```
 
-`name`, `school`, `draftYear/Round/Pick`, `team` and `previousTeam` are FACTS —
-one answer, true everywhere. `position` here is his listed position; what a
-board thinks he plays is on the board entry, because that is an opinion.
+`id` is **not** stored — it is the key. Null fields are not stored either;
+absent and null are the same answer to every reader, and only the storage
+disagreed. That was 55KB of the word "null".
 
-Both athletic-matrix scores were null on every one of the 733, so was
-`previousTeam`; `aliases` was an empty array on all of them and `hidden` was
-false on all of them. 75KB of a 246KB store spent writing down the absence of
-things. Timestamps are epoch — nothing reads them, they are provenance, and an
-ISO string spends 24 characters carrying 13 of fact.
+**A draft pick is one of these fields.** See below.
 
-`id` stays as a field here, unlike on board entries: the registry's id is read
-all over the app off the record itself.
+### `boards/{boardId}/entries` — 36KB per board, 328 documents, **112 bytes each**
 
-### `board_entries` — 216KB, 984 documents, ~225 bytes each
+One board's opinion of one player. It was 305 bytes.
 
-One document per player per board: where one analyst has placed him.
-
-```json
-{ "boardId": "b_mu19ee6rchozqp", "order": 0,
-  "playerId": "p_mu19eesz26budu95",
-  "name": "Fernando Mendoza", "position": "QB", "school": "Indiana",
-  "round": 1, "withinGroup": 1, "updatedAt": 1789391336194 }
+```
+{ position, round, tier, withinGroup, tag, updatedAt }
 ```
 
-Filed under `<boardId>__<playerId>`.
+What is *not* here, and why:
 
-- `round` + `tier` + `withinGroup` is the placement. `withinGroup` is a FLOAT
-  so a move lands on the midpoint between two neighbours and writes one
-  player instead of renumbering a tier.
-- **Total rank and position rank are not stored.** They are derived from the
-  placement, so they cannot contradict the board.
-- `round: null` means the analyst has said nothing and the rankings file's
-  placement stands. `cleared: true` means he took it OFF. Without that flag
-  those two were the same and "clear evaluations" appeared to do nothing.
-- `position` is this board's read of him and may differ per board.
-- `name` and `school` are duplicated from the registry so an entry is legible
-  on its own. **41KB.** Removing them means moving several name-based lookups
-  onto `playerId` first — that refactor is the work, not the saving.
+- `boardId`, `playerId` — the path and the key.
+- `name`, `school` — the registry's. A copy beside the id is a second answer
+  that a rename leaves behind.
+- `order` — a second ordering sitting beside the tiers and free to disagree
+  with them. `boardRanking` never read it: it sorts by tier, `withinGroup`,
+  source rank, positional value, then name. Read order is derived.
+- `position` **stays**. It is an opinion, not a fact — two analysts labelling
+  the same player DL and EDGE are not disagreeing about anything.
 
-### `draft_picks` — 127KB, 629 documents, ~170 bytes each
+### `evaluations` — 2.5KB per scouted player per board
 
-What the draft did. A pick, not a copy of the player who was taken.
+Keyed `{boardId}__{playerId}`. The document is its remarks.
 
-```json
-{ "id": "s_mu19ee6qfne3s9__pick_1", "scope": "s_mu19ee6qfne3s9", "order": 0,
-  "name": "Fernando Mendoza", "position": "QB",
-  "pickNumber": 1, "team": "LV", "draftedByUs": false }
+```
+{ remarks: [ { id, kind, text, seasonId, createdAt } ] }
 ```
 
-A numbered pick is filed by its number; an undrafted signing has none — "UDFA"
-is a label, not a slot — so it is filed under the player.
+**This is the one that matters at scale.** A player scouted properly carries
+about fourteen remarks, and inside one remark roughly 211 bytes carry 65
+characters of actual note: a 40-character uuid, the 38-character season id
+repeated on every remark, and a spelled-out `kind`.
 
-`round` is deliberately absent: it is derived from `pickNumber`. The stored
-round used to be the round somebody *projected* him in, which is how a player
-who went undrafted got "R5" printed on his roster card.
+Measured for one season with 5 boards, 400 prospects and 250 of them scouted to
+that standard on every board:
 
-`position` stays because a pick can be somebody the current rankings file has
-never heard of, and then this record is all there is to show him with.
+| | count | bytes |
+|---|---|---|
+| evaluations | 1,250 | **3,782,501** |
+| board entries | 2,000 | 307,436 |
+| players | 400 | 68,331 |
+| everything else | — | 17,561 |
+| **one season** | | **4.0 MB** |
 
-**41KB of `id` and `scope`** — the season id, twice, in every document.
+Evaluations are 91% of it. At that intensity **one season fills a 5MB quota**.
+Three changes would roughly halve it — group remarks by season instead of
+stamping each one (−742 B/doc), a short remark id (−476 B/doc), a single-char
+`kind` (−140 B/doc) — taking the season to about 2.1MB. That is a shape change
+with a migration, not a trim, and has not been done.
 
-### `depth_rows` — 18KB, 50 documents
+### `depth_rows` / `depth_bands` — 16KB, 54 documents
 
-A position row and the players standing in it, one document per row per stage
-per season. Moving somebody at WR.Z writes WR.Z.
+A depth chart as rows. One drag writes one row. A band document is its slots;
+it used to carry the whole key, its left half and its right half — 111 of 219
+bytes.
 
-```json
-{ "id": "s_…__fa_state_v1__O-WR.Z-0", "scope": "s_…__fa_state_v1", "order": 0,
-  "rowId": "O-WR.Z-0", "label": "WR.Z", "slots53": 2, "phase": "offense",
-  "slots": [ { "name": "Tyquan Thornton", "zone": "53", "arrival": "FA" } ] }
+### `draft_state` — 186 bytes, one per season
+
+```
+{ scope, value: { currentPick, ourPicksLeft, remotePicks } }
 ```
 
-A slot holds `arrival` — how he got here, FA/UDFA/`24/1` — which must survive
-every move. `"IR"` appears as an arrival and is really a status, which is why
-coming off injured reserve clears it and nothing else.
+Whose turn it is and which picks are ours. That is all the draft owns.
 
-### `depth_bands` — 1KB
+### `seasons`, `boards`, `authors`, `setup`, `stages` — under 2KB together
 
-Injured reserve and the cut panel, one document each per stage per season.
-Flat lists with no per-player structure to collide over, so they are not split
-further.
-
-### `evaluations` — 15KB
-
-Remarks, keyed `<ownerId>__<playerId>`. The owner is the AUTHOR for a personal
-board and the board itself for consensus, which has no person behind it.
-Stamped with the season they were written in. These outlive the board that
-ranked the player — the one thing still editable on an archived season.
-
-### `boards`, `authors`, `seasons` — ~1KB together
-
-Identity. A board has an `id` (what stored work points at), a `slug` (what
-links say), a `label` (what it is called this week), an `authorId`, an
-`ownerId` (who may write it — null until somebody signs in), and a `seasonId`.
-Renaming touches only the label.
-
-### `setup` — the first-run marker
-
-One document per season, recording that its stages have been set up. **In the
-store, not in localStorage**: with a shared backend, a local marker means every
-visitor decides the season was never initialised and seeds it again over
-everybody's work.
-
-### `draft_state` — <1KB
-
-What is left of a draft once the picks are documents: `currentPick`,
-`ourPicksLeft`, `remotePicks`.
-
-### Not collections
-
-`pending_writes_v1` (writes that have not reached the store yet — kept in
-localStorage on purpose, since it is emphatically not the store that failed),
-`viewed_season_v1`, `draft_board_view`, `draft_board_focus`,
-`nfl_draft_live_sync`, `athletic_matrix_url`, and the app settings.
+`setup` holds markers: that a season's stages were initialised, and that the
+shipped player facts were laid over it. Both live in the **target** store rather
+than in this browser, so the first client to arrive seeds and every client
+after it reads the marker and does nothing.
 
 ---
 
-## Capacity
+## There is no picks collection
 
-**~1.05MB per season** at 500 players. Against a 5MB localStorage quota that
-fails somewhere in **season three to five**, and the failure is the app
-refusing to save.
+A pick used to be a document: who was taken, at which pick, by which club, in
+which season. Every one of those is already a field on the player's registry
+record, so the collection was a second place recording the same event — and the
+two disagreed. The registry knew a draft outcome for 295 players; the picks
+collection held 631.
 
-Trimming records helps and does not solve it. `players` and `board_entries` are
-the bulk and both grow honestly. The structural answers are archiving old
-seasons out of the browser, or a backend.
+A selection is written onto the player and read back by asking the registry who
+entered the league in this season's year. `draftedByUs` is not stored at all: it
+compares the pick's club to whose offseason this is, so a stored answer went
+stale the moment the session team changed.
 
-## Ids
+Three things this needed, all of them real bugs first:
 
-`p_mu19eed31ih9mvy` — a type prefix, a base36 timestamp, and a random tail.
-Long because they are minted with no coordination: any client can make one
-without asking anything.
+- A pick can be somebody no rankings file has heard of. He is **registered**
+  rather than dropped; dropping them cost 300 players.
+- `applyPlayerFacts` refilled blanks on every load, so clearing a draft was
+  undone on the next boot. It seeds once per season now, and only lays the 2026
+  outcome over the season the app shipped with — a season started in the app
+  drafts its own class.
+- `hasDraft` asked the registry whether anyone was drafted, which the facts
+  file answered yes to before anything had been. It asks the state document.
 
-At this scale the timestamp half is near-identical across everything made in
-one session, so it is mostly repetition — and each id is stored two or three
-times per document. `p_` + 6 random base36 characters would be collision-safe
-against 700 players (36⁶ = 2.2 billion) and would save ~30KB.
+Saved 210KB.
 
-**Last on the list.** It means migrating every reference — entries,
-evaluations, picks, the registry — for the worst saving-to-risk ratio of
-anything here.
+---
 
-## What is left on the table
+## What it costs, all in
 
-| change | saves | cost |
+| | before | now |
 |---|---|---|
-| Drop `id`/`scope` from `draft_picks` and `depth_rows` bodies | ~50KB | low, but `scope` is the season filter until collections carry the season |
-| Drop `name`/`school` from `board_entries` | 41KB | **moving name-based lookups onto playerId** |
-| Shorter ids | ~30KB | migrating every reference |
+| whole store, cold | 686 KB | **295 KB** |
+| session export | 801 KB | 324 KB |
+| board entry | 305 B | 112 B |
+| depth band | 219 B | 72 B |
+| evaluation | 2,844 B | 2,505 B |
+| key material inside document bodies | 125,736 B | 318 B |
+| picks collection | 210 KB | gone |
+
+The remaining 27KB the audit still counts as "name and school on documents" is
+the `players` collection's own canonical copy. That is not duplication; it is
+where the name lives.
