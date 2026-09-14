@@ -4,7 +4,7 @@ What is stored, where, and what it costs. Measured on a cold boot of the
 shipped 2026 season: 733 players, 328 prospects on each of three boards, a
 91-man roster, the completed draft.
 
-**Total: 295KB for one season.** It was 925KB before the trims below, and
+**Total: 287KB for one season.** It was 925KB before the trims below, and
 686KB as recently as the picks store.
 
 ---
@@ -51,7 +51,7 @@ this order:
 | `seasons/{seasonId}` | the season stack | yes |
 | `boards/{boardId}` | board records: label, slug, season, owner | yes |
 | `boards/{boardId}/entries/{playerId}` | one board's placements | **yes** |
-| `evaluations/{boardId}__{playerId}` | remarks — deliberately global | flat, on purpose |
+| `evaluations/{authorId}__{playerId}` | remarks — deliberately global | flat, on purpose |
 | `seasons/{seasonId}/charts/{stage}/rows/{rowId}` | depth-chart rows | decided, not adopted |
 | `seasons/{seasonId}/charts/{stage}/bands/{band}` | reserve and cuts | decided, not adopted |
 | `seasons/{seasonId}/picks` | — | **no such thing**, see below |
@@ -109,35 +109,57 @@ What is *not* here, and why:
 - `position` **stays**. It is an opinion, not a fact — two analysts labelling
   the same player DL and EDGE are not disagreeing about anything.
 
-### `evaluations` — 2.5KB per scouted player per board
+### `evaluations` — ~1,350 bytes per scouted player per board
 
-Keyed `{boardId}__{playerId}`. The document is its remarks.
+Keyed `{ownerId}__{playerId}__{seasonId}__{s|w|n}` — the owner, the player,
+the season and the kind are all in the **address**, and the document is a map
+of short id to `[text, writtenAt]`.
 
 ```
-{ remarks: [ { id, kind, text, seasonId, createdAt } ] }
+evaluations/a_dan__p_delane__s_2026__s
+  { "k3f9x2": ["Sticky man-cover corner", 1789408507998], … }
 ```
 
-**This is the one that matters at scale.** A player scouted properly carries
-about fourteen remarks, and inside one remark roughly 211 bytes carry 65
-characters of actual note: a 40-character uuid, the 38-character season id
-repeated on every remark, and a spelled-out `kind`.
+The owner is the **author**, not the board, and the board only for consensus,
+which has no person behind it. A board is a snapshot of where somebody had a
+player at one moment; an evaluation is a running log that follows the analyst
+across every season he watches that player. That is also why these are not
+nested under a season: the player card reaches back through every season, and
+a season that has been scrapped must not take its remarks with it — so reads
+scan by key prefix rather than looping over the seasons the registry knows.
 
-Measured for one season with 5 boards, 400 prospects and 250 of them scouted to
-that standard on every board:
+It used to be one document per owner and player, holding every remark in one
+array with the season and the kind spelled out on each. Of roughly 209 bytes
+per remark, 116 said what the address can say once:
 
-| | count | bytes |
+| | was | now |
 |---|---|---|
-| evaluations | 1,250 | **3,782,501** |
-| board entries | 2,000 | 307,436 |
-| players | 400 | 68,331 |
-| everything else | — | 17,561 |
-| **one season** | | **4.0 MB** |
+| remark uuid | 46 B | 8 B (six base36 chars, unique among a dozen siblings) |
+| `seasonId` on every remark | 52 B | in the address |
+| `kind` spelled out | 18 B | in the address |
+| the text itself | ~65 B | ~65 B |
 
-Evaluations are 91% of it. At that intensity **one season fills a 5MB quota**.
-Three changes would roughly halve it — group remarks by season instead of
-stamping each one (−742 B/doc), a short remark id (−476 B/doc), a single-char
-`kind` (−140 B/doc) — taking the season to about 2.1MB. That is a shape change
-with a migration, not a trim, and has not been done.
+Measured on the shipped season: **2,505 bytes per player per board → 1,349**.
+
+Old documents are read as they are and split into the new addresses on the
+first **write**. Deliberately not on read: converting on read would turn
+opening a player card into a write, which is how a quota fills while somebody
+is only looking.
+
+**At scale.** One season with 5 boards, 400 prospects and 250 of them scouted
+to the standard of the richest real evaluation — fourteen remarks:
+
+| | count | was | now |
+|---|---|---|---|
+| evaluations | 1,250 | 3,782,501 | **1,956,251** |
+| board entries | 2,000 | 307,436 | 307,436 |
+| players | 400 | 68,331 | 68,331 |
+| everything else | — | 17,561 | 17,561 |
+| **one season** | | **4.0 MB** | **2.24 MB** |
+
+Two such seasons now fit a 5MB quota where one did. After this, text is about
+55% of what remains and the rest is close to intrinsic — there is no third
+round of this available.
 
 ### `depth_rows` / `depth_bands` — 16KB, 54 documents
 
@@ -194,11 +216,11 @@ Saved 210KB.
 
 | | before | now |
 |---|---|---|
-| whole store, cold | 686 KB | **295 KB** |
+| whole store, cold | 686 KB | **287 KB** |
 | session export | 801 KB | 324 KB |
 | board entry | 305 B | 112 B |
 | depth band | 219 B | 72 B |
-| evaluation | 2,844 B | 2,505 B |
+| evaluation (per player, per board) | 2,844 B | 1,349 B |
 | key material inside document bodies | 125,736 B | 318 B |
 | picks collection | 210 KB | gone |
 
