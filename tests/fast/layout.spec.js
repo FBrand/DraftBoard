@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { openWarm, TABS, gotoTab } from './helpers';
+import { openWarm, TABS, gotoTab, slotNames, touchDragTo } from './helpers';
 
 /**
  * How the app gives way as the window narrows.
@@ -126,6 +126,18 @@ test.describe('on a phone', () => {
             return { right: b.right, worst: Math.max(...cells) };
         });
         expect(spec.worst, 'a specialist card draws through the box').toBeLessThanOrEqual(spec.right + 1);
+
+        // A finger can move a player, which nothing else in the suite covers:
+        // every other drag test drives a mouse, and dnd-kit runs a separate
+        // delay-activated TouchSensor for touch. Mouse passing says nothing
+        // about whether the phone works.
+        const slots = page.locator('.rv-slot-name');
+        const beforeDrag = await slotNames(page);
+        await touchDragTo(page, slots.nth(0), slots.nth(1));
+        const afterDrag = await slotNames(page);
+        expect(afterDrag, 'a touch drag moved nobody').not.toEqual(beforeDrag);
+        expect(afterDrag[0]).toBe(beforeDrag[1]);
+        expect(afterDrag[1]).toBe(beforeDrag[0]);
 
         // Roster: a row can be removed. The control is revealed on hover, and
         // a touch screen has none, so it was invisible for good.

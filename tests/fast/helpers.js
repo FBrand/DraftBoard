@@ -100,3 +100,52 @@ export function trackErrors(page) {
 }
 
 export { expect };
+
+/**
+ * The same drag, with a finger.
+ *
+ * dnd-kit runs a separate TouchSensor and it is DELAY-activated (200ms), not
+ * distance-activated like the mouse — a quick swipe has to stay a scroll, or
+ * the depth chart would be impossible to scroll past on a phone. So a touch
+ * drag is press, hold past the delay, then move; anything that taps first
+ * cancels the press and the drag never starts.
+ *
+ * The target is re-measured once the drag is under way, for the same reason
+ * dragTo does it: the board auto-scrolls, and a coordinate taken before the
+ * press is pointing at the wrong slot by the time the finger arrives.
+ */
+export async function touchDragTo(page, source, target) {
+    const rect = (l) => l.evaluate(el => {
+        const r = el.getBoundingClientRect();
+        return { x: r.x, y: r.y, width: r.width, height: r.height };
+    });
+    const centre = (r) => [r.x + r.width / 2, r.y + r.height / 2];
+
+    const cdp = await page.context().newCDPSession(page);
+    const touch = (type, x, y) => cdp.send('Input.dispatchTouchEvent', {
+        type,
+        touchPoints: type === 'touchEnd' ? [] : [{ x, y, id: 1, radiusX: 10, radiusY: 10, force: 1 }],
+    });
+
+    const [ax, ay] = centre(await rect(source));
+    try {
+        await touch('touchStart', ax, ay);
+        await page.waitForTimeout(450);
+        let [bx, by] = centre(await rect(target));
+        for (let i = 1; i <= 16; i++) {
+            await touch('touchMove', ax + ((bx - ax) * i) / 16, ay + ((by - ay) * i) / 16);
+            await page.waitForTimeout(40);
+        }
+        await page.waitForTimeout(120);
+        [bx, by] = centre(await rect(target));
+        await touch('touchMove', bx, by);
+        await page.waitForTimeout(150);
+        await touch('touchEnd', bx, by);
+        await page.waitForTimeout(400);
+    } finally {
+        if (await page.locator('.rv-drag-overlay').count()) {
+            await touch('touchEnd', ax, ay).catch(() => {});
+            await page.keyboard.press('Escape').catch(() => {});
+        }
+    }
+}

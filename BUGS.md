@@ -135,6 +135,24 @@ draft a card, count roster slots. Then looked at every screenshot.
 
 **Checked and NOT bugs** — recorded so they are not re-chased
 
+- **Touch drag-and-drop on the roster works.** Nothing in the suite covered
+  it — every drag test drives a mouse, and dnd-kit runs a separate
+  delay-activated TouchSensor — so it was worth proving. A finger moves a
+  player exactly as a mouse does. Two "bugs" I reported against it first
+  were my own synthesis: a stray tap before the press cancels the hold, and
+  a target coordinate taken before the drag starts points at the wrong slot
+  once the board auto-scrolls. Now covered inside the existing phone test,
+  so it costs no extra boot.
+- **Archived seasons are exactly right.** The banner explains itself, tag
+  buttons and reorder handles are gone because a placement is history, and
+  the pencil reveals 3 evaluation adders and 12 inputs with zero placement
+  inputs — so "evaluations can still be added" is a promise the panel keeps.
+- **A refused write is visible and explained**, and the edit survives it.
+  Now covered by `tests/fast/writeRefused.spec.js`.
+- **Session export, Start Clean Slate and Load Current State all behave.**
+  Export is 801KB of versioned JSON, clean slate confirms first and empties
+  the roster, and Load Current State brings back all 91 slots.
+
 - Long names cut off in the side panels and depth-chart slots
   ("John Michael Gyllenborg" loses 29px): `text-overflow: ellipsis`,
   deliberate and graceful, not a hard clip.
