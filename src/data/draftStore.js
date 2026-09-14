@@ -31,9 +31,12 @@ const picks = createDocSet({
      */
     idOf: (scope, p) => {
         const n = Number(p.pickNumber);
-        return Number.isFinite(n)
-            ? `${scope}__pick_${n}`
-            : `${scope}__udfa_${nameKey(p.name)}`;
+        if (Number.isFinite(n)) return `${scope}__pick_${n}`;
+        // An undrafted signing has no number, so he is filed under the player.
+        // By id where there is one: filed under his NAME, correcting a typo
+        // moved him to a new document and left the old one behind as a second
+        // signing of the same man.
+        return `${scope}__udfa_${p.playerId ?? nameKey(p.name)}`;
     },
     scopeOf: (doc, scope) => doc.scope === scope,
 });
@@ -96,7 +99,7 @@ const KEPT = ['currentPick', 'ourPicksLeft', 'remotePicks'];
  *
  * The store does not have to look like the export. The export is rebuilt.
  */
-const PICK_FIELDS = ['name', 'position', 'pickNumber', 'team', 'draftedByUs'];
+const PICK_FIELDS = ['playerId', 'name', 'position', 'pickNumber', 'team', 'draftedByUs'];
 
 function leanPick(p) {
     const out = {};

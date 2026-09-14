@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { readStage, removeStage, openStages } from '../data/stageStore';
+import { joinIndex, findJoin } from '../utils/pickJoin';
 import { openDepthCharts } from '../data/depthChartStore';
 import { readDraft, writeDraft, hasDraft, openDraft } from '../data/draftStore';
 import { openSetup } from '../utils/seasonInit';
@@ -26,8 +27,20 @@ import { getSessionTeam as sessionTeam } from '../utils/appSettings';
  * round even though the draft was over. Resolved in one batch, because this
  * runs over every pick in the draft.
  */
+/**
+ * Records what the draft says about each player, and hands back WHO each pick
+ * was about.
+ *
+ * It was already resolving every pick to a registry record in order to write
+ * the facts, and then throwing the ids away — so a draft loaded from a file
+ * produced picks that knew a name and nothing else. The board in this hook is
+ * parsed straight from the rankings CSV and carries no ids of its own, unlike
+ * the Scouting pool, so this is the only place the two are brought together.
+ *
+ * @returns {Array<string|null>} ids, positionally matching `drafted`
+ */
 function recordDraftFacts(drafted) {
-    if (!drafted?.length) return;
+    if (!drafted?.length) return [];
     const ids = resolveAll(drafted.map(p => ({ name: p.name, position: p.position, school: p.school })));
 
     // One write for the whole draft. Per player, this was 639 serialisations
@@ -56,6 +69,7 @@ function recordDraftFacts(drafted) {
         });
     });
     setFactsMany(updates);
+    return ids;
 }
 import { findMatchingPlayerIndex, buildNameIndex, findMatchingIndex } from '../utils/nameMatcher';
 
@@ -238,9 +252,13 @@ export const useDraftState = () => {
                         const savedKCLeft = Array.isArray(parsedState.ourPicksLeft) ? parsedState.ourPicksLeft : seedKCLeft;
 
                         // 1. Reconcile fresh parsedPlayers with saved history (Board View)
-                        const savedDraftedIndex = buildNameIndex(savedDrafted);
+                        // By id where there is one, by name where there is not
+                        // — see utils/pickJoin.js. A pick used to say only the
+                        // name, so correcting a drafted player's spelling made
+                        // his pick stop finding him.
+                        const savedDraftedIndex = joinIndex(savedDrafted);
                         const reconciledPlayers = parsedPlayers.map(p => {
-                            const matchIdx = findMatchingIndex(p.name, savedDraftedIndex);
+                            const matchIdx = findJoin(p, savedDraftedIndex);
                             if (matchIdx !== -1) {
                                 const match = savedDrafted[matchIdx];
                                 return {
@@ -257,14 +275,15 @@ export const useDraftState = () => {
                         // 2. Re-enrich saved draft history (Right Panel View) with fresh metadata
                         // NOTE: use sd.draftedByUs (persisted value) — savedKCLeft only has *remaining* picks,
                         // so re-computing from it would always yield false for already-drafted players.
-                        const parsedPlayersIndex = buildNameIndex(parsedPlayers);
+                        const parsedPlayersIndex = joinIndex(parsedPlayers);
                         const enrichedDrafted = savedDrafted.map(sd => {
-                            const matchIdx = findMatchingIndex(sd.name, parsedPlayersIndex);
+                            const matchIdx = findJoin(sd, parsedPlayersIndex);
                             const draftedByUs = sd.draftedByUs === true || sd.team === TEAM_CONFIG.abbreviation; // Trust persisted or evaluate from CSV team string
                             if (matchIdx !== -1) {
                                 const updatedMetadata = parsedPlayers[matchIdx];
                                 return {
                                     ...updatedMetadata,
+                                    playerId: sd.playerId ?? updatedMetadata.id ?? null,
                                     pickNumber: sd.pickNumber,
                                     team: sd.team,
                                     drafted: true,
@@ -274,21 +293,32 @@ export const useDraftState = () => {
                             return { ...sd, draftedByUs };
                         });
 
-                        setPlayers(reconciledPlayers);
-                        setOurPicksLeft(savedKCLeft);
-                        const pickFallback = savedState ? parsedState.currentPick : undefined;
-                        setCurrentPick(typeof pickFallback === 'number' ? pickFallback : 1);
-                        setDraftedPlayers(enrichedDrafted);
-
-                        // yourPicks = all enriched entries where draftedByUs is persisted as true
-                        const enrichedYourPicks = enrichedDrafted.filter(p => p.draftedByUs);
-                        setYourPicks(enrichedYourPicks);
-
                         // A draft loaded from file never passed through
                         // draftPlayer, so nothing had recorded what it says
                         // about these players. Their cards showed no team, no
                         // pick and no round despite the draft being complete.
-                        recordDraftFacts(enrichedDrafted);
+                        //
+                        // Resolving them is also what gives each pick the id it
+                        // is ABOUT. Without it a pick knew only a name, and
+                        // correcting a drafted player's spelling made his pick
+                        // stop finding him. This runs BEFORE the state is set,
+                        // because the identified picks are the ones that have
+                        // to land — setting the un-identified ones first and
+                        // computing ids afterwards left them exactly as they
+                        // were.
+                        const draftedIds = recordDraftFacts(enrichedDrafted);
+                        const identified = enrichedDrafted.map((p, i) => (
+                            p.playerId ? p : { ...p, playerId: draftedIds[i] ?? null }
+                        ));
+
+                        setPlayers(reconciledPlayers);
+                        setOurPicksLeft(savedKCLeft);
+                        const pickFallback = savedState ? parsedState.currentPick : undefined;
+                        setCurrentPick(typeof pickFallback === 'number' ? pickFallback : 1);
+                        setDraftedPlayers(identified);
+
+                        // yourPicks = all enriched entries where draftedByUs is persisted as true
+                        setYourPicks(identified.filter(p => p.draftedByUs));
 
                         setRemotePicks(savedState && Array.isArray(parsedState.remotePicks) ? parsedState.remotePicks : []);
 
@@ -357,7 +387,13 @@ export const useDraftState = () => {
                 : p
         ));
 
-        const draftedPlayer = { ...player, drafted: true, pickNumber, draftedByUs: isOurPick, team };
+        // The id is what a pick is ABOUT. Without it the only link back to the
+        // player was his name, and a name is not an identity.
+        const draftedPlayer = {
+            ...player,
+            playerId: player.id ?? null,
+            drafted: true, pickNumber, draftedByUs: isOurPick, team,
+        };
         setDraftedPlayers(prev => [...prev, draftedPlayer]);
 
         if (isOurPick) {
@@ -476,9 +512,9 @@ export const useDraftState = () => {
         setDraftedPlayers(enrichedDrafted);
 
         // Update players availability
-        const enrichedDraftedIndex = buildNameIndex(enrichedDrafted);
+        const enrichedDraftedIndex = joinIndex(enrichedDrafted);
         setPlayers(prev => prev.map(p => {
-            const matchIdx = findMatchingIndex(p.name, enrichedDraftedIndex);
+            const matchIdx = findJoin(p, enrichedDraftedIndex);
             if (matchIdx !== -1) {
                 const match = enrichedDrafted[matchIdx];
                 return {
