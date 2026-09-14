@@ -8,15 +8,27 @@ phases, the session bundle, board and author records, evaluations, the roster
 sync. No DOM. `setup.js` supplies a twenty-line `localStorage` — not jsdom,
 because nothing here touches a document.
 
-**`tests/fast/` — Playwright, ~4 minutes.** What only a browser can prove:
+**`tests/fast/` — Playwright, ~6 minutes.** What only a browser can prove:
 drag-and-drop, clipping and stacking, a modal opening off-screen, a link
 restoring what it says, a layout collapsing at the wrong width.
 
+**`tests/audit/` — the sweep. Not part of `npm test`.** It LOOKS for problems
+rather than asserting their absence: content escaping the viewport, controls
+with no accessible name, text spilling out of its own box, console errors,
+every stage at four widths. It passes while reporting problems, which is
+exactly what a regression test must never do — so it is a tool to read, not a
+gate. It also costs about a third of the browser budget for something that
+cannot fail.
+
 ```bash
-npm test                     # both, in order
+npm test                     # unit + browser, in order
 npm run test:unit
 npm run test:browser:docker  # the normal way to run the browser suite here
+npm run test:audit:docker    # the sweep, when you want to go looking
 ```
+
+The box is memory-bound rather than CPU-bound: 8 cores but ~1.8GB free with
+four workers already swapping. More workers make it slower, not faster.
 
 The npm `playwright` package is installed with
 `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1` because this host is memory-constrained;

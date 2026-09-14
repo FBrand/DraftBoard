@@ -1,5 +1,5 @@
 import { test } from '@playwright/test';
-import { openWarm, gotoTab, TABS } from './helpers';
+import { openWarm, gotoTab, TABS } from '../fast/helpers';
 
 // A sweep, not a suite. Looks for things that are WRONG rather than checking
 // things that are right: console errors, overlapping elements, content that

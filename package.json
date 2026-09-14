@@ -13,6 +13,8 @@
     "test:unit": "vitest run",
     "test:unit:watch": "vitest",
     "test:browser": "playwright test --config playwright.fast.config.js",
+    "test:audit": "playwright test --config playwright.audit.config.js",
+    "test:audit:docker": "docker run --rm --network host -v \"$PWD\":/work -w /work -e NO_WEBSERVER=1 mcr.microsoft.com/playwright:v1.55.0-noble npx playwright test --config playwright.audit.config.js",
     "test:browser:docker": "docker run --rm --network host -v \"$PWD\":/work -w /work -e NO_WEBSERVER=1 mcr.microsoft.com/playwright:v1.55.0-noble npx playwright test --config playwright.fast.config.js"
   },
   "dependencies": {

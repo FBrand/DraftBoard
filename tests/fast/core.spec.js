@@ -611,3 +611,86 @@ test.describe('seasons', () => {
         expect(await boards()).toEqual(before);
     });
 });
+
+test.describe('when the store refuses', () => {
+    test('the change is kept, the queue retries, and it lands when the store returns', async ({ page }) => {
+        await openWarm(page, 'roster');
+        await page.waitForSelector('.roster-grid', { timeout: 45_000 });
+        const before = await slotNames(page);
+
+        // An unreachable store. Locally the only real way to fail is a full
+        // quota; this is what offline looks like from in here.
+        await page.evaluate(() => {
+            window.__realSet = Storage.prototype.setItem;
+            Storage.prototype.setItem = function (k, v) {
+                if (window.__broken && String(k).startsWith('db_depth_rows')) throw new Error('backend unreachable');
+                return window.__realSet.call(this, k, v);
+            };
+            window.__broken = true;
+        });
+
+        await dragTo(page, page.locator('.rv-slot-name').first(), page.locator('.rv-slot-name').nth(2));
+
+        // Kept, not rolled back. Losing the work is the thing being guarded
+        // against, not an acceptable response to it.
+        await expect(page.locator('.sync-status')).toContainText('unsaved', { timeout: 15_000 });
+        const moved = await slotNames(page);
+        expect(moved, 'the change was thrown away').not.toEqual(before);
+
+        // Both ways out are offered while it is still trying.
+        await expect(page.locator('.sync-status .ap-link')).toHaveText(['Try again', 'Save to a file']);
+
+        await page.evaluate(() => { window.__broken = false; });
+
+        // Either the button or the backoff gets there first, and which one is
+        // a race this test has no business caring about — pressing it is a
+        // shortcut through the wait, not a different code path.
+        const tryAgain = page.getByRole('button', { name: /Try again/i });
+        if (await tryAgain.count()) await tryAgain.click().catch(() => {});
+        await expect(page.locator('.sync-status')).toHaveCount(0, { timeout: 30_000 });
+
+        await page.reload();
+        await page.waitForSelector('.roster-grid', { timeout: 45_000 });
+        expect(await slotNames(page), 'the queued write never landed').toEqual(moved);
+    });
+});
+
+test.describe('an archived season', () => {
+    test('refuses writes on every stage, and says why', async ({ page }) => {
+        test.slow();
+        await openWarm(page, 'roster');
+        await page.waitForSelector('.roster-grid', { timeout: 45_000 });
+
+        const openSeasons = async () => {
+            await page.locator('.view-tabbar-actions .app-menu-trigger').click();
+            await page.getByRole('menuitem', { name: /Seasons/i }).click();
+            await page.waitForSelector('.season-modal', { timeout: 10_000 });
+        };
+        const settle = async () => {
+            await page.waitForLoadState('load');
+            await page.waitForSelector('.view-tabbar', { timeout: 45_000 });
+        };
+
+        await openSeasons();
+        await page.locator('#season-year').fill('2044');
+        await page.getByRole('button', { name: /Roll over/i }).click();
+        await settle();
+
+        await openSeasons();
+        await page.locator('.season-open').filter({ hasText: '2026' }).click();
+        await settle();
+
+        // A stage that silently refuses to change looks broken, so it says so.
+        await expect(page.locator('.season-banner')).toContainText('2026');
+
+        await gotoTab(page, 'roster');
+        await page.waitForSelector('.roster-grid', { timeout: 45_000 });
+        const names = await slotNames(page);
+        await dragTo(page, page.locator('.rv-slot-name').first(), page.locator('.roster-cuts').first());
+        await page.waitForTimeout(700);
+
+        await page.reload();
+        await page.waitForSelector('.roster-grid', { timeout: 45_000 });
+        expect(await slotNames(page), 'an archived roster took a write').toEqual(names);
+    });
+});
