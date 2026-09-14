@@ -122,6 +122,8 @@ draft a card, count roster slots. Then looked at every screenshot.
 
 | # | What | State |
 |---|---|---|
+| 28 | **A rollover carried nothing: new roster prefilled, free agency empty** | The bug the user reported twice, still there. `seasonInit` read and wrote the STAGE store; the roster and free agency had moved to row documents in `depthChartStore` so one drag writes one row. So `readStage('rosterState', outgoing)` returned null, nothing was carried, an empty `positionConfig` was written — and because an empty config does not satisfy the roster's own fallback, the new season fell through to bootstrapping `roster.csv` and arrived with all 91 players of a season it had nothing to do with. One missing store, both symptoms. FIXED: `seasonInit` uses the same chart-first precedence the roster itself uses. Verified in a browser: roster 91 → 0, FA 0 → 91, rollback restores 91 and 328 rows. |
+| 29 | **Rolling back threw a render error while succeeding** | `Cannot read properties of null (reading 'year')`. The confirm block names both seasons and outlives what it asks about: `scrapSeason()` succeeds, the season underneath becomes current, and React re-renders the open modal once more before the reload lands — at which point there is no season underneath, so `previous` is null and "…{previous.year} becomes current again" threw. The rollback itself was correct; only the sentence describing it failed. FIXED by not rendering the confirm block once there is nothing left to confirm. |
 | 25 | **A finished draft announced a pick that cannot happen** | The counter runs one past the final selection, so the header read `NOW DRAFTING #258` on a draft that ends at 257 — in the biggest text on the screen, which is the line a broadcast puts on air. Every other part of the view had already switched over: a card click signs a UDFA, the board is in post-draft mode, the tracker says "none left". Only the headline disagreed. `DraftView` already computed `draftComplete` and never passed it to the header. FIXED: reads `DRAFT COMPLETE / UDFA`, and the OURS badge no longer appears for a pick nobody owns. Covered by `tests/fast/draftComplete.spec.js`. |
 
 **Found, open, not fixed unprompted**
@@ -143,6 +145,13 @@ draft a card, count roster slots. Then looked at every screenshot.
   cards correctly scroll underneath.
 - No horizontal page overflow, no console or page errors, and no control
   without an accessible name, at either width, on any of the five stages.
+
+**The tests were part of the bug.** `seasonInit.test.js` had fifteen passing
+tests over a rollover that did not work, because it used `writeStage` to set
+last season's roster up and `readStage` to check the result — self-consistent,
+and touching neither store the app reads. Both sides now use the depth-chart
+store, and `tests/fast/seasonRollover.spec.js` drives the real flow, which is
+the only thing that can catch the wiring being wrong.
 
 **On the method.** Four of my six automated findings were false positives —
 my checkers, not the app. The ones that held up came from looking at a

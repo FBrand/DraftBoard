@@ -27,7 +27,8 @@
  * been set up yet" look identical in storage, and treating the first as the
  * second is what re-seeded a season somebody had deliberately cleared.
  */
-import { readStage, writeStage } from '../data/stageStore';
+import { readStage } from '../data/stageStore';
+import { hasChart, readChart, writeChart } from '../data/depthChartStore';
 import { writeDraft } from '../data/draftStore';
 import { STATE_VERSION as ROSTER_VERSION } from './rosterState';
 import { repository } from '../data/repository';
@@ -72,6 +73,29 @@ export function forgetSeason(seasonId) {
     repository.remove(SETUP, markerId(seasonId));
 }
 
+/**
+ * Last season's roster, from wherever it actually lives.
+ *
+ * This read used to be `readStage('rosterState', …)` alone, and it had
+ * silently stopped finding anything: the roster moved to row documents
+ * (depthChartStore) so one drag writes one row, and the stage blob became the
+ * legacy shape that `rosterState.loadState` reads once and migrates forward.
+ *
+ * Nothing failed loudly. `last` came back null, so a rollover wrote an empty
+ * roster and no free agency at all — and because an empty `positionConfig`
+ * does not satisfy the roster's own fallback, the new season fell through to
+ * bootstrapping `roster.csv` and arrived with all 91 players from a season it
+ * had nothing to do with. "New season — roster is prefilled, FA is empty" was
+ * one missing store, twice.
+ *
+ * Same precedence the roster itself uses, so the two cannot drift apart again.
+ */
+function readRoster(seasonId) {
+    if (hasChart('rosterState', seasonId)) return readChart('rosterState', seasonId);
+    const parsed = readStage('rosterState', seasonId);
+    return parsed?.positionConfig?.offense?.length > 0 ? parsed : null;
+}
+
 const EMPTY_ROSTER = () => ({
     version: ROSTER_VERSION,
     positionConfig: { offense: [], defense: [] },
@@ -100,9 +124,9 @@ function emptied(state) {
 export function initialiseSeason(seasonId, { carryRosterFrom = null } = {}) {
     if (!seasonId || isInitialised(seasonId)) return false;
 
-    const put = (base, value) => writeStage(base, seasonId, value);
+    const put = (base, value) => writeChart(base, seasonId, value);
 
-    const last = carryRosterFrom ? readStage('rosterState', carryRosterFrom) : null;
+    const last = carryRosterFrom ? readRoster(carryRosterFrom) : null;
 
     if (last) {
         // Free agency is where an offseason starts, and it starts with the

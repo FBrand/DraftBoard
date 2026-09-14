@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { initialiseSeason, isInitialised, forgetSeason } from '../../src/utils/seasonInit';
 import { readStage, writeStage } from '../../src/data/stageStore';
+import { readChart, writeChart, openDepthCharts } from '../../src/data/depthChartStore';
 import { readDraft } from '../../src/data/draftStore';
 import { repository } from '../../src/data/repository';
 
@@ -18,9 +19,10 @@ import { repository } from '../../src/data/repository';
  * look identical in storage, and reading the first as the second is what
  * re-seeded a season somebody had deliberately cleared.
  */
-beforeEach(() => {
+beforeEach(async () => {
     globalThis.resetStorage();
     repository.invalidate();
+    await openDepthCharts();
 });
 
 describe('setting a season up', () => {
@@ -47,7 +49,7 @@ describe('setting a season up', () => {
 
     it('starts the roster empty when there is nothing to carry', () => {
         initialiseSeason('s1');
-        const roster = readStage('rosterState', 's1');
+        const roster = readChart('rosterState', 's1');
         expect(roster.depthChart).toEqual({});
         expect(roster.cuts).toEqual([]);
     });
@@ -65,6 +67,11 @@ describe('setting a season up', () => {
 });
 
 describe('what a rollover hands the new season', () => {
+    // These read and write the DEPTH CHART store, because that is where the
+    // roster and free agency actually live. They used to use the stage store
+    // on both sides, which made them agree with themselves and with nothing
+    // the app does — the rollover shipped reading an empty stage blob, and
+    // every one of these passed while it did.
     // An offseason STARTS at free agency and ENDS at a 53-man roster. So last
     // season's roster is not the new roster — it is the pool of players whose
     // futures are the question. The new roster keeps its shape and none of its
@@ -79,18 +86,18 @@ describe('what a rollover hands the new season', () => {
     };
 
     it('puts last season’s roster into free agency, where the offseason starts', () => {
-        writeStage('rosterState', 's1', LAST_YEAR);
+        writeChart('rosterState', 's1', LAST_YEAR);
         initialiseSeason('s2', { carryRosterFrom: 's1' });
 
-        const fa = readStage('fa_state_v1', 's2');
+        const fa = readChart('fa_state_v1', 's2');
         expect(fa.depthChart.qb.map(s => s.name)).toEqual(['Patrick Mahomes']);
     });
 
     it('gives the new roster the shape and none of the players', () => {
-        writeStage('rosterState', 's1', LAST_YEAR);
+        writeChart('rosterState', 's1', LAST_YEAR);
         initialiseSeason('s2', { carryRosterFrom: 's1' });
 
-        const roster = readStage('rosterState', 's2');
+        const roster = readChart('rosterState', 's2');
         expect(roster.positionConfig.offense).toEqual([{ id: 'qb', label: 'QB', slots53: 2 }]);
         expect(roster.depthChart).toEqual({ qb: [] });
         expect(roster.reserve).toEqual([]);
@@ -98,24 +105,26 @@ describe('what a rollover hands the new season', () => {
     });
 
     it('does not carry last season’s injuries or cuts into either', () => {
-        writeStage('rosterState', 's1', LAST_YEAR);
+        writeChart('rosterState', 's1', LAST_YEAR);
         initialiseSeason('s2', { carryRosterFrom: 's1' });
 
-        expect(readStage('rosterState', 's2').reserve).toEqual([]);
+        expect(readChart('rosterState', 's2').reserve).toEqual([]);
     });
 
     it('copies rather than shares, so this year does not rewrite last year', () => {
-        writeStage('rosterState', 's1', LAST_YEAR);
+        writeChart('rosterState', 's1', LAST_YEAR);
         initialiseSeason('s2', { carryRosterFrom: 's1' });
 
-        writeStage('rosterState', 's2', { version: 1, depthChart: {}, reserve: [], cuts: [] });
-        expect(readStage('rosterState', 's1')).toEqual(LAST_YEAR);
+        writeChart('rosterState', 's2', { version: 1, depthChart: {}, reserve: [], cuts: [] });
+        const s1 = readChart('rosterState', 's1');
+        expect(s1.depthChart.qb.map(x => x.name)).toEqual(['Patrick Mahomes']);
+        expect(s1.reserve.map(x => x.name)).toEqual(['Somebody Hurt']);
     });
 
     it('starts empty when the season it came from has no roster', () => {
         initialiseSeason('s2', { carryRosterFrom: 's1' });
-        expect(readStage('rosterState', 's2').depthChart).toEqual({});
-        expect(readStage('fa_state_v1', 's2')).toBeNull();
+        expect(readChart('rosterState', 's2').depthChart).toEqual({});
+        expect(readChart('fa_state_v1', 's2').depthChart).toEqual({});
     });
 });
 

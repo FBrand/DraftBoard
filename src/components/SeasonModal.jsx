@@ -87,6 +87,15 @@ export default function SeasonModal({ isOpen, onClose, onChanged }) {
 
     const doomedBoards = current ? listBoards(current.id) : [];
 
+    // The confirm block names both seasons, and it outlives the thing it is
+    // asking about: scrapSeason() succeeds, the season underneath becomes
+    // current, and React re-renders this modal once more before the reload
+    // lands. On that render there is no season underneath any more, so
+    // `previous` is null and the copy that reads "{previous.year} becomes
+    // current again" threw. The work had already been done correctly — the
+    // error was purely in describing it, after the fact.
+    const confirming = confirmingRollback && !!previous && !!current;
+
     return (
         <div className="modal-overlay" onClick={onClose}>
             <div className="modal-content season-modal" onClick={e => e.stopPropagation()}>
@@ -152,7 +161,7 @@ export default function SeasonModal({ isOpen, onClose, onChanged }) {
                     </form>
 
                     <div className="season-danger">
-                        {!confirmingRollback ? (
+                        {!confirming ? (
                             <>
                                 <button
                                     type="button"
