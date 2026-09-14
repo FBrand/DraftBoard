@@ -35,7 +35,13 @@ export default function SyncStatus({ onExport }) {
     return (
         <div className={`sync-status sync-status--${sync.state}`} role="status">
             <span className="sync-dot" aria-hidden="true" />
-            <span className="sync-label">{label}</span>
+            {/* The advice is the useful half. "Could not save" tells somebody
+                to worry; "there is no room left, save to a file and clear old
+                seasons" tells them what to do about it. */}
+            <span className="sync-label" title={sync.advice ?? undefined}>{label}</span>
+            {sync.state === 'failed' && sync.advice && (
+                <span className="sync-advice">{sync.advice}</span>
+            )}
 
             {(sync.state === 'retrying' || sync.state === 'failed') && (
                 <>

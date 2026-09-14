@@ -4201,3 +4201,14 @@ body.export-mode .card-glow {
 @media (prefers-reduced-motion: reduce) {
   .sync-status--retrying .sync-dot { animation: none; }
 }
+
+.sync-advice {
+  font-size: 0.7rem;
+  opacity: 0.85;
+  max-width: 34ch;
+}
+
+@media (max-width: 900px) {
+  /* On a phone the label and the two buttons are already the whole width. */
+  .sync-advice { display: none; }
+}

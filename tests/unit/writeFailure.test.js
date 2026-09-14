@@ -250,3 +250,61 @@ describe('unsaved work outliving the tab', () => {
         expect(repo.syncState().state).toBe('saved');
     });
 });
+
+/**
+ * A refusal the store will repeat stops immediately.
+ *
+ * The difference between "the connection is down" and "the store looked at
+ * this and said no" is the difference between waiting and doing something
+ * about it, and the queue used to hide it by retrying both.
+ */
+describe('a write the store will never take', () => {
+    const refusing = (code) => ({
+        name: 'refusing',
+        async load() { return {}; },
+        loadSync() { return {}; },
+        async set() { throw Object.assign(new Error(code), { code }); },
+        async remove() { throw Object.assign(new Error(code), { code }); },
+    });
+
+    it('goes straight to failed instead of spending five attempts', async () => {
+        const repo = createRepository(refusing('permission-denied'));
+        await repo.set('boards', 'b1', { id: 'b1', label: 'Not mine' });
+
+        expect(repo.syncState().state).toBe('failed');
+    });
+
+    it('carries the advice, which is the half worth reading', async () => {
+        const repo = createRepository(refusing('permission-denied'));
+        await repo.set('boards', 'b1', { id: 'b1' });
+        expect(repo.syncState().advice).toMatch(/Sign in|board of your own/);
+    });
+
+    it('still keeps the change — refused is not the same as discarded', async () => {
+        const repo = createRepository(refusing('invalid-argument'));
+        await repo.set('boards', 'b1', { id: 'b1', label: 'Still here' });
+        expect(repo.get('boards', 'b1').label).toBe('Still here');
+    });
+
+    it('keeps retrying something that was merely unreachable', async () => {
+        const repo = createRepository(refusing('unavailable'));
+        await repo.set('boards', 'b1', { id: 'b1' });
+        expect(repo.syncState().state).toBe('retrying');
+    });
+
+    it('tries again when asked by hand, because the world may have changed', async () => {
+        // Signing in is exactly the thing that turns permission-denied into a
+        // write that works, and it happens after the refusal.
+        const adapter = refusing('permission-denied');
+        const repo = createRepository(adapter);
+        await repo.set('boards', 'b1', { id: 'b1', label: 'Mine now' });
+        expect(repo.syncState().state).toBe('failed');
+
+        const written = [];
+        adapter.set = async (c, id, doc) => { written.push(doc.label); };
+        await repo.retryNow();
+
+        expect(written).toEqual(['Mine now']);
+        expect(repo.syncState().state).toBe('saved');
+    });
+});

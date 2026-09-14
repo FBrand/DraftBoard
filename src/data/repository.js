@@ -25,6 +25,7 @@
  */
 import { localAdapter } from './localAdapter';
 import { createAdapter } from './backend';
+import { classifyWriteError } from './writeErrors';
 
 /**
  * @param {import('./types').Adapter} adapter
@@ -239,6 +240,7 @@ export function createRepository(adapter = localAdapter) {
     const writeErrorListeners = new Set();
     let retryTimer = null;
     let lastError = null;
+    let lastAdvice = null;
     let gaveUp = false;
     let inFlight = 0;
 
@@ -246,10 +248,10 @@ export function createRepository(adapter = localAdapter) {
 
     /** What the UI shows: are we saved, saving, behind, or beaten. */
     function syncState() {
-        if (gaveUp) return { state: 'failed', pending: pending.size, error: lastError };
-        if (pending.size) return { state: 'retrying', pending: pending.size, error: lastError };
-        if (inFlight) return { state: 'saving', pending: 0, error: null };
-        return { state: 'saved', pending: 0, error: null };
+        if (gaveUp) return { state: 'failed', pending: pending.size, error: lastError, advice: lastAdvice };
+        if (pending.size) return { state: 'retrying', pending: pending.size, error: lastError, advice: lastAdvice };
+        if (inFlight) return { state: 'saving', pending: 0, error: null, advice: null };
+        return { state: 'saved', pending: 0, error: null, advice: null };
     }
 
     function announce() {
@@ -318,13 +320,19 @@ export function createRepository(adapter = localAdapter) {
                 persistQueue();
                 lastError = null;
             } catch (err) {
+                const verdict = classifyWriteError(err);
                 lastError = err?.message ?? String(err);
-                const attempts = write.attempts + 1;
+                lastAdvice = verdict.advice;
+
+                const attempts = verdict.permanent ? BACKOFF_MS.length : write.attempts + 1;
                 pending.set(key, { ...write, attempts });
                 persistQueue();
-                // Out of patience. The change is still here and still on
-                // screen — what stops is the pretending that it will land.
-                if (attempts >= BACKOFF_MS.length) gaveUp = true;
+
+                // A store that has JUDGED the write and refused it will refuse
+                // it again. Spending four more attempts on that buries the
+                // reason under "retrying", which is the one word that tells
+                // somebody to sit and wait.
+                if (verdict.permanent || attempts >= BACKOFF_MS.length) gaveUp = true;
             }
         }
 
@@ -342,6 +350,8 @@ export function createRepository(adapter = localAdapter) {
     /** Try again now, from a button. */
     function retryNow() {
         gaveUp = false;
+        lastAdvice = null;
+        pending.forEach((w, k) => pending.set(k, { ...w, attempts: 0 }));
         if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; }
         announce();
         return flush();
@@ -359,9 +369,16 @@ export function createRepository(adapter = localAdapter) {
         return Promise.resolve(run())
             .then(() => { lastError = null; })
             .catch(err => {
+                const verdict = classifyWriteError(err);
                 lastError = err?.message ?? String(err);
+                lastAdvice = verdict.advice;
                 enqueue({ collection, id, doc, op });
-                reportWriteError({ collection, id, op, error: err });
+                if (verdict.permanent) {
+                    pending.set(keyOf(collection, id), { collection, id, doc, op, attempts: BACKOFF_MS.length });
+                    persistQueue();
+                    gaveUp = true;
+                }
+                reportWriteError({ collection, id, op, error: err, permanent: verdict.permanent, advice: verdict.advice });
             })
             .finally(() => { inFlight = Math.max(0, inFlight - 1); announce(); });
     }
@@ -403,12 +420,17 @@ export function createRepository(adapter = localAdapter) {
         return Promise.resolve(write)
             .then(() => { lastError = null; })
             .catch(err => {
+                const verdict = classifyWriteError(err);
                 lastError = err?.message ?? String(err);
+                lastAdvice = verdict.advice;
                 // A batch that failed becomes individual pending writes: the
                 // store may take some of them, and one poisoned document
                 // should not hold the rest hostage for ever.
-                changes.forEach(c => enqueue({ collection, id: c.id, doc: c.doc, op: c.doc === null ? 'remove' : 'set' }));
-                reportWriteError({ collection, id: null, op: 'commit', error: err });
+                changes.forEach(c => enqueue({
+                    collection, id: c.id, doc: c.doc, op: c.doc === null ? 'remove' : 'set',
+                }));
+                if (verdict.permanent) { gaveUp = true; persistQueue(); }
+                reportWriteError({ collection, id: null, op: 'commit', error: err, permanent: verdict.permanent, advice: verdict.advice });
             })
             .finally(() => { inFlight = Math.max(0, inFlight - 1); announce(); });
     }

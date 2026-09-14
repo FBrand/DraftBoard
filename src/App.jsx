@@ -101,10 +101,14 @@ function App() {
   // The toast fires once, when the queue gives up. Everything before that —
   // one failure, a retry, three more waiting — is the sync indicator's job,
   // because a message per failed attempt while offline is a machine gun.
-  React.useEffect(() => repository.onWriteError(({ op, error }) => {
-    if (op === 'commit' || op === 'set' || op === 'remove') return; // still queued, still trying
+  // The toast is for a refusal that will not come good on its own. Everything
+  // transient — one failure, a retry, three more waiting — is the sync
+  // indicator's job, because a message per failed attempt while offline is a
+  // machine gun.
+  React.useEffect(() => repository.onWriteError(({ permanent, advice, error }) => {
+    if (!permanent) return;
     setToast({
-      message: `Could not save. Your work is still on screen and still here — use "Save to a file" to keep it. (${error?.message ?? 'write refused'})`,
+      message: `${advice ?? 'Could not save.'} Your work is still on screen. (${error?.message ?? 'write refused'})`,
       tone: 'error',
     });
   }), []);
