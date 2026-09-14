@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { createRepository } from '../../src/data/repository';
 import { createMemoryAdapter } from '../../src/data/memoryAdapter';
 import { localAdapter } from '../../src/data/localAdapter';
@@ -20,6 +20,11 @@ const seeded = async (adapter) => {
     await repo.set('players', 'p1', { id: 'p1', name: 'Fernando Mendoza' });
     return repo;
 };
+
+// The pending-write queue is persisted, so a repository picks up whatever the
+// last one left behind. Tests have to start from an empty store or they read
+// each other's unsaved work.
+beforeEach(() => { globalThis.resetStorage(); });
 
 describe('both adapters satisfy the same interface', () => {
     for (const [label, make] of [['local', () => localAdapter], ['memory', () => createMemoryAdapter()]]) {

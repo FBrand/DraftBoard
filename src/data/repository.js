@@ -40,13 +40,29 @@ export function createRepository(adapter = localAdapter) {
         });
     };
 
+    /**
+     * Whatever the store returned, with anything still queued laid on top.
+     * A pending write is by definition newer than the store's answer.
+     */
+    function withPending(collection, docs) {
+        const merged = { ...(docs ?? {}) };
+        pending.forEach(w => {
+            if (w.collection !== collection) return;
+            if (w.doc === null) delete merged[w.id];
+            else merged[w.id] = w.doc;
+        });
+        return merged;
+    }
+
     /** Loads a collection into memory once. Returns a promise for the caller. */
     function ready(collection) {
         if (cache.has(collection)) return Promise.resolve(cache.get(collection));
         if (loading.has(collection)) return loading.get(collection);
 
         const promise = adapter.load(collection).then(docs => {
-            cache.set(collection, docs ?? {});
+            // Anything still queued is NEWER than anything the store can
+            // return — that is what "not saved yet" means — so it goes on top.
+            cache.set(collection, withPending(collection, docs));
             loading.delete(collection);
             notify(collection);
             return cache.get(collection);
@@ -65,7 +81,13 @@ export function createRepository(adapter = localAdapter) {
         const hit = cache.get(collection);
         if (hit) return hit;
         if (!adapter.loadSync) return null;
-        const docsNow = adapter.loadSync(collection) ?? {};
+        // Same merge as `ready`, and for the same reason: a queued write is
+        // newer than anything the store can return. This is the door the app
+        // actually comes through — a synchronous read during render beats the
+        // asynchronous load every time — so leaving the merge out of it meant
+        // a reload with unsaved work showed the OLD value while the queue
+        // wrote the new one behind it.
+        const docsNow = withPending(collection, adapter.loadSync(collection) ?? {});
         cache.set(collection, docsNow);
         return docsNow;
     }
@@ -173,6 +195,46 @@ export function createRepository(adapter = localAdapter) {
     const BACKOFF_MS = [1000, 2000, 4000, 8000, 15000];
 
     const pending = new Map();      // key -> { collection, id, doc, op, attempts }
+
+    // ── The queue outlives the tab ────────────────────────────────────────
+    //
+    // A queue in memory is a queue that a reload throws away, and a reload is
+    // exactly what somebody does when the app seems stuck. So the pending
+    // writes are written down — to localStorage, which is emphatically NOT
+    // the store they failed to reach, and is therefore still available when
+    // that store is not.
+    //
+    // This is the difference between "your change is being retried" and "your
+    // change was being retried". Without it the promise of not losing work
+    // lasts until the next refresh, which is not a promise.
+    const QUEUE_KEY = 'pending_writes_v1';
+
+    function persistQueue() {
+        try {
+            if (!pending.size) { localStorage.removeItem(QUEUE_KEY); return; }
+            localStorage.setItem(QUEUE_KEY, JSON.stringify([...pending.values()]));
+        } catch { /* if even this fails, the in-memory queue is all there is */ }
+    }
+
+    function restoreQueue() {
+        let saved = null;
+        try { saved = JSON.parse(localStorage.getItem(QUEUE_KEY) || 'null'); } catch { saved = null; }
+        if (!Array.isArray(saved) || !saved.length) return;
+
+        saved.forEach(w => {
+            if (!w?.collection || !w?.id) return;
+            pending.set(keyOf(w.collection, w.id), { ...w, attempts: 0 });
+        });
+
+        // Deliberately NOT applied to the cache here. Putting them in would
+        // make `cache.has(collection)` true, and `ready()` takes that as "this
+        // collection is loaded" and skips the store entirely — a restored
+        // queue of two rows became the whole depth chart, and a reload with an
+        // unsaved change dropped 84 of 91 players. They are merged on top when
+        // the collection actually loads; see `ready`.
+        scheduleRetry();
+        announce();
+    }
     const syncListeners = new Set();
     const writeErrorListeners = new Set();
     let retryTimer = null;
@@ -228,6 +290,7 @@ export function createRepository(adapter = localAdapter) {
         const key = keyOf(collection, id);
         const attempts = pending.get(key)?.attempts ?? 0;
         pending.set(key, { collection, id, doc, op, attempts });
+        persistQueue();
         scheduleRetry();
         announce();
     }
@@ -252,11 +315,13 @@ export function createRepository(adapter = localAdapter) {
                     ? adapter.remove(write.collection, write.id)
                     : adapter.set(write.collection, write.id, write.doc));
                 pending.delete(key);
+                persistQueue();
                 lastError = null;
             } catch (err) {
                 lastError = err?.message ?? String(err);
                 const attempts = write.attempts + 1;
                 pending.set(key, { ...write, attempts });
+                persistQueue();
                 // Out of patience. The change is still here and still on
                 // screen — what stops is the pretending that it will land.
                 if (attempts >= BACKOFF_MS.length) gaveUp = true;
@@ -367,6 +432,10 @@ export function createRepository(adapter = localAdapter) {
         if (collection == null) { cache.clear(); loading.clear(); }
         else { cache.delete(collection); loading.delete(collection); }
     }
+
+    // Anything left from a previous visit is picked up before anything else
+    // happens, so a reload resumes rather than forgets.
+    restoreQueue();
 
     return {
         ready, ensureLoaded, docs, isLoaded, get, all, query,

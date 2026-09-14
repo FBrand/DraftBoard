@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { createRepository } from '../../src/data/repository';
 
 /**
@@ -39,6 +39,11 @@ const adapterThat = ({ fail = false } = {}) => {
         seed(c, docs) { store.set(c, docs); },
     };
 };
+
+// The pending-write queue is persisted, so a repository picks up whatever the
+// last one left behind. Tests have to start from an empty store or they read
+// each other's unsaved work.
+beforeEach(() => { globalThis.resetStorage(); });
 
 describe('a write that succeeds', () => {
     it('is visible immediately, before the adapter has finished', async () => {
@@ -189,5 +194,59 @@ describe('knowing whether a collection can be read yet', () => {
 
         await repo.ready('players');
         expect(repo.isLoaded('players')).toBe(true);
+    });
+});
+
+/**
+ * A queue in memory is a queue a reload throws away — and a reload is exactly
+ * what somebody does when the app seems stuck.
+ *
+ * So it is written down, to localStorage, which is emphatically NOT the store
+ * the write failed to reach and is therefore still there when that one is not.
+ * This is the difference between "your change is being retried" and "your
+ * change WAS being retried", and without it the promise of not losing work
+ * lasts until the next refresh, which is not a promise.
+ */
+describe('unsaved work outliving the tab', () => {
+    it('writes the queue down where a reload can find it', async () => {
+        const repo = createRepository(adapterThat({ fail: true }));
+        await repo.set('players', 'p1', { id: 'p1', name: 'Not Saved Yet' });
+
+        const saved = JSON.parse(localStorage.getItem('pending_writes_v1'));
+        expect(saved).toHaveLength(1);
+        expect(saved[0]).toMatchObject({ collection: 'players', id: 'p1', op: 'set' });
+    });
+
+    it('picks it up again, and puts the change back on screen with it', async () => {
+        const adapter = adapterThat({ fail: true });
+        const first = createRepository(adapter);
+        await first.set('players', 'p1', { id: 'p1', name: 'Not Saved Yet' });
+
+        // A new visit: same storage, a repository that has never seen this.
+        const second = createRepository(adapterThat({ fail: true }));
+        expect(second.syncState()).toMatchObject({ state: 'retrying', pending: 1 });
+        // Not just queued — visible. Retrying something the screen no longer
+        // shows would be its own kind of lie.
+        expect(second.get('players', 'p1').name).toBe('Not Saved Yet');
+    });
+
+    it('clears it once the write finally lands', async () => {
+        const adapter = adapterThat();
+        const repo = createRepository(adapter);
+        adapter.set = () => Promise.reject(new Error('offline'));
+        await repo.set('players', 'p1', { id: 'p1', name: 'Eventually' });
+        expect(localStorage.getItem('pending_writes_v1')).toBeTruthy();
+
+        adapter.set = async () => {};
+        await repo.retryNow();
+
+        expect(localStorage.getItem('pending_writes_v1')).toBeNull();
+        expect(repo.syncState().state).toBe('saved');
+    });
+
+    it('survives a queue file that is nonsense rather than refusing to start', () => {
+        localStorage.setItem('pending_writes_v1', 'not json at all');
+        const repo = createRepository(adapterThat());
+        expect(repo.syncState().state).toBe('saved');
     });
 });

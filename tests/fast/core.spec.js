@@ -614,6 +614,9 @@ test.describe('seasons', () => {
 
 test.describe('when the store refuses', () => {
     test('the change is kept, the queue retries, and it lands when the store returns', async ({ page }) => {
+        // A drag, a queue, a backoff and a reload. Long on an idle box and
+        // longer with four workers on it.
+        test.slow();
         await openWarm(page, 'roster');
         await page.waitForSelector('.roster-grid', { timeout: 45_000 });
         const before = await slotNames(page);
@@ -631,11 +634,16 @@ test.describe('when the store refuses', () => {
 
         await dragTo(page, page.locator('.rv-slot-name').first(), page.locator('.rv-slot-name').nth(2));
 
+        // Prove the drag landed BEFORE asserting anything about syncing.
+        // Otherwise a drag that did not take under load reads as a sync bug,
+        // which is a wrong diagnosis printed with total confidence.
+        await expect.poll(() => slotNames(page), { timeout: 20_000 })
+            .not.toEqual(before);
+
         // Kept, not rolled back. Losing the work is the thing being guarded
         // against, not an acceptable response to it.
-        await expect(page.locator('.sync-status')).toContainText('unsaved', { timeout: 15_000 });
+        await expect(page.locator('.sync-status')).toContainText('unsaved', { timeout: 20_000 });
         const moved = await slotNames(page);
-        expect(moved, 'the change was thrown away').not.toEqual(before);
 
         // Both ways out are offered while it is still trying.
         await expect(page.locator('.sync-status .ap-link')).toHaveText(['Try again', 'Save to a file']);
@@ -652,6 +660,40 @@ test.describe('when the store refuses', () => {
         await page.reload();
         await page.waitForSelector('.roster-grid', { timeout: 45_000 });
         expect(await slotNames(page), 'the queued write never landed').toEqual(moved);
+    });
+
+    test('unsaved work survives the reload somebody does when it looks stuck', async ({ page }) => {
+        test.slow();
+        await openWarm(page, 'roster');
+        await page.waitForSelector('.roster-grid', { timeout: 45_000 });
+        const before = await slotNames(page);
+
+        await page.evaluate(() => {
+            window.__realSet = Storage.prototype.setItem;
+            Storage.prototype.setItem = function (k, v) {
+                if (window.__broken && String(k).startsWith('db_depth_rows')) throw new Error('backend unreachable');
+                return window.__realSet.call(this, k, v);
+            };
+            window.__broken = true;
+        });
+
+        await dragTo(page, page.locator('.rv-slot-name').first(), page.locator('.rv-slot-name').nth(2));
+        await expect.poll(() => slotNames(page), { timeout: 20_000 }).not.toEqual(before);
+        const moved = await slotNames(page);
+        await expect(page.locator('.sync-status')).toContainText('unsaved', { timeout: 20_000 });
+
+        // A queue in memory is a queue a reload throws away — and a reload is
+        // exactly what somebody does when the app seems stuck.
+        await page.reload();
+        await page.waitForSelector('.roster-grid', { timeout: 45_000 });
+
+        // Two ways this went wrong before. Seeding the cache from the restored
+        // queue made ready() think the collection was loaded, and a reload
+        // with one unsaved change dropped 84 of 91 players. Then merging only
+        // on the async path left the synchronous one — the door the app
+        // actually uses — showing the old value while the queue wrote the new.
+        await expect.poll(() => slotNames(page).then(n => n.length), { timeout: 20_000 }).toBe(before.length);
+        expect(await slotNames(page), 'the unsaved change was lost on reload').toEqual(moved);
     });
 });
 

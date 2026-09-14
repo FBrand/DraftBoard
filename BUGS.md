@@ -11,6 +11,17 @@ a measurement has been wrong more than once here.
 
 ---
 
+## Found by auditing the new write queue, 2026-09-14
+
+Three, all in code written the same day, all found by driving the thing rather
+than reasoning about it.
+
+| # | What | State |
+|---|---|---|
+| A4 | **A reload dropped 84 of 91 players** | The restored queue was applied to the cache, which made `cache.has(collection)` true — and `ready()` reads that as "already loaded" and skips the store. Two restored rows became the entire depth chart. **Fixed:** the queue is not seeded into the cache; it is merged on top when the collection actually loads. |
+| A5 | **The unsaved change was then lost anyway** | The merge was on the asynchronous load only. The synchronous path — `ensureLoaded` via `loadSync`, which is the door the app actually comes through during render — filled the cache straight from the store, so a reload showed the OLD value while the queue quietly wrote the new one. **Fixed:** one merge, both doors. |
+| A6 | Flaky test | The store-refuses test passed alone and failed under four workers. The fragile part was the drag, not the queue, so it now proves the drag landed before asserting anything about syncing — a drag that silently did not take was being reported as a sync bug. |
+
 ## The audit, 2026-09-14
 
 What was walked, and what it found. Every stage at 1600, 1280, 900 and 390,
