@@ -4,7 +4,7 @@ What is stored, where, and what it costs. Measured on a cold boot of the
 shipped 2026 season: 733 players, 328 prospects on each of three boards, a
 91-man roster, the completed draft.
 
-**Total: 287KB for one season.** It was 925KB before the trims below, and
+**Total: 285KB for one season.** It was 925KB before the trims below, and
 686KB as recently as the picks store.
 
 ---
@@ -12,14 +12,51 @@ shipped 2026 season: 733 players, 328 prospects on each of three boards, a
 ## The shape
 
 Everything goes through `src/data/repository.js`, which stores **documents in
-named collections**. A collection is a map of id to document. The interface is
-Firestore's, narrowed to what this app does, so the backend is an adapter swap
-— see `backend.js`.
+named collections**. A collection is a map of id to document, addressed by a
+**path**. The interface is Firestore's, narrowed to what this app does, so the
+backend is an adapter swap — see `backend.js`.
 
-`localAdapter` writes one localStorage key per collection: `db_<name>`, with
-`/` folded to `__`, so `boards/b1/entries` becomes `db_boards__b1__entries`.
+### How localStorage holds it, and why that decides the schema
 
-Two rules decide what a document holds.
+localStorage has exactly one write primitive: `setItem(key, wholeString)`.
+There is no partial write and no addressing into a value. **The unit of write
+is one key's entire value** — change one field and the whole string is
+re-serialised.
+
+That rule, not taste, is what settled the layout. Two earlier attempts:
+
+1. **The path folded into the key** — `db_seasons__s_1__charts__rosterState__rows`.
+   Fast, and it filled a storage inspector with `__`-joined strings
+   indistinguishable from the composite document keys the data model had just
+   got rid of.
+2. **The hierarchy inside the value** — one key per root collection holding a
+   tree. No `__`, and measured at a season's scale:
+
+   | write | blob | time |
+   |---|---|---|
+   | one draft pick | `db_players` 147KB | 36.8 ms |
+   | one remark | `db_evaluations` 2.0MB | **557.8 ms** |
+
+   Half a second to type a note, because one document write re-serialised
+   every evaluation in the season.
+
+A localStorage key is an arbitrary string and may contain a slash — which
+neither attempt used. So **one key per collection, and the key is the path**:
+`db_evaluations/p_…/s/b_…/s_…`. Same scale, same measurement:
+
+| write | time |
+|---|---|
+| one remark | **1.5 ms** |
+| scouting a player (fourteen remarks) | 7.1 ms |
+| one draft pick | 51.9 ms |
+
+Both earlier layouts are brought forward on first read. Missing either means
+the app comes up empty with every board and evaluation apparently gone.
+
+The other backends are not bound by this: IndexedDB writes one record,
+Firestore writes one **field**. The constraint is localStorage's alone.
+
+### Two rules for what a document holds
 
 > **The store does not have to look like the export.** Exports are rebuilt from
 > the registry and the rankings files, so a stored document holds only what
@@ -27,9 +64,8 @@ Two rules decide what a document holds.
 
 > **A document never states its own key.** The id is what it is filed under;
 > writing it again costs bytes on every write forever and gives a rename two
-> places to disagree. Ids are reattached on read. This removed 125KB.
-
----
+> places to disagree. Ids are reattached on read. This removed 125KB — key
+> material inside document bodies is now 270 bytes across the whole store.
 
 ## Paths
 
@@ -44,30 +80,34 @@ this order:
    seasons of everybody's placements and filtering in memory.
 3. **The parent stops being half of every key.**
 
-| path | what | adopted |
-|---|---|---|
-| `players/{playerId}` | the registry — global, a player spans seasons | yes |
-| `authors/{authorId}` | people — global, a person outlives a season | yes |
-| `seasons/{seasonId}` | the season stack | yes |
-| `boards/{boardId}` | board records: label, slug, season, owner | yes |
-| `boards/{boardId}/entries/{playerId}` | one board's placements | **yes** |
-| `evaluations/{authorId}__{playerId}` | remarks — deliberately global | flat, on purpose |
-| `seasons/{seasonId}/charts/{stage}/rows/{rowId}` | depth-chart rows | decided, not adopted |
-| `seasons/{seasonId}/charts/{stage}/bands/{band}` | reserve and cuts | decided, not adopted |
-| `seasons/{seasonId}/picks` | — | **no such thing**, see below |
-| `seasons/{seasonId}/draftState` | whose turn it is | decided, not adopted |
-| `seasons/{seasonId}/stages/{base}` | the prospect pool and its like | decided, not adopted |
-| `seasons/{seasonId}/setup` | the "already seeded" markers | decided, not adopted |
+| path | what |
+|---|---|
+| `players/{playerId}` | the registry — global, a player spans seasons |
+| `authors/{authorId}` | people — global, a person outlives a season |
+| `seasons/{seasonId}` | the season stack |
+| `boards/{boardId}` | board records: label, slug, season, owner |
+| `boards/{boardId}/entries/{playerId}` | one board's placements |
+| `evaluations/{playerId}/{kind}/{ownerId}/{seasonId}/{remarkId}` | one remark |
+| `seasons/{seasonId}/charts/{stage}/rows/{rowId}` | depth-chart rows |
+| `seasons/{seasonId}/charts/{stage}/bands/{band}` | reserve and cuts |
+| `seasons/{seasonId}/stages/{base}` | the prospect pool and its like |
+| `seasons/{seasonId}/setup/{season\|facts}` | the "already seeded" markers |
+| `draft_state/{seasonId}` | whose turn it is |
+| `seasons/{seasonId}/picks` | **no such thing** — see below |
 
-**Evaluations stay global on purpose.** They are stamped with the season they
-were written in rather than owned by it — what you learned about a player does
-not stop being true because the board is gone, and the player card reaches back
-through every season to show it. Nesting them under a season would make that
-read a fan-out over the whole stack.
+Every one of these is adopted. There are no composite document ids left: a
+document id is a player id, a row id, a stage name, or a six-character remark
+id, and nothing anywhere splits a key apart to find its parts.
 
-The unadopted paths are recorded so the choice is made once. Everything
-season-scoped still uses a flat collection with the season in the document key,
-which is the same information in a less convenient place.
+**Evaluations are not nested under a season**, even though the season is in
+their path. They are stamped with the season they were written in rather than
+owned by it — what you learned about a player does not stop being true because
+the board is gone, and the player card reaches back through every season to
+show it.
+
+**`draft_state` is the one thing still keyed flat by season.** It is a single
+small document per season, read only by exact id, so a path would buy a
+collection holding one record.
 
 ---
 
@@ -109,71 +149,70 @@ What is *not* here, and why:
 - `position` **stays**. It is an opinion, not a fact — two analysts labelling
   the same player DL and EDGE are not disagreeing about anything.
 
-### `evaluations` — ~1,350 bytes per scouted player per board
-
-Keyed `{ownerId}__{playerId}__{seasonId}__{s|w|n}` — the owner, the player,
-the season and the kind are all in the **address**, and the document is a map
-of short id to `[text, writtenAt]`.
+### `evaluations/{playerId}/{kind}/{ownerId}/{seasonId}` — one remark per document
 
 ```
-evaluations/a_dan__p_delane__s_2026__s
-  { "k3f9x2": ["Sticky man-cover corner", 1789408507998], … }
+db_evaluations/p_a11989cf…/n/b_9f9330c8…/s_1e66044d…
+  { "zjp9ay": { "t": "Natural thrower and a pro-ready timing…", "a": 1789418428790 } }
 ```
 
-The owner is the **author**, not the board, and the board only for consensus,
-which has no person behind it. A board is a snapshot of where somebody had a
-player at one moment; an evaluation is a running log that follows the analyst
-across every season he watches that player. That is also why these are not
-nested under a season: the player card reaches back through every season, and
-a season that has been scrapped must not take its remarks with it — so reads
-scan by key prefix rather than looping over the seasons the registry knows.
+No composite key anywhere in it. Every part of a remark's identity is something
+you select **by** — the card wants one player's, a section wants one kind's, a
+board wants one author's, the log wants one season's — so a key that always has
+to be taken apart again was earning nothing.
 
-It used to be one document per owner and player, holding every remark in one
-array with the season and the kind spelled out on each. Of roughly 209 bytes
-per remark, 116 said what the address can say once:
+The player comes first because of the read the app actually performs:
+`allRemarksFor` gathers what *everybody* has written about one player, and on a
+read-only card that stack is the card's content.
 
-| | was | now |
+`{kind}` is `s`/`w`/`n`. The owner is the **author**, and the board only for
+consensus, which has no person behind it — a board is a snapshot of where
+somebody had a player at one moment, while an evaluation is a running log that
+follows the analyst across every season. That is also why these are not nested
+under a season.
+
+**What it saves, and where it does not.** Each remark used to carry all three
+itself:
+
+| | was, per remark | now |
 |---|---|---|
-| remark uuid | 46 B | 8 B (six base36 chars, unique among a dozen siblings) |
-| `seasonId` on every remark | 52 B | in the address |
-| `kind` spelled out | 18 B | in the address |
-| the text itself | ~65 B | ~65 B |
+| remark uuid | 46 B | 8 B (six base36 chars, unique among siblings) |
+| `seasonId` | 52 B | in the path |
+| `kind` spelled out | 18 B | in the path |
 
-Measured on the shipped season: **2,505 bytes per player per board → 1,349**.
+116 bytes repeated on every remark, replaced by a ~133-byte key shared by the
+remarks in that bucket — about 28 bytes each when a bucket holds five. **A
+bucket holding one remark is a net loss**, paying 133 to save 116. It works
+because a kind-and-season bucket usually holds several.
 
-Old documents are read as they are and split into the new addresses on the
-first **write**. Deliberately not on read: converting on read would turn
-opening a player card into a write, which is how a quota fills while somebody
-is only looking.
+Old documents are read as they are and split on the first **write**. Converting
+on read would turn opening a player card into a write, which is how a quota
+fills while somebody is only looking.
 
-**At scale.** One season with 5 boards, 400 prospects and 250 of them scouted
-to the standard of the richest real evaluation — fourteen remarks:
+### `seasons/{seasonId}/charts/{stage}/rows|bands` — 13KB per season
 
-| | count | was | now |
-|---|---|---|---|
-| evaluations | 1,250 | 3,782,501 | **1,956,251** |
-| board entries | 2,000 | 307,436 | 307,436 |
-| players | 400 | 68,331 | 68,331 |
-| everything else | — | 17,561 | 17,561 |
-| **one season** | | **4.0 MB** | **2.24 MB** |
+A depth chart as rows, one drag writing one row. `{stage}` is `rosterState` or
+`fa_state_v1` — the 53-man roster and free agency's candidate board share the
+shape, so the stage is a path level rather than smuggled into the row id.
 
-Two such seasons now fit a 5MB quota where one did. After this, text is about
-55% of what remains and the rest is close to intrinsic — there is no third
-round of this available.
+A band document is its slots. It used to carry the whole key, its left half and
+its right half: 111 of 219 bytes.
 
-### `depth_rows` / `depth_bands` — 16KB, 54 documents
+These were a shared `depth_rows` collection keyed `{season}__{stage}__{rowId}`,
+and `readChart` gathered a chart by scanning it for a prefix. That is the test
+for whether a composite key earns its place — if something has to scan the key
+to collect a subset, the subset wanted to be a collection. Reading one roster
+meant walking every roster of every season.
 
-A depth chart as rows. One drag writes one row. A band document is its slots;
-it used to carry the whole key, its left half and its right half — 111 of 219
-bytes.
-
-### `draft_state` — 186 bytes, one per season
+### `draft_state/{seasonId}` — 186 bytes, one per season
 
 ```
-{ scope, value: { currentPick, ourPicksLeft, remotePicks } }
+{ value: { currentPick, ourPicksLeft, remotePicks } }
 ```
 
-Whose turn it is and which picks are ours. That is all the draft owns.
+Whose turn it is and which picks are ours. That is all the draft owns — the
+selections themselves are facts on the players. The body no longer repeats the
+season; that was the last document in the app stating its own address.
 
 ### `seasons`, `boards`, `authors`, `setup`, `stages` — under 2KB together
 
@@ -214,16 +253,40 @@ Saved 210KB.
 
 ## What it costs, all in
 
+Measured on a cold boot of the shipped season:
+
 | | before | now |
 |---|---|---|
-| whole store, cold | 686 KB | **287 KB** |
-| session export | 801 KB | 324 KB |
+| whole store | 686 KB | **285 KB** |
+| session export | 801 KB | ~324 KB |
 | board entry | 305 B | 112 B |
 | depth band | 219 B | 72 B |
-| evaluation (per player, per board) | 2,844 B | 1,349 B |
-| key material inside document bodies | 125,736 B | 318 B |
+| key material inside bodies | 125,736 B | **270 B** |
 | picks collection | 210 KB | gone |
 
-The remaining 27KB the audit still counts as "name and school on documents" is
-the `players` collection's own canonical copy. That is not duplication; it is
-where the name lives.
+The 27KB the audit still counts as "name and school on documents" is the
+`players` collection's own canonical copy. That is not duplication; it is where
+the name lives.
+
+## One season at full scale
+
+Five boards, 400 prospects, 250 of them scouted to the standard of the richest
+real evaluation — fourteen remarks each:
+
+| | count | bytes |
+|---|---|---|
+| evaluations | 1,250 (3,750 collections, 17,500 documents) | 2,126,250 |
+| board entries | 2,000 | 307,436 |
+| players | 400 | 68,331 |
+| charts, draft state, boards, authors, seasons, setup | — | 15,558 |
+| **one season** | | **2.52 MB** |
+
+Against a 5MB localStorage quota that is **two such seasons**, where the
+original layout fitted one at 4.0 MB.
+
+Evaluations are 84% of it, and 3,750 collection keys at ~133 characters are
+about 490KB — **21% of evaluations storage is the key text**. That is the price
+of having no composite key: the parts live in the path, repeated per collection
+instead of per document. The shallower alternative is one collection per player
+with `{kind}__{owner}__{season}__{remarkId}` as the document id — 400 keys
+instead of 3,750, and a composite key back.
