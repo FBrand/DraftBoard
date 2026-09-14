@@ -9,6 +9,7 @@ import PlayerInfoModal from './components/PlayerInfoModal';
 import Menu from './components/Menu';
 import HelpModal from './components/HelpModal';
 import SeasonModal from './components/SeasonModal';
+import SyncStatus from './components/SyncStatus';
 import { currentSeason, setViewedSeason } from './utils/boardRegistry';
 import { editRefusal } from './utils/permissions';
 import { repository } from './data/repository';
@@ -97,9 +98,13 @@ function App() {
   //
   // Against localStorage this fires on a full quota and almost never
   // otherwise. Over a network it is offline, a rule, a timeout: ordinary.
-  React.useEffect(() => repository.onWriteError(({ collection, error }) => {
+  // The toast fires once, when the queue gives up. Everything before that —
+  // one failure, a retry, three more waiting — is the sync indicator's job,
+  // because a message per failed attempt while offline is a machine gun.
+  React.useEffect(() => repository.onWriteError(({ op, error }) => {
+    if (op === 'commit' || op === 'set' || op === 'remove') return; // still queued, still trying
     setToast({
-      message: `That change could not be saved and has been undone. ${error?.message ?? collection}`,
+      message: `Could not save. Your work is still on screen and still here — use "Save to a file" to keep it. (${error?.message ?? 'write refused'})`,
       tone: 'error',
     });
   }), []);
@@ -166,6 +171,8 @@ function App() {
           {/* "Session" named one of the things in here. It now also holds the
               season stack, which outlives any session — a session is what you
               have open, a season is what the work belongs to. */}
+          {/* Only speaks up when there is something to say — see SyncStatus. */}
+          <SyncStatus onExport={handleSessionExport} />
           <Menu
             label="Manage"
             items={[

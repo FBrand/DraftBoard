@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { createRepository } from '../../src/data/repository';
 
 /**
@@ -53,118 +53,123 @@ describe('a write that succeeds', () => {
 });
 
 describe('a write that fails', () => {
-    it('puts back what was there', async () => {
-        const adapter = adapterThat();
-        const repo = createRepository(adapter);
-        adapter.seed('players', { p1: { name: 'Before' } });
-        await repo.ready('players');
-
-        adapter.set = () => Promise.reject(new Error('offline'));
-        await expect(repo.set('players', 'p1', { name: 'After' })).rejects.toThrow('offline');
-
-        expect(repo.get('players', 'p1').name).toBe('Before');
-    });
-
-    it('removes a document it had added, rather than leaving a ghost', async () => {
-        const adapter = adapterThat({ fail: true });
-        const repo = createRepository(adapter);
-
-        await expect(repo.set('players', 'p1', { name: 'Never Saved' })).rejects.toThrow();
-        expect(repo.get('players', 'p1')).toBeNull();
-    });
-
-    it('brings back a document whose deletion failed', async () => {
-        const adapter = adapterThat();
-        const repo = createRepository(adapter);
-        adapter.seed('players', { p1: { name: 'Still Here' } });
-        await repo.ready('players');
-
-        adapter.remove = () => Promise.reject(new Error('offline'));
-        await expect(repo.remove('players', 'p1')).rejects.toThrow();
-
+    it('KEEPS the change rather than putting it back', async () => {
+        // This is the opposite of what it used to do, on purpose. Rolling back
+        // is honest about storage and terrible for the person: the work is
+        // gone and the only notice is a message saying so. Offline is Tuesday.
+        const repo = createRepository(adapterThat({ fail: true }));
+        await repo.set('players', 'p1', { name: 'Still Here' });
         expect(repo.get('players', 'p1').name).toBe('Still Here');
     });
 
-    it('tells somebody, with enough to say what failed', async () => {
-        const adapter = adapterThat({ fail: true });
+    it('parks it and says how many are waiting', async () => {
+        const repo = createRepository(adapterThat({ fail: true }));
+        await repo.set('players', 'p1', { name: 'x' });
+
+        const sync = repo.syncState();
+        expect(sync.state).toBe('retrying');
+        expect(sync.pending).toBe(1);
+    });
+
+    it('keeps one pending write per document, not one per attempt', async () => {
+        // A player dragged five times while offline is one pending write
+        // holding the latest position, not five holding a history.
+        const repo = createRepository(adapterThat({ fail: true }));
+        await repo.set('players', 'p1', { name: 'one' });
+        await repo.set('players', 'p1', { name: 'two' });
+        await repo.set('players', 'p1', { name: 'three' });
+
+        expect(repo.syncState().pending).toBe(1);
+        expect(repo.get('players', 'p1').name).toBe('three');
+    });
+
+    it('lands the moment the store comes back', async () => {
+        const adapter = adapterThat();
         const repo = createRepository(adapter);
+        adapter.set = () => Promise.reject(new Error('offline'));
+
+        await repo.set('players', 'p1', { name: 'Fernando Mendoza' });
+        expect(repo.syncState().state).toBe('retrying');
+
+        // The store recovers, and the queue is emptied by hand the way the
+        // "Try again" button does it.
+        const store = new Map();
+        adapter.set = async (c, id, doc) => { store.set(id, doc); };
+        await repo.retryNow();
+
+        expect(repo.syncState().state).toBe('saved');
+        expect(store.get('p1').name).toBe('Fernando Mendoza');
+    });
+
+    it('tells somebody, with enough to say what failed', async () => {
+        const repo = createRepository(adapterThat({ fail: true }));
         const seen = [];
         repo.onWriteError(e => seen.push(e));
 
-        await expect(repo.set('players', 'p1', { name: 'x' })).rejects.toThrow();
+        await repo.set('players', 'p1', { name: 'x' });
 
-        expect(seen).toHaveLength(1);
         expect(seen[0].collection).toBe('players');
         expect(seen[0].id).toBe('p1');
-        expect(seen[0].op).toBe('set');
         expect(seen[0].error.message).toBe('write rejected');
     });
 
-    it('notifies subscribers of the rollback, so the screen follows it back', async () => {
-        const adapter = adapterThat({ fail: true });
-        const repo = createRepository(adapter);
-        const seen = vi.fn();
-        repo.subscribe('players', seen);
+    it('announces the sync state as it changes', async () => {
+        const repo = createRepository(adapterThat({ fail: true }));
+        const states = [];
+        repo.onSyncChange(s => states.push(s.state));
 
-        await expect(repo.set('players', 'p1', { name: 'x' })).rejects.toThrow();
+        await repo.set('players', 'p1', { name: 'x' });
 
-        // Once for the optimistic write, once for putting it back.
-        expect(seen.mock.calls.length).toBeGreaterThanOrEqual(2);
+        expect(states[0]).toBe('saved');          // on subscribe
+        expect(states).toContain('saving');
+        expect(states[states.length - 1]).toBe('retrying');
     });
 
     it('stops listening when told to', async () => {
-        const adapter = adapterThat({ fail: true });
-        const repo = createRepository(adapter);
+        const repo = createRepository(adapterThat({ fail: true }));
         const seen = [];
         const off = repo.onWriteError(e => seen.push(e));
         off();
 
-        await expect(repo.set('players', 'p1', { name: 'x' })).rejects.toThrow();
+        await repo.set('players', 'p1', { name: 'x' });
         expect(seen).toHaveLength(0);
     });
 });
 
 describe('a batch that fails', () => {
-    it('puts every document in it back, not just the first', async () => {
-        const adapter = adapterThat();
-        const repo = createRepository(adapter);
-        adapter.seed('players', { p1: { name: 'One' }, p2: { name: 'Two' } });
-        await repo.ready('players');
-
-        adapter.commit = () => Promise.reject(new Error('offline'));
-        await expect(repo.commit('players', [
-            { id: 'p1', doc: { name: 'One Changed' } },
-            { id: 'p2', doc: { name: 'Two Changed' } },
-            { id: 'p3', doc: { name: 'Three Added' } },
-        ])).rejects.toThrow();
+    it('keeps every document in it, and queues them one by one', async () => {
+        // Individually, so one poisoned document cannot hold the rest hostage
+        // for ever — the store may well take the others.
+        const repo = createRepository(adapterThat({ fail: true }));
+        await repo.commit('players', [
+            { id: 'p1', doc: { name: 'One' } },
+            { id: 'p2', doc: { name: 'Two' } },
+        ]);
 
         expect(repo.get('players', 'p1').name).toBe('One');
         expect(repo.get('players', 'p2').name).toBe('Two');
-        expect(repo.get('players', 'p3')).toBeNull();
+        expect(repo.syncState().pending).toBe(2);
     });
 
-    it('puts back a deletion that was part of the batch', async () => {
+    it('queues a deletion as a deletion', async () => {
         const adapter = adapterThat();
         const repo = createRepository(adapter);
         adapter.seed('players', { p1: { name: 'One' } });
         await repo.ready('players');
 
         adapter.commit = () => Promise.reject(new Error('offline'));
-        await expect(repo.commit('players', [{ id: 'p1', doc: null }])).rejects.toThrow();
+        await repo.commit('players', [{ id: 'p1', doc: null }]);
 
-        expect(repo.get('players', 'p1').name).toBe('One');
+        expect(repo.get('players', 'p1')).toBeNull();
+        expect(repo.syncState().pending).toBe(1);
+
+        const removed = [];
+        adapter.remove = async (c, id) => { removed.push(id); };
+        await repo.retryNow();
+        expect(removed).toEqual(['p1']);
     });
 });
 
-/**
- * "Nothing here" and "not loaded yet" are different answers.
- *
- * To every caller they are the same empty array, and against a local adapter
- * they always will be — loadSync fills the cache on the spot. Against a remote
- * one a caller that cannot tell them apart reports the wrong one: the add form
- * would say "no matching players" while the registry was still arriving, and
- * let somebody add a duplicate of a player it had simply not seen yet.
- */
 describe('knowing whether a collection can be read yet', () => {
     const remoteish = () => ({
         name: 'remote',

@@ -89,7 +89,7 @@ for (const size of SIZES) {
             await page.waitForTimeout(2200);
             const found = await page.evaluate(AUDIT);
             const problems = Object.entries(found)
-                .filter(([k, v]) => Array.isArray(v) && v.length)
+                .filter(([, v]) => Array.isArray(v) && v.length)
                 .map(([k, v]) => `${k}=${JSON.stringify([...new Set(v)].slice(0, 4))}`);
             console.log(`AUDIT ${size.name} ${tab} counts=${JSON.stringify(found.counts)} bodyX=${found.bodyScrollsX}` +
                 (problems.length ? ' ' + problems.join(' ') : ''));

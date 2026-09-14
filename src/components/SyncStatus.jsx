@@ -1,0 +1,57 @@
+import React, { useEffect, useState } from 'react';
+import { repository } from '../data/repository';
+
+/**
+ * Whether your work has actually been saved.
+ *
+ * The app writes to memory first and to storage after, so the screen is always
+ * instant and is sometimes ahead of the truth. That gap was invisible: a
+ * refused write showed a message once and then nothing, and there was no way
+ * to ask "am I saved?" — the only honest answer being a reload, which is the
+ * one thing you must not do when a write has not landed.
+ *
+ * Four states, and only two of them say anything:
+ *
+ *   saved     nothing to say, so it says almost nothing
+ *   saving    briefly, in passing
+ *   retrying  N changes are on screen and not in storage, and it is trying
+ *   failed    it has stopped trying — and THAT is where the export lives,
+ *             because a session file is the one way to get the work off this
+ *             machine without the backend being involved at all
+ */
+export default function SyncStatus({ onExport }) {
+    const [sync, setSync] = useState(() => repository.syncState());
+
+    useEffect(() => repository.onSyncChange(setSync), []);
+
+    if (sync.state === 'saved') return null;
+
+    const label = {
+        saving: 'Saving…',
+        retrying: `${sync.pending} unsaved — retrying`,
+        failed: `${sync.pending} unsaved — could not save`,
+    }[sync.state];
+
+    return (
+        <div className={`sync-status sync-status--${sync.state}`} role="status">
+            <span className="sync-dot" aria-hidden="true" />
+            <span className="sync-label">{label}</span>
+
+            {(sync.state === 'retrying' || sync.state === 'failed') && (
+                <>
+                    {/* Offered while it is still trying, not only once it has
+                        given up: somebody who knows the connection is back
+                        should not have to sit out a backoff, and somebody who
+                        wants their work in a file should not have to wait for
+                        the app to despair first. */}
+                    <button type="button" className="ap-link" onClick={() => repository.retryNow()}>
+                        Try again
+                    </button>
+                    <button type="button" className="ap-link" onClick={onExport}>
+                        Save to a file
+                    </button>
+                </>
+            )}
+        </div>
+    );
+}

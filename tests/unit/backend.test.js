@@ -92,13 +92,17 @@ describe('what changes without loadSync', () => {
 });
 
 describe('a backend that refuses writes', () => {
-    it('rolls back and reports, whichever adapter it is', async () => {
+    it('keeps the change and queues it, whichever adapter it is', async () => {
         const repo = createRepository(createMemoryAdapter({ failWrites: true }));
         const seen = [];
         repo.onWriteError(e => seen.push(e));
 
-        await expect(repo.set('players', 'p1', { name: 'x' })).rejects.toThrow();
-        expect(repo.get('players', 'p1')).toBeNull();
+        await repo.set('players', 'p1', { name: 'x' });
+
+        // Kept, not rolled back: losing the work is the failure being guarded
+        // against, not an acceptable response to it.
+        expect(repo.get('players', 'p1').name).toBe('x');
+        expect(repo.syncState()).toMatchObject({ state: 'retrying', pending: 1 });
         expect(seen[0].collection).toBe('players');
     });
 });

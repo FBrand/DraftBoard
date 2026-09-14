@@ -150,20 +150,61 @@ export function createRepository(adapter = localAdapter) {
         notify(collection);
     }
 
-    // ── Writes that can fail ──────────────────────────────────────────────
+    // ── Writes that can fail, and are not thrown away ─────────────────────
     //
-    // A write updates memory first, notifies, and reaches the adapter after —
-    // which is right for a UI that must not wait, and a lie if the write then
-    // fails. Against localStorage it could only fail on a full quota, and the
-    // adapter swallowed that: the app had already been told it worked.
+    // A write updates memory first, notifies, and reaches the store after —
+    // right for a UI that must not wait, and a lie if the store then refuses.
     //
-    // Over a network it will fail routinely — offline, a rule rejecting it, a
-    // timeout. So a failed write puts back what was there before and says so.
-    // The put-back is why the previous value is captured before the change
-    // rather than re-read after: by then it is the new one.
-    const writeErrorListeners = new Set();
+    // The first version of this put the local change BACK when a write failed.
+    // That is honest about storage and terrible for the person: the work is
+    // gone, and the only notice is a message saying so. Against localStorage
+    // it barely mattered — a full quota is the only way to fail. Over a
+    // network, offline is Tuesday.
+    //
+    // So a refused write is KEPT. The change stays in memory and on screen,
+    // goes into a queue, and is retried with a widening gap. What is on screen
+    // is the truth about what you did; the sync state is the truth about
+    // whether anybody else can see it yet, and those are two different facts
+    // that deserve two different places to live.
+    //
+    // Only when the queue gives up does the app admit defeat — and then it
+    // says so loudly and offers the work as a file, because a session export
+    // is the one escape hatch that does not need the backend to be working.
+    const BACKOFF_MS = [1000, 2000, 4000, 8000, 15000];
 
-    /** Notified when a write did not reach the adapter. Returns an unsubscribe. */
+    const pending = new Map();      // key -> { collection, id, doc, op, attempts }
+    const syncListeners = new Set();
+    const writeErrorListeners = new Set();
+    let retryTimer = null;
+    let lastError = null;
+    let gaveUp = false;
+    let inFlight = 0;
+
+    const keyOf = (collection, id) => `${collection}\u0000${id}`;
+
+    /** What the UI shows: are we saved, saving, behind, or beaten. */
+    function syncState() {
+        if (gaveUp) return { state: 'failed', pending: pending.size, error: lastError };
+        if (pending.size) return { state: 'retrying', pending: pending.size, error: lastError };
+        if (inFlight) return { state: 'saving', pending: 0, error: null };
+        return { state: 'saved', pending: 0, error: null };
+    }
+
+    function announce() {
+        const snapshot = syncState();
+        syncListeners.forEach(fn => {
+            try { fn(snapshot); } catch { /* a listener must not break a write */ }
+        });
+    }
+
+    /** Called whenever the sync state changes. Returns an unsubscribe. */
+    function onSyncChange(fn) {
+        syncListeners.add(fn);
+        try { fn(syncState()); } catch { /* ignore */ }
+        return () => syncListeners.delete(fn);
+    }
+
+    /** Notified when a write did not reach the store. Returns an unsubscribe. */
     function onWriteError(fn) {
         writeErrorListeners.add(fn);
         return () => writeErrorListeners.delete(fn);
@@ -171,33 +212,98 @@ export function createRepository(adapter = localAdapter) {
 
     function reportWriteError(detail) {
         writeErrorListeners.forEach(fn => {
-            try { fn(detail); } catch { /* a listener must not break the rollback */ }
+            try { fn(detail); } catch { /* a listener must not break the queue */ }
         });
     }
 
     /**
-     * Runs an adapter write, and undoes the local change if it is rejected.
+     * Parks a write to try again.
      *
-     * `restore` is applied rather than a whole-collection snapshot being put
-     * back: another write may have landed in between, and reverting the
-     * collection would discard it too.
+     * Keyed by document, so a player dragged five times while offline is one
+     * pending write holding the latest position rather than five holding a
+     * history nobody asked for. The attempt count follows the DOCUMENT, so a
+     * document that keeps failing still runs out of patience.
      */
-    function guard(promise, { collection, restore, op, id }) {
-        return Promise.resolve(promise).catch(err => {
-            restore();
-            notify(collection);
-            reportWriteError({ collection, id, op, error: err });
-            throw err;
-        });
+    function enqueue({ collection, id, doc, op }) {
+        const key = keyOf(collection, id);
+        const attempts = pending.get(key)?.attempts ?? 0;
+        pending.set(key, { collection, id, doc, op, attempts });
+        scheduleRetry();
+        announce();
+    }
+
+    function scheduleRetry() {
+        if (retryTimer || !pending.size || gaveUp) return;
+        const worst = Math.min(...[...pending.values()].map(w => w.attempts));
+        const wait = BACKOFF_MS[Math.min(worst, BACKOFF_MS.length - 1)];
+        retryTimer = setTimeout(() => { retryTimer = null; flush(); }, wait);
+    }
+
+    /** Tries everything parked. Called on a timer, and by hand from the UI. */
+    async function flush() {
+        if (!pending.size) return;
+        gaveUp = false;
+        const batch = [...pending.values()];
+
+        for (const write of batch) {
+            const key = keyOf(write.collection, write.id);
+            try {
+                await (write.doc === null
+                    ? adapter.remove(write.collection, write.id)
+                    : adapter.set(write.collection, write.id, write.doc));
+                pending.delete(key);
+                lastError = null;
+            } catch (err) {
+                lastError = err?.message ?? String(err);
+                const attempts = write.attempts + 1;
+                pending.set(key, { ...write, attempts });
+                // Out of patience. The change is still here and still on
+                // screen — what stops is the pretending that it will land.
+                if (attempts >= BACKOFF_MS.length) gaveUp = true;
+            }
+        }
+
+        announce();
+        if (pending.size && !gaveUp) scheduleRetry();
+        if (gaveUp) {
+            reportWriteError({
+                collection: batch[0]?.collection ?? null,
+                pending: pending.size,
+                error: new Error(lastError ?? 'write refused'),
+            });
+        }
+    }
+
+    /** Try again now, from a button. */
+    function retryNow() {
+        gaveUp = false;
+        if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; }
+        announce();
+        return flush();
+    }
+
+    /**
+     * Runs a write, and parks it rather than losing it when it is refused.
+     *
+     * The local change is NOT put back. That is the whole point: the screen
+     * keeps what you did, and the queue keeps trying to make it true.
+     */
+    function attempt(collection, id, doc, op, run) {
+        inFlight += 1;
+        announce();
+        return Promise.resolve(run())
+            .then(() => { lastError = null; })
+            .catch(err => {
+                lastError = err?.message ?? String(err);
+                enqueue({ collection, id, doc, op });
+                reportWriteError({ collection, id, op, error: err });
+            })
+            .finally(() => { inFlight = Math.max(0, inFlight - 1); announce(); });
     }
 
     function set(collection, id, doc) {
-        const before = get(collection, id);
         applyLocal(collection, id, doc);
-        return guard(adapter.set(collection, id, doc), {
-            collection, id, op: 'set',
-            restore: () => applyLocal(collection, id, before ?? null),
-        });
+        return attempt(collection, id, doc, 'set', () => adapter.set(collection, id, doc));
     }
 
     function update(collection, id, patch) {
@@ -206,12 +312,8 @@ export function createRepository(adapter = localAdapter) {
     }
 
     function remove(collection, id) {
-        const before = get(collection, id);
         applyLocal(collection, id, null);
-        return guard(adapter.remove(collection, id), {
-            collection, id, op: 'remove',
-            restore: () => { if (before) applyLocal(collection, id, before); },
-        });
+        return attempt(collection, id, null, 'remove', () => adapter.remove(collection, id));
     }
 
     /** Several documents in one go — one adapter round trip, one notify. */
@@ -225,19 +327,25 @@ export function createRepository(adapter = localAdapter) {
         cache.set(collection, next);
         notify(collection);
 
-        // A batch is one write, so it fails as one: every document in it goes
-        // back, not the ones that happened to be attempted first.
-        const before = changes.map(c => ({ id: c.id, doc: current[c.id] ?? null }));
         const write = adapter.commit
             ? adapter.commit(collection, changes)
             : Promise.all(changes.map(c => (c.doc === null
                 ? adapter.remove(collection, c.id)
                 : adapter.set(collection, c.id, c.doc))));
 
-        return guard(write, {
-            collection, id: null, op: 'commit',
-            restore: () => before.forEach(({ id, doc }) => applyLocal(collection, id, doc)),
-        });
+        inFlight += 1;
+        announce();
+        return Promise.resolve(write)
+            .then(() => { lastError = null; })
+            .catch(err => {
+                lastError = err?.message ?? String(err);
+                // A batch that failed becomes individual pending writes: the
+                // store may take some of them, and one poisoned document
+                // should not hold the rest hostage for ever.
+                changes.forEach(c => enqueue({ collection, id: c.id, doc: c.doc, op: c.doc === null ? 'remove' : 'set' }));
+                reportWriteError({ collection, id: null, op: 'commit', error: err });
+            })
+            .finally(() => { inFlight = Math.max(0, inFlight - 1); announce(); });
     }
 
     function clear(collection) {
@@ -260,7 +368,11 @@ export function createRepository(adapter = localAdapter) {
         else { cache.delete(collection); loading.delete(collection); }
     }
 
-    return { ready, ensureLoaded, docs, isLoaded, get, all, query, set, update, remove, commit, clear, subscribe, invalidate, onWriteError, adapter };
+    return {
+        ready, ensureLoaded, docs, isLoaded, get, all, query,
+        set, update, remove, commit, clear, subscribe, invalidate,
+        onWriteError, onSyncChange, syncState, retryNow, adapter,
+    };
 }
 
 // The app's one repository, pointed at whatever VITE_BACKEND names. Chosen

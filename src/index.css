@@ -4160,3 +4160,44 @@ body.export-mode .card-glow {
 @media (max-width: 640px) {
   .up-position-pair { grid-template-columns: 1fr; gap: 0; }
 }
+
+/* ── Whether your work is actually saved ───────────────────────────────────
+   The app writes to memory first and to storage after, so the screen can be
+   ahead of the truth. That gap used to be invisible: one message, then
+   nothing, and no way to ask. Silent when there is nothing to say. */
+.sync-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+.sync-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.sync-status--saving { color: var(--text-dim); }
+.sync-status--saving .sync-dot { background: var(--text-dim); }
+
+.sync-status--retrying { color: var(--chiefs-gold); background: rgba(255, 184, 28, 0.12); }
+.sync-status--retrying .sync-dot { background: var(--chiefs-gold); animation: sync-pulse 1.2s ease-in-out infinite; }
+
+.sync-status--failed { color: var(--chiefs-red); background: rgba(227, 24, 55, 0.14); }
+.sync-status--failed .sync-dot { background: var(--chiefs-red); }
+
+.sync-status .ap-link { font-size: 0.72rem; }
+
+@keyframes sync-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sync-status--retrying .sync-dot { animation: none; }
+}
