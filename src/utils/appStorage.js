@@ -30,7 +30,6 @@ const EXACT = [
     'position_value_v1',       // appSettings.js
     'session_team_v1',         // appSettings.js
     'viewed_season_v1',        // which season is open (boardRegistry.js)
-    'season_init_v1',          // which seasons have been set up (seasonInit.js)
 ];
 
 /**

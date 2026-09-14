@@ -22,7 +22,8 @@ import { addProspect, savePlayerEdit, deletePlayer, restorePlayer, hiddenPlayers
 import * as athleticMatrix from '../utils/athleticMatrix';
 import * as playerRegistry from '../utils/playerRegistry';
 
-import { createBoard, listBoards, boardBySlug, boardById, renameBoard, listSeasons, currentSeason, isReadOnly } from '../utils/boardRegistry';
+import { createBoard, listBoards, boardBySlug, boardById, renameBoard, listSeasons, currentSeason } from '../utils/boardRegistry';
+import { canEdit } from '../utils/permissions';
 import { ownerIdFor, remarksFor, addRemark, removeRemark } from '../utils/evaluations';
 
 const TAG_FILTERS = [
@@ -91,7 +92,7 @@ export default function ScoutingView({ players }) {
     // An archived board is a record of what somebody thought at the time. The
     // store refuses the write either way; this is what stops the controls
     // offering a change that will not happen.
-    const readOnly = isReadOnly();
+    const readOnly = !canEdit({ kind: 'placement', ownerId: boardById(activeBoard)?.ownerId });
     // How the middle column is grouped. A view preference, not board data —
     // it changes how the same players are read, never where they sit.
     const [groupBy, setGroupBy] = useState('position');

@@ -9,7 +9,9 @@ import PlayerInfoModal from './components/PlayerInfoModal';
 import Menu from './components/Menu';
 import HelpModal from './components/HelpModal';
 import SeasonModal from './components/SeasonModal';
-import { viewedSeason, currentSeason, setViewedSeason, isReadOnly } from './utils/boardRegistry';
+import { currentSeason, setViewedSeason } from './utils/boardRegistry';
+import { editRefusal } from './utils/permissions';
+import { repository } from './data/repository';
 import Toast from './components/Toast';
 import { ConfirmDialog } from './components/Dialogs';
 import { exportSession, importSession, sessionFilename } from './utils/appSession';
@@ -84,6 +86,23 @@ function App() {
   // agency out of storage — waiting for someone to open the tab meant the
   // pipeline had nothing to pull from until they did.
   React.useEffect(() => { faState.ensureSeeded(); }, []);
+
+  // A write that did not land.
+  //
+  // The repository shows a change immediately and reaches the store after,
+  // which is right for a UI that must not wait and a lie if the store then
+  // refuses. It puts the change back — so the screen is correct again — but
+  // silently, and a player sliding back to where he was with no explanation
+  // reads as the app being broken rather than as a failed save.
+  //
+  // Against localStorage this fires on a full quota and almost never
+  // otherwise. Over a network it is offline, a rule, a timeout: ordinary.
+  React.useEffect(() => repository.onWriteError(({ collection, error }) => {
+    setToast({
+      message: `That change could not be saved and has been undone. ${error?.message ?? collection}`,
+      tone: 'error',
+    });
+  }), []);
 
   const handleSessionExport = () => {
     const blob = new Blob([exportSession()], { type: 'application/json' });
@@ -254,11 +273,13 @@ function App() {
       <Toast message={toast?.message} tone={toast?.tone} onDismiss={dismissToast} />
       <HelpModal isOpen={helpOpen} onClose={() => setHelpOpen(false)} />
 
-      {isReadOnly() && (
+      {/* The banner says WHY, because a stage that silently refuses to change
+          looks broken. The reason comes from the same function the stores ask,
+          so the explanation cannot drift from the rule. */}
+      {editRefusal({ kind: 'stage' }) && (
         <div className="season-banner">
           <span>
-            Viewing <strong>{viewedSeason()?.year}</strong> — read-only. Placements, the
-            roster and the draft are the record of that season. Evaluations can still be added.
+            {editRefusal({ kind: 'stage' }).message} Evaluations can still be added.
           </span>
           <button
             type="button"

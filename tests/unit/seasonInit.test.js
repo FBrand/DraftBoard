@@ -130,3 +130,37 @@ describe('forgetting a scrapped season', () => {
         expect(isInitialised('s1')).toBe(true);
     });
 });
+
+/**
+ * The marker lives where the data does.
+ *
+ * It was a localStorage key, which is the right answer for exactly one
+ * backend. Point the app at a shared store and every visitor arrives with an
+ * empty local marker, decides the season was never set up, and seeds it again
+ * over the top of everybody's work.
+ */
+describe('where "already set up" is recorded', () => {
+    it('is a document beside the data, not a key in this browser', () => {
+        initialiseSeason('s1');
+
+        expect(repository.get('setup', 'season__s1')).toBeTruthy();
+        expect(localStorage.getItem('season_init_v1')).toBeNull();
+    });
+
+    it('is seen by a client that has never run the import', () => {
+        // The same store, a different browser: it must not seed again.
+        initialiseSeason('s1');
+        const marker = repository.get('setup', 'season__s1');
+
+        repository.invalidate();
+        repository.set('setup', 'season__s1', marker);
+
+        expect(isInitialised('s1')).toBe(true);
+        expect(initialiseSeason('s1')).toBe(false);
+    });
+
+    it('records when it ran, which is the only question worth asking of it later', () => {
+        initialiseSeason('s1');
+        expect(repository.get('setup', 'season__s1').at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    });
+});

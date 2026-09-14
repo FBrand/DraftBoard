@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { readStage, removeStage, openStages } from '../data/stageStore';
 import { openDepthCharts } from '../data/depthChartStore';
 import { readDraft, writeDraft, hasDraft, openDraft } from '../data/draftStore';
+import { openSetup } from '../utils/seasonInit';
 import { viewedSeason, seasonIsSeeded } from '../utils/boardRegistry';
 
 // Which season's copy of this stage. Read at call time, never cached: the
@@ -160,7 +161,7 @@ export const useDraftState = () => {
                 // whose file was renamed, or one made in the app, could not be
                 // linked to at all. The path is gone; the board knows its own
                 // file.
-                await Promise.all([openBoards(), openStages(), openDepthCharts(), openDraft()]);
+                await Promise.all([openBoards(), openStages(), openDepthCharts(), openDraft(), openSetup()]);
                 const slug = params.get('board');
                 const board = slug ? boardBySlug(slug) : null;
                 const fromBoard = board?.rankingsFile ? `${base}${board.rankingsFile}` : null;

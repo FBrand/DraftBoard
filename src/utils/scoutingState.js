@@ -29,7 +29,8 @@ import { buildNameIndex, findMatchingIndex } from './nameMatcher';
 import { parseTier, tierLabel, spaceEvenly } from './boardRanking';
 import { boardStateKey } from './appStorage';
 import { readEntries, writeEntries, hasEntries, openBoardEntries } from '../data/boardEntries';
-import { boardById, isReadOnly, BOARDS_COLLECTION } from './boardRegistry';
+import { boardById, BOARDS_COLLECTION } from './boardRegistry';
+import { canEdit } from './permissions';
 import { repository } from '../data/repository';
 import { ownerIdFor, remarksFor, REMARK_KINDS } from './evaluations';
 
@@ -268,7 +269,7 @@ export function saveState(boardId, state) {
     // An archived season is a record, not a workspace. Guarded HERE rather than
     // on each control, because one forgotten button is all it takes and this is
     // the single door every change goes through.
-    if (isReadOnly()) return;
+    if (!canEdit({ kind: 'placement', ownerId: boardById(boardId)?.ownerId })) return;
 
     // One document per player, and only the ones that moved — see
     // data/boardEntries.js. The board-level "seeded" flag is a fact about the

@@ -30,26 +30,46 @@
 import { readStage, writeStage } from '../data/stageStore';
 import { writeDraft } from '../data/draftStore';
 import { STATE_VERSION as ROSTER_VERSION } from './rosterState';
+import { repository } from '../data/repository';
 
-const DONE_KEY = 'season_init_v1';
+/**
+ * The marker lives in the TARGET store, not in this browser.
+ *
+ * It was a localStorage key, which is the right answer for exactly one
+ * backend. Point the app at a shared one and every visitor arrives with an
+ * empty local marker, decides the season has never been set up, and seeds it
+ * again over the top of everybody's work. The first client to run should seed,
+ * and no client after it should repeat.
+ *
+ * So it is a document beside the data it describes. Whoever gets there first
+ * writes it; everybody else reads it and does nothing.
+ */
+export const SETUP = 'setup';
 
-const read = () => {
-    try { return JSON.parse(localStorage.getItem(DONE_KEY) || '[]'); } catch { return []; }
-};
+const markerId = (seasonId) => `season__${seasonId}`;
 
-/** Whether this season's stages have been set up. */
+/** Whether this season's stages have been set up — by anyone, anywhere. */
 export function isInitialised(seasonId) {
-    return !!seasonId && read().includes(seasonId);
+    return !!seasonId && !!repository.get(SETUP, markerId(seasonId));
 }
 
 export function markInitialised(seasonId) {
     if (!seasonId || isInitialised(seasonId)) return;
-    try { localStorage.setItem(DONE_KEY, JSON.stringify([...read(), seasonId])); } catch { /* ignore */ }
+    repository.set(SETUP, markerId(seasonId), {
+        id: markerId(seasonId),
+        seasonId,
+        at: new Date().toISOString(),
+    });
+}
+
+/** Loads the markers. Must resolve before anything asks. */
+export function openSetup() {
+    return repository.ready(SETUP);
 }
 
 /** Forgets one season, so scrapping it does not leave its id behind forever. */
 export function forgetSeason(seasonId) {
-    try { localStorage.setItem(DONE_KEY, JSON.stringify(read().filter(id => id !== seasonId))); } catch { /* ignore */ }
+    repository.remove(SETUP, markerId(seasonId));
 }
 
 const EMPTY_ROSTER = () => ({

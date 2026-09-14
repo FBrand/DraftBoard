@@ -13,7 +13,8 @@
 import { defaultState, parseCSV, exportCSV } from './rosterState';
 import { readStage, removeStage } from '../data/stageStore';
 import { readChart, writeChart, hasChart } from '../data/depthChartStore';
-import { viewedSeason, isReadOnly, seasonIsSeeded } from './boardRegistry';
+import { viewedSeason, seasonIsSeeded } from './boardRegistry';
+import { canEdit } from './permissions';
 
 // Which season's copy of this stage. Read at call time, never cached: the
 // answer changes when somebody switches season, and a stage holding the
@@ -113,7 +114,7 @@ export function saveState(state) {
     // An archived season is a record, not a workspace. Guarded HERE rather than
     // on each control, because one forgotten button is all it takes and this is
     // the single door every change goes through.
-    if (isReadOnly()) return;
+    if (!canEdit({ kind: 'stage' })) return;
     writeChart(STORAGE_KEY, seasonId(), state);
 }
 

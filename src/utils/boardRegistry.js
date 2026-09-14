@@ -88,6 +88,12 @@ export async function openBoards() {
             slug: b.slug,
             label: b.label,
             authorId,
+            // Who may WRITE it, as opposed to whose opinion it is. Null means
+            // nobody has claimed it, which is every board until somebody signs
+            // in — and the shipped boards were made before there was anyone to
+            // own them. It is here now because adding a field to live data is a
+            // migration and adding it to a default is a line.
+            ownerId: null,
             seasonId: season.id,
             rankingsFile: b.rankingsFile,
             order,
@@ -323,7 +329,7 @@ export async function scrapSeason() {
     return { ok: true, dropped: outgoing, now: previous, boardsRemoved: doomed.length };
 }
 
-export async function createBoard({ label, authorName = '' } = {}) {
+export async function createBoard({ label, authorName = '', ownerId = null } = {}) {
     const name = String(label ?? '').trim();
     if (!name) return null;
 
@@ -353,6 +359,7 @@ export async function createBoard({ label, authorName = '' } = {}) {
         slug,
         label: name,
         authorId,
+        ownerId: ownerId ?? null,
         seasonId: season.id,
         // Boards made in the app have no file behind them — they are seeded
         // from whatever is imported into them, or start empty.
