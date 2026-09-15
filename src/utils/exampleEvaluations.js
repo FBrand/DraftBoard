@@ -23,7 +23,7 @@
 import { parseRankings } from './dataParser';
 import { resolveAll } from './playerRegistry';
 import { listBoards } from './boardRegistry';
-import { ownerIdFor, remarksFor, addRemark } from './evaluations';
+import { ownerIdFor, remarksFor, addRemark, openEvaluations } from './evaluations';
 import { currentSeason } from './boardRegistry';
 import { shouldSeed } from './appInit';
 
@@ -54,6 +54,12 @@ export async function seedExampleEvaluations() {
         rows.map(r => ({ name: r.name, position: r.position, school: r.school })),
         { create: false },
     );
+
+    // What is already there has to be READABLE before "nothing is there" can
+    // mean anything. These seven paths are exactly the ones this example would
+    // write, and writing over an analyst's own remarks is the one thing it
+    // must never do.
+    await openEvaluations(ids.filter(Boolean));
 
     const seasonId = currentSeason()?.id ?? null;
     let written = 0;

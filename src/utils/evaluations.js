@@ -90,8 +90,25 @@ function readHandle(handle) {
     return { seasonId: seasonOf(season), kind: CHAR_KIND[char], index: Number(index) };
 }
 
-/** Nothing to open: a player's remarks load on demand, under the player. */
-export async function openEvaluations() {}
+/**
+ * Loads the remarks for the players named, so a synchronous read can answer.
+ *
+ * Takes ids rather than opening everything, because a remark collection is PER
+ * PLAYER — `evaluations/{player}/remarks` — and there are seven hundred
+ * players. Opening them all would be seven hundred reads to show one card.
+ *
+ * It used to be an empty function, on the reasoning that remarks "load on
+ * demand under the player". Against localStorage that is true; `loadSync` fills
+ * a collection the instant anything asks. Against a store that answers later,
+ * `remarksFor` returns nothing for a player an analyst has written about — and
+ * the shipped worked example then seeds itself into the same paths, where the
+ * local overlay makes it WIN. A viewer opened a card and read the example
+ * instead of the expert.
+ */
+export async function openEvaluations(playerIds) {
+    const ids = playerIds == null ? [] : [].concat(playerIds).filter(Boolean);
+    await Promise.all(ids.map(id => repository.ready(remarksPath(id))));
+}
 
 const docFor = (playerId, ownerId) => repository.get(remarksPath(playerId), ownerId) ?? {};
 

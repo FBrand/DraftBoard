@@ -26,7 +26,7 @@ import { createBoard, listBoards, boardBySlug, boardById, renameBoard, listSeaso
 import { repository } from '../data/repository';
 import { entriesPath } from '../data/boardEntries';
 import { canEdit } from '../utils/permissions';
-import { ownerIdFor, remarksFor, addRemark, removeRemark } from '../utils/evaluations';
+import { ownerIdFor, remarksFor, addRemark, removeRemark, openEvaluations } from '../utils/evaluations';
 
 const TAG_FILTERS = [
     { id: 'all', label: 'All' },
@@ -173,6 +173,21 @@ export default function ScoutingView({ players }) {
     const [remarkTick, setRemarkTick] = useState(0);
     const seasons = listSeasons();
     const ownerId = ownerIdFor(boardById(activeBoard));
+    // A remark collection is per player and is not loaded until somebody asks
+    // for that player. Against localStorage the synchronous read below answers
+    // straight away; against a store that answers later it returns nothing, and
+    // the card shows an analyst no remarks on a player he has written about.
+    // Asking, then bumping the tick, is what the tick is for.
+    useEffect(() => {
+        const id = selectedName
+            ? effectivePlayers.find(p => p.name === selectedName)?.id
+            : null;
+        if (!id) return undefined;
+        let cancelled = false;
+        openEvaluations([id]).then(() => { if (!cancelled) setRemarkTick(t => t + 1); });
+        return () => { cancelled = true; };
+    }, [selectedName, effectivePlayers]);
+
     const selectedRemarks = useMemo(
         () => (ownerId && selectedName ? remarksFor(ownerId, effectivePlayers.find(p => p.name === selectedName)?.id) : []),
         // eslint-disable-next-line react-hooks/exhaustive-deps
