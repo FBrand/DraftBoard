@@ -185,7 +185,10 @@ export const useDraftState = () => {
                 // whose file was renamed, or one made in the app, could not be
                 // linked to at all. The path is gone; the board knows its own
                 // file.
-                await Promise.all([openBoards(), openStages(), openDepthCharts(), openDraft(), openSetup()]);
+                // The season has to be known before its markers can be read,
+                // and openBoards is what loads the seasons.
+                await Promise.all([openBoards(), openStages(), openDepthCharts(), openDraft()]);
+                await openSetup(viewedSeason()?.id ?? null);
                 const slug = params.get('board');
                 const board = slug ? boardBySlug(slug) : null;
                 const fromBoard = board?.rankingsFile ? `${base}${board.rankingsFile}` : null;

@@ -72,9 +72,23 @@ export function markInitialised(seasonId) {
     repository.set(setupPath(seasonId), MARKER, { at: Date.now() });
 }
 
-/** Nothing to open: a season's markers load on demand, under the season. */
-export function openSetup() {
-    return Promise.resolve();
+/**
+ * Loads a season's setup markers, so a synchronous read can answer for them.
+ *
+ * This used to return a resolved promise and load nothing, on the reasoning
+ * that the markers "load on demand". Against localStorage that holds, because
+ * `loadSync` fills the collection the instant anything asks. Against a store
+ * that answers later, `isInitialised` and `factsSeeded` read an unloaded
+ * collection, get nothing, and NOTHING reads as NOT DONE YET — which is the
+ * one thing these markers exist to prevent. The season is set up again, and
+ * the shipped facts are laid back over a draft somebody deliberately cleared:
+ * "Null out a player's pick, reload, and the file puts it straight back."
+ *
+ * The same mistake as `openBoardEntries`, which returned a resolved promise
+ * for the same stated reason and cost an expert's board its audience.
+ */
+export function openSetup(seasonId) {
+    return seasonId ? repository.ready(setupPath(seasonId)) : Promise.resolve();
 }
 
 /** Forgets one season, so scrapping it does not leave its id behind forever. */
