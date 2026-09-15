@@ -195,7 +195,11 @@ function DepthRow({ posConfig, slots, idx, phase, onConfigChange, onDeletePositi
     // on, hit the occupied slot instead); and the reserve list stopped at
     // the first hole, hiding every player after it, so moving a reserve
     // player one cell down made him vanish.
-    const s53 = Math.max(slots53, 1);
+    // A row whose target is missing must still render. Math.max(undefined, 1)
+    // is NaN, Array.from({length: NaN}) is empty, and the row would come up
+    // with no 53-man slots at all and NaN on its counter — invisible rather
+    // than obviously broken, which is worse.
+    const s53 = Math.max(Number(slots53) || 0, 1);
     const slots53Items = Array.from({ length: s53 }, (_, i) => ({ slot: slots[i] || null, zone: '53', idx: i }));
 
     // Practice squad shows everyone in it plus ONE empty cell to drop into —
@@ -239,9 +243,9 @@ function DepthRow({ posConfig, slots, idx, phase, onConfigChange, onDeletePositi
                     {label}
                 </div>
                 <div className="rv-pos-ctrl">
-                    <button onClick={e => { e.stopPropagation(); onConfigChange(Math.max(0, slots53 - 1)); }} className="rv-ctrl-btn">-</button>
-                    <span className="rv-pos-count">{slots53}</span>
-                    <button onClick={e => { e.stopPropagation(); onConfigChange(Math.min(6, slots53 + 1)); }} className="rv-ctrl-btn">+</button>
+                    <button onClick={e => { e.stopPropagation(); onConfigChange(Math.max(0, s53 - 1)); }} className="rv-ctrl-btn">-</button>
+                    <span className="rv-pos-count">{s53}</span>
+                    <button onClick={e => { e.stopPropagation(); onConfigChange(Math.min(6, s53 + 1)); }} className="rv-ctrl-btn">+</button>
                 </div>
             </div>
 

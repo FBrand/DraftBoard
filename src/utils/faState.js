@@ -141,7 +141,11 @@ export function computePositionNeed(snapshot) {
     const { positionConfig, depthChart } = snapshot;
     [...(positionConfig?.offense ?? []), ...(positionConfig?.defense ?? [])].forEach(p => {
         const slots = depthChart?.[p.id] ?? [];
-        const s53 = Math.max(p.slots53, 1);
+        // Math.max(undefined, 1) is NaN, and NaN reaches the screen as
+        // "still need NaN". A row is allowed to arrive without a target — an
+        // import that omitted the column, a shape written by an older build —
+        // and the honest reading of that is one slot, not nonsense.
+        const s53 = Math.max(Number(p.slots53) || 0, 1);
         const filled = slots.slice(0, s53).filter(Boolean).length;
         needs[p.label] = { filled, target: s53, stillNeed: Math.max(0, s53 - filled) };
     });
