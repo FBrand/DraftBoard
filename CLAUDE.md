@@ -343,8 +343,10 @@ position rank are derived**, never stored, by `utils/boardRanking.js`:
    typing a total rank).
 3. Otherwise, positional value breaks the tie (`POSITION_VALUE`).
 
-Consequences that are easy to regress and are covered by
-`tests/scouting-params.spec.js`:
+Consequences that are easy to regress, and are covered by the 26 tests in
+`tests/unit/boardRanking.test.js` — including that typing a rank MOVES a
+player, that he adopts the tier he lands in, and that an unranked player gets
+null rather than the worst number:
 
 - A rank is a *position in an ordering*, so two players can never share one.
   Typing a rank is a **move** — the player takes that slot, adopts that slot's
@@ -450,8 +452,11 @@ more, rather than adding a Markdown dependency.
   ~7 minutes, covering only what a browser can answer: rendering, routing,
   drag and drop, persistence across a reload, modal flows. `test:browser:docker`
   runs it against a container, which is how it is run here.
-- `tests/*.spec.js` is the OLD 87-test suite (~50 min). Superseded by the two
-  above; kept for reference, not part of the loop.
+- `tests/audit/` is the sweep — it LOOKS for problems rather than asserting
+  their absence, so it passes while reporting them. A tool to read, not a gate,
+  and not part of `npm test`. See tests/README.md.
+
+The old 87-test `tests/*.spec.js` suite is gone, superseded by the two above.
 
 Two things make the fast suite fast. `tests/fast/globalSetup.js` boots the app
 ONCE and snapshots the state it settles on, so no test pays the cold bootstrap;
