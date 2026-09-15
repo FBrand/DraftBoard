@@ -421,6 +421,15 @@ collection, so seeding this way was up to 514 full-collection writes per page
 load and crashed the renderer. Use `playerRegistry.fillMany()` for anything
 bulk.
 
+The same trap caught the roster import, which cannot use a bulk call at all:
+it needs an id back while it is still parsing the line the name came from, so
+it resolves one player per slot — and every resolve that created somebody
+rewrote the whole collection. 83 rewrites of an 89KB key at boot, for 91
+players. For that shape, `playerRegistry.beginBatch()` / `endBatch()` keeps
+the lookups one at a time and batches the WRITES: a record minted inside the
+batch is visible to every later lookup in it, which is what stops the import
+minting the same man twice.
+
 ### The user guide
 
 `public/USER_GUIDE.md` is written for the analysts, not for developers. It is
@@ -434,11 +443,13 @@ more, rather than adding a Markdown dependency.
 
 - **Vitest** (`npm run test:unit`, `tests/unit/*.test.js`) — pure logic:
   ranking, grouping, phase detection, name matching, CSV round-trips, the
-  registry. 77 tests in ~9s, node environment, no jsdom. Most bugs here have
-  been logic bugs, so this is the loop to stay in while working.
-- **Playwright fast** (`npm run test:fast`, `tests/fast/`) — 15 tests in
-  ~3.5 minutes, covering only what a browser can answer: rendering, routing,
-  drag and drop, persistence across a reload, modal flows.
+  registry, the storage schema. 416 tests in ~45s, node environment, no
+  jsdom. Most bugs here have been logic bugs, so this is the loop to stay in
+  while working.
+- **Playwright fast** (`npm run test:browser`, `tests/fast/`) — 37 tests in
+  ~7 minutes, covering only what a browser can answer: rendering, routing,
+  drag and drop, persistence across a reload, modal flows. `test:browser:docker`
+  runs it against a container, which is how it is run here.
 - `tests/*.spec.js` is the OLD 87-test suite (~50 min). Superseded by the two
   above; kept for reference, not part of the loop.
 
