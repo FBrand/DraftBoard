@@ -514,6 +514,47 @@ genuinely never seen.
 That is a design change with a real failure mode — a stale entry maps a name to
 the wrong player, which is precisely the bug this codebase has fought hardest —
 so it is written down rather than attempted: it wants deciding, not slipping in.
+
+## Verified, not assumed: syncing the roster twice, 2026-09-15
+
+The plan asked for this in so many words — *"run it twice in a row with a
+manual edit in between — confirm the manual edit survives the second sync,
+confirm no existing occupied slot ever gets silently overwritten"* — and it had
+only ever been checked in unit tests on the merge function. Driven in a browser
+now:
+
+| | |
+|---|---|
+| first sync | placed nothing: 132 had no matching position row, 238 no free slot, 81 already there |
+| hand edit | cut Tyquan Thornton — 91 on the roster to 90, 1 in the cut panel |
+| second sync | *"Placed 1 player"* — Harrison Wallace III, into the slot Thornton vacated |
+| Thornton | still cut. The hand edit survived |
+| displaced | nobody |
+
+This is the behaviour the plan specified, so it is a verification rather than a
+fix: the sync only fills. Locked in `tests/fast/rosterSyncTwice.spec.js`.
+
+### The probe said it was two bugs, and both were mine
+
+The first run of this reported *"the hand edit did not take"* and *"the second
+sync put Thornton back"*. Neither was true. A cut player is still a `.rv-slot`
+and still carries a `.rv-slot-name` — **a cut is a slot now**, not a bare name —
+so counting every `.rv-slot-name` on the page gives the same total before and
+after a cut. The man had moved, not vanished, and the count could not tell.
+
+What gave it away was a number that disagreed with the conclusion: the skip
+reason went from *238 had no free 53-man slot* to *237* across the cut. A slot
+had been freed, so something had certainly happened, and "the edit did not
+take" could not be the explanation. The fix was to exclude `.roster-cuts-list`
+from the roster count and read the cut panel separately.
+
+Seventh probe fault this session, and the same shape as the other six: **the
+selector was more general than the claim.** `.rv-slot-name` answers "is this a
+slot with a name in it", which is not the question "is this man on the 53".
+`tests/fast/irActivation.spec.js` already had this right — it excludes
+`.roster-ir` and `.roster-cuts` when it looks for an empty slot. Worth reading
+the neighbouring test before writing the selector, not after.
+
 ## Standing work, ordered by the user
 
 1. Season rollover — done
