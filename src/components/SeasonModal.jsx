@@ -34,7 +34,7 @@ export default function SeasonModal({ isOpen, onClose, onChanged }) {
     const current = currentSeason();
     const viewing = viewedSeason();
     const previous = seasons.filter(s => s.id !== current?.id && s.status === 'archived')
-        .sort((a, b) => b.year - a.year)[0] ?? null;
+        .sort((a, b) => (b.year ?? 0) - (a.year ?? 0))[0] ?? null;
 
     // Reload rather than re-render. A season change swaps the roster, the
     // draft, free agency, the prospect pool and every board at once, and most

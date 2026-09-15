@@ -341,7 +341,7 @@ export async function scrapSeason() {
 
     const previous = listSeasons()
         .filter(s => s.id !== outgoing.id && s.status === 'archived')
-        .sort((a, b) => b.year - a.year)[0];
+        .sort((a, b) => (b.year ?? 0) - (a.year ?? 0))[0];
     if (!previous) return { ok: false, reason: 'nothing-underneath' };
 
     const doomed = listBoards(outgoing.id);

@@ -11,7 +11,13 @@ const LeftPanel = ({ players, onDraft, onInfoOpen, tagFor }) => {
             const term = searchTerm.toLowerCase();
             return p.name.toLowerCase().includes(term) || p.position.toLowerCase().includes(term);
         })
-        .sort((a, b) => a.overallRank - b.overallRank);
+        // Unranked sorts LAST, not first. An unranked player has no rank at
+        // all — rankBoard returns null rather than the worst number, because
+        // numbering him last would assert a judgement nobody made — and
+        // `null - 5` is -5, which puts him above the best prospect in the
+        // class, in the list an analyst scans on air. Same rule, same
+        // expression, as boardEntries.readEntries.
+        .sort((a, b) => (a.overallRank ?? Number.MAX_SAFE_INTEGER) - (b.overallRank ?? Number.MAX_SAFE_INTEGER));
 
     const rounds = [1, 2, 3, 4, 5, 6, 7, 8];
 
