@@ -10,6 +10,7 @@ import Menu from './components/Menu';
 import HelpModal from './components/HelpModal';
 import SeasonModal from './components/SeasonModal';
 import SyncStatus from './components/SyncStatus';
+import SessionUser from './components/SessionUser';
 import { currentSeason, setViewedSeason } from './utils/boardRegistry';
 import { editRefusal } from './utils/permissions';
 import { repository } from './data/repository';
@@ -194,6 +195,8 @@ function App() {
               have open, a season is what the work belongs to. */}
           {/* Only speaks up when there is something to say — see SyncStatus. */}
           <SyncStatus onExport={handleSessionExport} />
+          {/* Silent on a local build and for a viewer who never signs in. */}
+          <SessionUser />
           <Menu
             label="Manage"
             items={[

@@ -4252,3 +4252,32 @@ body.export-mode .card-glow {
   line-height: 1.4;
   color: var(--text-main);
 }
+
+/* Who you are signed in as — see components/SessionUser.jsx. Sits beside the
+   sync indicator in the tab bar and keeps its shape: unobtrusive, and absent
+   entirely on a local build. */
+.session-user {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.session-user-name {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  max-width: 14ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.session-user-problem {
+  font-size: 0.72rem;
+  color: var(--chiefs-gold);
+}
+
+/* On a phone the tab bar is already tight — the name is the first thing that
+   can go, because the button next to it says what it does. */
+@media (max-width: 480px) {
+  .session-user-name { display: none; }
+}

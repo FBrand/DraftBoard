@@ -26,13 +26,31 @@ exactly what a regression test must never do — so it is a tool to read, not a
 gate. It also costs about a third of the browser budget for something that
 cannot fail.
 
+**`tests/rules/` — the Firestore rules, against the emulator. Not part of
+`npm test`.** Everything else can only prove a rule EXISTS for an address;
+this proves what the rules PERMIT. It found two real bugs the moment it first
+ran: the rules read `ownerId` on documents that store `o`, which does not deny
+quietly but raises an error and denies everything; and Firestore refuses a
+nested array, so the remark shape could not have been stored at all.
+
+It needs a JVM and a container, and a suite that cannot run everywhere is a
+suite that stops being run — so it is a separate command:
+
+```bash
+docker run -d --rm --name fsemu --network host -v "$PWD":/work -w /work \
+  node:20-alpine sh /work/.audit/emulator.sh
+FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 npm run test:rules
+```
+
+firebase-tools 15 wants Java 21; the JDK comes from the image so nothing is
+installed on the host.
+
 **The app against an adapter with no `loadSync`.** Every synchronous read in
 this app is served by localStorage answering instantly, and no network can do
 that — `memoryAdapter` omits `loadSync` on purpose, and its header claims the
 omission is what makes those reads reveal themselves. That claim went untested
-by actually running the app until it was run for real. It is what a shared
-backend turns on, and it is worth keeping true on this branch too: a reader
-that answers late must produce an empty board, not a crash.
+by actually running the app until it was the last thing standing between here
+and Firebase.
 
 It holds. Every stage fills from asynchronous loads alone — free agency 77
 slots, scouting 328 rows, the draft 217 cards, UDFA 9, the roster 91 — nothing

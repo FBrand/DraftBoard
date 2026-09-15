@@ -1,0 +1,199 @@
+rules_version = '2';
+
+// Who may read and write what.
+//
+// Two kinds of person use this app and they are not two kinds of account.
+//
+//   An EXPERT is signed in with a real credential. He writes his own boards
+//   and the season they belong to, and that is what makes a broadcast board
+//   the expert's own work rather than whatever the last viewer typed.
+//
+//   A VIEWER is anonymous. He gets a uid so the app can tell him from the next
+//   viewer, and he gets NO write access to this database at all. His own
+//   mock — his boards, his roster, his play-along — lives in his own browser.
+//   That is a deliberate asymmetry, not a limitation waiting to be lifted:
+//   ten experts' work is worth hosting, ten thousand viewers' is not, and a
+//   viewer who can write is a viewer who can overwrite.
+//
+// The asymmetry is enforced HERE and nowhere else. `canEdit()` in the app is
+// about what the interface offers; it is not a security boundary, because
+// anything the browser decides, the browser can be made to decide differently.
+//
+// Deploy with:  firebase deploy --only firestore:rules
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --- who is who -------------------------------------------------------
+
+    // Signed in with something other than an anonymous session.
+    function isExpert() {
+      return request.auth != null
+          && request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
+
+    // Documents are stored with SHORT FIELD NAMES — see src/data/fieldNames.js,
+    // where field names were 40-45% of storage. A rule reads what is actually
+    // written, so ownership is `o`, not `ownerId`. Reading the long name did
+    // not deny quietly: it raised "Property ownerId is undefined on object",
+    // which denies EVERYTHING, and an expert could not write his own board.
+    //
+    //     board   g slug  l label  a authorId  o ownerId  s seasonId
+    //     author  n name  o ownerId
+
+    // The board being touched, as it is stored right now. Null for a board
+    // that does not exist yet, which is what a creation looks like.
+    function boardNow(boardId) {
+      return get(/databases/$(database)/documents/boards/$(boardId)).data;
+    }
+
+    function boardExists(boardId) {
+      return exists(/databases/$(database)/documents/boards/$(boardId));
+    }
+
+    // A board with no ownerId is unowned — the consensus board is the case
+    // that matters, since it is derived rather than written by a person. Any
+    // expert may maintain it; no viewer may.
+    function ownsBoard(boardId) {
+      return isExpert()
+          && (!boardExists(boardId)
+              || boardNow(boardId).o == null
+              || boardNow(boardId).o == request.auth.uid);
+    }
+
+    // The same question about an AUTHOR, who is a person rather than a board.
+    function ownsAuthor(authorId) {
+      return isExpert()
+          && exists(/databases/$(database)/documents/authors/$(authorId))
+          && (get(/databases/$(database)/documents/authors/$(authorId)).data.o == null
+              || get(/databases/$(database)/documents/authors/$(authorId)).data.o == request.auth.uid);
+    }
+
+    // Whose voice an evaluation is in. It is keyed by AUTHOR for a personal
+    // board — one man's view of a player runs across every season, while the
+    // boards he built along the way are separate artifacts — and by BOARD only
+    // for consensus, which has no person behind it. So both have to be
+    // checked, and both have to EXIST: this deliberately does not inherit
+    // ownsBoard's "a board that does not exist yet is yours", which is there
+    // so a board can be created and would otherwise mean an author id, which
+    // is never a board id, made every expert the owner of every evaluation.
+    function ownsVoice(voiceId) {
+      return ownsAuthor(voiceId)
+          || (boardExists(voiceId) && ownsBoard(voiceId));
+    }
+
+    // --- the shared record ------------------------------------------------
+
+    // Everyone reads. A viewer following a live draft has to see the board,
+    // the players and the picks, and there is nothing private here — these are
+    // published opinions about publicly available football players.
+    //
+    // Writing is an expert's. The registry is shared: a rename or a corrected
+    // school is true for everybody, which is exactly why a viewer must not be
+    // able to do it.
+    match /players/{playerId} {
+      allow read: if true;
+      allow write: if isExpert();
+    }
+
+    // An author is a PERSON, and an expert may only be himself. Claiming an
+    // author on creation is what later lets a rule decide who may write that
+    // person's evaluations; letting any expert rewrite any author would hand
+    // over the evaluations with it.
+    match /authors/{authorId} {
+      allow read: if true;
+      allow create: if isExpert()
+                    && (request.resource.data.o == null
+                        || request.resource.data.o == request.auth.uid);
+      allow update, delete: if ownsAuthor(authorId);
+    }
+
+    match /seasons/{seasonId} {
+      allow read: if true;
+      allow write: if isExpert();
+      // Everything a season owns belongs to whoever may write the season:
+      //   seasons/{id}/charts/{stage}/rows|bands   the depth charts
+      //   seasons/{id}/stages/{base}               the prospect pool and its like
+      //   seasons/{id}/setup/{season|facts}        the "already seeded" markers
+      // All of them moved under the season precisely so this is one rule
+      // rather than one per collection.
+      match /{document=**} {
+        allow read: if true;
+        allow write: if isExpert();
+      }
+    }
+
+    // --- boards, which have an owner --------------------------------------
+
+    match /boards/{boardId} {
+      allow read: if true;
+      // Creating a board requires claiming it: an expert may not mint a board
+      // owned by somebody else, which is the whole point of storing ownerId.
+      allow create: if isExpert()
+                    && (request.resource.data.o == null
+                        || request.resource.data.o == request.auth.uid);
+      allow update, delete: if ownsBoard(boardId);
+
+      // The placements — one line about one board, where a flat collection
+      // with a boardId field would need a predicate holding for every document
+      // a query might touch.
+      //
+      // The board must EXIST. ownsBoard alone says yes for a board that does
+      // not — which is deliberate there, so that a board can be created — and
+      // would otherwise let anybody scatter entries under ids belonging to no
+      // board at all.
+      match /entries/{playerId} {
+        allow read: if true;
+        allow write: if boardExists(boardId) && ownsBoard(boardId);
+      }
+    }
+
+    // --- evaluations ------------------------------------------------------
+
+    // evaluations/{playerId}/remarks/{ownerId}
+    //
+    // This is the clearest case for paths in the whole file. It used to be one
+    // flat collection keyed {ownerId}__{playerId}, and the rule had to SPLIT
+    // that key to find out whose voice it was — which is how it came to be
+    // wrong: the left half is an author id for a personal board, the lookup
+    // went to /boards, found nothing, and every expert could overwrite every
+    // other expert's evaluations.
+    //
+    // The owner is a path variable now. There is nothing to parse and nothing
+    // to get wrong.
+    //
+    // Season and kind are keys inside the document rather than path levels —
+    // at a full season, splitting them out cost 183,750 characters of
+    // collection key and bought nothing. A remark is stamped with the season
+    // it was written in rather than owned by it, which is why none of this
+    // sits under /seasons.
+    match /evaluations/{playerId}/remarks/{ownerId} {
+      allow read: if true;
+      allow write: if ownsVoice(ownerId);
+    }
+
+    // --- the draft's own state ---------------------------------------------
+
+    // Whose turn it is and which picks are ours, one document per season. The
+    // selections themselves are not here — a pick is draftPick/team/draftYear
+    // on the player, so it is governed by the /players rule.
+    //
+    // Kept flat rather than under the season because it is a single small
+    // record read only by exact id, where a path would buy a collection
+    // holding one document. It still needs a rule of its own: without one it
+    // falls to the deny-all below and the draft cannot be written at all.
+    match /draft_state/{seasonId} {
+      allow read: if true;
+      allow write: if isExpert();
+    }
+
+    // --- everything else --------------------------------------------------
+
+    // Deny by default. A collection added later is unreachable until somebody
+    // writes a rule for it, which is the right way round: the failure is a
+    // permission error in development, not an open database in production.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
