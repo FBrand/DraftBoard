@@ -109,9 +109,20 @@ function slotFromImport(raw, zone, position = '') {
     // says something. Registering only the suffixed ones left most of the
     // roster — the veterans, who carry no suffix at all — with nothing to hang
     // a fact on, so their cards had no facts to show.
-    // The row label is an alignment ("WR.Z", "LB.O"); the player plays "WR".
-    // The alignment belongs to the depth chart, not to him.
-    const id = resolvePlayer({ name, position: basePosition(position) });
+    // By NAME, with no position qualifier. The row label is an alignment —
+    // "LDE", "LG", "NT", "WR.Z" — and the rankings files say "EDGE", "OG",
+    // "DT". Handing the alignment to the resolver as if it were a position
+    // makes it evidence that this is a DIFFERENT man, and it minted a second
+    // record for twelve players: Peter Woods as DL.3T/Clemson and again as DT,
+    // R Mason Thomas as EDGE/Oklahoma and again as LDE. Two records for one man
+    // is the bug this registry exists to prevent — his facts land on one, his
+    // board placement on the other.
+    //
+    // This is what nameMatcher already says to do: "Callers that know nothing
+    // beyond the name (scraped roster data, ESPN sync) pass nothing and get the
+    // original name-only behaviour — do not 'fix' those by forcing a qualifier
+    // through." A roster is exactly that caller, and it was forcing one.
+    const id = resolvePlayer({ name });
     // Being on the roster IS the fact that he plays for this team.
     if (id) pendingFacts?.push({ id, patch: { team: getSessionTeam(), ...facts } });
 

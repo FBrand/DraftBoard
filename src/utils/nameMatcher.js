@@ -116,8 +116,19 @@ export function buildNameIndex(playersList) {
 }
 
 // "WR.3" -> "WR". Positions carry a depth suffix in some of the app's data.
+//
+// "URA" folds to nothing. It is not a position — useDraftState writes it as the
+// "Unranked Placeholder" for somebody the live sync saw and the board has never
+// heard of, and the shipped picks file carries rows exported from such a
+// session. Treating it as a position made it EVIDENCE OF A DIFFERENCE, which is
+// the opposite of what it says: it declares that the position is unknown. Only
+// fields both sides declare can discriminate, and this one declares nothing.
+// Enrique Cruz Jr was in the registry twice for exactly that reason — OT from
+// the rankings file and URA from his pick.
+const UNKNOWN_POSITION = 'URA';
 function basePos(position) {
-    return String(position ?? '').split('.', 1)[0].trim().toUpperCase();
+    const base = String(position ?? '').split('.', 1)[0].trim().toUpperCase();
+    return base === UNKNOWN_POSITION ? '' : base;
 }
 
 function normSchool(school) {

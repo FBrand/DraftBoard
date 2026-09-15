@@ -353,6 +353,49 @@ CSV path does, with the cure sitting three hundred lines above it.
 Wiring it would mean deciding what the message says about unrecognised rows,
 which is the same product decision as above, so both are left together.
 
+## Twelve men were in the registry twice, 2026-09-15
+
+"A player is a record with a stable id, not a name" — and the registry exists
+because one bug kept returning in new disguises, one of which CLAUDE.md names
+outright: *two analysts labelling one player at different positions*. It had
+returned, in the shipped data, unnoticed:
+
+| | records | men held twice |
+|---|---|---|
+| before | 733 | **12** |
+| after resolving the roster by name | 725 | 4 |
+| after a placeholder stopped discriminating | **724** | **3** |
+
+Peter Woods was `DL.3T`/Clemson and again `DT`. R Mason Thomas was
+`EDGE`/Oklahoma and again `LDE`. His facts land on one record and his board
+placement on the other, which is the exact failure the ids were introduced to
+end.
+
+**Two causes, both fixed.**
+
+The roster import passed the row's ALIGNMENT to the resolver as though it were
+a position — `LDE`, `LG`, `NT`, against the rankings files' `EDGE`, `OG`, `DT`
+— so a label from a different vocabulary became evidence of a different man.
+`nameMatcher` already says not to do this: "Callers that know nothing beyond
+the name (scraped roster data, ESPN sync) pass nothing... do not 'fix' those by
+forcing a qualifier through." A roster is that caller, and it was forcing one.
+That is eight of the twelve.
+
+And `URA` was being treated as a position. It is the app's own "Unranked
+Placeholder", written by the live sync for somebody the board has never heard
+of, and the shipped picks file carries rows from such a session. It declares
+that the position is UNKNOWN, and it was being read as evidence of a
+difference. That is Enrique Cruz Jr, the ninth.
+
+**The last three are left, deliberately.** Uso Seumalo is `DT` and `NT`, Marvin
+Jones Jr `EDGE` and `LB`, Jalen McMurray `CB` and `S` — each a UDFA row whose
+position in the picks file differs from the one the roster gives him. Closing
+these needs either a position taxonomy (that `NT` is interior defensive line,
+that `S` and `CB` are not the same thing) or dropping the qualifier from the
+DRAFT path as well. The second is not safe: a draft class is exactly where two
+different men really do share a name, which is why the qualifier exists. The
+first is a football judgement rather than a code one.
+
 ## Still open: a double-click on the draft board takes two players
 
 Found by clicking the way somebody clicks while talking, which is what this
