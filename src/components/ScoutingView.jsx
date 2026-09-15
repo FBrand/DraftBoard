@@ -12,7 +12,7 @@ import useScoutingLayout from '../hooks/useScoutingLayout';
 import Menu from './Menu';
 import { exportBoardCSV } from '../utils/boardCsv';
 import { rankBoard, moveToRank, between } from '../utils/boardRanking';
-import useBoardRankings, { invalidatePools } from '../hooks/useBoardRankings';
+import useBoardRankings, { invalidatePools, invalidateBoards } from '../hooks/useBoardRankings';
 import useUrlParam from '../hooks/useUrlParam';
 import { PLAYER_TAGS } from '../utils/playerTags';
 import AddProspectsModal from './AddProspectsModal';
@@ -537,9 +537,10 @@ export default function ScoutingView({ players }) {
             if (players.length) scoutingState.seedBoard(board.id, players);
         }
 
-        // The pools are keyed by board, so a new one has to be re-merged
-        // before it can be shown.
-        invalidatePools();
+        // The pools are keyed by board AND the board list itself is read once,
+        // so a new board needs both forgotten before it can be shown as itself
+        // rather than as whatever the default pool holds.
+        invalidateBoards();
         setBoardList(listBoards());
         setActiveBoard(board.id);
     };

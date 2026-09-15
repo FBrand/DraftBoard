@@ -202,8 +202,18 @@ function loadPools() {
         // there was nowhere to disagree. Every board carries every player;
         // what differs is where each one has been placed.
         const pools = Object.fromEntries(Object.keys(files).map(boardId => {
-            const file = files[boardId];
-            if (!file?.length) return [boardId, file];
+            // A board with NO rankings file is the same case with an empty
+            // file: it carries every player, all of them unranked. That is
+            // what a board created in the app is, and what its own dialog
+            // promises — "every player starts unranked".
+            //
+            // This used to return the file's own emptiness, which reads as
+            // "there is no pool for this board", and the consumer then fell
+            // back to the DEFAULT pool: `pools?.[activeBoard] ?? players`.
+            // So a brand new empty board opened showing the consensus board's
+            // placements — 313 ranked players, none of them its own, and it
+            // survived a reload because nothing about it was stale.
+            const file = files[boardId] ?? [];
 
             // First row wins, matching the shared pool above and the board
             // store's own rule. It used to be `new Map(file.map(…))`, which
@@ -257,6 +267,24 @@ const listeners = new Set();
 export function invalidatePools() {
     generation += 1;
     listeners.forEach(fn => fn());
+}
+
+/**
+ * Forgets the BOARD LIST as well as the pools.
+ *
+ * `loadFiles` reads `listBoards()` once and caches the promise for the life of
+ * the page, so a board created after that read is in neither `files` nor
+ * `pools` — and a board missing from `pools` falls back to the default pool at
+ * `pools?.[activeBoard] ?? players`. A new empty board therefore opened showing
+ * the consensus board's placements until the page was reloaded.
+ *
+ * Separate from `invalidatePools` on purpose: that one runs whenever a player
+ * is added or corrected, and re-reading every rankings file for that would be
+ * work nobody asked for.
+ */
+export function invalidateBoards() {
+    filesPromise = null;
+    invalidatePools();
 }
 
 /** What the last load found wrong with the files. See duplicatesIn. */
