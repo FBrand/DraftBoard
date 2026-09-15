@@ -863,6 +863,43 @@ And unlike the ROLL OVER button recorded earlier as friction, this one **says
 why**: "13 names still to resolve" renders immediately above it, on screen, at
 390px. A disabled primary with a visible reason is not a dead button.
 
+## The board CSV round-trips, and the probe that said it lost 81 players
+
+Export a board, feed the file straight back as a new board, and count what
+landed. **328 records out, 328 entries stored**, tags and all. The export is
+already covered ("markers and all") and seeding a new board from a file is
+covered; this was the pair, end to end.
+
+No new browser spec: `tests/unit/boardCsv.test.js` already round-trips
+"placement and identity through a multi-line quoted cell", which is the risky
+part, and a slow test duplicating fast coverage is not worth the minute.
+
+### Twelfth probe fault, and the worst of the session
+
+It first reported: *"the round trip lost rows: 409 in the file, 328 on the
+board — 81 unaccounted, and the banner claimed none were unknown."* That reads
+like real data loss, with a storage-level count behind it, and I had already
+gone looking for which 81.
+
+What gave it away was reading the supposedly-lost rows instead of counting
+them:
+
+```
++ Sticky man-cover corner with a physical presence on the outside
++ Reactive athleticism; reads receivers and route combinations
+```
+
+Those are not players. They are evaluation bullets, and **an evaluation
+contains newlines**. The exporter quotes them correctly; my probe split the
+file on `\n`, so seven multi-line records became eighty-eight lines. 409 lines,
+328 records, and the difference is exactly the 81 I was hunting.
+
+The sharpest part: this codebase already fixed the comma version of this bug
+and carries an RFC-4180 parser because of it. The probe used a naive split
+anyway. **A file format is not a line format**, and counting a CSV by lines is
+the same mistake as counting `.rv-slot-name` including the cut panel — the
+measure was more general than the claim, for the twelfth time.
+
 ## Standing work, ordered by the user
 
 1. Season rollover — done
