@@ -313,6 +313,45 @@ They are the kind of thing that is only ever found before it matters or long
 after: the whole point of a version hook is to be correct on the day somebody
 raises it, and this one would have been silently inert.
 
+## Still open: starting a board from a CSV drops what it does not recognise, silently
+
+Creating a board offers "Start from a CSV". Given a file naming three players —
+two already in the class and one nobody has heard of — measured:
+
+| | result |
+|---|---|
+| entries written to the new board | 3, all placed |
+| the two known players | on the board, correctly placed |
+| the unknown player | **never rendered** — not before a reload, not after |
+| registry records minted | **0** |
+| duplicate player records | none |
+
+The placements are right and nothing is corrupted. But the third row of the
+file produced a stored entry that nothing can display: the pool is built from
+the SHIPPED rankings files plus in-app prospects, the uploaded file is not kept,
+and an entry whose player is not in the pool has nothing to attach to. The
+analyst is told none of this.
+
+Not fixed, because the obvious fix is a product decision with a real tension.
+Registering the unknown names would put them in the pool — but the Add Players
+flow deliberately refuses to do that without a verification step, on the
+grounds that "an import is a proposal, not a bulk write". Letting any board CSV
+inject players into the shared registry walks around that gate.
+
+**And the machinery to say so already exists, unwired.** `ScoutingView` holds
+an `importSummary` state, renders a banner for it — "Imported N players · M new
+· K remarks" — and carries the comment:
+
+> An import that replaces a board should say what it did — silence here reads
+> as "nothing happened" when the file was wrong.
+
+`setImportSummary` is never called with a value anywhere in the codebase. The
+banner cannot appear. The silence the comment warns about is exactly what the
+CSV path does, with the cure sitting three hundred lines above it.
+
+Wiring it would mean deciding what the message says about unrecognised rows,
+which is the same product decision as above, so both are left together.
+
 ## Still open: a double-click on the draft board takes two players
 
 Found by clicking the way somebody clicks while talking, which is what this
