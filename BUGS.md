@@ -555,6 +555,31 @@ slot with a name in it", which is not the question "is this man on the 53".
 `.roster-ir` and `.roster-cuts` when it looks for an empty slot. Worth reading
 the neighbouring test before writing the selector, not after.
 
+## Verified, not assumed: Free Agency's CSV round-trips, 2026-09-15
+
+Also on the plan's verification list and never driven: *"export/import
+round-trips"*. The field-level quoting has good unit tests — they were written
+for the `Last, First` comma bug — but nothing exercised the trip through the
+real UI: the menu, a Blob download, a file input, and `history.reset` on the
+way back in.
+
+Out and back with a drag in between, so an import that did nothing could not
+pass:
+
+- 22 position rows out, 22 back
+- per-row 53-man slot counts unchanged
+- 77 candidates, each back in **the same slot and the same zone**
+
+The zone is the part worth asserting. FA reuses the 53 zone as "top choice" and
+the reserve zone as "other options", so a round trip that carried the names but
+dropped the zone would silently re-rank every candidate — and the grid would
+look perfectly healthy afterwards. Same for the slot index: dropping it would
+compact the chart and lose the gaps that mean "nobody yet".
+
+Locked in `tests/fast/faRoundTrip.spec.js`. Roster's CSV is the same shape
+through the same grid, so this covers the risky half of both; a Roster-side
+equivalent is cheap to add if that path ever changes on its own.
+
 ## Standing work, ordered by the user
 
 1. Season rollover — done
