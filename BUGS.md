@@ -665,6 +665,55 @@ the tab is retried on the next boot, and could overwrite a newer value written
 elsewhere in between. That is the same bargain the refused-write queue has
 always made, and the window is now 250ms wider.
 
+## The phone walk, 2026-09-15: the draft board at 390px
+
+Hunting on the device the user's own bug reports come from. Three facts
+measured, one of them the reason a whole class of test cannot run there.
+
+**The list you draft from is off-canvas.** At 390px `.left-panel` sits at
+`x: -196` with `visibility: hidden`, behind `.sidebar-toggle.toggle-left` (the
+`📊` button). That is by design and it works — the toggle opens it to `x: 1`,
+visible. It is written down because it silently defeats any test that waits for
+`.left-panel` to be *visible*: `waitForSelector` defaults to the visible state,
+so `tests/fast/doubleClickDraft.spec.js` times out at 390px having never
+reached its own assertions.
+
+**A tap on a remaining player opens SIGN UDFA, and that is correct.** The
+shipped 2026 draft is already complete — 208 picks — so there is no pick left
+to make and the remaining players are undrafted signings. Tapping one opens
+*"Sign Player … ALREADY KNOWN — PICK HIM RATHER THAN ADDING A SECOND"*,
+prefilled. Nearly reported as "tapping a player does not draft him"; it is the
+post-draft phase behaving exactly as `draftPhase.js` says it should. Probe
+fault number eight, same shape as the others: **the premise was wrong, not the
+app.** A draft-phase assertion has to reset the draft first, which is what the
+desktop spec already does.
+
+**The double-click guard holds on a phone too.** Verified with the draft reset
+and the list opened by its toggle: one double-tap, one player. Locked in
+`tests/fast/phoneDraftHold.spec.js`, which runs under BOTH projects — on a
+desktop the panel is already open and the toggle is never touched, so it is one
+flow on two devices rather than a phone-only copy.
+
+### `playwright.phone.config.js`
+
+The same specs, at 390px with `hasTouch`. Deliberately NOT wired into `npm test`:
+most existing specs are not phone-ready, for the `.left-panel` reason above and
+others like it, and a config that fails twelve tests by design is worse than no
+config. It exists so a flow can be re-driven with a finger when that is the
+question, and `phoneDraftHold` is the first spec written to pass under both.
+
+Making the rest phone-ready is real work and is not started.
+
+### An unexplained count, recorded rather than smoothed over
+
+One run of the fast suite reported **43 passed of 44 collected, with zero
+failures** — a test that did not run rather than one that failed. There are no
+`test.skip`s in the suite. A clean re-run of the same build gave 44/44, and
+that is what the write-queue commit rests on, but nothing identified what
+happened to the missing test. If it recurs, the thing to capture is the full
+reporter output: the runs that showed it were piped through `tail`, which threw
+away the per-test lines that would have named it.
+
 ## Standing work, ordered by the user
 
 1. Season rollover — done
