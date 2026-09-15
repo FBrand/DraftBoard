@@ -11,7 +11,7 @@
  * /home/dev/.claude/plans/structured-growing-cat.md section 3 for why.
  */
 import { defaultState, parseCSV, exportCSV } from './rosterState';
-import { readChart, writeChart, hasChart, chartVersion } from '../data/depthChartStore';
+import { readChart, writeChart, hasChart, chartVersion, openDepthCharts } from '../data/depthChartStore';
 import { viewedSeason, seasonIsSeeded, openBoards } from './boardRegistry';
 import { canEdit } from './permissions';
 
@@ -73,6 +73,12 @@ export async function ensureSeeded() {
     // its turn. Locally it never showed, because localStorage answers before
     // the first render.
     await openBoards();
+
+    // And the chart itself has to have been ASKED FOR before "nothing is
+    // saved here" means anything. hasSavedState() is a synchronous read;
+    // against a store that answers later it says no for a chart that exists,
+    // and free agency then seeds itself over the shared one.
+    await openDepthCharts(seasonId());
 
     const sid = seasonId() ?? '_';
     if (seedPromises.has(sid)) return seedPromises.get(sid);

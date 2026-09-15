@@ -13,6 +13,8 @@ import { TextPromptDialog, ConfirmDialog } from './Dialogs';
 import Toast from './Toast';
 import Menu from './Menu';
 import { shouldSeed } from '../utils/appInit';
+import { openDepthCharts } from '../data/depthChartStore';
+import { viewedSeason } from '../utils/boardRegistry';
 import { syncFromStages, describeSync } from '../utils/rosterSync';
 import { resolve as resolvePlayer, setFacts, byId } from '../utils/playerRegistry';
 import useUndoableState from '../hooks/useUndoableState';
@@ -107,6 +109,16 @@ export default function RosterView({ masterPlayers, draftedPlayers, onInfoOpen }
         let cancelled = false;
         (async () => {
             try {
+                // Nothing is missing until the store has been asked. Against a
+                // remote store the chart has not arrived at mount, so the
+                // synchronous read behind `seeding` says "no roster" for one
+                // that is sitting there — and seeding on that answer replaces
+                // the shared roster with the file this app ships with.
+                await openDepthCharts(viewedSeason()?.id ?? null);
+                if (cancelled) return;
+                const already = loadState();
+                if (already) { history.reset(already); setSeeding(false); return; }
+
                 const loaded = shouldSeed()
                     ? await fetchLocalRoster()
                     : await fetchSeasonStartStructure();
