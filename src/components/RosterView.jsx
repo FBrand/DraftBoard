@@ -14,7 +14,7 @@ import Toast from './Toast';
 import Menu from './Menu';
 import { shouldSeed } from '../utils/appInit';
 import { openDepthCharts } from '../data/depthChartStore';
-import { viewedSeason } from '../utils/boardRegistry';
+import { viewedSeason, openBoards } from '../utils/boardRegistry';
 import { syncFromStages, describeSync } from '../utils/rosterSync';
 import { resolve as resolvePlayer, setFacts, byId } from '../utils/playerRegistry';
 import useUndoableState from '../hooks/useUndoableState';
@@ -114,6 +114,11 @@ export default function RosterView({ masterPlayers, draftedPlayers, onInfoOpen }
                 // synchronous read behind `seeding` says "no roster" for one
                 // that is sitting there — and seeding on that answer replaces
                 // the shared roster with the file this app ships with.
+                // The season first: viewedSeason() reads the repository, and
+                // against a remote store the seasons have not arrived when this
+                // view mounts. Asking for the chart of season `null` loads
+                // nothing, which looks exactly like an empty roster.
+                await openBoards();
                 await openDepthCharts(viewedSeason()?.id ?? null);
                 if (cancelled) return;
                 const already = loadState();

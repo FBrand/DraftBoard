@@ -205,6 +205,13 @@ export function writeChart(stage, seasonId, state) {
         const path = bandsPath(stage, seasonId);
         const before = repository.get(path, name);
         const next = { s: leanSlots(slots) };
+        // An empty band that nobody has stored is not a change, it is the
+        // absence of one. Writing it anyway put a document in this browser
+        // that says "nothing on reserve" — which then SHADOWS whatever the
+        // shared store has, because the local overlay wins. A viewer who has
+        // touched nothing was quietly overriding the expert's reserve list
+        // with his own emptiness.
+        if (!before && !next.s.length) return;
         if (!before || JSON.stringify(before.s ?? []) !== JSON.stringify(next.s)) {
             repository.set(path, name, next);
         }
