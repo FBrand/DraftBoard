@@ -240,6 +240,35 @@ because the code they fix is here.
 survives a reload; entries carry only single-character field names after an
 edit.
 
+## Still open: the boot is frozen for 7.2 seconds
+
+C3 took it from 13.1s to 7.2s of blocked main thread, worst single task 3.4s
+to ~1.9s. The rest has been profiled rather than guessed, by inclusive time
+over the call tree:
+
+| owner | inclusive |
+|---|---|
+| React rendering (`performWorkUntilDeadline`) | ~2.6s |
+| `loadInitialData` | ~1.7s |
+| `findMatchingIndex` (of which `getLevenshteinDistance` ~0.9s) | ~1.6s |
+| `resolveAll` | ~1.1s |
+
+**Two fixes were tried and measured as no-ops, so neither was kept:**
+
+- Deferring `RightPanel`'s auto-scroll to a `requestAnimationFrame`, on the
+  theory that its 764ms of forced layout was blocking the first paint. Total
+  blocked time 7,165ms -> 7,588ms. The layout still happens, one frame later.
+- Collapsing name-matching strategies 1-4 from four list scans into one pass,
+  preserving priority exactly. 7,165ms -> 7,266ms and 7,546ms over two runs.
+  Strictly less work, no measurable gain — so the scans are not the bottleneck,
+  and the code stays simple in the area this project has had the most bugs in.
+
+What is left is mostly React rendering a 328-row board and the distance pass
+that runs on every MISS while the pool resolves. Both are real work rather
+than waste; making them cheaper means virtualising the list or changing how
+identity is resolved, and the second is the part of this codebase that has
+bitten hardest. Worth doing deliberately, not opportunistically.
+
 ## Standing work, ordered by the user
 
 1. Season rollover — done
