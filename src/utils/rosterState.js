@@ -15,7 +15,7 @@ import { parseAcquisition } from './draftPhase';
 import { basePosition } from './boardRanking';
 import { getSessionTeam } from './appSettings';
 import { DRAFT_YEAR } from '../constants';
-import { resolve as resolvePlayer, setFactsMany } from './playerRegistry';
+import { resolve as resolvePlayer, setFactsMany, beginBatch, endBatch } from './playerRegistry';
 import { applyPlayerFacts } from './playerFacts';
 
 // Reasonable 53-man slot defaults by major position
@@ -251,6 +251,9 @@ export const CSV_TEMPLATE = [
 
 export function parseCSV(csvText) {
     pendingFacts = [];
+    // Every player this import registers is written once, at the end, rather
+    // than the whole collection per slot. See playerRegistry.beginBatch.
+    beginBatch();
     const lines = csvText
         .trim()
         .split('\n')
@@ -354,6 +357,9 @@ export function parseCSV(csvText) {
         if (phase === 'O') offense.push(chip);
         else if (phase === 'D') defense.push(chip);
     }
+
+    // The records first, so setFactsMany has something to patch.
+    endBatch();
 
     // One write for every player on the roster, not one each.
     setFactsMany(pendingFacts);

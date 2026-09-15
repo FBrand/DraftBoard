@@ -170,9 +170,47 @@ function lookupRows(players) {
  * matcher, the boards and the card would be a change to all of them for no
  * gain. One object spread, once per load.
  */
+/**
+ * Records minted inside an open batch: real, and not yet written.
+ *
+ * Importing a roster resolves one player per slot, and each resolve that
+ * created somebody committed the WHOLE collection — 83 rewrites of an 89KB
+ * key at boot, 0.55 MB of localStorage writes, for 91 players. resolveAll
+ * already commits once for a whole list; the roster parser could not use it,
+ * because it needs an id back while it is still parsing the line.
+ *
+ * So the writes are batched instead of the lookups. They stay visible to
+ * every later lookup in the same batch — otherwise the next slot would fail
+ * to find the man just minted and mint him a second time, which is the
+ * duplicate-record bug this module exists to prevent.
+ */
+let batched = null;
+
+/**
+ * Holds registry writes until endBatch, as ONE commit.
+ *
+ * Flushes a batch left open by a caller that threw, so a leak costs one
+ * late write rather than the records themselves.
+ */
+export function beginBatch() {
+    if (batched) endBatch();
+    batched = [];
+}
+
+/** Writes everything minted since beginBatch, in one go. */
+export function endBatch() {
+    const made = batched;
+    batched = null;
+    if (made && made.length) writeMany(made);
+    return made ? made.length : 0;
+}
+
 export function loadRegistry() {
     const map = repository.docs(PLAYERS) ?? {};
-    return Object.entries(map).map(([id, doc]) => ({ ...playerFields.fat(doc), id }));
+    const stored = Object.entries(map).map(([id, doc]) => ({ ...playerFields.fat(doc), id }));
+    // Uncommitted records are part of the registry as far as anybody asking
+    // is concerned. They are about to be.
+    return batched && batched.length ? [...stored, ...batched] : stored;
 }
 
 /**
@@ -269,7 +307,10 @@ export function resolveAll(candidates, { create = true } = {}) {
 
     // One commit for the whole batch: seeding a board resolves 328 players,
     // and that should be one write, not 328.
-    if (created.length) writeMany(created);
+    if (created.length) {
+        if (batched) batched.push(...created);
+        else writeMany(created);
+    }
     return ids;
 }
 
