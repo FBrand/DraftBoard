@@ -122,6 +122,14 @@ export function saveState(state) {
     // NEWER shape rather than guess at it, and the stage then comes up empty —
     // saving that empty stage back is how "don't guess" turns into losing the
     // work outright. Refusing is the honest end of the same decision.
+    // A chart belongs to a season. Without one there is nowhere to file it,
+    // and `rowsPath` falls back to `seasons/_/charts/...` — a season that
+    // exists nowhere, invisible to the stage that wrote it and to everything
+    // else. Measured against Firestore: the roster was filed under `_` on
+    // every boot, because the seasons had not arrived when the view first
+    // saved. Refusing is right — the season arrives a moment later, and the
+    // next save has somewhere to go.
+    if (!seasonId()) return;
     const stored = chartVersion(STORAGE_KEY, seasonId());
     if (stored !== null && stored > STATE_VERSION) return;
 

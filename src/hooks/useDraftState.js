@@ -187,8 +187,11 @@ export const useDraftState = () => {
                 // file.
                 // The season has to be known before its markers can be read,
                 // and openBoards is what loads the seasons.
-                await Promise.all([openBoards(), openStages(), openDepthCharts(), openDraft()]);
-                await openSetup(viewedSeason()?.id ?? null);
+                // The season has to be known before anything filed UNDER it can
+                // be addressed, and openBoards is what loads the seasons.
+                await Promise.all([openBoards(), openStages(), openDraft()]);
+                const season = viewedSeason()?.id ?? null;
+                await Promise.all([openDepthCharts(season), openSetup(season)]);
                 const slug = params.get('board');
                 const board = slug ? boardBySlug(slug) : null;
                 const fromBoard = board?.rankingsFile ? `${base}${board.rankingsFile}` : null;

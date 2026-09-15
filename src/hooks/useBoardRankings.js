@@ -142,7 +142,7 @@ function unionOfFiles(files, keyOf) {
 
 function loadPools() {
     return openBoards()
-        .then(() => Promise.all([loadFiles(), openRegistry(), openEvaluations(), openStages(), openBoardEntries(listBoards().map(b => b.id)), openDepthCharts(), openSetup(viewedSeason()?.id ?? null)]))
+        .then(() => Promise.all([loadFiles(), openRegistry(), openEvaluations(), openStages(), openBoardEntries(listBoards().map(b => b.id)), openDepthCharts(viewedSeason()?.id ?? null), openSetup(viewedSeason()?.id ?? null)]))
         .then(([files]) => {
         // Base data edited in-app — players added, corrected, or removed — is
         // shared by every board, so it is applied before anything ranks,

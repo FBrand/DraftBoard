@@ -89,9 +89,35 @@ function rowsOf(stage, seasonId) {
     return sets.get(path);
 }
 
-/** Nothing to open: a chart's rows load on demand, at its own path. */
-export function openDepthCharts() {
-    return Promise.resolve();
+/**
+ * The stages that keep a depth chart. Both are read by season.
+ *
+ * Named here rather than imported from the two stores, because those import
+ * this one.
+ */
+export const CHART_STAGES = ['rosterState', 'fa_state_v1'];
+
+/**
+ * Loads a season's charts, so a synchronous read can answer for them.
+ *
+ * This returned a resolved promise and loaded nothing, on the reasoning that a
+ * chart's rows "load on demand at its own path" — true of localStorage, where
+ * `loadSync` fills a collection the instant anything asks, and false of every
+ * other store. Against Firestore `hasChart()` therefore answered NO for a
+ * roster that was sitting right there, and the stage seeded itself from the
+ * shipped file instead: the shared roster was replaced, locally, by the one the
+ * app ships with. Measured — a name changed in Firestore never reached the
+ * screen.
+ *
+ * The third of this shape, after `openBoardEntries` and `openSetup`. All three
+ * said the same thing in the same words.
+ */
+export function openDepthCharts(seasonId) {
+    if (!seasonId) return Promise.resolve();
+    return Promise.all(CHART_STAGES.flatMap(stage => [
+        repository.ready(rowsPath(stage, seasonId)),
+        repository.ready(bandsPath(stage, seasonId)),
+    ]));
 }
 
 export function hasChart(stage, seasonId) {
