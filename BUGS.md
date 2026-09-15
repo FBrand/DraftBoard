@@ -255,6 +255,7 @@ with a plausible mechanism, and "we checked" is worth more than silence.
 | Roll over, then open the archived season | One rule in `permissions.js` carries an exception pulling both ways: a finished board must not move, but what you learn about a player keeps arriving after it. That is the kind of exception somebody tidying a boolean removes. | Holds, precisely. The archived board offers no live tag control at all, and the pencil unlocks three evaluation controls WITHOUT unlocking any placement control. The banner says the season is finished. |
 | Bring a player back off injured reserve | A deferred request said IR was one-way: a drag puts a man on it and nothing takes him off as healthy. `performMove` looks like it supports the return trip — it clears the injury arrival, because "leaving injured reserve is being activated" — but nothing tested it. The existing IR test drags to CUTS, which empties the slot while RELEASING the player, so it passes whether or not a man can actually come back. | Holds. Dragging from IR to an empty 53 slot takes him off IR and puts him on the roster. Now covered by a test that asserts both halves, because the old one could not. The request is closed. |
 | Sign an undrafted free agent | A whole stage with no coverage, and an earlier probe had left it looking broken — clicking a card removed nobody and opened nothing. | Holds. The probe was double-clicking, which opens the dialog and then dismisses it. A single click opens a sign flow offering SIGN UDFA, SIGN · NO TEAM and MINICAMP INVITE, and signing takes him off the board (9 cards -> 8). |
+| Add a free-agency candidate | The least-driven stage, and two recent changes run through it: the `computePositionNeed` NaN fix and the chart loading B11 rebuilt. | Holds. 77 candidates seeded across 22 rows, no NaN on screen, and the roster untouched — which is the whole design of this stage, measuring needs against a chart it never writes to. Adding a candidate with a position no depth-chart row is called is REFUSED, with the reason on screen: *"Nothing on the depth chart is called \"WR\". Pick where he lines up."* Choosing where he lines up adds him, and he survives a reload. |
 | Try to delete a player three analysts have ranked | A delete once took the player out from under every board, remarks and placements included, with nothing to undo it — which is why `playerWork.js` exists. The predicate it offers, `isUntouched`, is exported and called from nowhere, which is what made this worth checking. | Holds, and precisely. A ranked player is offered no Remove at all, only "clear THIS board's opinions", and the card names the boards holding work on him — "Ranked or evaluated on Consensus, Dan, Ryan — clear those first". Clearing one narrows the list to "Dan, Ryan" and he stays protected. `isUntouched` is redundant API surface rather than a missing wire; `whoHasWorkedOn` does the job. Now covered by a test, because the failure is silent and unrecoverable. |
 
 **One piece of friction, not a bug.** Rolling over needs a year typed in —
@@ -263,6 +264,13 @@ greyed placeholder. So the screen reads "ROLL OVER, 2027" with the button
 dead, and it is not obvious the number has to be retyped. Defaulting the field
 to `current.year + 1` would cost nothing; left alone because the confirmation
 text below it is doing deliberate work and this is the user's call, not mine.
+
+**The count is now five.** Free agency added two more probe faults to the
+three already recorded: clicking `.last()` button matching /Add/ hits "ADD AS
+TRADE TARGET" rather than "ADD AS FA TARGET", and reading only the first 90
+characters of a dialog misses the error message at the bottom of it. Both
+read as "the add silently does nothing"; the app was explaining itself the
+whole time.
 
 **A note on method.** Three of the "bugs" this round were faults in the probe,
 not the app: reading only the first of three board collections, counting
