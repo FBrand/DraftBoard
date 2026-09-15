@@ -1,3 +1,5 @@
+import { pickNumberOf } from './draftPhase';
+
 /**
  * Serializes the current draft state into a robust CSV format with metadata headers.
  */
@@ -78,8 +80,18 @@ export const deserializeDraftState = (csvText) => {
         });
     });
 
-    // Sort by pick number
-    draftedPlayers.sort((a, b) => a.pickNumber - b.pickNumber);
+    // Sort by pick number, and remember that a pick number is not always a
+    // number: this format records an undrafted signing with the literal UDFA,
+    // which is the whole reason `pickNumber` is kept as a string when it will
+    // not parse. `a.pickNumber - b.pickNumber` is NaN for those, and a
+    // comparator that returns NaN does not throw — it quietly sorts nothing.
+    // A session with any UDFA in it came back in FILE order: picks 3, 1, 2.
+    //
+    // Through draftPhase, which is where this rule lives: nothing outside it
+    // compares a raw pickNumber against a number. Signings sort after every
+    // pick and keep their order among themselves, the sort being stable.
+    const order = (p) => pickNumberOf(p) ?? Number.MAX_SAFE_INTEGER;
+    draftedPlayers.sort((a, b) => order(a) - order(b));
 
     return {
         draftedPlayers,
