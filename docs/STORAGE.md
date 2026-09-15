@@ -4,7 +4,7 @@ What is stored, where, and what it costs. Measured on a cold boot of the
 shipped 2026 season: 733 players, 328 prospects on each of three boards, a
 91-man roster, the completed draft.
 
-**Total: 285KB for one season.** It was 925KB before the trims below, and
+**Total: 164KB for one season.** It was 925KB before the trims below, and
 686KB as recently as the picks store.
 
 ---
@@ -64,8 +64,22 @@ Firestore writes one **field**. The constraint is localStorage's alone.
 
 > **A document never states its own key.** The id is what it is filed under;
 > writing it again costs bytes on every write forever and gives a rename two
-> places to disagree. Ids are reattached on read. This removed 125KB — key
-> material inside document bodies is now 270 bytes across the whole store.
+> places to disagree. Ids are reattached on read. Key material inside document
+> bodies is now **zero**.
+
+> **Field names are one character in the store and full words in the app.**
+> They were 40–45% of the three collections that hold nearly everything — more
+> than the values. The rename lives in `data/fieldNames.js`, beside the stores
+> rather than in the adapter, and every map is checked for bijection at module
+> load: a duplicate short name does not throw, it writes one field over another
+> and surfaces later as a player with somebody else's school.
+>
+> This has bitten twice, both times in code reading a collection *raw*:
+> `draftStore.yearOf` read `season.year` on a document storing `y`, returned
+> null, and the entire draft read as empty; and `firestore.rules` tested
+> `ownerId` on documents storing `o`, which Firestore does not treat as false —
+> it raises and denies everything, so no expert could write his own board.
+> **Anything reading a mapped collection must go through its `fat()`.**
 
 ## Paths
 
@@ -113,16 +127,21 @@ collection holding one record.
 
 ## Collections
 
-### `players` — 184KB, 733 documents, ~250 bytes each
+### `players` — 91KB, 733 documents, ~124 bytes each
 
 The registry. One document per player, keyed by an opaque permanent id.
 
 ```
-{ name, position, school, aliases[], hidden,
-  isUdfa, draftYear, draftRound, draftPick, team, previousTeam,
-  athleticMatrixTotal, athleticMatrixPosition,
-  createdAt, updatedAt }          // epoch ms, not ISO
+"p_gblwjors": { "n":"Tyquan Thornton", "p":"WR", "s":"Baylor",
+                "t":"KC", "y":2022, "d":2, "k":50, "u":false,
+                "c":1789434931720, "e":1789434932965 }
 ```
+
+In the app that is `{ name, position, school, team, draftYear, draftRound,
+draftPick, isUdfa, createdAt, updatedAt }` — plus `aliases[]`, `hidden`,
+`previousTeam` and the two athletic-matrix scores when they have values.
+Timestamps are epoch milliseconds; an ISO string spends 24 characters carrying
+13 of fact.
 
 `id` is **not** stored — it is the key. Null fields are not stored either;
 absent and null are the same answer to every reader, and only the storage
@@ -130,7 +149,7 @@ disagreed. That was 55KB of the word "null".
 
 **A draft pick is one of these fields.** See below.
 
-### `boards/{boardId}/entries` — 36KB per board, 328 documents, **112 bytes each**
+### `boards/{boardId}/entries` — 18.5KB per board, 328 documents, **56 bytes each**
 
 One board's opinion of one player. It was 305 bytes.
 
@@ -149,45 +168,44 @@ What is *not* here, and why:
 - `position` **stays**. It is an opinion, not a fact — two analysts labelling
   the same player DL and EDGE are not disagreeing about anything.
 
-### `evaluations/{playerId}/{kind}/{ownerId}/{seasonId}` — one remark per document
+### `evaluations/{playerId}/remarks/{ownerId}` — one document per owner, per player
 
 ```
-db_evaluations/p_a11989cf…/n/b_9f9330c8…/s_1e66044d…
-  { "zjp9ay": { "t": "Natural thrower and a pro-ready timing…", "a": 1789418428790 } }
+db_evaluations/p_a11989cf/remarks
+  { "b_9f9330c8": { "s_1e66044d": {
+        s: [{ t: "Natural thrower and a pro-ready timing…", a: 1789418428790 }],
+        w: [ … ], n: [ … ] } } }
 ```
 
-No composite key anywhere in it. Every part of a remark's identity is something
-you select **by** — the card wants one player's, a section wants one kind's, a
-board wants one author's, the log wants one season's — so a key that always has
-to be taken apart again was earning nothing.
+The player comes first because of the read the app performs: `allRemarksFor`
+gathers what **everybody** has written about one player, and on a read-only card
+that stack is the card's content. Under the player that is one collection read.
 
-The player comes first because of the read the app actually performs:
-`allRemarksFor` gathers what *everybody* has written about one player, and on a
-read-only card that stack is the card's content.
+Season and kind are keys inside the document rather than more path levels.
+Measured at a full season — 250 players scouted on five boards, 17,500 remarks —
+splitting them out cost 183,750 characters of collection key against 8,250 here,
+and bought nothing: nothing reads one kind of one season without wanting its
+neighbours. It also means reads do not enumerate seasons, so scrapping a season
+cannot make what you learned unreachable.
 
-`{kind}` is `s`/`w`/`n`. The owner is the **author**, and the board only for
-consensus, which has no person behind it — a board is a snapshot of where
-somebody had a player at one moment, while an evaluation is a running log that
-follows the analyst across every season. That is also why these are not nested
-under a season.
+The owner is the **author**, and the board only for consensus, which has no
+person behind it — a board is a snapshot of where somebody had a player at one
+moment, while an evaluation is a running log that follows the analyst across
+every season. That is why none of this sits under `/seasons`.
 
-**What it saves, and where it does not.** Each remark used to carry all three
-itself:
+**A remark is `{ t, a }` in an array.** It carried a six-character id whose only
+job was to find it inside that array; position does that, and dropping it saves
+about 157,500 characters across 17,500 remarks.
 
-| | was, per remark | now |
-|---|---|---|
-| remark uuid | 46 B | 8 B (six base36 chars, unique among siblings) |
-| `seasonId` | 52 B | in the path |
-| `kind` spelled out | 18 B | in the path |
+It was briefly `[text, writtenAt]`, which is smaller still — and **Firestore
+cannot store a nested array**. The emulator refused it outright: *"Nested arrays
+are not supported"*. A map inside an array is the cheapest shape both stores
+hold. Eight characters per remark is what that costs.
 
-116 bytes repeated on every remark, replaced by a ~133-byte key shared by the
-remarks in that bucket — about 28 bytes each when a bucket holds five. **A
-bucket holding one remark is a net loss**, paying 133 to save 116. It works
-because a kind-and-season bucket usually holds several.
-
-Old documents are read as they are and split on the first **write**. Converting
-on read would turn opening a player card into a write, which is how a quota
-fills while somebody is only looking.
+The cost of dropping the id, named rather than buried: a handle is an **index**,
+so two browsers of the same analyst editing the same player at the same moment
+could remove the wrong line. The whole document is rewritten on any change in
+that case anyway, so the race already existed.
 
 ### `seasons/{seasonId}/charts/{stage}/rows|bands` — 13KB per season
 
@@ -257,36 +275,54 @@ Measured on a cold boot of the shipped season:
 
 | | before | now |
 |---|---|---|
-| whole store | 686 KB | **285 KB** |
-| session export | 801 KB | ~324 KB |
-| board entry | 305 B | 112 B |
-| depth band | 219 B | 72 B |
-| key material inside bodies | 125,736 B | **270 B** |
+| whole store | 686 KB | **164 KB** |
+| `db_players` | 185,846 | 90,839 |
+| a board's entries | 36,926 | 18,539 |
+| evaluations | 19,939 | 6,644 |
+| a board entry | 305 B | 112 B |
+| a player id | 38 chars | 10 chars |
+| key material inside bodies | 125,736 B | 0 |
 | picks collection | 210 KB | gone |
 
-The 27KB the audit still counts as "name and school on documents" is the
-`players` collection's own canonical copy. That is not duplication; it is where
-the name lives.
+Four things got it there, in the order they were done:
+
+1. **The migration layer went.** 802 lines that read addresses nothing writes.
+   There is no live data, so nothing can.
+2. **Ids are eight base36 characters**, unique because they are *checked*
+   against the collection at mint time rather than long enough to be safe
+   blind. −48,000.
+3. **Field names are one character in the store.** They were 40–45% of these
+   collections — more than the values. −80,000.
+4. **Remarks are addressed, not described.** −3,600 here, −409,000 at scale.
 
 ## One season at full scale
 
 Five boards, 400 prospects, 250 of them scouted to the standard of the richest
 real evaluation — fourteen remarks each:
 
-| | count | bytes |
-|---|---|---|
-| evaluations | 1,250 (3,750 collections, 17,500 documents) | 2,126,250 |
-| board entries | 2,000 | 307,436 |
-| players | 400 | 68,331 |
-| charts, draft state, boards, authors, seasons, setup | — | 15,558 |
-| **one season** | | **2.52 MB** |
+| | bytes |
+|---|---|
+| evaluations (17,500 remarks) | 1,647,000 |
+| board entries (2,000) | 114,000 |
+| players (700) | 86,800 |
+| charts, draft state, boards, authors, seasons, setup | 15,558 |
+| **one season** | **1,863,358** |
 
-Against a 5MB localStorage quota that is **two such seasons**, where the
-original layout fitted one at 4.0 MB.
+Against the 4,175,829 this started at: **55% less**, and **2.8 seasons** fit a
+5 MiB quota where one did.
 
-Evaluations are 84% of it, and 3,750 collection keys at ~133 characters are
-about 490KB — **21% of evaluations storage is the key text**. That is the price
-of having no composite key: the parts live in the path, repeated per collection
-instead of per document. The shallower alternative is one collection per player
-with `{kind}__{owner}__{season}__{remarkId}` as the document id — 400 keys
-instead of 3,750, and a composite key back.
+Evaluations are 88% of it, and the remark text itself is about two thirds of
+that — roughly 1.1 MB of the 1.65 MB is what somebody actually typed. There is
+no third round of this available.
+
+## What the quota actually counts
+
+Measured, not assumed: **5,242,638 characters** before `QuotaExceededError` —
+5 MiB exactly, counted in characters rather than UTF-16 bytes. And a character
+in a **key** costs the same as a character in a value: filling with 200-char
+keys and 50-char values reached 5,242,750; with 5-char keys and 245-char values,
+5,242,677. The same ceiling either way.
+
+That was measured in Chromium. Firefox has historically counted its quota in
+UTF-16 bytes, which would halve the character budget — if the deployment is
+Firefox, this is worth re-measuring before deciding how many seasons to keep.

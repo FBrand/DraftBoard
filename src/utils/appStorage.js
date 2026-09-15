@@ -17,16 +17,10 @@
 
 /** Fixed keys, one per thing. */
 const EXACT = [
-    'nfl_draft_board_state',   // useDraftState
     'nfl_draft_live_sync',     // useDraftState's live-sync toggle
-    'rosterState',             // rosterState.js
-    'fa_state_v1',             // faState.js
     'draft_board_view',        // last active tab
     'draft_board_focus',       // Draft's focus-mode toggle
     'athletic_matrix_url',     // configurable Athletic Matrix link (appLinks.js)
-    'athletic_matrix_v1',      // matrix scores, before they became player facts
-    'player_registry_v1',      // the registry, before players became documents
-    'prospects_v1',            // players added, corrected or hidden in-app
     'position_value_v1',       // appSettings.js
     'session_team_v1',         // appSettings.js
     'viewed_season_v1',        // which season is open (boardRegistry.js)
@@ -37,15 +31,9 @@ const EXACT = [
  * Families with one key per board or per collection. A prefix is still an
  * allowlist — it just names a shape instead of an instance.
  */
-const PREFIXES = [
-    'rosterState__',           // legacy, pre-stageStore: migrated on first read
-    'fa_state_v1__',           // the same
-    'nfl_draft_board_state__', // the same
-    'prospects_v1__',          // the same
-    'scouting_board_v1__',     // legacy, pre-boardEntries: migrated on first read
-    'scouting_overlay_v1__',   // the same, when a board was its own name
-    'db_',                     // repository collections (data/localAdapter.js)
-];
+// Everything the repository writes. One prefix, because every collection is a
+// path under it — see data/localAdapter.js.
+const PREFIXES = ['db_'];
 
 /**
  * Where one board's work is stored. Here rather than in scoutingState because
@@ -63,36 +51,7 @@ export const boardStateKey = (boardId) => `scouting_board_v1__${boardId}`;
  * year's roster, last year's draft class and last year's picks sitting there,
  * and the new season was the old one wearing a different number.
  *
- * The base key with no season is what every existing save is called, so it is
- * kept as the unscoped form and migrated on first read — see `readSeasonScoped`.
  */
-export const seasonScopedKey = (base, seasonId) => (seasonId ? `${base}__${seasonId}` : base);
-
-/**
- * Reads a stage's state for a season, moving an old unscoped save into it the
- * first time. Returns the raw string or null.
- *
- * The migration is one-way and happens once: whatever was saved before seasons
- * were scoped belongs to the season that was current when it was written,
- * which is the one being asked for the first time this runs.
- */
-export function readSeasonScoped(base, seasonId) {
-    const key = seasonScopedKey(base, seasonId);
-    try {
-        const own = localStorage.getItem(key);
-        if (own !== null) return own;
-        if (key === base) return null;
-
-        const legacy = localStorage.getItem(base);
-        if (legacy === null) return null;
-        localStorage.setItem(key, legacy);
-        localStorage.removeItem(base);
-        return legacy;
-    } catch {
-        return null;
-    }
-}
-
 /** Whether the app owns this key, and may therefore write it on import. */
 export function isOwnedKey(key) {
     return EXACT.includes(key) || PREFIXES.some(p => key.startsWith(p));

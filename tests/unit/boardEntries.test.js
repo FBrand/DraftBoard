@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { entryDocId, entriesPath, BOARD_ENTRIES } from '../../src/data/boardEntries';
 import { makeEntry, loadState, saveState } from '../../src/utils/scoutingState';
-import { openBoards, allBoards } from '../../src/utils/boardRegistry';
+import { openBoards, allBoards, boardById } from '../../src/utils/boardRegistry';
 import { repository } from '../../src/data/repository';
+import { entryFields, boardFields } from '../../src/data/fieldNames';
 import { loadRegistry, PLAYERS } from '../../src/utils/playerRegistry';
 
 /**
@@ -121,7 +122,8 @@ describe('saving a board writes only what moved', () => {
         expect(changes).toHaveLength(1);
         // Identified by the document key, since the name is the registry's now.
         expect(changes[0].id).toContain('p_reese');
-        expect(changes[0].doc.round).toBe(1);
+        // Stored under the short field name — see data/fieldNames.js.
+        expect(entryFields.fat(changes[0].doc).round).toBe(1);
         spy.mockRestore();
     });
 
@@ -190,7 +192,10 @@ describe('the board-level seeded flag', () => {
         const id = board();
         saveState(id, { version: 1, seeded: true, entries: three() });
 
-        expect(repository.get('boards', id).seeded).toBe(true);
+        // Read through the board's own field map: the store writes short
+        // names, and asserting the long one would pass only by accident.
+        expect(boardFields.fat(repository.get('boards', id)).seeded).toBe(true);
+        expect(boardById(id).seeded).toBe(true);
         expect(repository.all(entriesPath(board())).every(d => d.seeded === undefined)).toBe(true);
     });
 });
@@ -218,46 +223,5 @@ describe('two analysts editing one board', () => {
         const after = loadState(id);
         expect(after.entries.find(e => e.name === 'Fernando Mendoza').round, 'Dan\'s move was erased').toBe(1);
         expect(after.entries.find(e => e.name === 'Caleb Downs').round).toBe(3);
-    });
-});
-
-/**
- * Boards written before the path existed.
- *
- * Everything an existing user has is in the flat `board_entries` collection,
- * keyed `boardId__playerId`. Moving to a path per board is not worth losing a
- * season of somebody's work over, so the old collection is read once, rewritten
- * under the board's own path, and dropped — the same shape of migration the
- * roster used going from a stage blob to rows.
- */
-describe('a board saved by an older build', () => {
-    it('is found at the old address and moved to its own', () => {
-        const id = board();
-        // Exactly what the previous build wrote: the board in the key, and the
-        // fields it used to carry in the body.
-        repository.set(BOARD_ENTRIES, `${id}__p_mendoza`, {
-            boardId: id, order: 0, playerId: 'p_mendoza', name: 'Fernando Mendoza',
-            position: 'QB', school: 'Indiana', round: 1, withinGroup: 1,
-        });
-
-        const entries = loadState(id).entries;
-        expect(entries.map(e => e.name)).toEqual(['Fernando Mendoza']);
-        expect(entries[0].round).toBe(1);
-
-        // Moved, not copied: the old address is empty and the new one holds it
-        // under the player alone, because the board is the path now.
-        expect(repository.get(BOARD_ENTRIES, `${id}__p_mendoza`)).toBeNull();
-        expect(repository.get(entriesPath(id), 'p_mendoza')).toBeTruthy();
-    });
-
-    it('does not move another board’s entries while moving one', () => {
-        const [a, b] = allBoards().map(x => x.id);
-        repository.set(BOARD_ENTRIES, `${a}__p_mendoza`, { boardId: a, playerId: 'p_mendoza', round: 1 });
-        repository.set(BOARD_ENTRIES, `${b}__p_reese`, { boardId: b, playerId: 'p_reese', round: 2 });
-
-        loadState(a);
-
-        expect(repository.get(BOARD_ENTRIES, `${b}__p_reese`)).toBeTruthy();
-        expect(repository.get(entriesPath(b), 'p_reese')).toBeNull();
     });
 });

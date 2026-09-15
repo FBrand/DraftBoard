@@ -22,6 +22,7 @@
  */
 import { repository } from './repository';
 import { getSessionTeam } from '../utils/appSettings';
+import { seasonFields } from './fieldNames';
 import {
     PLAYERS, byId, loadRegistry, setFactsMany, factsFor, resolveAll,
 } from '../utils/playerRegistry';
@@ -40,7 +41,10 @@ export const draftScope = (seasonId) => `${seasonId ?? '_'}`;
  */
 function yearOf(seasonId) {
     if (!seasonId) return null;
-    const season = repository.get('seasons', seasonId);
+    // Through the season's field map. Read raw, `season.year` is undefined —
+    // the store writes `y` — so this returned null, draftedIn matched nobody,
+    // and the whole draft read as empty while the data sat there intact.
+    const season = seasonFields.fat(repository.get('seasons', seasonId));
     return Number.isFinite(season?.year) ? season.year : null;
 }
 

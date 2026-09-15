@@ -11,9 +11,8 @@
  * /home/dev/.claude/plans/structured-growing-cat.md section 3 for why.
  */
 import { defaultState, parseCSV, exportCSV } from './rosterState';
-import { readStage, removeStage } from '../data/stageStore';
 import { readChart, writeChart, hasChart } from '../data/depthChartStore';
-import { viewedSeason, seasonIsSeeded } from './boardRegistry';
+import { viewedSeason, seasonIsSeeded, openBoards } from './boardRegistry';
 import { canEdit } from './permissions';
 
 // Which season's copy of this stage. Read at call time, never cached: the
@@ -28,7 +27,7 @@ export { parseCSV, exportCSV };
 
 export function hasSavedState() {
     try {
-        return hasChart(STORAGE_KEY, seasonId()) || readStage(STORAGE_KEY, seasonId()) !== null;
+        return hasChart(STORAGE_KEY, seasonId());
     } catch {
         return false;
     }
@@ -64,7 +63,17 @@ export async function fetchSeasonStartRoster() {
 // handed back the season you left.
 const seedPromises = new Map();
 
-export function ensureSeeded() {
+export async function ensureSeeded() {
+    // Which season this is has to be known BEFORE anything is read or written,
+    // and against a remote store it is not known at mount: seasons arrive
+    // asynchronously, `seasonId()` is null until they do, and every key here
+    // falls back to `_`. That is how a viewer's free agency ended up filed
+    // under `seasons/_/charts` — a season that exists nowhere, invisible to
+    // the tab and to Roster's sync, and memoised so the real season never got
+    // its turn. Locally it never showed, because localStorage answers before
+    // the first render.
+    await openBoards();
+
     const sid = seasonId() ?? '_';
     if (seedPromises.has(sid)) return seedPromises.get(sid);
     const promise = (async () => {
@@ -99,13 +108,6 @@ export function loadState() {
         const sid = seasonId();
         if (hasChart(STORAGE_KEY, sid)) return migrate({ version: STATE_VERSION, ...readChart(STORAGE_KEY, sid) }) ?? defaultState();
 
-        const parsed = readStage(STORAGE_KEY, sid);
-        if (parsed?.positionConfig) {
-            const state = migrate(parsed) ?? defaultState();
-            writeChart(STORAGE_KEY, sid, state);
-            removeStage(STORAGE_KEY, sid);
-            return state;
-        }
     } catch { /* ignore */ }
     return defaultState();
 }

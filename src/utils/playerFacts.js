@@ -111,18 +111,12 @@ function index(rows) {
  * the season marker is: whoever gets there first seeds, everybody else reads
  * the marker and does nothing.
  */
-const SEEDED = 'setup';
-const legacySeedMarker = (seasonId) => `facts__${seasonId}`;
-
 export function factsSeeded(seasonId) {
-    if (!seasonId) return false;
-    return !!repository.get(setupPath(seasonId), 'facts')
-        || !!repository.get(SEEDED, legacySeedMarker(seasonId));
+    return !!seasonId && !!repository.get(setupPath(seasonId), 'facts');
 }
 
 export async function applyPlayerFacts() {
     const seasonId = viewedSeason()?.id ?? null;
-    await repository.ready(SEEDED);
     // A season that has been seeded keeps whatever the app has since decided,
     // including a deliberately emptied draft.
     if (seasonId && factsSeeded(seasonId)) return false;

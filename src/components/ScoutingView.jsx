@@ -23,6 +23,8 @@ import * as athleticMatrix from '../utils/athleticMatrix';
 import * as playerRegistry from '../utils/playerRegistry';
 
 import { createBoard, listBoards, boardBySlug, boardById, renameBoard, listSeasons, currentSeason } from '../utils/boardRegistry';
+import { repository } from '../data/repository';
+import { entriesPath } from '../data/boardEntries';
 import { canEdit } from '../utils/permissions';
 import { ownerIdFor, remarksFor, addRemark, removeRemark } from '../utils/evaluations';
 
@@ -107,6 +109,24 @@ export default function ScoutingView({ players }) {
         setBoardList(list);
         setBoards(Object.fromEntries(list.map(b => [b.id, scoutingState.loadState(b.id)])));
     }, [pools]);
+
+    // Following the board, rather than having read it once.
+    //
+    // Against a store that pushes, somebody else's move arrives while this
+    // page is open — which is the entire point of a broadcast companion: the
+    // expert moves a player on stream and the people watching see it, without
+    // being told to reload.
+    //
+    // Only the board being looked at, and only where there is something to
+    // follow. localStorage cannot change behind the app's back, so there the
+    // subscription would cost a re-read of 328 entries on every edit to learn
+    // what the app already knew.
+    useEffect(() => {
+        if (!pools || !activeBoard || !repository.isLive()) return undefined;
+        return repository.follow(entriesPath(activeBoard), () => {
+            setBoards(prev => ({ ...prev, [activeBoard]: scoutingState.loadState(activeBoard) }));
+        });
+    }, [pools, activeBoard]);
 
     const state = boards[activeBoard] ?? { version: 1, entries: [] };
 

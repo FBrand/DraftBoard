@@ -9,10 +9,9 @@ import { applyProspects } from '../utils/prospects';
 import { identityKey, nameKey } from '../utils/nameMatcher';
 import { resolveAll, openRegistry, byId } from '../utils/playerRegistry';
 
-import { migrateLegacyScores } from '../utils/athleticMatrix';
 
-import { openBoards, listBoards, boardById } from '../utils/boardRegistry';
-import { openEvaluations, migrateBoardRemarks } from '../utils/evaluations';
+import { openBoards, listBoards } from '../utils/boardRegistry';
+import { openEvaluations } from '../utils/evaluations';
 import { applyPlayerFacts } from '../utils/playerFacts';
 import { seedExampleEvaluations } from '../utils/exampleEvaluations';
 
@@ -143,7 +142,7 @@ function unionOfFiles(files, keyOf) {
 
 function loadPools() {
     return openBoards()
-        .then(() => Promise.all([loadFiles(), openRegistry(), openEvaluations(), openStages(), openBoardEntries(), openDepthCharts(), openSetup()]))
+        .then(() => Promise.all([loadFiles(), openRegistry(), openEvaluations(), openStages(), openBoardEntries(listBoards().map(b => b.id)), openDepthCharts(), openSetup()]))
         .then(([files]) => {
         // Base data edited in-app — players added, corrected, or removed — is
         // shared by every board, so it is applied before anything ranks,
@@ -166,7 +165,6 @@ function loadPools() {
         // Matrix scores used to have a store of their own. Now that every
         // player has a record to hang facts on, they move onto it — here,
         // because this is the first moment the records exist to move them to.
-        migrateLegacyScores();
 
         // School and the draft outcome are in no rankings file, so they are
         // seeded onto the records here. AWAITED, unlike before: the pool is
@@ -236,18 +234,10 @@ function loadPools() {
             // way: after this the board lives in storage and is read from
             // there. Favourites are seeded as part of it.
             scoutingState.seedBoard(board, pools[board]);
-            // Entries written before the registry existed are joined to their
-            // player once, here, rather than by name on every read.
+            // A seeded entry is joined to its player here rather than by name
+            // on every read.
             scoutingState.attachPlayerIds(board, pools[board]);
             scoutingState.seedFavourites(board, pools[board]);
-
-            // Remarks used to be three arrays of strings on each entry, which
-            // meant they froze with the board. They move to the person who
-            // wrote them; see utils/evaluations.js. After attachPlayerIds, so
-            // there is an id to hang each one on.
-            const state = scoutingState.loadState(board);
-            const carried = migrateBoardRemarks(boardById(board), state.entries);
-            if (carried) scoutingState.saveState(board, { ...state, entries: carried });
         });
 
         // The shipped worked example — see exampleEvaluations.js. After the

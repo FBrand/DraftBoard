@@ -15,6 +15,9 @@ import { test } from '@playwright/test';
 import {
     expect, TABS, openWarm, openCold, gotoTab, slotNames, dragTo, trackErrors,
 } from './helpers';
+// The store's own rename, so an assertion about a stored document cannot
+// drift from how the document is actually written.
+import { playerFields } from '../../src/data/fieldNames.js';
 
 test.describe('rendering', () => {
     test('every tab renders, with no console errors and no native dialogs', async ({ page }) => {
@@ -397,17 +400,14 @@ test.describe('what he plays and where he stands', () => {
         await expect(modal).toBeHidden();
 
         expect(await slotNames(page)).toContain('Test Tackle');
-        // Read whatever shape the collection is in. This assertion has broken
-        // three times on storage layout alone — a flattened path key, then a
-        // root tree with the documents under `docs`, now a plain map again —
-        // without the app ever being at fault. `docs ?? raw` survives all of
-        // them, because the question here is about the registry, not about how
-        // the registry happens to be filed.
-        const recorded = await page.evaluate(() => {
-            const raw = JSON.parse(localStorage.getItem('db_players') || '{}');
-            return Object.values(raw.docs ?? raw)
-                .find(p => p && p.name === 'Test Tackle')?.position;
-        });
+        // This assertion has broken four times on storage alone — a flattened
+        // path key, a root tree, a plain map again, and now short field names —
+        // without the app ever being at fault. It reads through the same
+        // rename the store uses, so it cannot drift from it again.
+        const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('db_players') || '{}'));
+        const recorded = Object.values(stored)
+            .map(d => playerFields.fat(d))
+            .find(d => d.name === 'Test Tackle')?.position;
         expect(recorded, 'the depth chart overwrote what he plays').toBe('OT');
     });
 });
@@ -526,13 +526,17 @@ test.describe('the draft board in normal view', () => {
 
         // Wind the seeded, completed draft back to a handful of picks so there
         // are drafted and undrafted players sharing a tier.
-        await page.evaluate(() => {
-            // A pick is a FACT ON THE PLAYER now — draftPick, team, draftYear on
-            // his registry record — so winding the draft back to pick nine means
-            // clearing those facts, not deleting documents from a picks
-            // collection. This named db_draft_picks, which no longer exists: the
-            // read returned {}, the draft wound back to nothing, and the test went
-            // on asserting about a board with no drafted players on it.
+        // The store's own field names, passed in rather than spelled out, so
+        // this cannot drift from how a record is actually written. It already
+        // has: it named db_draft_picks after the picks collection was deleted,
+        // read {}, wound the draft back to nothing, and went on asserting about
+        // a board with no drafted players on it.
+        const FACTS = ['draftPick', 'draftYear', 'team', 'isUdfa'].map(f => playerFields.map[f]);
+        await page.evaluate(({ facts }) => {
+            // A pick is a FACT ON THE PLAYER — draftPick, team, draftYear on his
+            // registry record — so winding the draft back to pick nine means
+            // clearing those facts.
+            const [PICK, , , UDFA] = facts;
             const PLAYERS = 'db_players';
             const STATE = 'db_draft_state';
             const players = JSON.parse(localStorage.getItem(PLAYERS) || '{}');
@@ -540,22 +544,19 @@ test.describe('the draft board in normal view', () => {
             const stateId = Object.keys(stateDocs)[0];
 
             Object.entries(players).forEach(([id, rec]) => {
-                const n = Number(rec.draftPick);
-                const drafted = Number.isFinite(n) || rec.isUdfa === true;
+                const n = Number(rec[PICK]);
+                const drafted = Number.isFinite(n) || rec[UDFA] === true;
                 if (!drafted) return;
                 if (Number.isFinite(n) && n <= 9) return;
                 players[id] = { ...rec };
-                delete players[id].draftPick;
-                delete players[id].draftYear;
-                delete players[id].team;
-                delete players[id].isUdfa;
+                facts.forEach(f => { delete players[id][f]; });
             });
             localStorage.setItem(PLAYERS, JSON.stringify(players));
 
             const st = { ...stateDocs[stateId].value, currentPick: 10 };
             stateDocs[stateId] = { ...stateDocs[stateId], value: st };
             localStorage.setItem(STATE, JSON.stringify(stateDocs));
-        });
+        }, { facts: FACTS });
         await page.reload();
         await page.waitForSelector('.center-board-container .player-card', { timeout: 45_000 });
 
@@ -634,15 +635,20 @@ test.describe('when the store refuses', () => {
         await page.evaluate(() => {
             window.__realSet = Storage.prototype.setItem;
             Storage.prototype.setItem = function (k, v) {
-                // Anything the depth chart writes, wherever it happens to live.
+                // Anything the depth chart writes, wherever it lives.
                 //
-                // This has now been wrong three times by naming one exact key:
-                // db_depth_rows, then a flattened path, then db_seasons. Each
-                // time the address moved, the injection matched nothing, the
-                // write succeeded, and the test went on asserting that a sync
-                // indicator appears for a save that worked. Matching on what
-                // the value CONTAINS cannot rot the same way.
-                if (window.__broken && String(k).startsWith('db_') && /"slots"/.test(String(v))) {
+                // This has been wrong FOUR times by naming something that then
+                // moved: db_depth_rows, a flattened path, db_seasons, and the
+                // literal "slots" once field names were shortened. Every time,
+                // the injection matched nothing, the write succeeded, and the
+                // test went on asserting that a sync indicator appears for a
+                // save that worked — passing for the wrong reason.
+                //
+                // So it counts. __refused is asserted below: if this predicate
+                // ever stops matching, the test fails saying so rather than
+                // quietly testing nothing.
+                if (window.__broken && /^db_seasons\/.*\/charts\//.test(String(k))) {
+                    window.__refused = (window.__refused ?? 0) + 1;
                     throw new Error('backend unreachable');
                 }
                 return window.__realSet.call(this, k, v);
@@ -660,6 +666,9 @@ test.describe('when the store refuses', () => {
 
         // Kept, not rolled back. Losing the work is the thing being guarded
         // against, not an acceptable response to it.
+        expect(await page.evaluate(() => window.__refused ?? 0),
+            'the failure injection never matched a write — this test would pass for the wrong reason')
+            .toBeGreaterThan(0);
         await expect(page.locator('.sync-status')).toContainText('unsaved', { timeout: 20_000 });
         const moved = await slotNames(page);
 
@@ -689,15 +698,20 @@ test.describe('when the store refuses', () => {
         await page.evaluate(() => {
             window.__realSet = Storage.prototype.setItem;
             Storage.prototype.setItem = function (k, v) {
-                // Anything the depth chart writes, wherever it happens to live.
+                // Anything the depth chart writes, wherever it lives.
                 //
-                // This has now been wrong three times by naming one exact key:
-                // db_depth_rows, then a flattened path, then db_seasons. Each
-                // time the address moved, the injection matched nothing, the
-                // write succeeded, and the test went on asserting that a sync
-                // indicator appears for a save that worked. Matching on what
-                // the value CONTAINS cannot rot the same way.
-                if (window.__broken && String(k).startsWith('db_') && /"slots"/.test(String(v))) {
+                // This has been wrong FOUR times by naming something that then
+                // moved: db_depth_rows, a flattened path, db_seasons, and the
+                // literal "slots" once field names were shortened. Every time,
+                // the injection matched nothing, the write succeeded, and the
+                // test went on asserting that a sync indicator appears for a
+                // save that worked — passing for the wrong reason.
+                //
+                // So it counts. __refused is asserted below: if this predicate
+                // ever stops matching, the test fails saying so rather than
+                // quietly testing nothing.
+                if (window.__broken && /^db_seasons\/.*\/charts\//.test(String(k))) {
+                    window.__refused = (window.__refused ?? 0) + 1;
                     throw new Error('backend unreachable');
                 }
                 return window.__realSet.call(this, k, v);
@@ -708,6 +722,9 @@ test.describe('when the store refuses', () => {
         await dragTo(page, page.locator('.rv-slot-name').first(), page.locator('.rv-slot-name').nth(2));
         await expect.poll(() => slotNames(page), { timeout: 20_000 }).not.toEqual(before);
         const moved = await slotNames(page);
+        expect(await page.evaluate(() => window.__refused ?? 0),
+            'the failure injection never matched a write — this test would pass for the wrong reason')
+            .toBeGreaterThan(0);
         await expect(page.locator('.sync-status')).toContainText('unsaved', { timeout: 20_000 });
 
         // A queue in memory is a queue a reload throws away — and a reload is

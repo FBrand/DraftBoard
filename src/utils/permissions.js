@@ -36,9 +36,27 @@ export function getCurrentUser() {
     return currentUser;
 }
 
-/** Whether anybody is signed in. Viewers are not, and that is the normal case. */
+/**
+ * Whether anybody is signed in at all — an anonymous viewer included.
+ * Almost no caller wants this one; see isExpert.
+ */
 export function isSignedIn() {
     return !!currentUser?.id;
+}
+
+/**
+ * Whether the signed-in person is an expert — somebody whose writes the
+ * database will actually accept.
+ *
+ * A viewer IS signed in, anonymously, so that his play-along has an identity
+ * of its own. He is the author of nothing. Asking isSignedIn() here is the
+ * trap auth.js warns about, and it is not hypothetical: every board carries an
+ * ownerId, so the moment anonymous sign-in is wired up, "is this mine?" starts
+ * answering no for every board a viewer opens, and the app stops letting him
+ * touch his own play-along.
+ */
+export function isExpert() {
+    return !!currentUser?.id && currentUser.provider !== 'anonymous' && !currentUser.isAnonymous;
 }
 
 /**
@@ -67,7 +85,7 @@ export function editRefusal(subject = {}) {
         };
     }
 
-    if (subject.ownerId && isSignedIn() && subject.ownerId !== currentUser.id) {
+    if (subject.ownerId && isExpert() && subject.ownerId !== currentUser.id) {
         return {
             reason: 'not-yours',
             message: 'This board belongs to somebody else. Copy it to make your own.',

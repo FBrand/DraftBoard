@@ -25,7 +25,7 @@ import { repository } from './repository';
  * @param {Function} [config.scopeOf]   (doc) => the scope a document belongs to
  * @param {Function} [config.strip]     (doc) => the item, minus filing fields
  */
-export function createDocSet({ collection, idOf, scopeOf, strip }) {
+export function createDocSet({ collection, idOf, scopeOf, strip, keyField }) {
     /**
      * Which documents are in a scope, answered from the KEY.
      *
@@ -34,14 +34,8 @@ export function createDocSet({ collection, idOf, scopeOf, strip }) {
      * `${scope}__${rest}`, so the key already says it, and scopes here are a
      * season id joined to a fixed stage name: neither can be a `__`-prefixed
      * extension of another.
-     *
-     * Documents written by an older build still carry `scope`, so that is
-     * honoured where present — this reads both shapes and writes only the new
-     * one.
      */
-    const belongsTo = scopeOf ?? ((doc, scope, id) => (
-        doc.scope !== undefined ? doc.scope === scope : String(id).startsWith(`${scope}__`)
-    ));
+    const belongsTo = scopeOf ?? ((doc, scope, id) => String(id).startsWith(`${scope}__`));
 
     /** The documents in one scope, each carrying its own id again. */
     const mine = (scope) => {
@@ -67,14 +61,13 @@ export function createDocSet({ collection, idOf, scopeOf, strip }) {
     const filed = (doc) => {
         const out = { ...doc };
         delete out.id;
-        delete out.scope;
+        if (keyField) delete out[keyField];
         return out;
     };
 
     const unfile = strip ?? ((doc) => {
         const item = { ...doc };
         delete item.id;
-        delete item.scope;
         delete item.order;
         return item;
     });
@@ -103,12 +96,12 @@ export function createDocSet({ collection, idOf, scopeOf, strip }) {
                 const id = idOf(scope, item, order);
                 if (seen.has(id)) return; // two of the same thing; the first wins
                 seen.add(id);
-                // Neither `id` nor `scope` is stored: the key states both, and
-                // a document that repeats its own key pays for it on every
-                // write, in every season, forever.
+                // Nothing the key already says is stored. A document that
+                // repeats its own address pays for it on every write, in every
+                // season, forever — and gives a rename two places to disagree.
                 const doc = { order, ...item };
                 delete doc.id;
-                delete doc.scope;
+                if (keyField) delete doc[keyField];
                 const before = current.get(id);
                 if (!before || !shallowSame(filed(before), doc)) changes.push({ id, doc });
             });

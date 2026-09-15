@@ -19,13 +19,17 @@
  */
 import { createDocSet } from './docSet';
 import { repository } from './repository';
+import { rowFields, slotFields } from './fieldNames';
 
-/** The pre-path collections. Read once for migration; never written. */
-export const DEPTH_ROWS = 'depth_rows';
-export const DEPTH_BANDS = 'depth_bands';
-
-/** Which chart a row belongs to: one stage, one season. */
-export const chartScope = (stage, seasonId) => `${seasonId ?? '_'}__${stage}`;
+/**
+ * A slot list, short names in the store and long ones in the app.
+ *
+ * Nulls are load-bearing — an empty slot in the middle of a depth row is how
+ * the chart says "nobody here yet" without closing the gap — so they survive
+ * rather than being filtered out.
+ */
+const leanSlots = (slots) => (slots ?? []).map(x => (x ? slotFields.lean(x) : null));
+const fatSlots = (slots) => (slots ?? []).map(x => (x ? slotFields.fat(x) : null));
 
 /**
  * A chart's rows are a collection of their own.
@@ -62,55 +66,35 @@ function rowsOf(stage, seasonId) {
             // row the same document and the chart collapsed to whichever row
             // was written last.
             idOf: (_scope, row) => row.rowId,
+            keyField: 'rowId',
             scopeOf: () => true,
-            strip: (doc) => ({
-                id: doc.rowId,
-                label: doc.label,
-                slots53: doc.slots53,
-                phase: doc.phase,
-                slots: doc.slots ?? [],
-            }),
+            // `doc.id` is the key docSet reattaches on read, and the key IS
+            // the rowId — idOf says so. The row used to store `rowId` as well,
+            // which is the document stating its own address, the one thing
+            // every other collection here stopped doing.
+            // Long names in the app, short ones in the store — field names
+            // were 45% of this collection. See fieldNames.js.
+            strip: (doc) => {
+                const row = rowFields.fat(doc);
+                return {
+                    id: doc.id ?? row.rowId,
+                    label: row.label,
+                    slots53: row.slots53,
+                    phase: row.phase,
+                    slots: fatSlots(row.slots),
+                };
+            },
         }));
     }
     return sets.get(path);
 }
 
-/**
- * Moves a chart under its season, once, the first time it is looked at.
- *
- * Same shape as the board-entry move: read at the old address, rewrite at the
- * new one, drop the old. Runs at most once per chart, because afterwards the
- * shared collection holds nothing under that prefix.
- */
-function migrateChart(stage, seasonId) {
-    const scope = chartScope(stage, seasonId);
-    const legacy = repository.docs(DEPTH_ROWS) ?? {};
-    const prefix = `${scope}__`;
-    const mine = Object.entries(legacy).filter(([id, doc]) => doc && id.startsWith(prefix));
-    if (mine.length) {
-        repository.commit(rowsPath(stage, seasonId), mine.map(([id, doc]) => ({
-            id: id.slice(prefix.length),
-            doc: { ...doc, rowId: doc.rowId ?? id.slice(prefix.length) },
-        })));
-        repository.commit(DEPTH_ROWS, mine.map(([id]) => ({ id, doc: null })));
-    }
-
-    ['reserve', 'cuts'].forEach(name => {
-        const old = repository.get(DEPTH_BANDS, `${scope}__${name}`);
-        if (!old) return;
-        repository.set(bandsPath(stage, seasonId), name, { slots: old.slots ?? [] });
-        repository.remove(DEPTH_BANDS, `${scope}__${name}`);
-    });
-}
-
+/** Nothing to open: a chart's rows load on demand, at its own path. */
 export function openDepthCharts() {
-    // Only the legacy collections, so a chart written by an older build can be
-    // found and moved. A chart's own rows load on demand.
-    return Promise.all([repository.ready(DEPTH_ROWS), repository.ready(DEPTH_BANDS)]);
+    return Promise.resolve();
 }
 
 export function hasChart(stage, seasonId) {
-    migrateChart(stage, seasonId);
     return rowsOf(stage, seasonId).has(SCOPE);
 }
 
@@ -119,7 +103,6 @@ export function hasChart(stage, seasonId) {
  * `{ positionConfig: { offense, defense }, depthChart, reserve, cuts }`.
  */
 export function readChart(stage, seasonId) {
-    migrateChart(stage, seasonId);
     const all = rowsOf(stage, seasonId).read(SCOPE);
 
     const positionConfig = { offense: [], defense: [] };
@@ -131,12 +114,11 @@ export function readChart(stage, seasonId) {
         }
     });
 
-    const band = (name) => repository.get(bandsPath(stage, seasonId), name)?.slots ?? [];
+    const band = (name) => fatSlots(repository.get(bandsPath(stage, seasonId), name)?.s);
     return { positionConfig, depthChart, reserve: band('reserve'), cuts: band('cuts') };
 }
 
 export function writeChart(stage, seasonId, state) {
-    migrateChart(stage, seasonId);
     const { positionConfig = { offense: [], defense: [] }, depthChart = {} } = state;
 
     // Rows in display order, offense then defense, each carrying its slots.
@@ -148,17 +130,24 @@ export function writeChart(stage, seasonId, state) {
         (positionConfig[phase] ?? []).forEach(chip => {
             list.push({
                 rowId: chip.id,
-                label: chip.label,
-                slots53: chip.slots53,
-                phase,
-                slots: depthChart[chip.id] ?? [],
+                ...rowFields.lean({
+                    label: chip.label,
+                    slots53: chip.slots53,
+                    phase,
+                    slots: leanSlots(depthChart[chip.id]),
+                }),
             });
         });
     });
     const configured = new Set(list.map(r => r.rowId));
     Object.keys(depthChart).forEach(rowId => {
         if (configured.has(rowId)) return;
-        list.push({ rowId, label: rowId, slots53: 1, phase: null, slots: depthChart[rowId] ?? [] });
+        list.push({
+            rowId,
+            ...rowFields.lean({
+                label: rowId, slots53: 1, phase: null, slots: leanSlots(depthChart[rowId]),
+            }),
+        });
     });
 
     rowsOf(stage, seasonId).write(SCOPE, list);
@@ -169,8 +158,8 @@ export function writeChart(stage, seasonId, state) {
     const band = (name, slots) => {
         const path = bandsPath(stage, seasonId);
         const before = repository.get(path, name);
-        const next = { slots: slots ?? [] };
-        if (!before || JSON.stringify(before.slots ?? []) !== JSON.stringify(next.slots)) {
+        const next = { s: leanSlots(slots) };
+        if (!before || JSON.stringify(before.s ?? []) !== JSON.stringify(next.s)) {
             repository.set(path, name, next);
         }
     };
@@ -179,7 +168,6 @@ export function writeChart(stage, seasonId, state) {
 }
 
 export function removeChart(stage, seasonId) {
-    migrateChart(stage, seasonId);
     return Promise.all([
         rowsOf(stage, seasonId).removeAll(SCOPE),
         repository.remove(bandsPath(stage, seasonId), 'reserve'),

@@ -34,3 +34,14 @@ dist-test/
 # Screenshots from ad-hoc browser probes
 .shots/
 .audit/
+dist-fb/
+dist-fb2/
+dist-fbbroken/
+
+# The emulator's debug log. It reached 2.4GB in one session of audit runs and
+# degraded the emulator itself — a rules test that had always passed started
+# failing, and app writes stopped completing.
+firestore-debug.log
+firebase-debug.log
+ui-debug.log
+dist-prof/

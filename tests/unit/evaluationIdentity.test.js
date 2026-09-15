@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
     ownerIdFor, openEvaluations, remarksFor, addRemark,
-    updateRemarkText, removeRemark, migrateBoardRemarks, REMARK_KINDS,
+    updateRemarkText, removeRemark, REMARK_KINDS,
 } from '../../src/utils/evaluations';
 import { openBoards, allBoards, renameBoard, renameAuthor, authorOf, currentSeason } from '../../src/utils/boardRegistry';
 import { repository } from '../../src/data/repository';
@@ -154,30 +154,5 @@ describe('editing and deleting', () => {
         const owner = ownerIdFor(personal());
         expect(removeRemark(owner, 'p1', 'r_nope')).toBe(false);
         expect(updateRemarkText(owner, 'p1', 'r_nope', 'x')).toBe(false);
-    });
-});
-
-describe('remarks that used to live on the board', () => {
-    it('moves each legacy field onto the owner, stamped with the board’s season', () => {
-        const board = personal();
-        const entries = [
-            { name: 'Fernando Mendoza', playerId: 'p_mendoza', strengths: ['Arm'], weaknesses: ['Footwork'], notes: ['Watch the bowl game'] },
-            { name: 'Arvell Reese', playerId: 'p_reese' },
-        ];
-
-        const migrated = migrateBoardRemarks(board, entries);
-
-        expect(migrated).not.toBeNull();
-        expect(migrated[0].strengths).toBeUndefined();
-        expect(migrated[0].weaknesses).toBeUndefined();
-        expect(migrated[0].notes).toBeUndefined();
-
-        const moved = remarksFor(ownerIdFor(board), 'p_mendoza');
-        expect(moved.map(r => r.kind).sort()).toEqual(['note', 'strength', 'weakness']);
-        moved.forEach(r => expect(r.seasonId).toBe(board.seasonId));
-    });
-
-    it('says so rather than churning when there is nothing to move', () => {
-        expect(migrateBoardRemarks(personal(), [{ name: 'Arvell Reese', playerId: 'p_reese' }])).toBeNull();
     });
 });

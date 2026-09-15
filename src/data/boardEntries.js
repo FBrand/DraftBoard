@@ -19,12 +19,7 @@
 import { repository } from './repository';
 import { identityKey } from '../utils/nameMatcher';
 import { byId } from '../utils/playerRegistry';
-
-/**
- * The flat collection every board's entries USED to share. Kept only so that
- * a board saved by an older build is found once and moved.
- */
-export const BOARD_ENTRIES = 'board_entries';
+import { entryFields } from './fieldNames';
 
 /**
  * One board's entries, at a path of their own.
@@ -45,10 +40,25 @@ export const BOARD_ENTRIES = 'board_entries';
  */
 export const entriesPath = (boardId) => `boards/${boardId}/entries`;
 
-export function openBoardEntries() {
-    // The legacy flat collection, so a board written by an older build can be
-    // found and moved on first read. Per-board paths load on demand.
-    return repository.ready(BOARD_ENTRIES);
+/**
+ * Loads the named boards' entries, so a synchronous read can answer for them.
+ *
+ * This used to return a resolved promise and do nothing, on the reasoning that
+ * entries "load on demand at their own path". Against localStorage that holds —
+ * `loadSync` fills the collection the instant anything reads it. Against a
+ * remote store it is the difference between following a broadcast and not:
+ * `hasEntries()` reads synchronously, an unloaded collection answers "no
+ * entries", and the CSV is then seeded over the top of the board that was
+ * already there. Because the local overlay wins over the shared store, the
+ * viewer kept that copy for good — Firestore said round 1, his screen said
+ * round 6, and nothing the expert did ever reached him.
+ *
+ * Takes the ids rather than fetching the board list itself: boardRegistry
+ * imports this module, and reaching back into it would close the cycle.
+ */
+export function openBoardEntries(boardIds) {
+    const ids = boardIds == null ? [] : [].concat(boardIds).filter(Boolean);
+    return Promise.all(ids.map(id => repository.ready(entriesPath(id))));
 }
 
 /**
@@ -73,19 +83,8 @@ export function entryDocId(boardId, entry) {
  * has nothing under that prefix.
  */
 function onBoard(boardId) {
-    const path = entriesPath(boardId);
-    const own = repository.docs(path) ?? {};
-    if (Object.keys(own).length) return Object.entries(own).filter(([, doc]) => doc);
-
-    const legacy = repository.docs(BOARD_ENTRIES) ?? {};
-    const prefix = `${boardId}__`;
-    const mine = Object.entries(legacy).filter(([id, doc]) => doc && id.startsWith(prefix));
-    if (!mine.length) return [];
-
-    const moved = mine.map(([id, doc]) => [id.slice(prefix.length), doc]);
-    repository.commit(path, moved.map(([id, doc]) => ({ id, doc })));
-    repository.commit(BOARD_ENTRIES, mine.map(([id]) => ({ id, doc: null })));
-    return moved;
+    const own = repository.docs(entriesPath(boardId)) ?? {};
+    return Object.entries(own).filter(([, doc]) => doc);
 }
 
 /**
@@ -105,12 +104,12 @@ function onBoard(boardId) {
  */
 export function readEntries(boardId) {
     const entries = onBoard(boardId).map(([id, doc]) => {
-        const entry = { ...doc };
+        // Long names in the app, short ones in the store — field names were
+        // 40% of this collection. See fieldNames.js.
+        const entry = entryFields.fat(doc);
         delete entry.boardId;
         delete entry.order;
-        // Pre-registry rows keep the name they were written with, because for
-        // them it is the only identity there is.
-        const playerId = doc.playerId ?? (id.startsWith('p_') ? id : null);
+        const playerId = id;
         if (playerId) {
             entry.playerId = playerId;
             const record = byId(playerId);
@@ -164,7 +163,7 @@ export function writeEntries(boardId, entries) {
         // Compared by value: a board is re-saved wholesale on every edit, and
         // writing 328 identical documents because one of them moved is the
         // thing this exists to stop.
-        if (!before || !same(filed(before), doc)) changes.push({ id, doc });
+        if (!before || !same(before, doc)) changes.push({ id, doc });
     });
 
     // Gone from the board — removed players, or a re-seed that dropped some.
@@ -211,17 +210,30 @@ function stamp(value) {
  * are not disagreeing about a fact. `name` stays only for a row with no
  * playerId, where it is the last thing identifying him.
  */
+/**
+ * The document for one entry: the fields an entry declares, and nothing else.
+ *
+ * A whitelist rather than a blacklist, because `entryFields.lean()` passes a
+ * key it does not recognise straight through under its LONG name. The app hands
+ * this whole player objects — `saveEntry` spreads the display shape over the
+ * stored one — so an edit wrote `strengths`, `weaknesses` and `notes` onto a
+ * PLACEMENT document, as empty arrays, spelled out in full. Remarks moved to
+ * evaluations/{player}/remarks precisely so they would stop riding along on
+ * boards, and field names were 40% of this collection before they were
+ * shortened — the biggest one in the app at 984 documents.
+ *
+ * Deleting the three known offenders would have fixed today's leak and left the
+ * next one to be found in production. What belongs in this document is a
+ * question the document should answer.
+ */
+const DECLARED = new Set(Object.keys(entryFields.map));
+
 function filed(entry) {
-    const out = { ...entry };
-    delete out.id;
-    delete out.boardId;
-    delete out.order;
-    if (out.playerId) {
-        delete out.playerId;   // the key says it
-        delete out.name;       // the registry says it
-        delete out.school;
-    }
-    return out;
+    const out = {};
+    Object.entries(entry ?? {}).forEach(([k, v]) => { if (DECLARED.has(k)) out[k] = v; });
+    // playerId, name and school are deliberately absent: the key says who this
+    // is, and the registry says what he is called.
+    return entryFields.lean(out);
 }
 
 function withoutNulls(entry) {

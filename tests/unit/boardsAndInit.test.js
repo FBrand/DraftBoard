@@ -37,7 +37,14 @@ describe('which way the app comes back up', () => {
 });
 
 describe('wiping', () => {
-    const stageKeys = ['rosterState', 'fa_state_v1', 'nfl_draft_board_state', 'db_players'];
+    // Every collection is a path under db_. The per-stage keys these used to
+    // name belonged to the pre-repository shapes, and nothing writes them.
+    const stageKeys = [
+        'db_players',
+        'db_boards/b1/entries',
+        'db_seasons/s1/charts/rosterState/rows',
+        'db_seasons/s1/stages',
+    ];
 
     it('clears every stage, not just the ones a literal list could name', () => {
         stageKeys.forEach(k => localStorage.setItem(k, '{"x":1}'));
@@ -49,7 +56,7 @@ describe('wiping', () => {
         stageKeys.forEach(k => expect(localStorage.getItem(k), k).toBeNull());
         // The boards are the ones that got left behind before, because their
         // key contains a board id and no fixed list can spell it.
-        expect(localStorage.getItem(`scouting_board_v1__${board.id}`)).toBeNull();
+        expect(localStorage.getItem(`db_boards/${board.id}/entries`)).toBeNull();
     });
 
     it('keeps the init mode itself, which is what the reload reads', () => {
@@ -83,32 +90,6 @@ describe('one analyst’s board is not another’s', () => {
         expect(loadState(board.id)).toEqual({ version: 1, entries: [] });
     });
 
-    it('moves work written under an older storage shape onto the board', () => {
-        // Two older homes: the analyst's slug, from before a board had an id,
-        // and the board's own JSON blob, from before entries were documents.
-        // Each is read once and rewritten, so a rename — or this change —
-        // does not strand the work.
-        const board = allBoards().find(b => b.authorId);
-        const legacy = { version: 1, entries: [makeEntry('Fernando Mendoza', 'QB')] };
-        localStorage.setItem(`scouting_overlay_v1__${board.slug}`, JSON.stringify(legacy));
-
-        expect(loadState(board.id).entries).toHaveLength(1);
-        // Moved, not copied — the old key is gone.
-        expect(localStorage.getItem(`scouting_overlay_v1__${board.slug}`)).toBeNull();
-        // And it survives being read again, which is what "moved" has to mean.
-        expect(loadState(board.id).entries.map(e => e.name)).toEqual(['Fernando Mendoza']);
-    });
-
-    it('reads a board written as one blob and leaves the blob behind', () => {
-        const board = allBoards().find(b => b.authorId);
-        localStorage.setItem(`scouting_board_v1__${board.id}`, JSON.stringify({
-            version: 1, entries: [makeEntry('Arvell Reese', 'EDGE')],
-        }));
-
-        expect(loadState(board.id).entries.map(e => e.name)).toEqual(['Arvell Reese']);
-        expect(localStorage.getItem(`scouting_board_v1__${board.id}`)).toBeNull();
-        expect(loadState(board.id).entries).toHaveLength(1);
-    });
 });
 
 describe('when UDFA signing opens', () => {

@@ -20,11 +20,11 @@
 import { buildNameIndex, findMatchingIndex, nameKey } from './nameMatcher';
 import { repository } from '../data/repository';
 import { prefixedId } from './ids';
+import { playerFields } from '../data/fieldNames';
 
 /** One document per player. See data/repository.js. */
 export const PLAYERS = 'players';
 
-const LEGACY_KEY = 'player_registry_v1';
 export const STATE_VERSION = 1;
 
 /**
@@ -34,18 +34,6 @@ export const STATE_VERSION = 1;
  */
 export async function openRegistry() {
     await repository.ready(PLAYERS);
-    if (repository.all(PLAYERS).length) return;
-
-    let legacy = [];
-    try {
-        const raw = localStorage.getItem(LEGACY_KEY);
-        const parsed = raw ? JSON.parse(raw) : null;
-        legacy = Array.isArray(parsed?.players) ? parsed.players : [];
-    } catch { /* nothing to carry across */ }
-
-    if (!legacy.length) return;
-    await repository.commit(PLAYERS, legacy.filter(p => p?.id).map(p => ({ id: p.id, doc: lean(p) })));
-    try { localStorage.removeItem(LEGACY_KEY); } catch { /* ignore */ }
 }
 
 // The rest of this module reads and writes through the repository but keeps a
@@ -88,7 +76,9 @@ function lean(record) {
         }
         out[k] = v;
     });
-    return out;
+    // Long names in the app, short ones in the store — field names were 43% of
+    // this collection. See data/fieldNames.js.
+    return playerFields.lean(out);
 }
 
 function writeOne(record) {
@@ -99,8 +89,11 @@ function writeMany(records) {
     repository.commit(PLAYERS, records.map(r => ({ id: r.id, doc: lean(r) })));
 }
 
-// A uuid on every origin, not only the secure ones — see utils/ids.js.
-const newId = () => prefixedId('p');
+/**
+ * A new player id, checked against the registry rather than trusted to be
+ * unique by length. See utils/ids.js — a collision here merges two people.
+ */
+const newId = (taken) => prefixedId('p', taken);
 
 const clean = (v) => String(v ?? '').trim();
 
@@ -179,7 +172,7 @@ function lookupRows(players) {
  */
 export function loadRegistry() {
     const map = repository.docs(PLAYERS) ?? {};
-    return Object.entries(map).map(([id, doc]) => (doc.id === id ? doc : { ...doc, id }));
+    return Object.entries(map).map(([id, doc]) => ({ ...playerFields.fat(doc), id }));
 }
 
 /**
@@ -225,7 +218,7 @@ export function searchPlayers(term, limit = 6) {
 
 export function byId(id) {
     const doc = repository.get(PLAYERS, id);
-    return doc && doc.id !== id ? { ...doc, id } : doc;
+    return doc ? { ...playerFields.fat(doc), id } : null;
 }
 
 /**
@@ -242,6 +235,10 @@ export function resolveAll(candidates, { create = true } = {}) {
     const index = buildNameIndex(rows);
     const ids = [];
     const created = [];
+    // Every id in the collection, plus the ones minted during this very call —
+    // resolveAll registers a whole rankings file at once, so the set has to
+    // grow as it goes or two new players could collide with each other.
+    const taken = new Set(players.map(x => x.id));
 
     (candidates ?? []).forEach(c => {
         const name = clean(c?.name);
@@ -252,7 +249,7 @@ export function resolveAll(candidates, { create = true } = {}) {
         if (!create) { ids.push(null); return; }
 
         const record = {
-            id: newId(),
+            id: newId(taken),
             name,
             position: clean(c.position).toUpperCase(),
             school: clean(c.school),
@@ -266,6 +263,7 @@ export function resolveAll(candidates, { create = true } = {}) {
         // instead of creating a second one for the same player.
         rows.push({ id: record.id, name: record.name, position: record.position, school: record.school });
         index.push(...buildNameIndex([rows[rows.length - 1]]).map(e => ({ ...e, index: rows.length - 1 })));
+        taken.add(record.id);
         ids.push(record.id);
     });
 

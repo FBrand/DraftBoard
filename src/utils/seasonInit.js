@@ -27,7 +27,7 @@
  * been set up yet" look identical in storage, and treating the first as the
  * second is what re-seeded a season somebody had deliberately cleared.
  */
-import { readStage } from '../data/stageStore';
+
 import { hasChart, readChart, writeChart } from '../data/depthChartStore';
 import { writeDraft } from '../data/draftStore';
 import { STATE_VERSION as ROSTER_VERSION } from './rosterState';
@@ -45,9 +45,6 @@ import { repository } from '../data/repository';
  * So it is a document beside the data it describes. Whoever gets there first
  * writes it; everybody else reads it and does nothing.
  */
-/** The pre-path collection. Read once for migration; never written. */
-export const SETUP = 'setup';
-
 /**
  * The markers live under the season they are about.
  *
@@ -63,13 +60,10 @@ export const SETUP = 'setup';
 export const setupPath = (seasonId) => `seasons/${seasonId ?? '_'}/setup`;
 
 const MARKER = 'season';
-const legacyMarkerId = (seasonId) => `season__${seasonId}`;
 
 /** Whether this season's stages have been set up — by anyone, anywhere. */
 export function isInitialised(seasonId) {
-    if (!seasonId) return false;
-    return !!repository.get(setupPath(seasonId), MARKER)
-        || !!repository.get(SETUP, legacyMarkerId(seasonId));
+    return !!seasonId && !!repository.get(setupPath(seasonId), MARKER);
 }
 
 export function markInitialised(seasonId) {
@@ -78,44 +72,30 @@ export function markInitialised(seasonId) {
     repository.set(setupPath(seasonId), MARKER, { at: Date.now() });
 }
 
-/** Loads the legacy markers, so a season set up by an older build is known. */
+/** Nothing to open: a season's markers load on demand, under the season. */
 export function openSetup() {
-    return repository.ready(SETUP);
+    return Promise.resolve();
 }
 
 /** Forgets one season, so scrapping it does not leave its id behind forever. */
 export function forgetSeason(seasonId) {
-    // Both addresses: a season scrapped before it was ever read may still be
-    // marked at the old one.
-    repository.remove(SETUP, legacyMarkerId(seasonId));
-    repository.remove(SETUP, `facts__${seasonId}`);
+    repository.remove(setupPath(seasonId), MARKER);
     // The shipped facts were laid over this season once; a season that no
     // longer exists has not been seeded. See playerFacts.factsSeeded.
-    repository.remove(setupPath(seasonId), MARKER);
     repository.remove(setupPath(seasonId), 'facts');
 }
 
 /**
  * Last season's roster, from wherever it actually lives.
  *
- * This read used to be `readStage('rosterState', …)` alone, and it had
- * silently stopped finding anything: the roster moved to row documents
- * (depthChartStore) so one drag writes one row, and the stage blob became the
- * legacy shape that `rosterState.loadState` reads once and migrates forward.
- *
- * Nothing failed loudly. `last` came back null, so a rollover wrote an empty
- * roster and no free agency at all — and because an empty `positionConfig`
- * does not satisfy the roster's own fallback, the new season fell through to
- * bootstrapping `roster.csv` and arrived with all 91 players from a season it
- * had nothing to do with. "New season — roster is prefilled, FA is empty" was
- * one missing store, twice.
- *
- * Same precedence the roster itself uses, so the two cannot drift apart again.
+ * Read through the depth-chart store, the same place the roster itself reads,
+ * so the two cannot drift apart. They did once: this asked the stage store
+ * while the roster had moved to row documents, came back null, and a rollover
+ * carried nothing — "new season, roster is prefilled, FA is empty" was one
+ * missing store, twice.
  */
 function readRoster(seasonId) {
-    if (hasChart('rosterState', seasonId)) return readChart('rosterState', seasonId);
-    const parsed = readStage('rosterState', seasonId);
-    return parsed?.positionConfig?.offense?.length > 0 ? parsed : null;
+    return hasChart('rosterState', seasonId) ? readChart('rosterState', seasonId) : null;
 }
 
 const EMPTY_ROSTER = () => ({

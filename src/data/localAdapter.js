@@ -34,87 +34,7 @@ const PREFIX = 'db_';
 
 const keyFor = (collection) => `${PREFIX}${collection}`;
 
-/** Every key in storage, through the Storage interface's own API. */
-function storageKeys() {
-    const out = [];
-    try {
-        for (let i = 0; i < localStorage.length; i += 1) {
-            const k = localStorage.key(i);
-            if (k) out.push(k);
-        }
-    } catch { /* unreadable */ }
-    return out;
-}
-
-/**
- * Brings forward whatever an older build wrote, once.
- *
- * Two earlier layouts exist and both have to be found, because either one
- * being missed means the app comes up empty on first load — every board, every
- * roster, every evaluation apparently gone, when they are only at an address
- * nothing asks for.
- *
- *   1. Flattened path keys: `db_seasons__s_1__charts__rosterState__rows`.
- *      Split on `__`; safe because nothing in a path contains a double
- *      underscore — ids are a prefix plus a uuid or base36, stage names are
- *      single-underscored, kinds are one letter.
- *   2. A root tree: `db_seasons` holding `{ docs, sub }`, walked so each node's
- *      documents go to their own key.
- */
-let migrated = false;
-
-function migrateOnce() {
-    if (migrated) return;
-    migrated = true;
-
-    const moves = [];
-
-    storageKeys().forEach(key => {
-        if (!key.startsWith(PREFIX)) return;
-        const rest = key.slice(PREFIX.length);
-
-        let value = null;
-        try { value = JSON.parse(localStorage.getItem(key) ?? 'null'); } catch { return; }
-        if (!value || typeof value !== 'object' || Array.isArray(value)) return;
-
-        // A root tree — nothing else carries `docs` or `sub` at the top.
-        if (value.docs || value.sub) {
-            const walk = (node, trail) => {
-                if (node.docs && Object.keys(node.docs).length) {
-                    moves.push({ path: [rest, ...trail].join('/'), docs: node.docs });
-                }
-                Object.entries(node.sub ?? {}).forEach(([step, child]) => walk(child, [...trail, step]));
-            };
-            walk(value, []);
-            moves.push({ drop: key });
-            return;
-        }
-
-        // A flattened path key.
-        if (rest.includes('__')) {
-            moves.push({ path: rest.split('__').filter(Boolean).join('/'), docs: value });
-            moves.push({ drop: key });
-        }
-    });
-
-    if (!moves.length) return;
-    try {
-        // Drops first, writes after. A root tree's own documents land at the
-        // root's own path — `db_seasons` holds both the old tree and the new
-        // `seasons` collection — so writing before dropping deleted exactly
-        // what had just been written.
-        moves.filter(m => m.drop).forEach(m => localStorage.removeItem(m.drop));
-        moves.filter(m => m.path).forEach(m => {
-            const target = keyFor(m.path);
-            let existing = {};
-            try { existing = JSON.parse(localStorage.getItem(target) ?? '{}') ?? {}; } catch { existing = {}; }
-            localStorage.setItem(target, JSON.stringify({ ...existing, ...m.docs }));
-        });
-    } catch { /* a full quota leaves the old keys in place; nothing is lost */ }
-}
-
 function readAll(collection) {
-    migrateOnce();
     try {
         const raw = localStorage.getItem(keyFor(collection));
         if (!raw) return {};
@@ -185,10 +105,5 @@ export const localAdapter = {
         try { localStorage.removeItem(keyFor(collection)); } catch { /* ignore */ }
     },
 };
-
-/** Lets a test — or a clean slate — forget that the migration already ran. */
-export function resetLegacyFold() {
-    migrated = false;
-}
 
 export { keyFor as collectionKey };

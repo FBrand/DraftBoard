@@ -47,20 +47,80 @@ export function createRepository(adapter = localAdapter) {
      */
     function withPending(collection, docs) {
         const merged = { ...(docs ?? {}) };
-        pending.forEach(w => {
+        const lay = (w) => {
             if (w.collection !== collection) return;
             if (w.doc === null) delete merged[w.id];
             else merged[w.id] = w.doc;
-        });
+        };
+        sending.forEach(lay);   // sent, not acknowledged
+        pending.forEach(lay);   // refused, waiting to be retried
         return merged;
+    }
+
+    /**
+     * Collections the STORE has answered for.
+     *
+     * Deliberately not `cache.has()`. A write primes the cache for a collection
+     * that may never have loaded — `applyLocal` and `commit` both have to, so
+     * the change shows at once — and `ready()` reading `cache.has()` took that
+     * one document as the whole collection and skipped the store for good.
+     *
+     * Against a local adapter that is invisible: the write went to the same
+     * place the read would have come from. Against a remote one a viewer opened
+     * the app, something wrote a single document before the season had arrived,
+     * and `openBoards()` awaited a `ready()` that resolved instantly on an
+     * empty collection — so it concluded nobody had ever made a board and
+     * seeded a private season over the top of the expert's. 6 boots out of 6.
+     *
+     * `restoreQueue` documents the same trap and guards it by hand; this is
+     * that guard made general.
+     */
+    const loaded = new Set();
+
+    /**
+     * Collections being kept up to date by the store, and how to stop.
+     *
+     * Only a store that can push has any — localStorage cannot change behind
+     * the app's back, so nothing is listened to and no watcher is started.
+     */
+    const watchers = new Map();
+
+    /** How many callers are following each collection. */
+    const followers = new Map();
+
+    /**
+     * Writes sent to the store and not yet acknowledged.
+     *
+     * `pending` holds writes that FAILED and are waiting to be retried. That
+     * was the whole story while the store only ever answered when asked: a
+     * write in flight needed no protection, because nothing could overwrite
+     * the cache underneath it.
+     *
+     * A store that pushes changes it. A snapshot can arrive in the gap
+     * between showing somebody's drag and the server accepting it, carrying
+     * the position the player was in before — so he would jump back across
+     * the board, and then jump forward again a moment later when the write
+     * landed. On a live broadcast that reads as the app losing the pick.
+     */
+    const sending = new Map();
+
+    function startSending(collection, id, doc, op) {
+        if (id == null) return () => {};
+        const key = keyOf(collection, id);
+        sending.set(key, { collection, id, doc, op });
+        return () => sending.delete(key);
     }
 
     /** Loads a collection into memory once. Returns a promise for the caller. */
     function ready(collection) {
-        if (cache.has(collection)) return Promise.resolve(cache.get(collection));
+        if (loaded.has(collection)) return Promise.resolve(cache.get(collection));
         if (loading.has(collection)) return loading.get(collection);
 
         const promise = adapter.load(collection).then(docs => {
+            // A read the store could not answer must not count as loaded, or a
+            // transient failure would be cached for the life of the page and
+            // never retried.
+            if (!adapter.readFailed?.(collection)) loaded.add(collection);
             // Anything still queued is NEWER than anything the store can
             // return — that is what "not saved yet" means — so it goes on top.
             cache.set(collection, withPending(collection, docs));
@@ -70,6 +130,85 @@ export function createRepository(adapter = localAdapter) {
         });
         loading.set(collection, promise);
         return promise;
+    }
+
+    /**
+     * Keeps a collection up to date once it has loaded.
+     *
+     * The load still happens first and is still what ready() resolves on: a
+     * caller awaiting it needs an answer even if the connection never opens,
+     * and a first snapshot that never arrives would hang the app rather than
+     * show it a stale board. This is the difference between reading the shared
+     * record and following it — an expert moves a player and the people
+     * watching see it, without being told to reload.
+     *
+     * A pending write still wins, same as on load. Somebody who has just
+     * dragged a player must not watch him jump back because the store answered
+     * a moment later with the version it held before.
+     */
+    /**
+     * Follows a collection: subscribes to it AND keeps it up to date from the
+     * store, for as long as somebody is listening.
+     *
+     * Opt-in, per collection, and counted — because a listener is not free.
+     * Every collection the app touches was watched at first, which is twenty
+     * open streams per viewer: on a real project that is twenty times the
+     * reads, and against the emulator it was enough to fill the log with
+     * NETWORK_ERROR and leave the client wedged offline, where writes queue
+     * for ever and nothing says why. A board is worth following. The season
+     * record and the player registry are read once and change almost never.
+     *
+     * @returns {() => void} stop listening; the last one out stops the watch
+     */
+    function follow(collection, fn) {
+        const unsubscribe = subscribe(collection, fn);
+        followers.set(collection, (followers.get(collection) ?? 0) + 1);
+        startWatching(collection);
+        let done = false;
+        return () => {
+            if (done) return;
+            done = true;
+            unsubscribe();
+            const left = (followers.get(collection) ?? 1) - 1;
+            if (left > 0) { followers.set(collection, left); return; }
+            followers.delete(collection);
+            stopWatching(collection);
+        };
+    }
+
+    function startWatching(collection) {
+        if (!adapter.watch || watchers.has(collection)) return;
+        const stop = adapter.watch(
+            collection,
+            (docs) => {
+                // Dropped rather than applied if the collection has since been
+                // invalidated — a late snapshot would otherwise resurrect what
+                // a wipe has just removed.
+                if (!loaded.has(collection)) return;
+                cache.set(collection, withPending(collection, docs));
+                notify(collection);
+            },
+            (err) => reportWriteError({
+                collection,
+                id: null,
+                op: 'watch',
+                error: err,
+                permanent: false,
+                advice: 'Live updates stopped. What is on screen is the last the store sent.',
+            }),
+        );
+        watchers.set(collection, stop);
+    }
+
+    function stopWatching(collection) {
+        if (collection == null) {
+            watchers.forEach(stop => { try { stop(); } catch { /* already gone */ } });
+            watchers.clear();
+            return;
+        }
+        const stop = watchers.get(collection);
+        if (stop) { try { stop(); } catch { /* already gone */ } }
+        watchers.delete(collection);
     }
 
     /**
@@ -111,6 +250,27 @@ export function createRepository(adapter = localAdapter) {
      */
     function isLoaded(collection) {
         return cache.has(collection) || !!adapter.loadSync;
+    }
+
+    /**
+     * Whether the last load of this collection failed to reach the store.
+     *
+     * For callers that must not mistake "could not read" for "nothing there".
+     * Always false against a store that cannot fail to be reached.
+     */
+    /**
+     * Whether the store pushes changes, or only answers when asked.
+     *
+     * A view uses this to decide whether following is worth the subscription:
+     * against localStorage nothing can change behind the app's back, so
+     * re-reading on every notify would be work with no possible new answer.
+     */
+    function isLive() {
+        return !!adapter.watch;
+    }
+
+    function loadFailed(collection) {
+        return adapter.readFailed?.(collection) ?? false;
     }
 
     function get(collection, id) {
@@ -365,6 +525,7 @@ export function createRepository(adapter = localAdapter) {
      */
     function attempt(collection, id, doc, op, run) {
         inFlight += 1;
+        const settled = startSending(collection, id, doc, op);
         announce();
         return Promise.resolve(run())
             .then(() => { lastError = null; })
@@ -380,7 +541,7 @@ export function createRepository(adapter = localAdapter) {
                 }
                 reportWriteError({ collection, id, op, error: err, permanent: verdict.permanent, advice: verdict.advice });
             })
-            .finally(() => { inFlight = Math.max(0, inFlight - 1); announce(); });
+            .finally(() => { settled(); inFlight = Math.max(0, inFlight - 1); announce(); });
     }
 
     function set(collection, id, doc) {
@@ -416,6 +577,9 @@ export function createRepository(adapter = localAdapter) {
                 : adapter.set(collection, c.id, c.doc))));
 
         inFlight += 1;
+        const settled = changes.map(c => startSending(
+            collection, c.id, c.doc, c.doc === null ? 'remove' : 'set',
+        ));
         announce();
         return Promise.resolve(write)
             .then(() => { lastError = null; })
@@ -432,12 +596,14 @@ export function createRepository(adapter = localAdapter) {
                 if (verdict.permanent) { gaveUp = true; persistQueue(); }
                 reportWriteError({ collection, id: null, op: 'commit', error: err, permanent: verdict.permanent, advice: verdict.advice });
             })
-            .finally(() => { inFlight = Math.max(0, inFlight - 1); announce(); });
+            .finally(() => { settled.forEach(done => done()); inFlight = Math.max(0, inFlight - 1); announce(); });
     }
 
     function clear(collection) {
         cache.delete(collection);
+        loaded.delete(collection);
         loading.delete(collection);
+        stopWatching(collection);
         notify(collection);
         return adapter.clear ? adapter.clear(collection) : Promise.resolve();
     }
@@ -451,8 +617,9 @@ export function createRepository(adapter = localAdapter) {
 
     /** Drops the in-memory copy so the next `ready` re-reads. For a wipe. */
     function invalidate(collection) {
-        if (collection == null) { cache.clear(); loading.clear(); }
-        else { cache.delete(collection); loading.delete(collection); }
+        stopWatching(collection);
+        if (collection == null) { cache.clear(); loaded.clear(); loading.clear(); }
+        else { cache.delete(collection); loaded.delete(collection); loading.delete(collection); }
     }
 
     // Anything left from a previous visit is picked up before anything else
@@ -460,7 +627,7 @@ export function createRepository(adapter = localAdapter) {
     restoreQueue();
 
     return {
-        ready, ensureLoaded, docs, isLoaded, get, all, query,
+        ready, ensureLoaded, docs, isLoaded, loadFailed, isLive, follow, get, all, query,
         set, update, remove, commit, clear, subscribe, invalidate,
         onWriteError, onSyncChange, syncState, retryNow, adapter,
     };

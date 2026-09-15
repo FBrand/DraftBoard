@@ -26,6 +26,25 @@ exactly what a regression test must never do — so it is a tool to read, not a
 gate. It also costs about a third of the browser budget for something that
 cannot fail.
 
+**The app against an adapter with no `loadSync`.** Every synchronous read in
+this app is served by localStorage answering instantly, and no network can do
+that — `memoryAdapter` omits `loadSync` on purpose, and its header claims the
+omission is what makes those reads reveal themselves. That claim went untested
+by actually running the app until it was run for real. It is what a shared
+backend turns on, and it is worth keeping true on this branch too: a reader
+that answers late must produce an empty board, not a crash.
+
+It holds. Every stage fills from asynchronous loads alone — free agency 77
+slots, scouting 328 rows, the draft 217 cards, UDFA 9, the roster 91 — nothing
+bypasses the adapter into localStorage, and there are no console errors.
+
+```bash
+VITE_BACKEND=memory npm run build:memory
+npx vite preview --outDir dist-mem --port 4174
+docker run --rm --network host -v "$PWD":/work -w /work \
+  mcr.microsoft.com/playwright:v1.55.0-noble node /work/.audit/noLoadSync.mjs
+```
+
 ```bash
 npm test                     # unit + browser, in order
 npm run test:unit

@@ -27,11 +27,11 @@
 import { parseCsvLine, csvField } from './csvUtils';
 import { buildNameIndex, findMatchingIndex } from './nameMatcher';
 import { parseTier, tierLabel, spaceEvenly } from './boardRanking';
-import { boardStateKey } from './appStorage';
 import { readEntries, writeEntries, hasEntries, openBoardEntries } from '../data/boardEntries';
 import { boardById, BOARDS_COLLECTION } from './boardRegistry';
 import { canEdit } from './permissions';
 import { repository } from '../data/repository';
+import { boardFields } from '../data/fieldNames';
 import { ownerIdFor, remarksFor, REMARK_KINDS } from './evaluations';
 
 // Each analyst has their own rankings file, and they are genuinely different
@@ -43,22 +43,6 @@ import { ownerIdFor, remarksFor, REMARK_KINDS } from './evaluations';
 // Which boards exist is no longer a constant here: see boardRegistry.js. A
 // board is a record with an id, so an analyst can be renamed or replaced
 // without the work moving.
-const storageKey = boardStateKey;
-
-// What the key was when a board was its own name.
-const legacyKey = (slug) => `scouting_overlay_v1__${slug}`;
-
-function readKey(key) {
-    try {
-        const raw = localStorage.getItem(key);
-        if (!raw) return null;
-        const parsed = JSON.parse(raw);
-        if (parsed?.version === 1 && Array.isArray(parsed.entries)) {
-            return { ...parsed, entries: unfuseGroups(parsed.entries) };
-        }
-    } catch { /* ignore */ }
-    return null;
-}
 
 /**
  * @returns {import('../data/types').BoardEntry}
@@ -112,35 +96,9 @@ function parseListField(raw) {
     }
 }
 
-/**
- * Entries saved before round and tier were split still carry a joined "1.3"
- * `group` string. Converted on read rather than in a one-shot migration, so a
- * board written by an older build keeps working whenever it turns up.
- */
-function unfuseGroups(entries) {
-    return entries.map(e => {
-        if (!('group' in e)) return e;
-        const { group, ...rest } = e;
-        return { ...rest, ...parseTier(group) };
-    });
-}
-
 export function loadState(boardId) {
     if (hasEntries(boardId)) {
         return { version: 1, seeded: boardById(boardId)?.seeded ?? true, entries: readEntries(boardId) };
-    }
-
-    // Two older homes, newest first: the board's own blob, and the one from
-    // when the key was the analyst's name. Either is read once, written out as
-    // documents, and the old key dropped — so the work moves with the board
-    // rather than being stranded by a rename or by this change.
-    const slug = boardById(boardId)?.slug;
-    for (const key of [storageKey(boardId), slug && legacyKey(slug)].filter(Boolean)) {
-        const old = readKey(key);
-        if (!old) continue;
-        saveState(boardId, old);
-        try { localStorage.removeItem(key); } catch { /* ignore */ }
-        return old;
     }
 
     return { version: 1, entries: [] };
@@ -280,7 +238,10 @@ export function saveState(boardId, state) {
     // every entry.
     writeEntries(boardId, state.entries ?? []);
     if (state.seeded && boardById(boardId) && !boardById(boardId).seeded) {
-        repository.update(BOARDS_COLLECTION, boardId, { seeded: true });
+        // Through the board's own field map, or this writes `seeded` in full
+        // beside the short names everything else in the document uses — and
+        // then boardFields.fat would not know to read it back.
+        repository.update(BOARDS_COLLECTION, boardId, boardFields.lean({ seeded: true }));
     }
 }
 

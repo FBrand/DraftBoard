@@ -135,6 +135,14 @@ draft a card, count roster slots. Then looked at every screenshot.
 
 **Checked and NOT bugs** — recorded so they are not re-chased
 
+- **A UDFA signed by another club shows as "available" on the draft board.**
+  Deliberate, and documented where it is done: `CenterBoard` does
+  `isTaken(player) ? player : { ...player, drafted: false }`, and `DraftView`
+  passes `takenTest={isDraftPick}` — "drafted means drafted; a player signed
+  as a UDFA went undrafted, so he stays available here". The card still prints
+  "UDFA DAL", so who took him is on screen; only the dimming says available.
+  80 of 217 board cards are in this state on the shipped season.
+
 - **Touch drag-and-drop on the roster works.** Nothing in the suite covered
   it — every drag test drives a mouse, and dnd-kit runs a separate
   delay-activated TouchSensor — so it was worth proving. A finger moves a
@@ -213,8 +221,26 @@ What DOES follow from the question, and is worth doing:
 - the draft should WRITE facts for players it picks, so the pool learns
   what the session did rather than only what the file said
 
+## The storage audit, 2026-09-15
+
+Three bugs in code on this branch, all found by driving the app rather than
+reading it. The shared-backend work that surfaced two of them lives on the
+`firebase` branch, which sits on top of this one; the fixes belong here
+because the code they fix is here.
+
+| # | What | State |
+|---|---|---|
+| C1 | **One early write hid a whole collection** | A write has to prime the in-memory copy — `applyLocal` and `commit` both do, or a change would not show until the store agreed — and `ready()` read a primed cache as a loaded collection. So one document written before a collection loaded became the whole collection, and the store was never asked. `restoreQueue` documents this exact trap (A4) and guards it by hand. **Fixed:** a `loaded` set that only a completed `adapter.load` adds to. **Verified:** `tests/unit/readyAfterWrite.test.js` fails without it. Invisible against localStorage, where the write went to the same place the read would have come from — which is why it needed a store that answers late to find it. |
+| C2 | **Placement documents carried evaluation data, spelled out in full** | `entryFields.lean()` passes a key it does not recognise straight through under its LONG name, and `saveEntry` spreads the whole display shape over the stored one — so an ordinary edit wrote `strengths`, `weaknesses` and `notes` onto a board entry, as empty arrays, on the largest collection in the app. Remarks moved to `evaluations/{player}/remarks` precisely so they would stop riding along on boards, and short field names are most of why this collection fell by 76%. One unrecognised key undoes both. **Fixed:** `filed()` writes the fields an entry declares and drops the rest — a whitelist, because a blacklist fixes today's leak and leaves the next one for production. `athleticMatrixTotal`/`athleticMatrixPosition` were missing from the map too, and would have leaked the first time a board overrode one. |
+| C3 | **The boot froze the main thread for 13 seconds** | Not slow — frozen: no scroll, no click, no repaint, worst single task 3.4s. It surfaced sideways: a loop asking the page a trivial question every 500ms was taking five seconds an answer, and an evaluation cannot be slow on its own. A CPU profile put 1.96s in `getLevenshteinDistance` and 1.64s in `basePos`, both fuzzy name matching, both doing work nobody wanted — the distance function computed the full matrix when the caller rejects anything past 2, and `discriminates()` re-folded position and school for every candidate on every lookup. **Fixed and measured:** blocked time 13,067ms → 7,247ms, worst freeze 3,402ms → 1,507ms; the browser suite went 8.4m → 7.2m without being touched. No behaviour change — 51 identity-matching tests and all 37 browser tests. |
+
+**Not bugs, checked rather than assumed:** tagging a player shows, stores and
+survives a reload; entries carry only single-character field names after an
+edit.
+
 ## Standing work, ordered by the user
 
 1. Season rollover — done
-2. Deep audit, desktop and 390px — in progress
-3. Firebase migration — documented in `ROADMAP.md`, not started
+2. Deep audit, desktop and 390px — done
+3. Shared backend — on the `firebase` branch, which is this branch plus that
+   work. Nothing about it is on this branch, deliberately.

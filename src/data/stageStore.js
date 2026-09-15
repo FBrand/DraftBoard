@@ -19,10 +19,6 @@
  * collection. This one is about making the backend swappable at all.
  */
 import { repository } from './repository';
-import { seasonScopedKey } from '../utils/appStorage';
-
-/** The pre-path collection. Read once for migration; never written. */
-export const STAGES = 'stages';
 
 /**
  * A season's stages are a collection of its own.
@@ -44,34 +40,9 @@ export const stagesPath = (seasonId) => `seasons/${seasonId ?? '_'}/stages`;
 /** Every stage that lives here, by the storage key it used to have. */
 export const STAGE_KEYS = ['rosterState', 'fa_state_v1', 'nfl_draft_board_state', 'prospects_v1'];
 
-export const stageId = (base, seasonId) => `${seasonId ?? '_'}__${base}`;
-
+/** Nothing to open: a season's stages load on demand, at its own path. */
 export function openStages() {
-    // The legacy collection only, so a stage written by an older build can be
-    // found and moved. A season's stages load on demand.
-    return repository.ready(STAGES);
-}
-
-/**
- * Moves a stage off its raw key, once.
- *
- * Looks for the season-scoped key first and the unscoped one after, which is
- * the order they were introduced. Whatever is found becomes the document and
- * the raw key is dropped, so this can only happen once per stage per season.
- */
-function migrate(base, seasonId) {
-    const candidates = [seasonScopedKey(base, seasonId), base];
-    for (const key of candidates) {
-        let raw = null;
-        try { raw = localStorage.getItem(key); } catch { /* unreadable */ }
-        if (raw == null) continue;
-
-        let value = null;
-        try { value = JSON.parse(raw); } catch { value = null; }
-        try { localStorage.removeItem(key); } catch { /* ignore */ }
-        if (value && typeof value === 'object') return value;
-    }
-    return null;
+    return Promise.resolve();
 }
 
 /**
@@ -82,25 +53,7 @@ function migrate(base, seasonId) {
  * resolved. See `ensureLoaded` in repository.js.
  */
 export function readStage(base, seasonId) {
-    const own = repository.get(stagesPath(seasonId), base);
-    if (own) return own.value ?? null;
-
-    // Written by the build before the move: one shared collection, the season
-    // in the key, and the key repeated inside the document.
-    const legacy = repository.get(STAGES, stageId(base, seasonId));
-    if (legacy) {
-        const value = legacy.value ?? null;
-        writeStage(base, seasonId, value);
-        repository.remove(STAGES, stageId(base, seasonId));
-        return value;
-    }
-
-    const migrated = migrate(base, seasonId);
-    if (migrated) {
-        writeStage(base, seasonId, migrated);
-        return migrated;
-    }
-    return null;
+    return repository.get(stagesPath(seasonId), base)?.value ?? null;
 }
 
 export function writeStage(base, seasonId, value) {
@@ -110,9 +63,6 @@ export function writeStage(base, seasonId, value) {
 }
 
 export function removeStage(base, seasonId) {
-    // Both addresses: a season being scrapped may never have been read, and so
-    // may never have been moved.
-    repository.remove(STAGES, stageId(base, seasonId));
     return repository.remove(stagesPath(seasonId), base);
 }
 

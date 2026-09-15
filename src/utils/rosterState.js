@@ -3,7 +3,6 @@
  * Stored in localStorage under key 'rosterState'.
  */
 import { parseCsvLine, csvField } from './csvUtils';
-import { readStage, removeStage } from '../data/stageStore';
 import { readChart, writeChart, hasChart } from '../data/depthChartStore';
 import { viewedSeason } from './boardRegistry';
 import { canEdit } from './permissions';
@@ -217,12 +216,6 @@ export function loadState() {
         // older shape and is read once, written out as rows, and dropped.
         if (hasChart(STORAGE_KEY, sid)) return migrate({ version: STATE_VERSION, ...readChart(STORAGE_KEY, sid) });
 
-        const parsed = readStage(STORAGE_KEY, sid);
-        if (parsed?.positionConfig?.offense?.length > 0) {
-            const state = migrate(parsed);
-            if (state) { writeChart(STORAGE_KEY, sid, state); removeStage(STORAGE_KEY, sid); }
-            return state;
-        }
     } catch { /* ignore */ }
     return null;
 }

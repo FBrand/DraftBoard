@@ -9,6 +9,7 @@ import { requestPersistentStorage } from './utils/appStorage'
 // pressure. See appStorage.js — best effort, never blocks startup.
 requestPersistentStorage()
 
+
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <App />

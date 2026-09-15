@@ -19,9 +19,7 @@
  * ownerIdFor.
  */
 import { repository } from '../data/repository';
-import { listSeasons } from './boardRegistry';
 
-/** The pre-path collection. Read for migration; never written. */
 export const EVALUATIONS = 'evaluations';
 
 /**
@@ -39,142 +37,82 @@ const KIND_CHAR = { strength: 's', weakness: 'w', note: 'n' };
 const CHAR_KIND = { s: 'strength', w: 'weakness', n: 'note' };
 
 /**
- * Every part of a remark's identity is a path segment.
+ * One document per owner, per player. The remarks are inside it.
  *
- *     evaluations/{playerId}/{kind}/{ownerId}/{seasonId}/{remarkId}
+ *     evaluations/{playerId}/remarks/{ownerId}
+ *       { "{seasonId}": { s: [["text", 1789418428790], …], w: […], n: […] } }
  *
- * There is no composite key anywhere in it, which is the point. A composite
- * key earns nothing here: something always has to take it apart again, and
- * every part of this one is a thing you select BY — the card wants one
- * player's, the section wants one kind's, a board wants one author's, the log
- * wants one season's.
+ * The player comes first because of the read the app performs: the card shows
+ * what EVERYBODY has written about one player, and on a read-only card that
+ * stack is the card's content. Under the player that is one collection.
  *
- * The player comes first because of the read the app actually performs. The
- * card shows what everybody has written about one player — on a read-only card
- * that stack IS the card's content — so the player is the thing being selected
- * by, and everything else narrows within it.
+ * Season and kind are object keys inside the document rather than more path
+ * levels. Measured at a full season — 250 players scouted on five boards,
+ * 17,500 remarks — splitting them out cost 183,750 characters of collection
+ * key against 8,250 here, and bought nothing: nothing reads one kind of one
+ * season without wanting its neighbours.
  *
- * A document is one remark: `{ t: text, a: writtenAt }`. Nothing in it repeats
- * any of the five things the address already states, and the remark id is
- * short because it is a handle into one collection, never referenced from
- * outside it.
+ * A remark is `{ t: text, a: writtenAt }` in an array. It had a six-character
+ * id of its own, which existed only to find it inside that array; the position
+ * locates it just as well, and dropping it saves about 157,500 characters
+ * across 17,500 remarks.
+ *
+ * It was briefly a two-element array, `[text, writtenAt]`, which is smaller
+ * still — and **Firestore cannot store a nested array at all**. The emulator
+ * refused it outright: "Nested arrays are not supported". A map inside an
+ * array is the cheapest shape that both stores can hold.
+ *
+ * The cost of that is worth naming: a handle is an INDEX, so two browsers of
+ * the same analyst editing the same player at the same moment could remove the
+ * wrong line. The whole document is rewritten on any change in that case
+ * anyway, so the race already existed; this makes it slightly worse in
+ * exchange for a fifth of the collection.
+ *
+ * Total at that scale: 1,916,250 -> 1,507,000 characters, 21%.
  */
-export const remarksPath = (playerId, kind, ownerId, seasonId) =>
-    `${EVALUATIONS}/${playerId}/${KIND_CHAR[kind]}/${ownerId}/${seasonId ?? NO_SEASON}`;
+export const remarksPath = (playerId) => `${EVALUATIONS}/${playerId}/remarks`;
 
-/**
- * "No season" needs a name, because a path segment cannot be empty.
- *
- * A dash rather than an underscore: the separators here are slashes so there
- * is no ambiguity left to create, but the same sentinel is used either side of
- * the move and an underscore reads as part of an id.
- */
 const NO_SEASON = '-';
-
-/** Unique among a dozen siblings, not among every remark ever written. */
-function shortId(taken) {
-    for (let i = 0; i < 50; i += 1) {
-        const id = Math.random().toString(36).slice(2, 8);
-        if (!taken.has(id)) return id;
-    }
-    return Date.now().toString(36);
-}
+const seasonKey = (seasonId) => seasonId ?? NO_SEASON;
+const seasonOf = (key) => (key === NO_SEASON ? null : key);
 
 /**
- * The handle a caller gets back, and hands to removeRemark.
+ * The handle a caller gets back and hands to removeRemark.
  *
- * Composed from the address rather than stored, so nothing is written twice.
- * The owner is not in it: every caller that can remove a remark already passes
- * the owner separately.
+ * Composed from where the remark sits rather than stored, so nothing is
+ * written down twice. The owner is not in it: every caller that can remove a
+ * remark already passes the owner separately.
  */
-const handleFor = (seasonId, kind, id) => `${seasonId ?? '_'}:${KIND_CHAR[kind]}:${id}`;
+const handleFor = (seasonId, kind, index) => `${seasonKey(seasonId)}:${KIND_CHAR[kind]}:${index}`;
 
 function readHandle(handle) {
-    const [seasonId, char, id] = String(handle ?? '').split(':');
-    return { seasonId: seasonId === '_' ? null : seasonId, kind: CHAR_KIND[char], id };
+    const [season, char, index] = String(handle ?? '').split(':');
+    return { seasonId: seasonOf(season), kind: CHAR_KIND[char], index: Number(index) };
 }
 
-export async function openEvaluations() {
-    // Only the legacy collection. A player's remarks load on demand, which is
-    // the point of filing them under the player.
-    await repository.ready(EVALUATIONS);
-}
+/** Nothing to open: a player's remarks load on demand, under the player. */
+export async function openEvaluations() {}
 
-// --- the shapes written by older builds, read but never written -------------
+const docFor = (playerId, ownerId) => repository.get(remarksPath(playerId), ownerId) ?? {};
 
-/** The very first shape: one document per owner and player, remarks in a list. */
-function legacyFlat(ownerId, playerId) {
-    const doc = repository.get(EVALUATIONS, `${ownerId}__${playerId}`);
-    return Array.isArray(doc?.remarks) ? doc.remarks : [];
-}
-
-/** The second: a flat collection keyed owner, player, season, kind. */
-function legacyComposite(ownerId, playerId) {
-    const all = repository.docs(EVALUATIONS) ?? {};
-    const prefix = `${ownerId}__${playerId}__`;
+function expand(ownerId, doc) {
     const out = [];
-    Object.entries(all).forEach(([id, doc]) => {
-        if (!doc || !id.startsWith(prefix)) return;
-        const rest = id.slice(prefix.length);
-        const cut = rest.lastIndexOf('__');
-        if (cut === -1) return;
-        const kind = CHAR_KIND[rest.slice(cut + 2)];
-        if (!kind) return;
-        const season = rest.slice(0, cut);
-        Object.entries(doc).forEach(([rid, pair]) => {
-            if (!Array.isArray(pair)) return;
-            out.push({
-                id: handleFor(season === '_' ? null : season, kind, rid),
-                kind, text: pair[0], seasonId: season === '_' ? null : season, createdAt: pair[1] ?? null,
+    Object.entries(doc ?? {}).forEach(([sKey, kinds]) => {
+        REMARK_KINDS.forEach(kind => {
+            (kinds?.[KIND_CHAR[kind]] ?? []).forEach((r, index) => {
+                if (!r || typeof r !== 'object') return;
+                out.push({
+                    id: handleFor(seasonOf(sKey), kind, index),
+                    ownerId,
+                    kind,
+                    text: r.t,
+                    seasonId: seasonOf(sKey),
+                    createdAt: r.a ?? null,
+                });
             });
         });
     });
     return out;
-}
-
-function legacyRemarks(ownerId, playerId) {
-    const flat = legacyFlat(ownerId, playerId);
-    if (flat.length) return flat;
-    return legacyComposite(ownerId, playerId);
-}
-
-// --- reading ----------------------------------------------------------------
-
-/**
- * Which seasons to look in.
- *
- * With every part of the address a path segment, there is no key left to scan:
- * reading a player's remarks means visiting the collections they are in, and
- * that means knowing which seasons exist. Firestore cannot list subcollections
- * from a browser at all, so this cannot be fixed by asking the store.
- *
- * The consequence is worth stating plainly: remarks written in a season that
- * has since been SCRAPPED are no longer reachable, because a scrapped season
- * leaves the list. The previous shape, which scanned a key prefix, found them.
- * Nothing else about evaluations changed — they still outlive the board and
- * still outlive the season being archived — but rolling a season back now
- * takes its remarks out of view with it.
- */
-function seasonCandidates() {
-    return [...listSeasons().map(x => x.id), null];
-}
-
-function readMap(playerId, kind, ownerId, seasonId) {
-    return repository.docs(remarksPath(playerId, kind, ownerId, seasonId)) ?? {};
-}
-
-function expand(playerId, kind, ownerId, seasonId) {
-    const docs = readMap(playerId, kind, ownerId, seasonId);
-    return Object.entries(docs)
-        .filter(([, d]) => d && typeof d === 'object')
-        .map(([id, d]) => ({
-            id: handleFor(seasonId, kind, id),
-            ownerId,
-            kind,
-            text: d.t,
-            seasonId,
-            createdAt: d.a ?? null,
-        }));
 }
 
 const byKindThenTime = (a, b) => (
@@ -191,65 +129,44 @@ const byKindThenTime = (a, b) => (
  */
 export function remarksFor(ownerId, playerId) {
     if (!ownerId || !playerId) return [];
-
-    const legacy = legacyRemarks(ownerId, playerId);
-    if (legacy.length) return legacy;
-
-    const out = [];
-    REMARK_KINDS.forEach(kind => {
-        seasonCandidates().forEach(seasonId => {
-            out.push(...expand(playerId, kind, ownerId, seasonId));
-        });
-    });
-    return out.sort(byKindThenTime);
+    return expand(ownerId, docFor(playerId, ownerId)).sort(byKindThenTime);
 }
 
 /**
- * What everybody has written about one player.
+ * What everybody has written about one player, in one collection read.
  *
- * The card was calling remarksFor once per board that has ever existed; this
- * is the same work with the owner as one more level to walk rather than a
- * separate pass over a shared collection.
+ * This is what the player-first address is for. The card was calling
+ * remarksFor once per board that has ever existed.
  */
-export function allRemarksFor(playerId, ownerIds = []) {
+export function allRemarksFor(playerId) {
     if (!playerId) return [];
+    const docs = repository.docs(remarksPath(playerId)) ?? {};
     const out = [];
-    ownerIds.filter(Boolean).forEach(ownerId => {
-        REMARK_KINDS.forEach(kind => {
-            seasonCandidates().forEach(seasonId => {
-                out.push(...expand(playerId, kind, ownerId, seasonId));
-            });
-        });
-    });
+    Object.entries(docs).forEach(([ownerId, doc]) => out.push(...expand(ownerId, doc)));
     return out;
 }
 
-/**
- * Moves a player's remarks under him, once, on the first WRITE.
- *
- * Reading alone does not trigger it: converting on read would turn opening a
- * player card into a write, which is exactly how a quota fills while somebody
- * is only looking.
- */
-function migrateIfNeeded(ownerId, playerId) {
-    const legacy = legacyRemarks(ownerId, playerId);
-    if (!legacy.length) return;
+/** The array a remark of this kind and season lives in, created if needed. */
+function lineFor(doc, seasonId, kind) {
+    const sKey = seasonKey(seasonId);
+    const season = doc[sKey] ?? (doc[sKey] = {});
+    const char = KIND_CHAR[kind];
+    return season[char] ?? (season[char] = []);
+}
 
-    legacy.forEach(r => {
-        const kind = REMARK_KINDS.includes(r.kind) ? r.kind : 'note';
-        const path = remarksPath(playerId, kind, ownerId, r.seasonId ?? null);
-        const taken = new Set(Object.keys(repository.docs(path) ?? {}));
-        const at = typeof r.createdAt === 'number' ? r.createdAt : (Date.parse(r.createdAt) || Date.now());
-        repository.set(path, shortId(taken), { t: r.text, a: at });
+function write(playerId, ownerId, doc) {
+    // A season with no remarks left in it is not a season with three empty
+    // lists; it is a season nobody has written about.
+    Object.keys(doc).forEach(sKey => {
+        Object.keys(doc[sKey]).forEach(char => {
+            if (!doc[sKey][char].length) delete doc[sKey][char];
+        });
+        if (!Object.keys(doc[sKey]).length) delete doc[sKey];
     });
 
-    // Both old addresses, whichever this came from.
-    repository.remove(EVALUATIONS, `${ownerId}__${playerId}`);
-    const all = repository.docs(EVALUATIONS) ?? {};
-    const prefix = `${ownerId}__${playerId}__`;
-    Object.keys(all).forEach(id => {
-        if (id.startsWith(prefix)) repository.remove(EVALUATIONS, id);
-    });
+    const path = remarksPath(playerId);
+    if (!Object.keys(doc).length) repository.remove(path, ownerId);
+    else repository.set(path, ownerId, doc);
 }
 
 /**
@@ -261,14 +178,16 @@ export function addRemark(ownerId, playerId, kind, text, seasonId) {
     const body = String(text ?? '').trim();
     if (!ownerId || !playerId || !body || !REMARK_KINDS.includes(kind)) return null;
 
-    migrateIfNeeded(ownerId, playerId);
-
-    const path = remarksPath(playerId, kind, ownerId, seasonId ?? null);
-    const id = shortId(new Set(Object.keys(repository.docs(path) ?? {})));
+    const doc = structuredClone(docFor(playerId, ownerId));
+    const line = lineFor(doc, seasonId ?? null, kind);
     const at = Date.now();
-    repository.set(path, id, { t: body, a: at });
+    line.push({ t: body, a: at });
+    write(playerId, ownerId, doc);
 
-    return { id: handleFor(seasonId ?? null, kind, id), ownerId, kind, text: body, seasonId: seasonId ?? null, createdAt: at };
+    return {
+        id: handleFor(seasonId ?? null, kind, line.length - 1),
+        ownerId, kind, text: body, seasonId: seasonId ?? null, createdAt: at,
+    };
 }
 
 /**
@@ -279,82 +198,27 @@ export function updateRemarkText(ownerId, playerId, handle, text) {
     const body = String(text ?? '').trim();
     if (!body) return removeRemark(ownerId, playerId, handle);
 
-    migrateIfNeeded(ownerId, playerId);
-    const { seasonId, kind, id } = readHandle(handle);
-    if (!kind) return false;
+    const { seasonId, kind, index } = readHandle(handle);
+    if (!kind || !Number.isInteger(index)) return false;
 
-    const path = remarksPath(playerId, kind, ownerId, seasonId);
-    const doc = repository.get(path, id);
-    if (!doc) return false;
-    repository.set(path, id, { t: body, a: doc.a });
+    const doc = structuredClone(docFor(playerId, ownerId));
+    const line = doc[seasonKey(seasonId)]?.[KIND_CHAR[kind]];
+    if (!line?.[index]) return false;
+
+    line[index] = { t: body, a: line[index].a };
+    write(playerId, ownerId, doc);
     return true;
 }
 
 export function removeRemark(ownerId, playerId, handle) {
-    migrateIfNeeded(ownerId, playerId);
-    const { seasonId, kind, id } = readHandle(handle);
-    if (!kind) return false;
+    const { seasonId, kind, index } = readHandle(handle);
+    if (!kind || !Number.isInteger(index)) return false;
 
-    const path = remarksPath(playerId, kind, ownerId, seasonId);
-    if (!repository.get(path, id)) return false;
-    repository.remove(path, id);
+    const doc = structuredClone(docFor(playerId, ownerId));
+    const line = doc[seasonKey(seasonId)]?.[KIND_CHAR[kind]];
+    if (!line?.[index]) return false;
+
+    line.splice(index, 1);
+    write(playerId, ownerId, doc);
     return true;
-}
-
-// The board fields remarks used to live in, back when they were bare strings
-// and belonged to a board rather than to the person who wrote them.
-const LEGACY_FIELDS = { strengths: 'strength', weaknesses: 'weakness', notes: 'note' };
-
-/**
- * Moves a board's remarks onto its owner's evaluations, once.
- *
- * They were three arrays of strings on each entry, which meant they froze with
- * the board and were duplicated per season. Each becomes a remark stamped with
- * the season the board belongs to — the best available answer to "when was
- * this written", and right for anything written during that board's season.
- *
- * Returns the entries with the legacy fields stripped, or null if there was
- * nothing to move.
- */
-export function migrateBoardRemarks(board, entries) {
-    const ownerId = ownerIdFor(board);
-    if (!ownerId || !entries?.length) return null;
-
-    const carried = new Map();   // playerId -> remarks to append
-    let found = false;
-
-    const cleaned = entries.map(entry => {
-        const hasLegacy = Object.keys(LEGACY_FIELDS).some(f => Array.isArray(entry[f]) && entry[f].length);
-        if (!hasLegacy) return entry;
-        found = true;
-
-        // No player id means nothing to hang the remark on; leave the entry
-        // alone rather than dropping what somebody wrote.
-        if (!entry.playerId) return entry;
-
-        const made = [];
-        Object.entries(LEGACY_FIELDS).forEach(([field, kind]) => {
-            (entry[field] ?? []).forEach(text => {
-                const body = String(text ?? '').trim();
-                if (!body) return;
-                made.push({ kind, text: body });
-            });
-        });
-
-        if (made.length) carried.set(entry.playerId, [...(carried.get(entry.playerId) ?? []), ...made]);
-
-        const next = { ...entry };
-        Object.keys(LEGACY_FIELDS).forEach(f => { delete next[f]; });
-        return next;
-    });
-
-    if (!found) return null;
-
-    // Through addRemark rather than a bulk write, so these land in the same
-    // season-and-kind documents as everything else — there is no second path
-    // into the store for them to diverge from.
-    carried.forEach((remarks, playerId) => {
-        remarks.forEach(r => addRemark(ownerId, playerId, r.kind, r.text, board.seasonId ?? null));
-    });
-    return cleaned;
 }

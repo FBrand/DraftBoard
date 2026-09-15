@@ -18,13 +18,16 @@ const put = (pairs) => Object.entries(pairs).forEach(([k, v]) => localStorage.se
 
 // One key from each stage, plus a board (whose key contains its id, so no
 // literal list can name it) and a repository collection.
+// Every collection is a path under db_, and the handful of settings that are
+// not documents are named exactly. There are no other families: the legacy
+// per-stage and per-board key prefixes are gone with the code that read them.
 const A_SESSION = {
-    nfl_draft_board_state: '{"drafted":["Arvell Reese"]}',
-    rosterState: '{"version":1,"depthChart":{"qb":[]}}',
-    fa_state_v1: '{"version":1,"depthChart":{}}',
-    scouting_board_v1__board_dan: '{"entries":[{"name":"Fernando Mendoza","round":1}]}',
-    db_players: '{"p1":{"name":"Fernando Mendoza"}}',
+    db_players: '{"p1":{"n":"Fernando Mendoza"}}',
+    'db_boards/b1/entries': '{"p1":{"r":1,"w":1}}',
+    'db_seasons/s1/charts/rosterState/rows': '{"qb":{"l":"QB","s":[]}}',
+    db_draft_state: '{"s1":{"value":{"currentPick":1}}}',
     draft_board_view: 'scouting',
+    session_team_v1: 'KC',
 };
 
 beforeEach(() => { globalThis.resetStorage(); });
@@ -70,11 +73,11 @@ describe('importing a session', () => {
         put(A_SESSION);
         const bundle = exportSession();
         const trimmed = JSON.parse(bundle);
-        delete trimmed.data.fa_state_v1;
+        delete trimmed.data.db_draft_state;
 
         importSession(JSON.stringify(trimmed));
-        expect(localStorage.getItem('fa_state_v1')).toBeNull();
-        expect(localStorage.getItem('rosterState')).toBe(A_SESSION.rosterState);
+        expect(localStorage.getItem('db_draft_state')).toBeNull();
+        expect(localStorage.getItem('db_players')).toBe(A_SESSION.db_players);
     });
 
     it('ignores keys it does not own rather than writing whatever it is handed', () => {
@@ -84,7 +87,7 @@ describe('importing a session', () => {
             data: { ...A_SESSION, evil_key: 'x' },
         }));
         expect(localStorage.getItem('evil_key')).toBeNull();
-        expect(localStorage.getItem('rosterState')).toBe(A_SESSION.rosterState);
+        expect(localStorage.getItem('db_players')).toBe(A_SESSION.db_players);
     });
 });
 
@@ -122,14 +125,17 @@ describe('a file that is not a session', () => {
 
 describe('which keys the app owns', () => {
     it('claims the fixed ones and the families that grow', () => {
-        expect(isOwnedKey('rosterState')).toBe(true);
-        expect(isOwnedKey('scouting_board_v1__anything')).toBe(true);
+        expect(isOwnedKey('draft_board_view')).toBe(true);
         expect(isOwnedKey('db_players')).toBe(true);
+        expect(isOwnedKey('db_boards/b1/entries')).toBe(true);
+        expect(isOwnedKey('db_seasons/s1/charts/rosterState/rows')).toBe(true);
         expect(isOwnedKey('some_other_app')).toBe(false);
+        // The legacy families are not claimed any more — nothing writes them.
+        expect(isOwnedKey('scouting_board_v1__anything')).toBe(false);
     });
 
     it('enumerates only what is actually present', () => {
-        put({ rosterState: '{}' });
-        expect(ownedKeys()).toEqual(['rosterState']);
+        put({ db_players: '{}' });
+        expect(ownedKeys()).toEqual(['db_players']);
     });
 });
