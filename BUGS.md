@@ -405,51 +405,49 @@ DRAFT path as well. The second is not safe: a draft class is exactly where two
 different men really do share a name, which is why the qualifier exists. The
 first is a football judgement rather than a code one.
 
-## Still open: a double-click on the draft board takes two players
+## Fixed: a double-click on the draft board took two players
 
 Found by clicking the way somebody clicks while talking, which is what this
-app is for. **Reproduced every time**, on a draft reset to pick 1:
+app is for. Reproduced every time, on a draft reset to pick 1:
 
 > One double-click on Fernando Mendoza drafted **Mendoza at pick 1 and Arvell
-> Reese at pick 2**. Nobody chose Reese. One Undo takes back one of them.
+> Reese at pick 2**. Nobody chose Reese. One Undo took back one of them.
 
-The mechanism is the feature working: the Remaining list drops a player the
+The mechanism was the feature working: the Remaining list drops a player the
 instant he is drafted, so the card under the cursor is replaced by whoever was
-below him — and the second click of the double takes that man. On air it is a
-pick nobody made, announced before anybody notices.
+below him, and the second click takes that man.
 
-**Three fixes were tried and measured; none worked, and the reasons are the
-useful part:**
+**Three guards at the click were tried and measured, and none can work.** A
+350ms cooldown in `draftPlayer` does nothing — the gap between the clicks is
+dominated by re-rendering three hundred cards, so any threshold short enough
+to be safe is shorter than the render. `event.detail > 1` does nothing either:
+by the time the second click lands, the element under the cursor is a
+different card and the browser's multi-click counter resets on a new target.
+Which is the finding — **after the re-flow, nothing distinguishes the second
+half of a double-click from a deliberate one.**
 
-1. *A cooldown in `draftPlayer`* — ignore a pick within 350ms of the last.
-   No effect: the gap between the two clicks is dominated by re-rendering
-   three hundred cards, so any threshold short enough to be safe is shorter
-   than the render it is trying to outlast.
-2. *`event.detail > 1` in PlayerCard*, the browser's own multi-click counter,
-   which follows the reader's OS setting and does not care about render time.
-   No effect: by the time the second click lands, the element under the cursor
-   is a different card, and the counter resets on a new target.
-3. Which is the finding. **After the re-flow there is nothing left that tells
-   the second half of a double-click apart from a deliberate one** — same
-   position, new element, fresh click. No guard at the click can work.
+**So the list holds still instead.** A just-drafted player stays in place for
+1200ms and is inert while he does; the repeat click lands on a man who is
+already drafted, which `draftPlayer` has always refused. Focus mode never had
+this bug for exactly this reason — it leaves drafted cards where they are
+rather than filtering them out.
 
-So the fix has to be in the list, not the click, and it is a product decision:
+Two things had to be true, and both are measured:
 
-- **Keep the drafted man in place**, dimmed, for a moment — nothing moves under
-  the cursor, and the repeat click lands on a player who is already drafted,
-  which `draftPlayer` already refuses. Focus mode is immune for exactly this
-  reason: `isFocusMode ? players : players.filter(...)` leaves drafted cards
-  where they are. Normal view and the Remaining panel both re-flow.
-- Or confirm picks. Worth knowing before dismissing that as too heavy for a
-  live tool: **the app already does it for signings.** Clicking a card on the
-  UDFA board opens a dialog — SIGN UDFA, SIGN · NO TEAM, MINICAMP INVITE —
-  and that dialog is exactly why UDFA does not have this bug. A second click
-  lands on the overlay and dismisses it rather than taking a second player.
-  So the pattern is established in this app, on the neighbouring stage, for
-  the same kind of irreversible action.
+| | before | after |
+|---|---|---|
+| one double-click drafts | 2 players | **1** |
+| one Undo takes back | 1 of 2 | **1 of 1** |
+| two DELIBERATE picks, 600ms apart | 2 | **2** |
 
-Worth knowing while it stands: **Focus mode does not have this bug.**
+That last row is the cure being no worse than the bug: the held CARD is inert,
+the list is not, so an analyst burning through late rounds is not slowed. And
+the repeat click opens nothing — a drafted card normally answers "who took
+him" by opening his card, which during a live draft is a modal nobody asked
+for, over the Undo button, a third of a second after the pick.
 
+Pinned by `tests/fast/doubleClickDraft.spec.js`, which fails against the old
+code with exactly the original symptom.
 ## Still open, and worse than it looked: the app is unusable on a phone for 25 seconds
 
 The 7.2s of blocked main thread (C3) was measured on a desktop-class box with
