@@ -837,6 +837,32 @@ reads back. Then reload and confirm he is still signed.
 Eleventh probe fault. Same shape once more: **the evidence was more general
 than the claim.**
 
+## Add Players at 390px — the dialog I exempted from the fix
+
+`.modal-content.add-prospects` keeps `overflow: hidden` rather than taking the
+new max-height scrolling, because it is a flex column that scrolls its own
+body and would otherwise scroll twice. That exemption is only right if the
+INNER region actually scrolls on a phone — otherwise I left exactly the bug I
+had just fixed, in the one dialog I chose not to fix. Checked, with 14 rows:
+
+| | box | inner region |
+|---|---|---|
+| entry step | 50…794 of 844 — fits | `.ap-entry-grid` 339px of 746px, scrolls |
+| verify step | 50…794 of 844 — fits | `.ap-verify-list` 508px of 5970px, scrolls |
+
+Both primary actions stay on screen (BACK at 696, ADD 14 TO BOARD at 777).
+The exemption was correct.
+
+**The commit button is disabled, and that is the feature.** `blockedCount`
+counts rows whose name matched somebody already known and has not been resolved
+either way, and `submit` refuses while it is above zero — the verification step
+Add Players insists on. My 14 probe names matched *each other*, which is the
+check doing its job.
+
+And unlike the ROLL OVER button recorded earlier as friction, this one **says
+why**: "13 names still to resolve" renders immediately above it, on screen, at
+390px. A disabled primary with a visible reason is not a dead button.
+
 ## Standing work, ordered by the user
 
 1. Season rollover — done
