@@ -762,6 +762,44 @@ regression test asserts reachability without that helper, and it fails on the
 pre-fix build with *"the dialog hangs off the top of the screen"* — checked,
 not assumed. `tests/fast/modalReach.spec.js`.
 
+## The touch half of drag-and-drop had never been tested, 2026-09-15
+
+Every drag in the suite goes through `page.mouse`. @dnd-kit's TouchSensor is a
+different code path from MouseSensor — **delay**-activated (200ms, 8px
+tolerance) rather than **distance**-activated, which is what lets a quick swipe
+scroll the chart instead of carrying a player off it. The drag-and-drop was
+rewritten on dnd-kit precisely for touch, and nothing automated had ever
+exercised that half.
+
+Driven now, at 390px, with the gesture dispatched over CDP
+(`Input.dispatchTouchEvent`: press, hold past the delay, move, lift — Playwright's
+touchscreen only taps):
+
+- a finger drag moves a player — Tyquan Thornton and Xavier Worthy swapped slots
+- the roster count is unchanged, so it moved somebody rather than adding or losing one
+- a quick swipe leaves everyone where they are, which is the whole point of the
+  delay activation
+
+**No bug.** The touch path works. It is now covered by
+`tests/fast/touchDrag.spec.js`, which skips where there is no touchscreen, so
+it costs the desktop run nothing and passes under the phone project.
+
+### Two probe faults on the way, both caught by a number that made no sense
+
+The first run reported the touch path broken. It was dragging to **x=968 on a
+390px-wide screen** — the depth chart scrolls sideways, and my "is it visible"
+filter checked `top`/`bottom` and not `left`/`right`, so the first empty slot in
+DOM order was off the side of the display. Dragging to a coordinate that is not
+on the screen proves nothing about touch.
+
+Constraining to both axes then found *no* empty slot on screen at all, which is
+true and is why the test now moves a man onto an occupied slot instead: it
+exercises the same sensor without needing the chart scrolled first, and
+scrolling would have been a second variable in a test about dragging.
+
+Nine and ten of the session. The pattern holds: **the selector was more general
+than the claim.**
+
 ## Standing work, ordered by the user
 
 1. Season rollover — done
