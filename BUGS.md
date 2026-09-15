@@ -714,6 +714,54 @@ happened to the missing test. If it recurs, the thing to capture is the full
 reporter output: the runs that showed it were piped through `tail`, which threw
 away the per-test lines that would have named it.
 
+## Fixed: you could not add a free-agency candidate on a phone
+
+Found by walking the stage rather than confirming it. The dialog opens, the
+fields fill, and the button that submits it is **off the bottom of the screen
+with no way to reach it**.
+
+`.modal-overlay` centres its box. `.modal-content` carried `overflow: hidden`
+and **no max-height**, so a dialog taller than the viewport hangs off both ends
+at once and nothing scrolls to what is hanging off. Measured at 390x844:
+
+| | dialog height | primary action |
+|---|---|---|
+| on open | 1046px (spans −101…945) | on screen by 1px; "Add as Trade Target" already off |
+| after typing a known name | 1161px | **bottom 901 — off screen** |
+
+Typing a name the app knows inserts the "ALREADY KNOWN — PICK HIM RATHER THAN
+ADDING A SECOND" list above the actions, which is what pushes them off. So the
+dialog broke precisely when it was doing its most useful work.
+
+**Fixed** by giving the base `.modal-content` a `max-height` (92vh, with 92dvh
+for the phone's moving chrome) and `overflow: hidden auto` — x stays hidden so
+the rounded corners still clip. `.add-prospects` scrolls its own body, so it
+keeps `overflow: hidden` explicitly rather than scrolling twice.
+
+A/B, with a swipe rather than a programmatic scroll:
+
+| | primary action | after scrolling |
+|---|---|---|
+| before | bottom 901, off screen | bottom 901 — **unreachable** |
+| after | bottom 1092, off screen | bottom 709 — **reachable** |
+
+This is the base dialog, so the draft's unranked-player form, the UDFA sign
+modal and the roster sign modal all sat behind the same rule.
+
+### The probe that passed on the broken build
+
+Worth recording, because it nearly buried this. The end-to-end version —
+open, fill, submit, assert the man appears — **passed on both builds**.
+`scrollIntoViewIfNeeded` scrolls an element into view by means a person does
+not have, so it sailed past the exact defect under test and reported the flow
+healthy.
+
+The honest question was "can a FINGER get there": type the name, swipe, and see
+whether the button moves. On the broken build it does not move at all. The
+regression test asserts reachability without that helper, and it fails on the
+pre-fix build with *"the dialog hangs off the top of the screen"* — checked,
+not assumed. `tests/fast/modalReach.spec.js`.
+
 ## Standing work, ordered by the user
 
 1. Season rollover — done

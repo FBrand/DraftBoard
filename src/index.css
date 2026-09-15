@@ -888,7 +888,18 @@ body {
   width: 90%;
   max-width: 800px;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-  overflow: hidden;
+  /* Never taller than the screen, and reachable when it is.
+     The overlay centres the box, so a dialog taller than the viewport hangs
+     off BOTH ends and its actions are simply unreachable — measured on a
+     390x844 phone, the Add Candidate dialog came to 1046px with "Add as Trade
+     Target" already off the bottom at open, and 1161px once a known name
+     brought up the "already known" list, which put BOTH actions off. Nothing
+     scrolled, because the only overflow rule here was `hidden`.
+     x stays hidden so the rounded corners still clip. */
+  max-height: 92vh;
+  max-height: 92dvh;
+  overflow: hidden auto;
+  overscroll-behavior: contain;
   animation: modal-enter 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
@@ -2877,6 +2888,8 @@ body.export-mode .card-glow {
   max-height: 88vh;
   display: flex;
   flex-direction: column;
+  /* This one scrolls its own body, so it must not also scroll as a whole. */
+  overflow: hidden;
 }
 
 .ap-hint,
