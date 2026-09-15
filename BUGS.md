@@ -254,6 +254,7 @@ with a plausible mechanism, and "we checked" is worth more than silence.
 | Export the full session, clean slate, import it back | The bundle is built from a key list, and the rewrite renamed every collection key — a stale list exports an incomplete season and the import succeeds anyway, silently short. | Holds. `appSession` enumerates through the same `db_` prefix as the wipe, so it cannot drift. Measured: 186 KB, `version: 1`, 18 collections; the tag made before the export is back after it, and the board returns with all 328 rows. |
 | Roll over, then open the archived season | One rule in `permissions.js` carries an exception pulling both ways: a finished board must not move, but what you learn about a player keeps arriving after it. That is the kind of exception somebody tidying a boolean removes. | Holds, precisely. The archived board offers no live tag control at all, and the pencil unlocks three evaluation controls WITHOUT unlocking any placement control. The banner says the season is finished. |
 | Bring a player back off injured reserve | A deferred request said IR was one-way: a drag puts a man on it and nothing takes him off as healthy. `performMove` looks like it supports the return trip — it clears the injury arrival, because "leaving injured reserve is being activated" — but nothing tested it. The existing IR test drags to CUTS, which empties the slot while RELEASING the player, so it passes whether or not a man can actually come back. | Holds. Dragging from IR to an empty 53 slot takes him off IR and puts him on the roster. Now covered by a test that asserts both halves, because the old one could not. The request is closed. |
+| Sign an undrafted free agent | A whole stage with no coverage, and an earlier probe had left it looking broken — clicking a card removed nobody and opened nothing. | Holds. The probe was double-clicking, which opens the dialog and then dismisses it. A single click opens a sign flow offering SIGN UDFA, SIGN · NO TEAM and MINICAMP INVITE, and signing takes him off the board (9 cards -> 8). |
 | Try to delete a player three analysts have ranked | A delete once took the player out from under every board, remarks and placements included, with nothing to undo it — which is why `playerWork.js` exists. The predicate it offers, `isUntouched`, is exported and called from nowhere, which is what made this worth checking. | Holds, and precisely. A ranked player is offered no Remove at all, only "clear THIS board's opinions", and the card names the boards holding work on him — "Ranked or evaluated on Consensus, Dan, Ryan — clear those first". Clearing one narrows the list to "Dan, Ryan" and he stays protected. `isUntouched` is redundant API surface rather than a missing wire; `whoHasWorkedOn` does the job. Now covered by a test, because the failure is silent and unrecoverable. |
 
 **One piece of friction, not a bug.** Rolling over needs a year typed in —
@@ -431,7 +432,13 @@ So the fix has to be in the list, not the click, and it is a product decision:
   which `draftPlayer` already refuses. Focus mode is immune for exactly this
   reason: `isFocusMode ? players : players.filter(...)` leaves drafted cards
   where they are. Normal view and the Remaining panel both re-flow.
-- Or confirm picks, which is heavier than a live tool wants.
+- Or confirm picks. Worth knowing before dismissing that as too heavy for a
+  live tool: **the app already does it for signings.** Clicking a card on the
+  UDFA board opens a dialog — SIGN UDFA, SIGN · NO TEAM, MINICAMP INVITE —
+  and that dialog is exactly why UDFA does not have this bug. A second click
+  lands on the overlay and dismisses it rather than taking a second player.
+  So the pattern is established in this app, on the neighbouring stage, for
+  the same kind of irreversible action.
 
 Worth knowing while it stands: **Focus mode does not have this bug.**
 
