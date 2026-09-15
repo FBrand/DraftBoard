@@ -40,9 +40,22 @@ export const stagesPath = (seasonId) => `seasons/${seasonId ?? '_'}/stages`;
 /** Every stage that lives here, by the storage key it used to have. */
 export const STAGE_KEYS = ['rosterState', 'fa_state_v1', 'nfl_draft_board_state', 'prospects_v1'];
 
-/** Nothing to open: a season's stages load on demand, at its own path. */
-export function openStages() {
-    return Promise.resolve();
+/**
+ * Loads a season's stages, so a synchronous read can answer for them.
+ *
+ * The last of the openers that returned a resolved promise and loaded nothing,
+ * and the same fault as the other four: "loads on demand at its own path" is
+ * true of localStorage, where loadSync fills a collection the instant anything
+ * asks, and false of every other store.
+ *
+ * What lives here is `prospects_v1` — the players an analyst adds himself, for
+ * somebody who declared late or was missed by every rankings file. Against
+ * Firestore that read returned nothing, so a player added by one person reached
+ * nobody: measured by writing one straight into the store and finding it absent
+ * from another client's board.
+ */
+export function openStages(seasonId) {
+    return seasonId ? repository.ready(stagesPath(seasonId)) : Promise.resolve();
 }
 
 /**

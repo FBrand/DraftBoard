@@ -189,9 +189,9 @@ export const useDraftState = () => {
                 // and openBoards is what loads the seasons.
                 // The season has to be known before anything filed UNDER it can
                 // be addressed, and openBoards is what loads the seasons.
-                await Promise.all([openBoards(), openStages(), openDraft()]);
+                await Promise.all([openBoards(), openDraft()]);
                 const season = viewedSeason()?.id ?? null;
-                await Promise.all([openDepthCharts(season), openSetup(season)]);
+                await Promise.all([openStages(season), openDepthCharts(season), openSetup(season)]);
                 const slug = params.get('board');
                 const board = slug ? boardBySlug(slug) : null;
                 const fromBoard = board?.rankingsFile ? `${base}${board.rankingsFile}` : null;

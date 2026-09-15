@@ -4,6 +4,7 @@ import {
     restorePlayer, hiddenPlayers, applyProspects, loadProspects,
 } from '../../src/utils/prospects';
 import { repository } from '../../src/data/repository';
+import { openBoards } from '../../src/utils/boardRegistry';
 
 /**
  * Adding, correcting and removing players.
@@ -24,11 +25,15 @@ const FILE = [
     { name: 'Arvell Reese', position: 'EDGE', school: 'Ohio State' },
 ];
 
-beforeEach(() => {
+beforeEach(async () => {
     globalThis.resetStorage();
     // State lives in the repository now, which keeps its own copy — clearing
     // storage underneath it would leave the previous test's pool in memory.
     repository.invalidate();
+    // A prospect belongs to a season, and the store now refuses to file one
+    // without it rather than writing to `seasons/_/stages` where nothing will
+    // look. These tests used to rely on that fallback; the app never does.
+    await openBoards();
 });
 
 describe('deciding whether a typed name is new', () => {

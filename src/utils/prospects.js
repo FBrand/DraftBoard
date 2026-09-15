@@ -57,6 +57,10 @@ const originOf = (p) => p?.sourceIdentity ?? identityOf(p);
 
 function write(state) {
     try {
+        // A stage belongs to a season. Without one, stagesPath falls back to
+        // `seasons/_/stages` — a season that exists nowhere, so the work is
+        // filed where nothing will look for it. Same guard as the charts.
+        if (!seasonId()) return;
         writeStage(STORAGE_KEY, seasonId(), { ...state, version: STATE_VERSION });
     } catch { /* ignore */ }
 }
