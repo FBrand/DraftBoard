@@ -549,7 +549,28 @@ export default function ScoutingView({ players }) {
 
         if (file) {
             const players = parseRankings(await file.text()).filter(p => p?.name);
-            if (players.length) scoutingState.seedBoard(board.id, players);
+            if (players.length) {
+                scoutingState.seedBoard(board.id, players);
+
+                // Say what the file did.
+                //
+                // A row naming somebody no rankings file has ever mentioned is
+                // stored as an entry and then never rendered: the pool is built
+                // from the shipped files plus in-app prospects, the uploaded
+                // file is not kept, and an entry whose player is not in the pool
+                // has nothing to attach to. That is defensible — registering
+                // strangers from a CSV would walk around the verification step
+                // Add Players insists on — but doing it in SILENCE is not, and
+                // this view already says so in a comment: "An import that
+                // replaces a board should say what it did — silence here reads
+                // as 'nothing happened' when the file was wrong."
+                //
+                // Every board carries every player, so the pool on screen is
+                // the union and is the right thing to ask.
+                const known = buildNameIndex(boardPlayers);
+                const unknown = players.filter(p => findMatchingIndex(p.name, known, p) === -1).length;
+                setImportSummary({ placed: players.length - unknown, unknown });
+            }
         }
 
         // The pools are keyed by board AND the board list itself is read once,
@@ -584,6 +605,12 @@ export default function ScoutingView({ players }) {
                         Imported <strong>{importSummary.placed}</strong> players
                         {importSummary.created ? <> · <strong>{importSummary.created}</strong> new</> : null}
                         {importSummary.remarks ? <> · <strong>{importSummary.remarks}</strong> remarks</> : null}
+                        {/* The half that was silent. A row naming a player no
+                            rankings file knows is kept but cannot be shown, and
+                            the analyst has no other way to find that out. */}
+                        {importSummary.unknown
+                            ? <> · <strong>{importSummary.unknown}</strong> not on any board, so not shown</>
+                            : null}
                     </span>
                     <button type="button" className="close-button" onClick={() => setImportSummary(null)}>&times;</button>
                 </div>

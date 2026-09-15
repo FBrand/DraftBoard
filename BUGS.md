@@ -323,45 +323,32 @@ They are the kind of thing that is only ever found before it matters or long
 after: the whole point of a version hook is to be correct on the day somebody
 raises it, and this one would have been silently inert.
 
-## Still open: starting a board from a CSV drops what it does not recognise, silently
+## Fixed the silence: starting a board from a CSV now says what it did
 
-Creating a board offers "Start from a CSV". Given a file naming three players —
-two already in the class and one nobody has heard of — measured:
+Given a file naming three players — two the class knows, one nobody has heard
+of — the board gets three entries and the third is **stored and never
+rendered**: the pool is built from the shipped rankings files plus in-app
+prospects, the uploaded file is not kept, and an entry whose player is not in
+the pool has nothing to attach to.
 
-| | result |
-|---|---|
-| entries written to the new board | 3, all placed |
-| the two known players | on the board, correctly placed |
-| the unknown player | **never rendered** — not before a reload, not after |
-| registry records minted | **0** |
-| duplicate player records | none |
+The banner now reads:
 
-The placements are right and nothing is corrupted. But the third row of the
-file produced a stored entry that nothing can display: the pool is built from
-the SHIPPED rankings files plus in-app prospects, the uploaded file is not kept,
-and an entry whose player is not in the pool has nothing to attach to. The
-analyst is told none of this.
+> Imported **2** players · **1** not on any board, so not shown
 
-Not fixed, because the obvious fix is a product decision with a real tension.
-Registering the unknown names would put them in the pool — but the Add Players
-flow deliberately refuses to do that without a verification step, on the
-grounds that "an import is a proposal, not a bulk write". Letting any board CSV
-inject players into the shared registry walks around that gate.
+**What was fixed is the silence, not the behaviour**, and the distinction is
+the point. Registering strangers straight from a CSV would walk around the
+verification step Add Players deliberately insists on — "an import is a
+proposal, not a bulk write" — so whether to do that is still a decision, and
+still open. Telling the analyst what happened never was.
 
-**And the machinery to say so already exists, unwired.** `ScoutingView` holds
-an `importSummary` state, renders a banner for it — "Imported N players · M new
-· K remarks" — and carries the comment:
+The cure had been sitting in the file the whole time: `ScoutingView` held an
+`importSummary` state, rendered a banner for it, and carried the comment *"An
+import that replaces a board should say what it did — silence here reads as
+'nothing happened' when the file was wrong."* `setImportSummary` was never
+called with a value anywhere in the codebase, so the banner could not appear.
+Half-built, three hundred lines above the code that needed it.
 
-> An import that replaces a board should say what it did — silence here reads
-> as "nothing happened" when the file was wrong.
-
-`setImportSummary` is never called with a value anywhere in the codebase. The
-banner cannot appear. The silence the comment warns about is exactly what the
-CSV path does, with the cure sitting three hundred lines above it.
-
-Wiring it would mean deciding what the message says about unrecognised rows,
-which is the same product decision as above, so both are left together.
-
+Pinned by `tests/fast/importSummary.spec.js`.
 ## Twelve men were in the registry twice, 2026-09-15
 
 "A player is a record with a stable id, not a name" — and the registry exists
