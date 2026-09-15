@@ -800,6 +800,43 @@ scrolling would have been a second variable in a test about dragging.
 Nine and ten of the session. The pattern holds: **the selector was more general
 than the claim.**
 
+## Phone flows driven clean, 2026-09-15
+
+Doing the work, not finding the screen. The layout suite already proves every
+stage is REACHABLE at 390px; these are the edits themselves, with a finger.
+
+| flow | result |
+|---|---|
+| Scouting: tag a player | tag applies, reaches `db_boards/<id>/entries`, survives a reload |
+| FA: add a candidate | **was broken** — see the dialog fix above; works now |
+| UDFA: sign a player | signs, leaves the undrafted board, survives a reload |
+| Roster: drag with a finger | moves a player; a quick swipe still scrolls |
+
+The UDFA dialog's three actions all sit inside the box at 390px, which is the
+bug the user reported first — the gold SIGN UDFA a sliver past the left edge.
+It stacks now and stays in.
+
+### "The signing was not written anywhere" — wrong twice over
+
+Nearly filed as a data-loss bug. Two separate faults, both mine:
+
+The first search only looked at keys matching `/udfa|draft_state|signing/`.
+Collections are path-keyed (`db_seasons/<id>/...`), so guessing at key names
+is how a probe reports nothing about a write that landed.
+
+The second was worse, because it *looked* like evidence. Searching every key
+for the player's NAME found `db_players` and called that the signing — but the
+registry already holds every player, so his name being in it proves nothing,
+and the signing itself is filed by `playerId`, which no name search can find.
+
+What actually answers it is which collections **changed**: snapshot storage
+before and after, and diff. One did — `db_players` — because the registry is
+where an undrafted signing is recorded, which is exactly what `draftPhase.js`
+reads back. Then reload and confirm he is still signed.
+
+Eleventh probe fault. Same shape once more: **the evidence was more general
+than the claim.**
+
 ## Standing work, ordered by the user
 
 1. Season rollover — done
