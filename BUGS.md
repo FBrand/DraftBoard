@@ -311,6 +311,45 @@ They are the kind of thing that is only ever found before it matters or long
 after: the whole point of a version hook is to be correct on the day somebody
 raises it, and this one would have been silently inert.
 
+## Still open: a double-click on the draft board takes two players
+
+Found by clicking the way somebody clicks while talking, which is what this
+app is for. **Reproduced every time**, on a draft reset to pick 1:
+
+> One double-click on Fernando Mendoza drafted **Mendoza at pick 1 and Arvell
+> Reese at pick 2**. Nobody chose Reese. One Undo takes back one of them.
+
+The mechanism is the feature working: the Remaining list drops a player the
+instant he is drafted, so the card under the cursor is replaced by whoever was
+below him — and the second click of the double takes that man. On air it is a
+pick nobody made, announced before anybody notices.
+
+**Three fixes were tried and measured; none worked, and the reasons are the
+useful part:**
+
+1. *A cooldown in `draftPlayer`* — ignore a pick within 350ms of the last.
+   No effect: the gap between the two clicks is dominated by re-rendering
+   three hundred cards, so any threshold short enough to be safe is shorter
+   than the render it is trying to outlast.
+2. *`event.detail > 1` in PlayerCard*, the browser's own multi-click counter,
+   which follows the reader's OS setting and does not care about render time.
+   No effect: by the time the second click lands, the element under the cursor
+   is a different card, and the counter resets on a new target.
+3. Which is the finding. **After the re-flow there is nothing left that tells
+   the second half of a double-click apart from a deliberate one** — same
+   position, new element, fresh click. No guard at the click can work.
+
+So the fix has to be in the list, not the click, and it is a product decision:
+
+- **Keep the drafted man in place**, dimmed, for a moment — nothing moves under
+  the cursor, and the repeat click lands on a player who is already drafted,
+  which `draftPlayer` already refuses. Focus mode is immune for exactly this
+  reason: `isFocusMode ? players : players.filter(...)` leaves drafted cards
+  where they are. Normal view and the Remaining panel both re-flow.
+- Or confirm picks, which is heavier than a live tool wants.
+
+Worth knowing while it stands: **Focus mode does not have this bug.**
+
 ## Still open, and worse than it looked: the app is unusable on a phone for 25 seconds
 
 The 7.2s of blocked main thread (C3) was measured on a desktop-class box with
