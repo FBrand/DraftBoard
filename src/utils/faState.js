@@ -11,7 +11,7 @@
  * /home/dev/.claude/plans/structured-growing-cat.md section 3 for why.
  */
 import { defaultState, parseCSV, exportCSV } from './rosterState';
-import { readChart, writeChart, hasChart } from '../data/depthChartStore';
+import { readChart, writeChart, hasChart, chartVersion } from '../data/depthChartStore';
 import { viewedSeason, seasonIsSeeded, openBoards } from './boardRegistry';
 import { canEdit } from './permissions';
 
@@ -117,7 +117,15 @@ export function saveState(state) {
     // on each control, because one forgotten button is all it takes and this is
     // the single door every change goes through.
     if (!canEdit({ kind: 'stage' })) return;
-    writeChart(STORAGE_KEY, seasonId(), state);
+    // See rosterState.saveState — the shape is stamped here, not trusted.
+    // Never write over a chart this build cannot read. migrate() refuses a
+    // NEWER shape rather than guess at it, and the stage then comes up empty —
+    // saving that empty stage back is how "don't guess" turns into losing the
+    // work outright. Refusing is the honest end of the same decision.
+    const stored = chartVersion(STORAGE_KEY, seasonId());
+    if (stored !== null && stored > STATE_VERSION) return;
+
+    writeChart(STORAGE_KEY, seasonId(), { ...state, version: STATE_VERSION });
 }
 
 /**

@@ -115,7 +115,27 @@ export function readChart(stage, seasonId) {
     });
 
     const band = (name) => fatSlots(repository.get(bandsPath(stage, seasonId), name)?.s);
-    return { positionConfig, depthChart, reserve: band('reserve'), cuts: band('cuts') };
+
+    // Which shape this was written in. Absent for a chart written before the
+    // version was recorded, and that is not an error: it is the shape this app
+    // writes, so the caller reads it as current — the same reading
+    // `rosterState.migrate` gives unversioned data.
+    const version = repository.get(bandsPath(stage, seasonId), 'meta')?.v;
+
+    const chart = { positionConfig, depthChart, reserve: band('reserve'), cuts: band('cuts') };
+    if (typeof version === 'number') chart.version = version;
+    return chart;
+}
+
+/**
+ * The shape a stored chart was written in, or null when it does not say.
+ *
+ * For the one question a writer has to ask before overwriting: is what is
+ * already there from a build newer than mine?
+ */
+export function chartVersion(stage, seasonId) {
+    const v = repository.get(bandsPath(stage, seasonId), 'meta')?.v;
+    return typeof v === 'number' ? v : null;
 }
 
 export function writeChart(stage, seasonId, state) {
@@ -165,6 +185,23 @@ export function writeChart(stage, seasonId, state) {
     };
     band('reserve', state.reserve);
     band('cuts', state.cuts);
+
+    // The shape this was written in, so a later build can tell.
+    //
+    // `rosterState.migrate` and `faState.migrate` both refuse a chart from a
+    // NEWER app rather than guess at it, and the header above STATE_VERSION
+    // says what that guard is for: without a version there was no way to tell
+    // an old shape from a current one, so a stale blob was trusted and
+    // rendered wrong. The guard stopped working the moment the chart stopped
+    // being a blob — nothing wrote a version any more, and neither caller can
+    // spread one in from a read that does not carry it. Two files described a
+    // protection that could not fire.
+    const version = typeof state.version === 'number' ? state.version : null;
+    if (version !== null) {
+        const path = bandsPath(stage, seasonId);
+        const before = repository.get(path, 'meta');
+        if (!before || before.v !== version) repository.set(path, 'meta', { v: version });
+    }
 }
 
 export function removeChart(stage, seasonId) {
@@ -172,5 +209,6 @@ export function removeChart(stage, seasonId) {
         rowsOf(stage, seasonId).removeAll(SCOPE),
         repository.remove(bandsPath(stage, seasonId), 'reserve'),
         repository.remove(bandsPath(stage, seasonId), 'cuts'),
+        repository.remove(bandsPath(stage, seasonId), 'meta'),
     ]);
 }

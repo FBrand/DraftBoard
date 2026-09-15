@@ -297,6 +297,18 @@ What does NOT happen is live update between tabs: tab A keeps showing its own
 copy until it is reloaded. That is expected for a local-only app, and is the
 thing the shared backend on the `firebase` branch changes.
 
+## A guard that had stopped guarding, 2026-09-15
+
+| # | What | State |
+|---|---|---|
+| C5 | **"Written by a newer app — don't guess" could never fire** | `rosterState.migrate` and `faState.migrate` both refuse a chart from a newer build rather than render it wrong, and the header above `STATE_VERSION` says why: without a version "there was no way to tell an old shape from a current one, so a stale blob was simply trusted and rendered wrong". That protection stopped working when the chart stopped being a blob and became row documents — nothing wrote a version any more, and neither caller can spread one in from a read that does not carry it. Two files described a guard that was unreachable. **Fixed:** the chart records the shape it was written in, and a chart written before that reads as current, which is what it is. **Verified:** two of the four new tests fail against the old code. |
+| C6 | **And the guard firing would have lost the work** | With the version restored, a newer chart is refused — and free agency answers a refused read with `?? defaultState()`, so the stage comes up EMPTY. Save anything after that and the empty stage is written over the chart that could not be read. "Don't guess" turning into "delete" is the worst version of this. **Fixed:** both stages refuse to write over a chart whose stored version is newer than theirs, at the single door every change already goes through. **Verified:** a chart stamped v99 is refused by `loadState`, an empty save is ignored, and the player who was in it is still there. |
+
+Neither is reachable today — `STATE_VERSION` is 1 and has never been bumped.
+They are the kind of thing that is only ever found before it matters or long
+after: the whole point of a version hook is to be correct on the day somebody
+raises it, and this one would have been silently inert.
+
 ## Still open, and worse than it looked: the app is unusable on a phone for 25 seconds
 
 The 7.2s of blocked main thread (C3) was measured on a desktop-class box with

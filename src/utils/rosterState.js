@@ -3,7 +3,7 @@
  * Stored in localStorage under key 'rosterState'.
  */
 import { parseCsvLine, csvField } from './csvUtils';
-import { readChart, writeChart, hasChart } from '../data/depthChartStore';
+import { readChart, writeChart, hasChart, chartVersion } from '../data/depthChartStore';
 import { viewedSeason } from './boardRegistry';
 import { canEdit } from './permissions';
 
@@ -225,7 +225,17 @@ export function saveState(state) {
     // on each control, because one forgotten button is all it takes and this is
     // the single door every change goes through.
     if (!canEdit({ kind: 'stage' })) return;
-    writeChart(STORAGE_KEY, seasonId(), state);
+    // Stamped here rather than trusted from the caller: parseCSV and the stage
+    // sync both build a state without one, and a chart with no version is a
+    // chart a later build cannot tell apart from its own.
+    // Never write over a chart this build cannot read. migrate() refuses a
+    // NEWER shape rather than guess at it, and the stage then comes up empty —
+    // saving that empty stage back is how "don't guess" turns into losing the
+    // work outright. Refusing is the honest end of the same decision.
+    const stored = chartVersion(STORAGE_KEY, seasonId());
+    if (stored !== null && stored > STATE_VERSION) return;
+
+    writeChart(STORAGE_KEY, seasonId(), { ...state, version: STATE_VERSION });
 }
 
 // ---------------------------------------------------------------------------
