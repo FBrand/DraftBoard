@@ -2,7 +2,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [ master, pastel-lantern ]
+    branches: [ master, pastel-lantern, firebase ]
 
 permissions:
   contents: write
@@ -23,8 +23,46 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # The shared-backend build needs its whole config or it cannot connect,
+      # and a half-configured build does not fail — it comes up with an empty
+      # season and a console warning nobody reads. Better to stop here.
+      - name: Check the Firebase config is present
+        if: github.ref == 'refs/heads/firebase'
+        env:
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+        run: |
+          missing=""
+          for v in VITE_FIREBASE_API_KEY VITE_FIREBASE_AUTH_DOMAIN VITE_FIREBASE_PROJECT_ID VITE_FIREBASE_APP_ID; do
+            [ -n "$(printenv "$v")" ] || missing="$missing $v"
+          done
+          if [ -n "$missing" ]; then
+            echo "Missing repository secrets:$missing"
+            echo "None of this is secret — a web app ships its Firebase config to every"
+            echo "browser. They come from the environment so that a fork cannot write"
+            echo "into this project's database. See .env.example."
+            exit 1
+          fi
+
       - name: Build
-        run: VITE_ENABLE_SYNC=true npm run build
+        # The config is injected for every branch and only USED by a build that
+        # asks for the firebase backend. On master and pastel-lantern the vars
+        # are empty and nothing reads them, so those builds are unchanged.
+        env:
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+        run: |
+          if [ "$GITHUB_REF" = "refs/heads/firebase" ]; then
+            VITE_BACKEND=firebase VITE_ENABLE_SYNC=true npm run build
+          else
+            VITE_ENABLE_SYNC=true npm run build
+          fi
 
       - name: Deploy master to root
         if: github.ref == 'refs/heads/master'
@@ -34,6 +72,7 @@ jobs:
           branch: gh-pages
           clean-exclude: |
             pastel-lantern
+            firebase
 
       - name: Deploy pastel-lantern to subpath
         if: github.ref == 'refs/heads/pastel-lantern'
@@ -42,3 +81,13 @@ jobs:
           folder: dist
           branch: gh-pages
           target-folder: pastel-lantern
+
+      # Its own subpath, so the shared-backend build can be looked at without
+      # replacing the one people use.
+      - name: Deploy firebase to subpath
+        if: github.ref == 'refs/heads/firebase'
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: dist
+          branch: gh-pages
+          target-folder: firebase
