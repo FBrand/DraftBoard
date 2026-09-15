@@ -251,6 +251,7 @@ with a plausible mechanism, and "we checked" is worth more than silence.
 | Rename a player, then reload | The rankings file still carries the OLD name, so the next load resolves it to nobody and mints a SECOND record — the duplicate-player bug, arriving through the one door that looks like an edit. | Holds. 740 records before and after; one record carries the new name; he is still on the board. The alias does its job. |
 | Start Clean Slate | The wipe list and the storage keys are two places that can disagree, and the rewrite renamed every collection key. | Holds. The wipe matches on the `db_` prefix, so it cannot go stale that way. A new season is minted, the user's own work is discarded, and the app comes back usable. The player POOL stays, which is correct — the rankings files are data, not work. |
 | Two tabs (below) | The second tab writes its stale copy over the first tab's work. | Holds, for two independent reasons. |
+| Export the full session, clean slate, import it back | The bundle is built from a key list, and the rewrite renamed every collection key — a stale list exports an incomplete season and the import succeeds anyway, silently short. | Holds. `appSession` enumerates through the same `db_` prefix as the wipe, so it cannot drift. Measured: 186 KB, `version: 1`, 18 collections; the tag made before the export is back after it, and the board returns with all 328 rows. |
 
 **A note on method.** Three of the "bugs" this round were faults in the probe,
 not the app: reading only the first of three board collections, counting
