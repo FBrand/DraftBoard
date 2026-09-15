@@ -370,11 +370,52 @@ export function createRepository(adapter = localAdapter) {
     // lasts until the next refresh, which is not a promise.
     const QUEUE_KEY = 'pending_writes_v1';
 
+    // Refused AND unacknowledged. A write the store never answered is not
+    // safe just because nothing threw: offline, the Firestore SDK neither
+    // resolves nor rejects it, it buffers in memory — and initializeFirestore
+    // is called without a local cache, so that buffer dies with the tab too.
+    // "Seems stuck" IS the unacknowledged state, which makes it the one most
+    // likely to be in flight when somebody reloads.
+    //
+    // `sending` goes in last: if a key is in both, the copy being sent is the
+    // newer one.
+    function unlanded() {
+        const byKey = new Map();
+        pending.forEach((w, k) => byKey.set(k, w));
+        sending.forEach((w, k) => byKey.set(k, { ...w, attempts: 0 }));
+        return [...byKey.values()];
+    }
+
+    // Whether the key is actually out there. Without this, every settled write
+    // pays a removeItem to delete a queue that was never written — and against
+    // localStorage, where writes land before the promise resolves, that is
+    // EVERY write, to protect against a loss that cannot happen there.
+    //
+    // Not justified by a benchmark: boot blocking is far too noisy to see this
+    // (the same build measured against itself spread 7191-8872ms). It is
+    // justified by mechanism — no storage call is made at all on a path that
+    // has nothing to write down.
+    let queueOnDisk = false;
+
     function persistQueue() {
         try {
-            if (!pending.size) { localStorage.removeItem(QUEUE_KEY); return; }
-            localStorage.setItem(QUEUE_KEY, JSON.stringify([...pending.values()]));
+            const all = unlanded();
+            if (!all.length) {
+                if (queueOnDisk) { localStorage.removeItem(QUEUE_KEY); queueOnDisk = false; }
+                return;
+            }
+            localStorage.setItem(QUEUE_KEY, JSON.stringify(all));
+            queueOnDisk = true;
         } catch { /* if even this fails, the in-memory queue is all there is */ }
+    }
+
+    // A write is only worth writing down once it is slow enough to be in doubt.
+    // Against localStorage nothing ever reaches this; against a store that has
+    // gone quiet, everything does.
+    const GRACE_MS = 250;
+    function persistIfStillSending() {
+        const timer = setTimeout(persistQueue, GRACE_MS);
+        return () => clearTimeout(timer);
     }
 
     function restoreQueue() {
@@ -382,6 +423,7 @@ export function createRepository(adapter = localAdapter) {
         try { saved = JSON.parse(localStorage.getItem(QUEUE_KEY) || 'null'); } catch { saved = null; }
         if (!Array.isArray(saved) || !saved.length) return;
 
+        queueOnDisk = true;
         saved.forEach(w => {
             if (!w?.collection || !w?.id) return;
             pending.set(keyOf(w.collection, w.id), { ...w, attempts: 0 });
@@ -526,6 +568,7 @@ export function createRepository(adapter = localAdapter) {
     function attempt(collection, id, doc, op, run) {
         inFlight += 1;
         const settled = startSending(collection, id, doc, op);
+        const cancelPersist = persistIfStillSending();
         announce();
         return Promise.resolve(run())
             .then(() => { lastError = null; })
@@ -541,7 +584,7 @@ export function createRepository(adapter = localAdapter) {
                 }
                 reportWriteError({ collection, id, op, error: err, permanent: verdict.permanent, advice: verdict.advice });
             })
-            .finally(() => { settled(); inFlight = Math.max(0, inFlight - 1); announce(); });
+            .finally(() => { cancelPersist(); settled(); persistQueue(); inFlight = Math.max(0, inFlight - 1); announce(); });
     }
 
     function set(collection, id, doc) {
@@ -580,6 +623,7 @@ export function createRepository(adapter = localAdapter) {
         const settled = changes.map(c => startSending(
             collection, c.id, c.doc, c.doc === null ? 'remove' : 'set',
         ));
+        const cancelPersist = persistIfStillSending();
         announce();
         return Promise.resolve(write)
             .then(() => { lastError = null; })
@@ -596,7 +640,7 @@ export function createRepository(adapter = localAdapter) {
                 if (verdict.permanent) { gaveUp = true; persistQueue(); }
                 reportWriteError({ collection, id: null, op: 'commit', error: err, permanent: verdict.permanent, advice: verdict.advice });
             })
-            .finally(() => { settled.forEach(done => done()); inFlight = Math.max(0, inFlight - 1); announce(); });
+            .finally(() => { cancelPersist(); settled.forEach(done => done()); persistQueue(); inFlight = Math.max(0, inFlight - 1); announce(); });
     }
 
     function clear(collection) {

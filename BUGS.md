@@ -580,6 +580,91 @@ Locked in `tests/fast/faRoundTrip.spec.js`. Roster's CSV is the same shape
 through the same grid, so this covers the risky half of both; a Roster-side
 equivalent is cheap to add if that path ever changes on its own.
 
+## A write nobody ever answered was never written down, 2026-09-15
+
+The persisted queue exists because of a sentence in its own comment:
+
+> A queue in memory is a queue that a reload throws away, and a reload is
+> exactly what somebody does when the app seems stuck.
+
+An unacknowledged write **is** the state where the app seems stuck — the
+indicator says `Saving…` and never stops. And that was the one write the queue
+did not hold. `attempt()` enqueues on CATCH, so the queue, the retry and the
+warning all hang off the adapter's promise rejecting; a write that is neither
+accepted nor refused falls between them.
+
+Measured before touching anything, with an adapter whose `set` returns a
+promise that never settles (`tests/unit/unacknowledgedWrite.test.js`):
+
+| | before |
+|---|---|
+| the indicator | `saving` — honest, it never claimed saved |
+| `pending_writes_v1` | **empty** |
+| after a reload | **the change is gone, with no error anywhere** |
+
+The indicator was already telling the truth, which is why this survived so
+long. The gap was only that the truth was not written down.
+
+`initializeFirestore` is called without a local cache, so the SDK's own buffer
+is memory-only too — there is no second net underneath.
+
+### The fix, and why it is not a product decision
+
+The mechanism and the stated intent were both already there; one case was
+never wired into them. Same shape as the import banner that could not appear.
+`persistQueue` now writes down everything unlanded — `pending` (refused) and
+`sending` (unacknowledged) — deduplicated by document, `sending` last because
+the copy being sent is the newer one.
+
+Two things keep it from costing anything on the way:
+
+- **It persists per write OPERATION, not per document.** `commit` calls
+  `startSending` once per change, so persisting inside it would have made a
+  328-entry seed quadratic.
+- **It waits 250ms first.** A write is only worth writing down once it is slow
+  enough to be in doubt. Against localStorage the timer can never fire at all:
+  `localAdapter.set` is an `async` function with no `await` in it, so its
+  promise settles in a microtask, and microtasks run before timers. Plus a
+  `queueOnDisk` flag, so a settled write does not pay a `removeItem` to delete
+  a queue that was never written.
+
+### What the benchmark actually showed
+
+An eager version measured +494ms of boot blocking, the lazy one +393ms. Both
+are **noise**. Running the identical build against itself four times spread
+7191–8872ms — a 1681ms range, wider than either difference:
+
+| | blocking, mean of 6 |
+|---|---|
+| before | 7400ms |
+| after | 7794ms |
+| same build vs itself (n=4) | range **7191–8872ms** |
+
+So the benchmark cannot tell these builds apart, and saying the lazy version is
+faster would be reading the noise. It is preferred on MECHANISM — a microtask
+beats a timer, so the local path provably does no extra storage work — not on
+these numbers. Recorded this way so the next person does not re-run it
+expecting a difference to appear.
+
+### What this does NOT fix
+
+The reconnect failure recorded on the `firebase` branch is a **different
+case**, and this does not close it. There the indicator went from `Saving…` to
+*nothing*, which is `inFlight` falling back to zero: the promise RESOLVED, and
+the write still never reached the store. A resolved write is removed from
+`sending` and correctly stops being held — so a store that lies about success
+defeats this entirely.
+
+That remains what the entry there already said it was: a seam decision. The
+adapter has to decide when a write has failed, by timeout or by Firestore's own
+connection state, because a promise that resolves without landing cannot be
+detected from above it.
+
+**The tradeoff taken, stated plainly:** a write persisted and then lost with
+the tab is retried on the next boot, and could overwrite a newer value written
+elsewhere in between. That is the same bargain the refused-write queue has
+always made, and the window is now 250ms wider.
+
 ## Standing work, ordered by the user
 
 1. Season rollover — done
