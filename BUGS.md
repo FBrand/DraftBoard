@@ -240,6 +240,35 @@ because the code they fix is here.
 survives a reload; entries carry only single-character field names after an
 edit.
 
+## The app open in two tabs — checked, and it holds
+
+Not exotic: a tab left over from earlier, or the analyst opening the board
+again mid-draft. Both tabs share one localStorage and each keeps its own
+in-memory copy of every collection, so the obvious failure is the second tab
+writing its stale copy over the first tab's work.
+
+Driven rather than reasoned about — two tabs, an edit in each, then a reload:
+
+| flow | result |
+|---|---|
+| tag a different player in each tab | both tags in storage, both survive the reload |
+| bump a different position row's 53-man count in each tab | both survive |
+
+It holds because of two things, and removing either would lose work silently:
+
+1. **Writes diff.** `docSet.write` and `writeEntries` work out which documents
+   actually changed and commit only those, so a stale tab has no opinion about
+   rows it did not touch — even though it rebuilds the whole chart in memory.
+2. **The commit re-reads.** `localAdapter.commit` reads the stored collection
+   back before applying the changed documents, rather than serialising the
+   tab's cache. One key per collection makes the whole value the unit of
+   write, so without this step every commit would publish a stale snapshot of
+   everything else in that collection.
+
+What does NOT happen is live update between tabs: tab A keeps showing its own
+copy until it is reloaded. That is expected for a local-only app, and is the
+thing the shared backend on the `firebase` branch changes.
+
 ## Still open: the boot is frozen for 7.2 seconds
 
 C3 took it from 13.1s to 7.2s of blocked main thread, worst single task 3.4s
