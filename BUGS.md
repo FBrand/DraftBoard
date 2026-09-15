@@ -252,6 +252,14 @@ with a plausible mechanism, and "we checked" is worth more than silence.
 | Start Clean Slate | The wipe list and the storage keys are two places that can disagree, and the rewrite renamed every collection key. | Holds. The wipe matches on the `db_` prefix, so it cannot go stale that way. A new season is minted, the user's own work is discarded, and the app comes back usable. The player POOL stays, which is correct — the rankings files are data, not work. |
 | Two tabs (below) | The second tab writes its stale copy over the first tab's work. | Holds, for two independent reasons. |
 | Export the full session, clean slate, import it back | The bundle is built from a key list, and the rewrite renamed every collection key — a stale list exports an incomplete season and the import succeeds anyway, silently short. | Holds. `appSession` enumerates through the same `db_` prefix as the wipe, so it cannot drift. Measured: 186 KB, `version: 1`, 18 collections; the tag made before the export is back after it, and the board returns with all 328 rows. |
+| Roll over, then open the archived season | One rule in `permissions.js` carries an exception pulling both ways: a finished board must not move, but what you learn about a player keeps arriving after it. That is the kind of exception somebody tidying a boolean removes. | Holds, precisely. The archived board offers no live tag control at all, and the pencil unlocks three evaluation controls WITHOUT unlocking any placement control. The banner says the season is finished. |
+
+**One piece of friction, not a bug.** Rolling over needs a year typed in —
+`disabled={busy || !year}` — while the field shows the obvious answer as a
+greyed placeholder. So the screen reads "ROLL OVER, 2027" with the button
+dead, and it is not obvious the number has to be retyped. Defaulting the field
+to `current.year + 1` would cost nothing; left alone because the confirmation
+text below it is doing deliberate work and this is the user's call, not mine.
 
 **A note on method.** Three of the "bugs" this round were faults in the probe,
 not the app: reading only the first of three board collections, counting
