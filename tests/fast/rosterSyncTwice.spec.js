@@ -38,7 +38,7 @@ test('roster: syncing again fills empty slots without undoing a hand edit', asyn
     await openWarm(page, 'roster');
     await page.waitForSelector('.roster-grid', { timeout: 45_000 });
     test.skip(!(await depthChartDragReachable(page)),
-        'no depth-chart drag target is on screen at this width');
+        'dragTo cannot reach a drop target at this width (a finger can, via edge auto-scroll)');
 
 
     const first = await sync(page);

@@ -997,7 +997,24 @@ compiled it. Two one-word answers finish this; the position-interchangeability
 config would finish it generally, and is the larger version of the same
 question.
 
-## The depth chart cannot be dragged on a phone, 2026-09-16
+## Wrong: I said the depth chart cannot be dragged on a phone. It can, 2026-09-16
+
+**Corrected the same day, by the user, who tried it.** He dragged a card to the
+edge of the screen on his own server and the chart scrolled. Verified here with
+a real touch gesture afterwards: holding a card against the bottom edge moved
+the IR zone from **y=1967 to y=1527 — about 440px in four seconds**, so roughly
+ten seconds of holding to bring IR into reach. Slow, and not something anybody
+will enjoy mid-broadcast, but it **works**. The stages are operable.
+
+What follows is the measurement, which was right, and the conclusion I drew
+from it, which was not. I had even seen `autoScroll` in the dnd-kit config and
+written that holding a card against the edge for several seconds was "not a
+thing anybody will do" — dismissing the mechanism rather than trying it. The
+user tried it in about a minute.
+
+The three specs that skip at this width skip because **`dragTo` moves and
+releases without dwelling at the edge**, so it never triggers auto-scroll. That
+is a limit of the harness, not the app, and the guard now says so.
 
 Coming back off IR is a drag from the IR zone to an empty 53 slot. At 390px
 those two things cannot be on the screen at the same time:
@@ -1019,10 +1036,10 @@ down. Scrolling sideways to find an empty slot does not bring it back.
 | roster | 844px | y=1967 | y=2132 | **0 of 44** |
 | free agency | 844px | y=1936 | y=2057 | **0 of 22** |
 
-So every drag the depth chart is built on — **cutting a player, moving him to
-an empty slot, bringing him back off IR** — has its target more than twice the
-screen height below the fold. That is the whole interaction model of two of the
-five stages.
+So every drag the depth chart is built on — cutting a player, moving him to an
+empty slot, bringing him back off IR — has its target more than twice the
+screen height below the fold **at rest**. Reaching it means holding the card at
+the edge and waiting for the chart to travel, which is what auto-scroll is for.
 
 What made this hard to see is that the automated drags succeed: Playwright
 scrolls an element into view before dragging to it, so a spec finishes a

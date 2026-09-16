@@ -181,13 +181,17 @@ export async function closeCardModal(page) {
  *
  * On the roster and free agency at 390px, measured: the IR zone sits at
  * y≈1950 and the cut panel at y≈2100 on an 844px-tall screen, and NO empty 53
- * slot is on screen at rest (0 of 44, 0 of 22). So a drag whose target is an
- * empty slot, the cut panel or IR has nowhere on screen to finish.
+ * slot is on screen at rest (0 of 44, 0 of 22).
  *
- * Playwright's own drag scrolls elements into view and therefore succeeds
- * where a hand cannot, which is why specs using it pass and fail here
- * inconsistently — they are exercising a capability the user does not have.
- * See BUGS.md, "the depth chart cannot be dragged on a phone".
+ * A PERSON can still do it: holding a card against the edge of the screen makes
+ * dnd-kit auto-scroll the chart — measured at ~440px per 4 seconds, so roughly
+ * ten seconds of holding to reach IR. Slow, but it works, and the app is not
+ * broken here.
+ *
+ * `dragTo` cannot: it moves and releases without dwelling at the edge, so no
+ * auto-scroll is triggered and the drop lands nowhere. This guard is therefore
+ * about the HARNESS, not the app — it skips a spec our drag helper cannot
+ * perform at this width, and must not be read as "the user cannot either".
  */
 export async function depthChartDragReachable(page) {
     return page.evaluate(() => {

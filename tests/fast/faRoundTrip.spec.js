@@ -34,7 +34,7 @@ test('free agency: the candidate CSV comes back the way it went out', async ({ p
     await openWarm(page, 'fa');
     await page.waitForSelector('.roster-grid', { timeout: 45_000 });
     test.skip(!(await depthChartDragReachable(page)),
-        'no depth-chart drag target is on screen at this width');
+        'dragTo cannot reach a drop target at this width (a finger can, via edge auto-scroll)');
 
 
     const before = await snapshot(page);
