@@ -35,6 +35,11 @@ async function resetDraft(page) {
 
 test('draft: a double-click takes one player, and two deliberate picks both land', async ({ page }) => {
     await openWarm(page, 'draft');
+    // At 390px the player list is off-canvas behind a toggle, so waiting for
+    // .left-panel to be VISIBLE never returns. phoneDraftHold.spec.js covers
+    // this same guard on a phone, opening the list the way a finger does.
+    test.skip(!(await page.locator('.left-panel').first().isVisible().catch(() => false)),
+        'the player list is off-canvas at this width — see phoneDraftHold.spec.js');
     await page.waitForSelector('.left-panel', { timeout: 45_000 });
     await resetDraft(page);
 

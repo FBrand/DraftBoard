@@ -13,6 +13,9 @@ import base from './playwright.fast.config.js';
  */
 export default defineConfig({
     ...base,
+    // Fewer workers than the desktop project: rendering a thousand cards at
+    // 390px is heavier than at 1600px.
+    workers: Number(process.env.WORKERS ?? 2),
     projects: [
         { name: 'phone', use: { ...devices['Pixel 5'], viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true } },
     ],

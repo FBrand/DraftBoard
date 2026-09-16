@@ -13,7 +13,7 @@
  */
 import { test } from '@playwright/test';
 import {
-    expect, TABS, openWarm, openCold, gotoTab, slotNames, dragTo, trackErrors,
+    expect, TABS, openWarm, openCold, gotoTab, slotNames, dragTo, trackErrors, closeCardModal,
 } from './helpers';
 // The store's own rename, so an assertion about a stored document cannot
 // drift from how the document is actually written.
@@ -37,8 +37,12 @@ test.describe('rendering', () => {
         const errors = trackErrors(page);
         await openCold(page);
         // The seeded offseason loads itself; the draft board should have cards.
+        // Scoped to the BOARD: at 390px the first .player-card in the document
+        // belongs to the off-canvas player list, which is deliberately hidden
+        // behind a toggle, so asserting on it tests the wrong surface.
         await gotoTab(page, 'draft');
-        await expect(page.locator('.player-card').first()).toBeVisible({ timeout: 30_000 });
+        await expect(page.locator('.center-board-container .player-card').first())
+            .toBeVisible({ timeout: 30_000 });
         expect(errors.filter(e => !/favicon/i.test(e)), errors.join('\n')).toEqual([]);
     });
 });
@@ -186,6 +190,12 @@ test.describe('the player card', () => {
 test.describe('drag and drop', () => {
     test('scouting: reordering the ranking survives a reload', async ({ page }) => {
         await openWarm(page, 'scouting');
+        // useScoutingLayout drops the ranking column at narrow widths — "a
+        // ranking above a list is a ranking you have to scroll past to reach
+        // the list". There is nothing to reorder on a phone, so this asserts
+        // about a surface that is deliberately absent rather than broken.
+        test.skip(await page.locator('.scouting-rank-row').count() === 0,
+            'the ranking column is not rendered at this width');
         // The ranking column is what reorders; the grouped list beside it is a
         // reading surface and deliberately does not drag. The whole ROW is the
         // drag handle — there used to be a ⠿ grip, which nobody aimed at.
@@ -283,6 +293,11 @@ test.describe('undo', () => {
     test('each stage undoes its own work, not the stage you were on before', async ({ page }) => {
         await openWarm(page, 'scouting');
         await page.waitForSelector('.sg-row', { timeout: 30_000 });
+
+        // The scouting half of this reorders the ranking column, which
+        // useScoutingLayout drops at narrow widths — see the reorder spec.
+        test.skip(await page.locator('.scouting-rank-row').count() === 0,
+            'the ranking column is not rendered at this width');
 
         const order = () => page.locator('.scouting-rank-row .rank-name, .scouting-rank-row').allInnerTexts();
         const consensusBefore = await order();
@@ -467,6 +482,9 @@ test.describe('the board CSV', () => {
             await page.waitForTimeout(200);
         }
 
+        // At 390px the card opened as a modal and is now in front of the menu.
+        await closeCardModal(page);
+
         const download = page.waitForEvent('download');
         await page.locator('.top-panel .app-menu-trigger').click();
         await page.getByRole('menuitem', { name: /Export Board CSV/i }).click();
@@ -488,6 +506,13 @@ test.describe('the draft board in normal view', () => {
     test('scrolls down its own column without taking the side panels with it', async ({ page }) => {
         await openWarm(page, 'draft');
         await page.waitForSelector('.center-board-container .player-card', { timeout: 45_000 });
+
+        // The whole assertion is that the board scrolls WITHOUT dragging the
+        // side panels along. At 390px both panels are off-canvas behind
+        // toggles, so there is nothing beside the board to hold still.
+        test.skip(await page.locator('.left-panel .scroll-container').count() === 0
+            || !(await page.locator('.left-panel').first().isVisible().catch(() => false)),
+            'the side panels are off-canvas at this width');
 
         const before = await page.evaluate(() => {
             const el = (s) => document.querySelector(s);

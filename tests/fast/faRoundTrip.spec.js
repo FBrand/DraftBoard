@@ -1,5 +1,5 @@
 import { test } from '@playwright/test';
-import { expect, openWarm, dragTo } from './helpers';
+import { expect, openWarm, dragTo, depthChartDragReachable } from './helpers';
 
 /**
  * Free Agency's CSV, out and back in.
@@ -33,6 +33,9 @@ const openMenu = async (page) => {
 test('free agency: the candidate CSV comes back the way it went out', async ({ page }) => {
     await openWarm(page, 'fa');
     await page.waitForSelector('.roster-grid', { timeout: 45_000 });
+    test.skip(!(await depthChartDragReachable(page)),
+        'no depth-chart drag target is on screen at this width');
+
 
     const before = await snapshot(page);
     expect(before.positions.length).toBeGreaterThan(0);

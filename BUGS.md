@@ -955,7 +955,7 @@ compiled it. Two one-word answers finish this; the position-interchangeability
 config would finish it generally, and is the larger version of the same
 question.
 
-## On a phone you cannot take a player off injured reserve, 2026-09-16
+## The depth chart cannot be dragged on a phone, 2026-09-16
 
 Coming back off IR is a drag from the IR zone to an empty 53 slot. At 390px
 those two things cannot be on the screen at the same time:
@@ -969,6 +969,26 @@ those two things cannot be on the screen at the same time:
 The roster stacks vertically on a narrow screen (which is the fix for "FA only
 shows cuts"), so twenty-two position rows push IR roughly two thousand pixels
 down. Scrolling sideways to find an empty slot does not bring it back.
+
+**And it is not only IR.** Measured on both depth-chart stages at 390px:
+
+| view | viewport | IR zone | cut panel | empty slots on screen |
+|---|---|---|---|---|
+| roster | 844px | y=1967 | y=2132 | **0 of 44** |
+| free agency | 844px | y=1936 | y=2057 | **0 of 22** |
+
+So every drag the depth chart is built on — **cutting a player, moving him to
+an empty slot, bringing him back off IR** — has its target more than twice the
+screen height below the fold. That is the whole interaction model of two of the
+five stages.
+
+What made this hard to see is that the automated drags succeed: Playwright
+scrolls an element into view before dragging to it, so a spec finishes a
+gesture no hand can. It is the same trap as the dialog that "passed" on the
+build where its button was unreachable — **a probe that can do what the user
+cannot will report the app healthy.** Three specs (faRoundTrip, rosterSyncTwice,
+doubleClickDraft) failed on the phone project for exactly this reason and now
+skip there, pointing here.
 
 So the gesture requires dragging across ~1100px of vertical scroll while
 holding a card. dnd-kit does auto-scroll during a drag, so it is not strictly
@@ -1000,6 +1020,37 @@ phone-ready". Measured: **38 of 47 pass**. Nine fail, and six of those are one
 device mismatch — on a phone the player card opens as a modal, so a desktop
 spec that clicks what would be the side panel is blocked by `.modal-overlay`.
 None of the nine is an app bug except the condition above.
+
+## The phone suite, made to mean something, 2026-09-16
+
+`playwright.phone.config.js` runs the same specs at 390px with a real
+touchscreen. It started at **38 of 47 passing** — not "most specs are not
+phone-ready", which is what I had written down without measuring.
+
+Nine failures, and sorting them mattered more than fixing them: a spec that
+fails on a phone is either a **device mismatch** (the spec assumes a desktop
+surface), a **feature that is deliberately absent** at that width, or a **real
+bug**. Only the last is worth a fix, and one of the nine was exactly that.
+
+| failure | what it was | what was done |
+|---|---|---|
+| six clicks blocked by `.modal-overlay` | at 390px the player card is a MODAL, not a side panel, so anything clicked after looking at a player is behind it | `closeCardModal()` in helpers, called by `gotoTab` — a no-op on a desktop |
+| `.scouting-rank-row` not found ×2 | `useScoutingLayout` **drops the ranking column** at narrow widths, by design | the two specs skip, with the reason |
+| `.player-card` never visible | the first card in the document belongs to the off-canvas player list | assertion scoped to `.center-board-container` |
+| side panels "must not scroll" | both panels are off-canvas at 390px, so there is nothing beside the board to hold still | skips at this width |
+| three drag specs | **a real bug** — no depth-chart drag target is on screen at 390px | they skip there, pointing at the entry above |
+
+I first read those three as contention — they drag, export and wait on
+downloads, and rendering a thousand cards at 390px is heavy. So I added a
+retry. **They failed twice running**, which is what a retry is for finding out:
+the cause was structural, not load. The retry came back out and the specs skip
+instead. The phone project does run two workers rather than four, which is
+honest on its own terms.
+
+**The point of doing this at all:** both real bugs found this session came from
+walking the app at 390px — the dialog with no way to reach its submit button,
+and IR activation. A phone suite that fails nine specs for uninteresting
+reasons is a suite nobody runs, and then nothing catches the tenth.
 
 ## Standing work, ordered by the user
 

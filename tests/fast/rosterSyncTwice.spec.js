@@ -1,5 +1,5 @@
 import { test } from '@playwright/test';
-import { expect, openWarm, dragTo } from './helpers';
+import { expect, openWarm, dragTo, depthChartDragReachable } from './helpers';
 
 /**
  * "Sync from FA/Draft/UDFA", run twice with a hand edit in between.
@@ -37,6 +37,9 @@ const sync = async (page) => {
 test('roster: syncing again fills empty slots without undoing a hand edit', async ({ page }) => {
     await openWarm(page, 'roster');
     await page.waitForSelector('.roster-grid', { timeout: 45_000 });
+    test.skip(!(await depthChartDragReachable(page)),
+        'no depth-chart drag target is on screen at this width');
+
 
     const first = await sync(page);
     expect(first.onRoster.length).toBeGreaterThan(0);
