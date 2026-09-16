@@ -131,6 +131,23 @@ export function createFirebaseAdapter() {
         async set(path, id, doc) {
             assertCollection(path);
             const { db, doc: docRef, setDoc } = await api();
+            // Behind a flag, and only because what this promise DOES during an
+            // outage is the whole open question: the docs say it does not
+            // resolve until the server acknowledges, and what was observed
+            // here looked like it resolved anyway. Left in so the next person
+            // can see it rather than infer it.
+            if (globalThis.__DB_TRACE) {
+                const t0 = Date.now();
+                console.log(`[trace] setDoc issued ${path}/${id}`);
+                try {
+                    await setDoc(docRef(db, path, id), doc);
+                    console.log(`[trace] setDoc RESOLVED ${path}/${id} after ${Date.now() - t0}ms`);
+                } catch (e) {
+                    console.log(`[trace] setDoc REJECTED ${path}/${id} after ${Date.now() - t0}ms: ${e?.code ?? e?.message}`);
+                    throw e;
+                }
+                return;
+            }
             await setDoc(docRef(db, path, id), doc);
         },
 
