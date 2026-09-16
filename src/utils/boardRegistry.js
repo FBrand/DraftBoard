@@ -119,7 +119,13 @@ export async function openBoards() {
     INITIAL_BOARDS.forEach((b, order) => {
         let authorId = null;
         if (b.author) {
-            const author = { id: newId('a'), name: b.author, createdAt: season.createdAt };
+            // Unclaimed, like the board itself — see the comment on
+            // boards.ownerId below. Omitting the field entirely instead of
+            // stating null makes `authors`' create rule read an undefined
+            // property, which errors rather than compares false, and an
+            // error denies the write: the shipped Dan/Ryan authors silently
+            // never reached a real Firestore project while their boards did.
+            const author = { id: newId('a'), name: b.author, ownerId: null, createdAt: season.createdAt };
             authors.push(author);
             authorId = author.id;
         }
