@@ -910,6 +910,48 @@ measure was more general than the claim, for the twelfth time.
 
 ## The three registry duplicates are three duplicate ROWS, 2026-09-16
 
+**Resolved 2026-09-16.** The duplicate rows are out of
+`public/DraftBoard_Picks.csv`, decided by the user:
+
+| player | kept | removed |
+|---|---|---|
+| Uso Seumalo | `DL.1T` | the `NT` row |
+| Marvin Jones Jr | `Edge` | the `LB` row |
+| Jalen McMurray | `CB` | the `S` row |
+
+Verified on a fresh seed: **724 records with 3 duplicated names → 721 with 0.**
+
+### Why the fix belongs in the file and not in the matcher
+
+The rule, from the user: **no merging within one seed file — a seed file has to
+be considered truth within itself.**
+
+That is already how this codebase treats rankings files. `joinKeyFor()` joins
+boards on the NAME, *except* for a name appearing twice inside a single file,
+where it adds position "because the analyst deliberately listed two people".
+The same logic applies here: two rows in one picks file are two entries, and
+the app making two records was **faithful to the file**, not a matcher fault.
+
+Teaching the matcher to merge same-name rows within a file would look like a
+fix and would silently collapse two genuinely different men the day a file
+lists them — which is the failure the registry exists to prevent. So the file
+gets corrected; the matcher does not change.
+
+### Two things noticed on the way, not acted on
+
+`DL.1T` and `DL.3T` (three rows now, including Seumalo's) do not match the
+depth chart, whose rows are `DT.1T` and `DT.3T`: `resolvePosition` matches the
+exact label, then the part before the dot, and `DL` is not `DT`. Those players
+will not auto-place on a roster sync. That is the deferred what-he-plays /
+where-he-lines-up problem (#22), not something to fix inside one CSV.
+
+The user also stated a second principle, recorded here because it is a
+requirement and not yet built: **later expert imports should be reviewed and
+decided by an expert before anything is written.** The board-CSV import already
+works this way — it proposes its unknown players to Add Players rather than
+writing them — but no other import path does.
+
+
 Filed for a long time as "needs a football position taxonomy". It does not. It
 needs three lines deleted from a shipped file.
 
