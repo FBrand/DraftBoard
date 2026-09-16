@@ -1,35 +1,96 @@
-# 2026 NFL Draft Board
+# DraftBoard
 
-A high-performance, professional-grade visual board designed for tracking the 2026 NFL Draft. Originally built for the Kansas City Chiefs, the application is fully data-driven and can be configured for any team or draft board preference.
+A five-stage NFL offseason tracker, built as a broadcast companion for RGR
+Football. It runs entirely in the browser: no account, no server, no network
+call after the page loads.
 
 ![Draft Board Preview](board.png)
 
-## Key Features
+## The five stages
 
-- **Dynamic Positional Board**: Visual 2D grid of players organized by positional columns and draft round horizontal slices.
-- **Configurable Layout**: Fully customizable column order (QB, RB, WR...) via `public/columns.txt`.
-- **Intelligent Search**: Real-time filtering by **Player Name** or **Position** in the Left Panel.
-- **Draft Unranked Players**: Manually draft players missing from the big board using the "Draft Unranked" modal.
-- **Session Persistence (CSV)**: Save and restore your full draft state (including trades and pick history) using human-readable CSV files.
-- **High-Quality Export**: Generate professional 15.6MP JPEG snapshots of your board for sharing and analysis.
-### Live Sync
-The application is prepared to support real-time synchronization by polling live draft data to automatically update the board as selections are made.
+An offseason **starts** at free agency and **ends** at a 53-man roster, and the
+app is laid out that way. Each tab is a stage, and each one feeds the next.
 
-⚠️ **Disclaimer**: The current implementation is provided strictly for experimental and educational purposes. It may rely on publicly accessible, unofficial data sources and is not guaranteed to be accurate, stable, or compliant with third-party terms.
+| stage | what it is for |
+|---|---|
+| 💰 **Free Agency** | candidates you are considering, per position row, against what the roster still needs |
+| 🔎 **Scouting** | every analyst's board — tag, rank, annotate and compare players before the draft |
+| 📋 **Draft Board** | the live board on air: position columns, round tiers, click to draft |
+| 🪧 **UDFA** | who is left once the draft ends, and signing them |
+| 🏈 **Roster** | the 53-man depth chart, seeded from the three stages above |
 
-**Use at your own risk.** Users are responsible for ensuring compliance with applicable laws and terms. The authors assume no liability for any misuse or resulting damages.
+Two shapes do all five. Scouting, Draft and UDFA share the **board grid**
+(position columns × round rows); Free Agency and Roster share the **depth
+chart** (position rows × slots). They are real shared components, not copies.
 
-## Usage
+**Seasons** stack: roll over to a new year and last season's roster becomes the
+new free-agency pool, while the roster keeps its shape and loses its players.
+Roll back and the old season is intact.
 
-### Browser Operations
-1. **Search & Draft**: Use the search bar in the Left Panel to find players by name/position. **Click any player card in the rankings or on the board to draft.**
-2. **Custom Draft**: Click "Draft Unranked Player" at the bottom of the Left Panel to enter players manually.
-3. **Session Management**: Use the **Save Session** and **Load Session** buttons at the bottom of the Right Panel to persist mock drafts as CSV files.
-4. **Export Board**: Click **Export JPEG** in the Top Panel to download a high-resolution image of the central board.
-5. **Update Picks**: Modify your team's owned picks via the "Update Picks" modal (Gold highlights).
-6. **Undo**: Use the "Undo" button to revert the last drafting action.
+## What it stores, and where
 
-## Disclaimers & Legal Information
+Everything lives in the browser, as **documents in collections** — the shape a
+document database uses, kept deliberately so that moving to a shared backend is
+a change of adapter rather than a rewrite.
+
+- Each collection is one localStorage key; the key *is* the path
+  (`db_boards/{boardId}/entries`).
+- Reads are synchronous, writes are asynchronous and queued: a refused write is
+  retried with backoff, survives a reload, and is never silently dropped.
+- A player has one **registry record** with a stable id. Names arrive from
+  files and are resolved to that id **once**; everything downstream keys on the
+  id, so correcting a spelling never orphans anybody's work.
+
+`docs/STORAGE.md` has the full schema, the per-collection sizes, and what the
+quota actually counts. Worth reading before adding a collection: **one season
+is about 1MB against a 5MB quota**, so the browser holds roughly three to five
+seasons before it refuses to save.
+
+## Getting your data in
+
+The app ships with a worked 2026 class so it is usable immediately. Your own
+data goes in through `public/`:
+
+| file | what it is |
+|---|---|
+| `rankings_consensus.csv`, `rankings_dan.csv`, `rankings_ryan.csv` | one board per analyst — `group,name,position` |
+| `picks.txt` | the pick numbers your team owns, comma-separated |
+| `columns.txt` | positional column order, left to right |
+| `DraftBoard_Picks.csv` | a completed draft, if you have one |
+| `roster_2025_end.csv`, `roster_predraft.csv` | last season's roster shape, and free agency's starting pool |
+
+In a rankings file the `group` column (`1.1`, `1.2`, …) starts a new row on
+the board and is inherited by the rows beneath it, so you only set it when the
+tier changes. Save as **CSV (comma delimited)** from any spreadsheet.
+
+These files are an **import, not a source of truth**: they seed a season the
+first time it is opened, and after that the season lives in storage and is read
+from there. Adding players later goes through **Add Players**, which checks each
+new name against everyone already known before creating a record.
+
+## Tests
+
+```sh
+npm test                    # unit + browser
+npm run test:unit           # vitest, ~500 tests, seconds
+npm run test:browser        # playwright: drag, layout, modals, routing
+npm run test:browser:docker # the same, pinned to the 1.55.0 image
+```
+
+The split is deliberate: anything that is a function of values is a unit test,
+and the browser suite keeps only what a browser can prove — drag-and-drop,
+clipping, stacking contexts, modals. `playwright.phone.config.js` runs specs at
+390px with a real touchscreen; most specs are not phone-ready yet, so it is not
+wired into `npm test`.
+
+## Branches
+
+- **`pastel-lantern`** — this one. Local-only, no backend, no account.
+- **`firebase`** — the same app plus a shared backend, so a viewer can follow
+  an expert's board live. It is `pastel-lantern` plus that work and nothing
+  else; see `docs/FIREBASE.md` on that branch.
+
+## Options and saving
 
 ### URL Parameters
 - **Live Sync Activation**: Add `?sync=true` to the URL to enable the Live Sync toggle in the Top Panel.
@@ -56,33 +117,6 @@ The application is prepared to support real-time synchronization by polling live
   exports *every* stage at once and restores it. Use this to move a whole
   offseason between machines; use the CSVs when you want to edit something in a
   spreadsheet or hand one stage to someone else.
-
-## Data Formatting
-
-The application is driven by three primary files in the `/public` directory:
-
-### 1. `rankings.csv`
-Defines the player pool and board layout.
-- **Format**: `group,name,position`
-- **Group Optionality**: The `group` field is only required for the *first* player in a new board row. Subsequent rows with empty group values will automatically inherit the last seen group.
-- **Vertical Grouping**: The `group` value (e.g., `1.1`, `1.2`) creates a horizontal slice across the entire board, allowing you to group players by round or specific draft tier.
-
-#### Creating Rankings with Excel
-1. Open Excel and create three columns: `group`, `name`, and `position`.
-2. Enter your player data. Use the `group` column sparingly to create row breaks.
-3. Click **File > Save As**.
-4. Choose **CSV (Comma delimited) (*.csv)** as the file format.
-5. Save the file as `rankings.csv` and place it in the `public/` folder of the project.
-
-### 2. `picks.txt`
-A simple list of pick numbers owned by your team.
-- **Format**: Comma-separated integers.
-- **Example**: `32, 64, 95, 126`
-
-### 3. `columns.txt`
-Defines the order of positional columns from left to right.
-- **Format**: Comma-separated list of positions.
-- **Example**: `QB, RB, WR, TE, OT, IOL, EDGE, DL, LB, CB, S`
 
 ## Setup & Development
 
@@ -183,3 +217,13 @@ The app runs entirely in the browser and requires no backend.
 
 ### Live Sync Modularity
 The application features a robust discovery system. If the `src/services/` directory (containing synchronization logic) is missing, the "Live Sync" functionality will gracefully disable itself in the UI without affecting the core board experience.
+
+## Legal
+
+⚠️ Live Sync is provided strictly for experimental and educational purposes. It
+may rely on publicly accessible, unofficial data sources and is not guaranteed
+to be accurate, stable, or compliant with third-party terms.
+
+**Use at your own risk.** Users are responsible for ensuring compliance with
+applicable laws and terms. The authors assume no liability for any misuse or
+resulting damages.

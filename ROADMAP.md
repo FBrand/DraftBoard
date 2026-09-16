@@ -1,6 +1,48 @@
 # DraftBoard — Project Roadmap
 
+## Status, 2026-09-16
+
+**Every phase below has shipped.** The document is kept because the reasoning
+still explains why things are shaped as they are, not because any of it is
+outstanding.
+
+| phase | state |
+|---|---|
+| Short-Term: Dual View Modes | **done** — Normal hides drafted players, Focus shows the whole board |
+| Mid-Term: 5-Stage Offseason App | **done** — all five stages, on two shared components |
+| Long-Term: Collaborative Expert & Public Sync | **done** on the `firebase` branch — a viewer follows an expert's board live, ~1.4s, no reload |
+| Migrating to Firebase | **done** on the `firebase` branch — adapters, rules, emulator suites |
+
+### What is actually next
+
+Nothing here is started, and the first three want a decision before they are.
+
+1. **Render less.** A warm boot on a 4x-throttled phone takes 25-26s, and it is
+   dominated by producing and styling roughly a thousand player cards — not by
+   anything clever. Virtualising the board so off-screen tiers cost nothing is
+   the only change that would move it. The matcher has now been optimised twice
+   on this theory and neither attempt moved the number; see BUGS.md.
+2. **The draft board does not follow the store.** Boards do; the draft board
+   reads once. The reconciliation it needs is nearly pure already — the blocker
+   was that it re-resolved names, which is now fixed on the pool and the picks
+   but reverted on the draft join because it wanted new I/O before first paint.
+3. **Merging duplicate registry records.** Three names are held by two records
+   each. Same school and year is not proof of one man, so a merge needs either a
+   confirmation modal or a position-interchangeability config.
+4. **The storage ceiling.** One season is about 1MB against a 5MB quota, so
+   localStorage holds three to five seasons and then refuses to save. Archiving
+   old seasons out of the browser, or the backend that already exists on the
+   other branch.
+5. **Phone-ready specs.** `playwright.phone.config.js` exists and most specs
+   fail under it, for mechanical reasons (panels are off-canvas at 390px, so
+   waiting for one to be *visible* times out).
+
+---
+
+
 ## Short-Term: Dual View Modes
+
+> **Delivered.** The Normal/Focus toggle ships; `isFocusMode` drives it.
 
 ### Overview
 Two distinct board modes toggled by a button in the header:
@@ -55,6 +97,8 @@ const visiblePlayers = players.filter(p => !p.drafted);
 ---
 
 ## Mid-Term: 5-Stage Offseason App
+
+> **Delivered.** All five stages ship, on two shared components — the board grid and the depth chart.
 
 ### Stage Overview
 
@@ -156,6 +200,8 @@ Player {
 
 ## Long-Term: Collaborative Expert & Public Sync
 
+> **Delivered.** On the `firebase` branch. A viewer reads a season out of Firestore and follows an expert live.
+
 ### Overview
 Enable content creators/experts to log in, host public draft boards/rosters, and sync draft execution in real-time. Unauthenticated users can view boards or play locally.
 
@@ -178,6 +224,8 @@ Enable content creators/experts to log in, host public draft boards/rosters, and
 ---
 
 ## Migrating to Firebase
+
+> **Delivered.** On the `firebase` branch: adapter seam, security rules, seeded emulator, and suites for all three.
 
 _Written 2026-09-12 against the code as it stands. The point of `src/data/` was
 always that this would be an adapter swap; most of it is, and this section is
