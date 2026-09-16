@@ -57,6 +57,8 @@ function App() {
   const [seasonOpen, setSeasonOpen] = useState(false);
   const [seasonEpoch, setSeasonEpoch] = useState(0);
 
+  const activeTabRef = React.useRef(null);
+
   const [view, setViewParam] = useUrlParam(
     'view',
     localStorage.getItem('draft_board_view') || 'draft',
@@ -145,6 +147,20 @@ function App() {
     }
   };
 
+  // Keep the tab you are ON in view.
+  //
+  // The bar is wider than a phone screen and scrolls sideways, but it never
+  // scrolled itself: measured at 390px, scrollLeft stayed 0 with 405px of
+  // scrollable width, so Draft Board was cut in half and UDFA and Roster were
+  // off screen entirely — the bar showed three stages you were NOT on, and
+  // nothing to say where you were.
+  //
+  // 'nearest' so a tab already fully visible does not move, which means a
+  // desktop scrolls nothing at all.
+  React.useEffect(() => {
+    activeTabRef.current?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+  }, [view]);
+
   return (
     <div className="app-container">
       {/* View switcher tabs — always first so it never shifts position when
@@ -154,6 +170,7 @@ function App() {
         {TABS.map(({ id, label }) => (
           <button
             key={id}
+            ref={view === id ? activeTabRef : null}
             onClick={() => setView(id)}
             className={`view-tab${view === id ? ' active' : ''}`}
           >{label}</button>

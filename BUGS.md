@@ -1052,6 +1052,49 @@ walking the app at 390px — the dialog with no way to reach its submit button,
 and IR activation. A phone suite that fails nine specs for uninteresting
 reasons is a suite nobody runs, and then nothing catches the tenth.
 
+## Fixed: on a phone the tab bar never showed the stage you were on
+
+Found by taking a screenshot and looking at it, which is the method that has
+found every real bug this session.
+
+The tab bar is wider than a 390px screen and scrolls sideways — but it never
+scrolled itself. `scrollLeft` stayed **0** with **405px** of scrollable width,
+whichever stage was open:
+
+| stage you are on | the tab for it |
+|---|---|
+| Free Agency, Scouting | visible |
+| Draft Board | **cut in half** |
+| UDFA, Roster | **off screen entirely** |
+
+So on two of the five stages the bar showed three stages you were *not* on and
+nothing at all to say where you were. On a broadcast, on a phone, that is the
+one piece of chrome whose whole job is orientation.
+
+**Fixed** in `App.jsx`: a ref on the active tab and an effect that calls
+`scrollIntoView({ inline: 'nearest' })` when the view changes. `nearest` means
+a tab already fully visible does not move, so a desktop scrolls nothing.
+Measured after: every stage fully visible, the bar scrolling 0 / 0 / 45 / 138 /
+250 as you move along it.
+
+### The test passed against the broken build, first time
+
+`tests/fast/activeTabVisible.spec.js` originally walked the stages with
+`gotoTab`, which **clicks** each tab — and a browser scrolls an element into
+view when you click it. The test was creating the condition it was asserting,
+and passed against the very build whose screenshot had just shown the bug.
+
+It now navigates to `/?view=<stage>` instead, arriving cold the way somebody
+does when they reopen the app. Against the unfixed build it fails with
+*"arriving at draft, its tab (📋 DRAFT BOARD) is not fully on screen"*.
+
+**Thirteenth probe fault, and the third of exactly this kind** — after the
+dialog that "passed" because `scrollIntoViewIfNeeded` reached a button no hand
+could, and the depth-chart drags that pass because Playwright scrolls to a drop
+target the user cannot see. The rule those three share is worth stating once:
+**a test that performs the user's gesture with the browser's powers is not
+testing the user's experience.**
+
 ## Standing work, ordered by the user
 
 1. Season rollover — done
