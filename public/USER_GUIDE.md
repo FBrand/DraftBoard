@@ -143,6 +143,19 @@ already filled in. They are a proposal, not a silent import: nothing is written
 until you look at each one, because a name that is nearly somebody already on
 the board is how one player quietly becomes two.
 
+### Importing a roster or a candidate list
+
+**More → Import Roster CSV…** on the Roster, and **Import Candidates CSV…** in
+Free Agency, both **ask before they do anything**. The file is read, and you are
+told how many players it holds, how many the app already knows, and how many it
+has never seen — because importing those adds them as new players. Nothing is
+written until you say Import; Cancel leaves both the chart and the player list
+exactly as they were.
+
+That is the same rule Add Players follows: a file is a proposal, not a bulk
+write. It matters most when the file is wrong, which is the moment you would
+otherwise find out by seeing a hundred strangers appear.
+
 ### Unranked players
 
 A player someone else has ranked and you haven't is **unranked** on your board,
@@ -199,6 +212,21 @@ and the card on screen went on showing the original, so nothing looked wrong.
 **athletic matrix** weights. Both are global rather than per board: if analysts
 disagree about what a position is worth, that belongs in where they place
 players, not hidden in a default that quietly makes their boards differ.
+
+It also holds two tables about positions, which is how the app knows that a
+file saying **EDGE** and a depth chart saying **LDE** mean the same man:
+
+- **Who can fill whose slot** — pairs like `OT/IOL`. A tackle who can play
+  guard is a fact about football rather than about one player, so it is stated
+  once. Used when placing somebody on a depth chart.
+- **Group labels** — `OL = OT + IOL`. A file that says *OL* has not said
+  tackle or guard, so he goes wherever there is most room instead of the app
+  deciding which he is.
+
+A third table, **where each position lines up**, is shown but cannot be edited.
+That one decides whether two labels mean the same player, and an edit that
+stopped EDGE matching LDE would not misplace anybody — it would quietly create
+a second record for him.
 
 ---
 
