@@ -81,6 +81,10 @@ export default function ScoutingView({ players }) {
     // An import that replaces a board should say what it did — silence here
     // reads as "nothing happened" when the file was wrong.
     const [importSummary, setImportSummary] = useState(null);
+    // Rows an import named that no board knows. They are PROPOSED, never
+    // written: they go to Add Players, which is the one path that checks a new
+    // name against everybody already known before minting a record.
+    const [pendingImport, setPendingImport] = useState(null);
     const [renaming, setRenaming] = useState(null);
     // Removing a rankings-file player only HIDES him — the file still has him —
     // so there has to be a way back. Undo doesn't cover base data: it is shared
@@ -568,8 +572,23 @@ export default function ScoutingView({ players }) {
                 // Every board carries every player, so the pool on screen is
                 // the union and is the right thing to ask.
                 const known = buildNameIndex(boardPlayers);
-                const unknown = players.filter(p => findMatchingIndex(p.name, known, p) === -1).length;
-                setImportSummary({ placed: players.length - unknown, unknown });
+                const strangers = players.filter(p => findMatchingIndex(p.name, known, p) === -1);
+                setImportSummary({ placed: players.length - strangers.length, unknown: strangers.length });
+
+                // Neither dropped nor silently registered: handed to the
+                // verification step. Registering them straight from a file
+                // would walk around the check that stops one man becoming two
+                // records, which is how the registry grew duplicates before.
+                if (strangers.length) {
+                    setPendingImport(strangers.map(p => ({
+                        name: p.name,
+                        position: p.position ?? '',
+                        school: p.school ?? '',
+                        round: p.round == null ? '' : String(p.round),
+                        tier: p.tier == null ? '' : String(p.tier),
+                    })));
+                    setAddOpen(true);
+                }
             }
         }
 
@@ -609,7 +628,7 @@ export default function ScoutingView({ players }) {
                             rankings file knows is kept but cannot be shown, and
                             the analyst has no other way to find that out. */}
                         {importSummary.unknown
-                            ? <> · <strong>{importSummary.unknown}</strong> not on any board, so not shown</>
+                            ? <> · <strong>{importSummary.unknown}</strong> not on any board — check them and add</>
                             : null}
                     </span>
                     <button type="button" className="close-button" onClick={() => setImportSummary(null)}>&times;</button>
@@ -799,10 +818,11 @@ export default function ScoutingView({ players }) {
             {addOpen && (
                 <AddProspectsModal
                     isOpen
-                    onClose={() => setAddOpen(false)}
+                    onClose={() => { setAddOpen(false); setPendingImport(null); }}
                     existingPlayers={boardPlayers}
                     onSubmit={handleAddProspects}
                     onOpenPlayer={setSelectedName}
+                    initialRows={pendingImport}
                 />
             )}
 

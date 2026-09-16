@@ -9,9 +9,13 @@ import { expect, openWarm } from './helpers';
  * in-app prospects, the uploaded file is not kept, and an entry whose player is
  * not in the pool has nothing to attach to.
  *
- * That is defensible — registering strangers straight from a CSV would walk
- * around the verification step Add Players insists on — but it was happening in
- * SILENCE. ScoutingView had carried the cure for this the whole time: an
+ * Dropping them loses the analyst's work; registering them straight from a CSV
+ * would walk around the verification Add Players insists on, which is the one
+ * check that stops one man becoming two registry records. So they are neither:
+ * the import PROPOSES them, handing the rows it could not place to that same
+ * verification step, pre-filled.
+ *
+ * It also used to happen in SILENCE. ScoutingView had carried the cure for this the whole time: an
  * `importSummary` state, a banner rendered for it, and the comment "An import
  * that replaces a board should say what it did — silence here reads as
  * 'nothing happened' when the file was wrong." `setImportSummary` was never
@@ -40,6 +44,20 @@ test('scouting: creating a board from a CSV reports what it kept and what it cou
 
     // Two of the three are players the class knows.
     await expect(banner).toContainText('2');
-    // And the third is named as kept-but-unshowable rather than dropped quietly.
+    // And the third is named rather than dropped quietly.
     await expect(banner).toContainText(/not on any board/i);
+
+    // Proposed, not dropped and not committed: the stranger is handed to Add
+    // Players, pre-filled, where a name is checked against everyone already
+    // known before any record is minted.
+    const dialog = page.locator('.modal-content.add-prospects');
+    await expect(dialog).toBeVisible({ timeout: 20_000 });
+    await expect(dialog.locator('.ap-entry-grid input').first()).toHaveValue('Completely Unknown Person');
+
+    // Nothing has been written yet — he is a proposal until somebody commits.
+    const registered = await page.evaluate((name) => {
+        const raw = localStorage.getItem('db_players') || '';
+        return raw.includes(name);
+    }, 'Completely Unknown Person');
+    expect(registered, 'the stranger was registered without anybody verifying him').toBe(false);
 });

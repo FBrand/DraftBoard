@@ -349,6 +349,28 @@ called with a value anywhere in the codebase, so the banner could not appear.
 Half-built, three hundred lines above the code that needed it.
 
 Pinned by `tests/fast/importSummary.spec.js`.
+
+### Closed, 2026-09-16: the strangers are now proposed, not dropped
+
+The open half of this — whether an import should REGISTER the players no board
+knows — turned out to be a false choice, and the user agreed with the third
+option: neither.
+
+Dropping them loses the analyst's work. Registering them straight from a file
+walks around the one check that stops a man becoming two registry records —
+which is exactly how the twelve duplicates got there. So the import now hands
+those rows to **Add Players**, pre-filled, where each name is matched against
+everybody already known and the commit stays disabled until every match is
+resolved. Nothing is written until somebody says so.
+
+`AddProspectsModal` takes an `initialRows` prop; `handleCreateBoard` collects
+the rows its file named that the pool does not have and opens it with them. The
+banner changed from "so not shown" to "check them and add", because they are no
+longer going nowhere.
+
+`tests/fast/importSummary.spec.js` now asserts both halves: the dialog opens
+carrying the stranger's name, AND `db_players` does not contain him — a
+proposal, not a write.
 ## Twelve men were in the registry twice, 2026-09-15
 
 "A player is a record with a stable id, not a name" — and the registry exists
