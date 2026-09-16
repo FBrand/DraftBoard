@@ -93,7 +93,7 @@ export const ALIASES = {
  * it starts at what has actually been asked for and grows by editing rather
  * than by guessing.
  */
-export const COMPATIBLE = [
+export const DEFAULT_COMPATIBLE = [
     ['OT', 'IOL'],     // a tackle kicking inside to guard
     ['EDGE', 'DL'],    // five-technique and interior rusher are one body
     ['CB', 'S'],       // the nickel, filed either way by different sources
@@ -123,11 +123,109 @@ export const COMPATIBLE = [
  * identity — a group cannot be canonicalised to one of its members without
  * guessing which.
  */
-export const GROUPS = {
+export const DEFAULT_GROUPS = {
     OL: ['OT', 'IOL'],
     DB: ['CB', 'S'],
     'WR/TE': ['WR', 'TE'],
 };
+
+// ---------------------------------------------------------------------------
+// The editable half
+//
+// Containment is not here. It is what identity compares through, so an edit
+// that stops two labels matching starts minting duplicate records — the one
+// table where being wrong is expensive. Compatibility and groups only ever
+// widen where somebody MAY be placed, and the worst case is a near-fit in a
+// slot you would rather have left empty, which is visible and reversible.
+// ---------------------------------------------------------------------------
+
+const COMPATIBLE_KEY = 'position_compatible_v1';
+const GROUPS_KEY = 'position_groups_v1';
+
+let compatibleCache = null;
+let groupsCache = null;
+
+const up = (x) => String(x ?? '').trim().toUpperCase();
+
+/** Pairs, as `OT/IOL, EDGE/DL`. Anything empty resets to the shipped set. */
+export function getCompatible() {
+    if (compatibleCache) return compatibleCache;
+    try {
+        const stored = JSON.parse(localStorage.getItem(COMPATIBLE_KEY) || 'null');
+        if (Array.isArray(stored) && stored.length) {
+            compatibleCache = stored
+                .map(pair => (Array.isArray(pair) ? pair.map(up) : []))
+                .filter(pair => pair.length === 2 && pair[0] && pair[1]);
+            if (compatibleCache.length) return compatibleCache;
+        }
+    } catch { /* ignore */ }
+    compatibleCache = DEFAULT_COMPATIBLE;
+    return compatibleCache;
+}
+
+export function setCompatible(value) {
+    const pairs = (Array.isArray(value) ? value : parsePairs(value))
+        .map(pair => pair.map(up)).filter(pair => pair.length === 2 && pair[0] && pair[1]);
+    compatibleCache = null;
+    try {
+        if (!pairs.length) localStorage.removeItem(COMPATIBLE_KEY);
+        else localStorage.setItem(COMPATIBLE_KEY, JSON.stringify(pairs));
+    } catch { /* ignore */ }
+    return getCompatible();
+}
+
+/** `OL = OT + IOL, DB = CB + S`. */
+export function getGroups() {
+    if (groupsCache) return groupsCache;
+    try {
+        const stored = JSON.parse(localStorage.getItem(GROUPS_KEY) || 'null');
+        if (stored && typeof stored === 'object' && Object.keys(stored).length) {
+            groupsCache = Object.fromEntries(Object.entries(stored)
+                .map(([k, v]) => [up(k), (Array.isArray(v) ? v : []).map(up).filter(Boolean)])
+                .filter(([k, v]) => k && v.length));
+            if (Object.keys(groupsCache).length) return groupsCache;
+        }
+    } catch { /* ignore */ }
+    groupsCache = DEFAULT_GROUPS;
+    return groupsCache;
+}
+
+export function setGroups(value) {
+    const table = (value && typeof value === 'object' && !Array.isArray(value)) ? value : parseGroups(value);
+    const clean = Object.fromEntries(Object.entries(table)
+        .map(([k, v]) => [up(k), (Array.isArray(v) ? v : []).map(up).filter(Boolean)])
+        .filter(([k, v]) => k && v.length));
+    groupsCache = null;
+    try {
+        if (!Object.keys(clean).length) localStorage.removeItem(GROUPS_KEY);
+        else localStorage.setItem(GROUPS_KEY, JSON.stringify(clean));
+    } catch { /* ignore */ }
+    return getGroups();
+}
+
+/** `OT/IOL, EDGE/DL` -> [['OT','IOL'], ['EDGE','DL']] */
+export function parsePairs(text) {
+    return String(text ?? '').split(',')
+        .map(chunk => chunk.split('/').map(x => x.trim()).filter(Boolean))
+        .filter(pair => pair.length === 2);
+}
+
+/** `OL = OT + IOL, DB = CB + S` -> { OL: ['OT','IOL'], DB: ['CB','S'] } */
+export function parseGroups(text) {
+    const out = {};
+    String(text ?? '').split(/[,\n]/).forEach((line) => {
+        const [name, members] = line.split('=');
+        if (!name || !members) return;
+        const list = members.split('+').map(x => x.trim()).filter(Boolean);
+        if (list.length) out[name.trim()] = list;
+    });
+    return out;
+}
+
+/** For the settings field, and for showing what is in force. */
+export const formatPairs = (pairs) => pairs.map(p => p.join('/')).join(', ');
+export const formatGroups = (groups) => Object.entries(groups)
+    .map(([k, v]) => `${k} = ${v.join(' + ')}`).join(', ');
 
 const ROW_TO_POSITION = (() => {
     const m = new Map();
@@ -190,7 +288,7 @@ export function rowsFor(label) {
 
     // A group reaches every member's rows. The caller picks among them by
     // space, which is the whole point of not forcing a choice here.
-    const group = GROUPS[position];
+    const group = getGroups()[position];
     if (group) {
         const rows = new Set();
         group.forEach(member => rowsFor(member).forEach(r => rows.add(r)));
@@ -203,7 +301,7 @@ export function rowsFor(label) {
     // exact string left "OLB" with nothing but LB.W and LB.S.
     const major = position.split('.', 1)[0];
     const isMine = (label) => label === position || label === major;
-    COMPATIBLE.forEach(([a, b]) => {
+    getCompatible().forEach(([a, b]) => {
         if (isMine(a)) (COVERS[b] ?? []).forEach(r => out.add(r));
         if (isMine(b)) (COVERS[a] ?? []).forEach(r => out.add(r));
     });

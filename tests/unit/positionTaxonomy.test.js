@@ -1,5 +1,8 @@
-import { describe, it, expect } from 'vitest';
-import { canonicalPosition, samePosition, rowsFor, COVERS } from '../../src/utils/positionTaxonomy';
+import { describe, it, expect, beforeEach } from 'vitest';
+import {
+    canonicalPosition, samePosition, rowsFor, COVERS,
+    getCompatible, setCompatible, setGroups, parsePairs, parseGroups,
+} from '../../src/utils/positionTaxonomy';
 
 /**
  * What a man plays, versus where he lines up.
@@ -156,5 +159,50 @@ describe('labels that name a group', () => {
         // the group above it.
         expect(canonicalPosition('LG')).toBe('IOL.G');
         expect(canonicalPosition('CB.N')).toBe('CB.N');
+    });
+});
+
+describe('the editable tables', () => {
+    beforeEach(() => { globalThis.resetStorage(); setCompatible([]); setGroups({}); });
+
+    it('reads pairs and groups the way a settings field writes them', () => {
+        expect(parsePairs('OT/IOL, EDGE/DL')).toEqual([['OT', 'IOL'], ['EDGE', 'DL']]);
+        expect(parseGroups('OL = OT + IOL, DB = CB + S'))
+            .toEqual({ OL: ['OT', 'IOL'], DB: ['CB', 'S'] });
+    });
+
+    it('takes an edit and lets it change where somebody can be placed', () => {
+        // Nothing ties a tight end to the tackle rows by default.
+        expect(rowsFor('TE')).not.toContain('LT');
+        setCompatible('TE/OT');
+        expect(rowsFor('TE')).toContain('LT');
+    });
+
+    it('falls back to the shipped tables when the edit is emptied', () => {
+        setCompatible('TE/OT');
+        setCompatible('');
+        expect(rowsFor('OT')).toContain('LG');   // the shipped OT/IOL pair again
+    });
+
+    it('ignores nonsense rather than storing it', () => {
+        setCompatible('OT, EDGE/, /IOL, OT/IOL');
+        expect(getCompatible()).toEqual([['OT', 'IOL']]);
+    });
+
+    it('lets a group be redefined', () => {
+        // Deliberately a group with nothing in common with the shipped one:
+        // redefining OL to OT would still reach guard rows, because a tackle
+        // is compatible with IOL — which is the other table doing its job, not
+        // this one failing.
+        setGroups('OL = TE');
+        expect(rowsFor('OL')).toContain('TE');
+        expect(rowsFor('OL')).not.toContain('LT');
+    });
+
+    it('leaves containment alone — it is not editable, on purpose', () => {
+        // Identity compares through containment. An edit that stops two labels
+        // matching starts minting duplicate records, which is not a setting.
+        expect(samePosition('EDGE', 'LDE')).toBe(true);
+        expect(canonicalPosition('LG')).toBe('IOL.G');
     });
 });

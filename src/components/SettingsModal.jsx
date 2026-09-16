@@ -1,4 +1,8 @@
 import React, { useState } from 'react';
+import {
+    getCompatible, setCompatible, getGroups, setGroups,
+    formatPairs, formatGroups, DEFAULT_COMPATIBLE, DEFAULT_GROUPS, COVERS,
+} from '../utils/positionTaxonomy';
 import useEscapeKey from '../hooks/useEscapeKey';
 import {
     DEFAULT_POSITION_VALUE, getPositionValue, setPositionValue, setAthleticMatrixUrl,
@@ -17,6 +21,8 @@ import { getAthleticMatrixUrl } from '../utils/appLinks';
  */
 export default function SettingsModal({ isOpen, onClose, onChanged }) {
     const [positions, setPositions] = useState(() => getPositionValue().join(', '));
+    const [compat, setCompat] = useState(() => formatPairs(getCompatible()));
+    const [groupText, setGroupText] = useState(() => formatGroups(getGroups()));
     const [matrixUrl, setMatrixUrl] = useState(() => getAthleticMatrixUrl());
     const [team, setTeam] = useState(() => getSessionTeam());
     const [rounds, setRounds] = useState(() => getRoundSizes().join(', '));
@@ -31,6 +37,8 @@ export default function SettingsModal({ isOpen, onClose, onChanged }) {
             return setError('That link needs to be a full http:// or https:// address.');
         }
         setPositionValue(positions);
+        setCompatible(compat);
+        setGroups(groupText);
         setSessionTeam(team);
         setRoundSizes(rounds);
         setError('');
@@ -39,6 +47,8 @@ export default function SettingsModal({ isOpen, onClose, onChanged }) {
     };
 
     const resetPositions = () => setPositions(DEFAULT_POSITION_VALUE.join(', '));
+    const resetCompatible = () => setCompat(formatPairs(DEFAULT_COMPATIBLE));
+    const resetGroups = () => setGroupText(formatGroups(DEFAULT_GROUPS));
 
     return (
         <div className="modal-overlay" onClick={onClose}>
@@ -91,6 +101,64 @@ export default function SettingsModal({ isOpen, onClose, onChanged }) {
                                     : 'Empty resets to the shipped order.';
                             })()}
                         </span>
+                    </label>
+
+                    <label className="settings-field">
+                        <span className="settings-label">Who can fill whose slot</span>
+                        <span className="settings-hint">
+                            Pairs of positions that can stand in for each other, as
+                            <code> OT/IOL</code>. A tackle who can play guard is a fact about
+                            football, not about one player, so it is stated once here.
+                            Used when placing somebody on a depth chart — never when working
+                            out who he is.
+                        </span>
+                        <input
+                            type="text"
+                            className="text-input"
+                            value={compat}
+                            placeholder="OT/IOL, EDGE/DL"
+                            onChange={e => setCompat(e.target.value)}
+                        />
+                        <button type="button" className="ap-link settings-reset" onClick={resetCompatible}>
+                            Reset to the shipped pairs
+                        </button>
+                    </label>
+
+                    <label className="settings-field">
+                        <span className="settings-label">Group labels</span>
+                        <span className="settings-hint">
+                            Labels that name a group rather than a position, as
+                            <code> OL = OT + IOL</code>. A file that says OL has not said
+                            tackle or guard, so he is placed wherever there is most room
+                            rather than the app deciding which he is.
+                        </span>
+                        <input
+                            type="text"
+                            className="text-input"
+                            value={groupText}
+                            placeholder="OL = OT + IOL, DB = CB + S"
+                            onChange={e => setGroupText(e.target.value)}
+                        />
+                        <button type="button" className="ap-link settings-reset" onClick={resetGroups}>
+                            Reset to the shipped groups
+                        </button>
+                    </label>
+
+                    <label className="settings-field">
+                        <span className="settings-label">Where each position lines up</span>
+                        <span className="settings-hint">
+                            Read-only on purpose. This is what the app compares through to
+                            decide whether two labels mean the same man — an edit that stops
+                            EDGE matching LDE does not misplace somebody, it quietly creates
+                            a second record for him. It lives in
+                            <code> src/utils/positionTaxonomy.js</code>.
+                        </span>
+                        <textarea
+                            className="text-input settings-textarea"
+                            rows={4}
+                            readOnly
+                            value={Object.entries(COVERS).map(([k, v]) => `${k} = ${v.join(' + ')}`).join(', ')}
+                        />
                     </label>
 
                     <label className="settings-field">

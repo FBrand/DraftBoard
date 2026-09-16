@@ -63,7 +63,17 @@ test('free agency: the candidate CSV comes back the way it went out', async ({ p
 
     await openMenu(page);
     await page.setInputFiles('input[type="file"][accept=".csv"]', csvPath);
-    await page.waitForTimeout(3_500);
+
+    // Wait for the import to LAND, not for a fixed number of seconds. Three
+    // and a half was enough alone and not enough under four workers, which
+    // made this fail intermittently with the dragged state still on screen.
+    //
+    // Polling until the grid stops showing the dragged arrangement is not the
+    // same as polling until the test passes: it waits for "the import changed
+    // something", and the assertion below is still that what it changed to is
+    // exactly what was exported.
+    await expect.poll(async () => (await snapshot(page)).slots, { timeout: 30_000 })
+        .not.toEqual(changed.slots);
 
     const after = await snapshot(page);
     expect(after.positions).toEqual(before.positions);
