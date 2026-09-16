@@ -908,6 +908,53 @@ anyway. **A file format is not a line format**, and counting a CSV by lines is
 the same mistake as counting `.rv-slot-name` including the cut panel — the
 measure was more general than the claim, for the twelfth time.
 
+## The three registry duplicates are three duplicate ROWS, 2026-09-16
+
+Filed for a long time as "needs a football position taxonomy". It does not. It
+needs three lines deleted from a shipped file.
+
+`public/DraftBoard_Picks.csv` lists each of these men **twice** as a UDFA
+signing — same team, different position label:
+
+| lines | rows |
+|---|---|
+| 588, 591 | `UDFA,Uso Seumalo,DT,SEA` and `UDFA,Uso Seumalo,NT,SEA` |
+| 590, 594 | `UDFA,Marvin Jones Jr,Edge,SEA` and `UDFA,Marvin Jones Jr,LB,SEA` |
+| 621, 623 | `UDFA,Jalen McMurray,CB,TEN` and `UDFA,Jalen McMurray,S,TEN` |
+
+The app then did exactly what it should: it resolves by name AND position, the
+positions differ, so it created a record for each. **This is not a matcher
+fault and not a merge problem — it is two rows describing one signing.**
+
+### What the records look like
+
+All six carry no school, `isUdfa: true`, `draftYear: 2026`, and the same team
+as their twin. Each pair was created **2-3ms apart**, in one batch, which is the
+signature of one file being read once.
+
+And the part that makes this cheap: **every one of the six is referenced by
+zero collections.** No board entry, no pick, no roster slot points at either
+record. Nothing has to be rewritten, nothing loses its history — a merge here
+is deleting an orphan.
+
+### What is still the user's call
+
+Which position survives, for two of the three. `public/player_facts_2026.csv`
+settles one of them on the repo's own evidence:
+
+- **Jalen McMurray** — `Jalen McMurray,CB,Tennessee,,,,TEN`. **CB**; the `S` row
+  on line 623 is the duplicate.
+- **Uso Seumalo** (DT vs NT) — not in player_facts. NT is an interior
+  alignment and DT is what he plays, but that is a football judgement and this
+  file is the user's data.
+- **Marvin Jones Jr** (Edge vs LB) — not in player_facts. Same.
+
+Left alone deliberately. Deleting the wrong row of a pair silently changes what
+the app says a man plays, and the shipped data belongs to the person who
+compiled it. Two one-word answers finish this; the position-interchangeability
+config would finish it generally, and is the larger version of the same
+question.
+
 ## Standing work, ordered by the user
 
 1. Season rollover — done
