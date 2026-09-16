@@ -137,6 +137,12 @@ An author is who is writing it; leave it blank for a board nobody owns, which
 is what Consensus is. Reusing a name reuses that person, so one analyst keeps
 one identity across boards and seasons.
 
+If your file names players the app has never heard of, it says so — "*3 not on
+any board — check them and add*" — and opens **Add Players** with those rows
+already filled in. They are a proposal, not a silent import: nothing is written
+until you look at each one, because a name that is nearly somebody already on
+the board is how one player quietly becomes two.
+
 ### Unranked players
 
 A player someone else has ranked and you haven't is **unranked** on your board,
@@ -199,6 +205,11 @@ players, not hidden in a default that quietly makes their boards differ.
 ## 📋 Draft Board — the live draft
 
 Position columns across, rounds and tiers down. Click a player to draft him.
+
+A player you have just drafted stays in the list for a moment before he
+disappears. That is on purpose: without it, the list closed up under your
+cursor and a second click — or a slightly long one — took the next man down
+instead.
 
 - **Normal view** hides drafted players and collapses emptied rows, so what's
   left is what you see.
