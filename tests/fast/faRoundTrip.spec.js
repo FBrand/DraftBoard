@@ -64,6 +64,13 @@ test('free agency: the candidate CSV comes back the way it went out', async ({ p
     await openMenu(page);
     await page.setInputFiles('input[type="file"][accept=".csv"]', csvPath);
 
+    // An import is a proposal now: it says what it will do and waits. Without
+    // this the file is read, nothing is applied, and the poll below times out
+    // still looking at the dragged arrangement — see importReview.spec.js.
+    const confirm = page.locator('.modal-content').filter({ hasText: /Import these candidates/i });
+    await expect(confirm).toBeVisible({ timeout: 20_000 });
+    await confirm.locator('button').filter({ hasText: /^Import$/ }).first().click();
+
     // Wait for the import to LAND, not for a fixed number of seconds. Three
     // and a half was enough alone and not enough under four workers, which
     // made this fail intermittently with the dragged state still on screen.

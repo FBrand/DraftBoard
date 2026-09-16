@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
+import { ConfirmDialog } from './Dialogs';
 import useIsMobile from '../hooks/useIsMobile';
 import * as faState from '../utils/faState';
 import * as rosterState from '../utils/rosterState';
@@ -17,6 +18,7 @@ import { resolve as resolvePlayer, setFacts } from '../utils/playerRegistry';
 // always current) purely to compute need indicators — never written to.
 export default function FreeAgencyView({ masterPlayers, draftedPlayers, onInfoOpen }) {
     const [isAddOpen, setIsAddOpen] = useState(false);
+    const [pendingImport, setPendingImport] = useState(null);
     const [addPositionPhase, setAddPositionPhase] = useState(null);
     // Same control Roster has: this grid is desktop-wide by design, so on a
     // phone it needs shrinking to be navigable. FA renders the identical
@@ -72,12 +74,12 @@ export default function FreeAgencyView({ masterPlayers, draftedPlayers, onInfoOp
 
             if (dst.posId === '__ir__') next.reserve.push(src.slot);
             else if (dst.posId === '__cut__') next.cuts.push(src.slot);
-            else { dc[dst.posId] = [...(dc[dst.posId] ?? [])]; dc[dst.posId][dst.slotIdx] = makeSlot(src.slot.name, dst.targetZone, src.slot.arrival); }
+            else { dc[dst.posId] = [...(dc[dst.posId] ?? [])]; dc[dst.posId][dst.slotIdx] = makeSlot(src.slot.name, dst.targetZone, src.slot.arrival, src.slot.playerId ?? null); }
 
             if (displaced) {
                 if (src.posId === '__ir__') next.reserve.push(displaced);
                 else if (src.posId === '__cut__') next.cuts.push(displaced);
-                else dc[src.posId][src.slotIdx] = makeSlot(displaced.name, src.slot?.zone ?? '53', displaced.arrival);
+                else dc[src.posId][src.slotIdx] = makeSlot(displaced.name, src.slot?.zone ?? '53', displaced.arrival, displaced.playerId ?? null);
             }
             return next;
         });
@@ -223,13 +225,32 @@ export default function FreeAgencyView({ masterPlayers, draftedPlayers, onInfoOp
     };
 
 
+    // An import is a proposal, not a bulk write.
+    //
+    // Parsing USED to be the write: resolving each name with creation minted a
+    // registry record for every stranger in the file before anybody saw what
+    // the file would do. The dry run resolves without creating, so this can say
+    // what will happen and wait to be told to do it.
     const handleImport = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
         const text = await file.text();
+        const preview = faState.parseCSV(text, { dryRun: true });
+        const slots = Object.values(preview.depthChart ?? {}).flat().filter(x => x?.name);
+        setPendingImport({
+            text,
+            total: slots.length,
+            known: slots.filter(x => x.playerId).length,
+            unknown: slots.filter(x => !x.playerId).length,
+        });
+    };
+
+    const applyImport = () => {
+        if (!pendingImport) return;
         // reset, not setState: undoing back into the file you just replaced
         // would be surprising rather than useful.
-        history.reset(faState.parseCSV(text));
+        history.reset(faState.parseCSV(pendingImport.text));
+        setPendingImport(null);
     };
 
     return (
@@ -294,6 +315,22 @@ export default function FreeAgencyView({ masterPlayers, draftedPlayers, onInfoOp
                     ]} />
                 </div>
             </div>
+
+            {pendingImport && (
+                <ConfirmDialog
+                    title="Import these candidates?"
+                    message={
+                        `${pendingImport.total} player${pendingImport.total === 1 ? '' : 's'} in this file, replacing the current candidates. `
+                        + `${pendingImport.known} already known`
+                        + (pendingImport.unknown
+                            ? `, and ${pendingImport.unknown} the app has never seen — importing adds them as new players.`
+                            : '.')
+                    }
+                    confirmLabel="Import"
+                    onConfirm={applyImport}
+                    onCancel={() => setPendingImport(null)}
+                />
+            )}
 
             <DepthChartGrid
                 showPracticeSquad={false}

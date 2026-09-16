@@ -39,6 +39,7 @@ export default function RosterView({ masterPlayers, draftedPlayers, onInfoOpen }
     // has somewhere to place players. The import options that used to live on
     // the blocking bootstrap screen are in this view's menu instead.
     const [seeding, setSeeding] = useState(() => loadState() === null);
+    const [pendingImport, setPendingImport] = useState(null);
     const [isSignModalOpen, setIsSignModalOpen] = useState(false);
     const [isPasting, setIsPasting] = useState(false);
     const [pastedHtml, setPastedHtml] = useState('');
@@ -175,12 +176,19 @@ export default function RosterView({ masterPlayers, draftedPlayers, onInfoOpen }
         // Two players really can share a name, which is what the qualified
         // lookup is for; it stays as the fallback when the name alone finds
         // nobody and a record has to be created.
+        // Resolved out here, not inside the facts branch, because the SLOT needs
+        // it too: a slot carries the id of the man in it now, and leaving this
+        // block-scoped meant placeAt referenced an identifier that was not in
+        // scope — every sign threw and the dialog simply never closed.
+        //
+        // This is also the answer to "is a player always registered before he
+        // reaches the roster": here, yes. The last call creates.
+        const signedId = linkedId
+            ?? resolvePlayer({ name: displayName }, { create: false })
+            ?? resolvePlayer({ name: displayName, position });
+
         if (team || previousTeam || draftYear || draftRound) {
-            // The record the form was pointed at, when somebody picked one.
-            // Falling back to the name, then to creating one — see below.
-            const id = linkedId
-                ?? resolvePlayer({ name: displayName }, { create: false })
-                ?? resolvePlayer({ name: displayName, position });
+            const id = signedId;
 
             // Signing him HERE is what makes this his team — and it is also the
             // only moment his old one is still known. Writing the new team over
@@ -221,7 +229,7 @@ export default function RosterView({ masterPlayers, draftedPlayers, onInfoOpen }
         const arr = next.depthChart[rowId] = [...(next.depthChart[rowId] ?? [])];
 
         const placeAt = (index, zone, label) => {
-            arr[index] = makeSlot(displayName, zone, arrival);
+            arr[index] = makeSlot(displayName, zone, arrival, signedId ?? null);
             setState(next);
             setToast({ message: `Signed ${displayName} — ${chip?.label ?? position}, ${label}.`, tone: 'success' });
         };
@@ -274,14 +282,14 @@ export default function RosterView({ masterPlayers, draftedPlayers, onInfoOpen }
                 // that is really a status. Every other arrival is a fact about
                 // how he got here and survives the trip.
                 const arrival = src.posId === '__ir__' ? clearInjuryArrival(src.slot.arrival) : (src.slot.arrival ?? null);
-                dc[dst.posId][dst.slotIdx] = makeSlot(src.slot.name, dst.targetZone, arrival);
+                dc[dst.posId][dst.slotIdx] = makeSlot(src.slot.name, dst.targetZone, arrival, src.slot.playerId ?? null);
             }
 
             // Swap displaced back to source
             if (displaced) {
                 if (src.posId === '__ir__') next.reserve.push(displaced);
                 else if (src.posId === '__cut__') next.cuts.push(displaced);
-                else dc[src.posId][src.slotIdx] = makeSlot(displaced.name, src.slot?.zone ?? '53', displaced.arrival ?? null);
+                else dc[src.posId][src.slotIdx] = makeSlot(displaced.name, src.slot?.zone ?? '53', displaced.arrival ?? null, displaced.playerId ?? null);
             }
 
             return next;
@@ -332,11 +340,28 @@ export default function RosterView({ masterPlayers, draftedPlayers, onInfoOpen }
         });
     }, [setState]);
 
+    // An import is a proposal, not a bulk write — see FreeAgencyView, same
+    // shape. The dry run resolves every name WITHOUT creating a record, so
+    // this can say how many strangers the file carries before anybody agrees
+    // to register them.
     const handleBootstrap = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
         const text = await file.text();
-        history.reset(parseCSV(text));
+        const preview = parseCSV(text, { dryRun: true });
+        const slots = Object.values(preview.depthChart ?? {}).flat().filter(x => x?.name);
+        setPendingImport({
+            text,
+            total: slots.length,
+            known: slots.filter(x => x.playerId).length,
+            unknown: slots.filter(x => !x.playerId).length,
+        });
+    };
+
+    const applyImport = () => {
+        if (!pendingImport) return;
+        history.reset(parseCSV(pendingImport.text));
+        setPendingImport(null);
     };
 
     const handleFetchAdapter = async () => {
@@ -513,6 +538,22 @@ export default function RosterView({ masterPlayers, draftedPlayers, onInfoOpen }
                     ]} />
                 </div>
             </div>
+
+            {pendingImport && (
+                <ConfirmDialog
+                    title="Import this roster?"
+                    message={
+                        `${pendingImport.total} player${pendingImport.total === 1 ? '' : 's'} in this file, replacing the current depth chart. `
+                        + `${pendingImport.known} already known`
+                        + (pendingImport.unknown
+                            ? `, and ${pendingImport.unknown} the app has never seen — importing adds them as new players.`
+                            : '.')
+                    }
+                    confirmLabel="Import"
+                    onConfirm={applyImport}
+                    onCancel={() => setPendingImport(null)}
+                />
+            )}
 
             <DepthChartGrid
                 positionConfig={positionConfig}

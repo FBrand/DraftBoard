@@ -105,7 +105,7 @@ export function makeSlot(name, zone = '53', arrival = null, playerId = null) {
 // several loops and passing a collector down all of them is noise.
 let pendingFacts = null;
 
-function slotFromImport(raw, zone, position = '') {
+function slotFromImport(raw, zone, position = '', dryRun = false) {
     const { name, facts } = parseAcquisition(raw, DRAFT_YEAR);
     if (!name) return null;
     const arrival = String(raw ?? '').trim().slice(name.length + 1).trim() || null;
@@ -127,11 +127,16 @@ function slotFromImport(raw, zone, position = '') {
     // beyond the name (scraped roster data, ESPN sync) pass nothing and get the
     // original name-only behaviour — do not 'fix' those by forcing a qualifier
     // through." A roster is exactly that caller, and it was forcing one.
-    const id = resolvePlayer({ name });
+    // `create` is false for a DRY RUN — an import the expert has not agreed to
+    // yet. Parsing used to be the write: resolving with creation minted a
+    // record for every unknown name before anybody saw what the file would do.
+    const id = resolvePlayer({ name }, { create: dryRun ? false : true });
     // Being on the roster IS the fact that he plays for this team.
-    if (id) pendingFacts?.push({ id, patch: { team: getSessionTeam(), ...facts } });
+    if (id && !dryRun) pendingFacts?.push({ id, patch: { team: getSessionTeam(), ...facts } });
 
-    return makeSlot(name, zone, arrival);
+    // The id is already in hand here, so the slot carries it from the moment
+    // it is built rather than waiting to be stamped on the next save.
+    return makeSlot(name, zone, arrival, id);
 }
 
 /**
@@ -343,11 +348,17 @@ export const CSV_TEMPLATE = [
     'D,EDGE,2,A Starter:22/1,A Rotational Guy:UDFA,',
 ].join('\n') + '\n';
 
-export function parseCSV(csvText) {
+/**
+ * @param {string} csvText
+ * @param {{ dryRun?: boolean }} [options] dryRun parses and resolves WITHOUT
+ *   creating a record or writing a fact, so an import can be shown to somebody
+ *   before it is agreed to.
+ */
+export function parseCSV(csvText, { dryRun = false } = {}) {
     pendingFacts = [];
     // Every player this import registers is written once, at the end, rather
     // than the whole collection per slot. See playerRegistry.beginBatch.
-    beginBatch();
+    if (!dryRun) beginBatch();
     const lines = csvText
         .trim()
         .split('\n')
@@ -374,7 +385,7 @@ export function parseCSV(csvText) {
             const rawSlots = hasSlots53Col ? cols.slice(3) : cols.slice(2);
             // Slots, not names — the arrival has to survive the file.
             const irSlots = rawSlots.map(s => s.trim()).filter(Boolean)
-                .map(n => slotFromImport(n.replace(/^(PS:|IR:|R:)/i, '').trim(), 'ir'))
+                .map(n => slotFromImport(n.replace(/^(PS:|IR:|R:)/i, '').trim(), 'ir', '', dryRun))
                 .filter(Boolean);
             reserve.push(...irSlots);
             continue;
@@ -387,7 +398,7 @@ export function parseCSV(csvText) {
             // Slots, not bare names: a cut player keeps how he arrived, so
             // moving him back onto the chart restores his tag and colour.
             const cutSlots = rawSlots.map(s => s.trim()).filter(Boolean)
-                .map(n => slotFromImport(n.replace(/^(PS:|IR:|R:)/i, '').trim(), 'cut'))
+                .map(n => slotFromImport(n.replace(/^(PS:|IR:|R:)/i, '').trim(), 'cut', '', dryRun))
                 .filter(Boolean);
             cuts.push(...cutSlots);
             continue;
@@ -407,7 +418,7 @@ export function parseCSV(csvText) {
             // directly skipped registration, which made the kicker, punter and
             // long snapper the only players on the roster with no record — and
             // so the only ones whose card could never show a school.
-            depthChart[pos] = name ? [slotFromImport(name, '53', pos)].filter(Boolean) : [];
+            depthChart[pos] = name ? [slotFromImport(name, '53', pos, dryRun)].filter(Boolean) : [];
             continue;
         }
 
@@ -430,7 +441,7 @@ export function parseCSV(csvText) {
             else if (v.toUpperCase().startsWith('R:')) zone = 'r';
             else if (rIndex >= limit53) zone = 'r';
 
-            const slot = slotFromImport(v.replace(/^(PS:|IR:|R:)/i, '').trim(), zone, pos);
+            const slot = slotFromImport(v.replace(/^(PS:|IR:|R:)/i, '').trim(), zone, pos, dryRun);
             if (!slot) return;
 
             if (zone === 'ps') {
@@ -453,10 +464,11 @@ export function parseCSV(csvText) {
     }
 
     // The records first, so setFactsMany has something to patch.
-    endBatch();
-
-    // One write for every player on the roster, not one each.
-    setFactsMany(pendingFacts);
+    if (!dryRun) {
+        endBatch();
+        // One write for every player on the roster, not one each.
+        setFactsMany(pendingFacts);
+    }
     pendingFacts = null;
 
     // The roster registers players the boards never saw — veterans, and the
