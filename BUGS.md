@@ -378,10 +378,42 @@ documented behaviour — a write promise does not resolve until the server
 acknowledges — is written about `setDoc`. A batch commit is a different call
 and does not behave the same way here.
 
-**The probe now refuses to conclude without an edit.** One run in two failed to
-apply the tag at all, and would have reported "the change is gone" about a
-change that was never made. Anything measured before that guard existed should
-be re-run rather than trusted.
+**The probe now refuses to conclude without an edit**, and asks the WRITE QUEUE
+rather than the screen — the DOM tag markers reported "no edit" on a run where
+the adapter had plainly issued a batch, so that guard produced false aborts of
+its own.
+
+### Firestore's own state, watched through the outage
+
+| | entry documents | carrying a tag |
+|---|---|---|
+| before the outage | 150 | 8 |
+| while cut | 150 | 8 |
+| 20s after reconnecting, batch RESOLVED at 10019ms | **150** | **8** |
+
+Not a new document, not an updated tag. The batch resolved and the store did
+not change.
+
+### Which contradicts the documentation, so read this before acting on it
+
+A batch commit is documented to resolve **only** once the writes are in the
+backend, and batches are documented to persist offline. The complaint everybody
+else has is the OPPOSITE of this one: that a commit **hangs** offline and never
+resolves (firebase-js-sdk #6515, #2822, firebase-ios-sdk #478). A false resolve
+is not a reported failure mode anywhere found.
+
+**Every measurement here is against the emulator.** `firebase-tools`' Firestore
+emulator does not promise to reproduce production offline-sync semantics, and
+when a measurement contradicts behaviour thousands of applications depend on,
+the emulator diverging is far likelier than Firestore losing acknowledged
+writes. **This should be reproduced against a real project before it is called
+a Firestore bug** — which needs credentials.
+
+What holds either way: the app must not treat the resolve as proof. The
+established mechanism for "has this reached the server" is
+`waitForPendingWrites()` (firebase-js-sdk #3661), or `metadata.hasPendingWrites`
+per document — never the write promise. That is the shape of the fix whichever
+way the emulator question lands.
 
 Worth fixing at the seam rather than in the app: the adapter should decide when
 a write has failed — a timeout, or Firestore's own connection state — rather
