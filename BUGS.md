@@ -1198,10 +1198,15 @@ So: **identity uses containment only; placement uses both.**
 
 ### What it fixed, measured
 
-| | before | after |
-|---|---|---|
-| roster sync: "no matching position row" | **132** | **52** |
-| roster sync: "no free 53-man slot" | 238 | 315 |
+| | before | containment + compatibility | + groups |
+|---|---|---|---|
+| roster sync: "no matching position row" | **132** | 52 | **21** |
+| roster sync: "no free 53-man slot" | 238 | 315 | 346 |
+| position labels reaching no row at all | — | 5 | **2** |
+
+The 21 that remain are **URA** — players whose position is not stated at all.
+That is the correct floor: a label that declares nothing cannot place anybody.
+The other unresolvable label is a CSV header line my probe read as data.
 
 Eighty players who could not find a row now find one, and move to "no free
 slot" — which is correct, because the roster is already at 91. That is bug #22,
@@ -1225,9 +1230,19 @@ LT **is** an OT, and the lookup finds him. A guard row still does not.
 - `DB`, `OL` and `WR/TE` are **deliberately absent**. They name a group, not a
   position, and guessing which half is meant is how a wrong record gets written
   confidently. They fall through unchanged.
-- Compatibility starts at the single pair that was actually asked for. Every
-  entry there is a scheme opinion the expert owns, so it should grow by editing
-  — it wants to live in Settings beside positional value, which is not done.
+- **A third relation: GROUPS.** `OL`, `DB` and `WR/TE` name a group rather
+  than a position, and refusing to guess left 37 players unplaceable. They now
+  reach every member's rows, and `resolvePosition` already prefers the emptiest
+  — so an OL lands wherever there is most space, without anybody deciding he is
+  a guard. Placement only, one direction: reading a man out of the LG row still
+  says IOL, never "some offensive lineman", and a group is never canonicalised
+  to a member because that would be the guess all over again.
+- **The three tables are an expert's opinion and want to live in Settings**,
+  beside positional value, which is already global and already editable. Not
+  done. Worth noting when it is: compatibility and groups are safe to edit
+  freely, because they only widen where somebody may be placed. Containment is
+  not — it is what identity compares through, so a careless edit there stops
+  two labels matching and mints duplicates.
 
 ## Standing work, ordered by the user
 

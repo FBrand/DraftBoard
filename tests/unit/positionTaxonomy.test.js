@@ -73,14 +73,18 @@ describe('same position?', () => {
 
 describe('which rows can he fill', () => {
     it('gives the rows his own position covers', () => {
-        expect(rowsFor('EDGE').sort()).toEqual(['LDE', 'RDE']);
+        // Membership, not equality: EDGE is compatible with DL and LB, so its
+        // reachable rows are wider than the ones it covers.
+        expect(rowsFor('EDGE')).toContain('LDE');
+        expect(rowsFor('EDGE')).toContain('RDE');
         // IOL also gains the tackle rows, because OT and IOL are declared
         // compatible — that is placement, and it is the point of rowsFor.
         expect(rowsFor('IOL').sort()).toEqual(['C', 'LG', 'LT', 'RG', 'RT']);
     });
 
     it('answers for a man labelled by an alignment', () => {
-        expect(rowsFor('LDE').sort()).toEqual(['LDE', 'RDE']);
+        expect(rowsFor('LDE')).toContain('LDE');
+        expect(rowsFor('LDE')).toContain('RDE');
     });
 
     it('includes a compatible position, which is what placement is for', () => {
@@ -102,5 +106,55 @@ describe('the table itself', () => {
             'P', 'K', 'LS'];
         const covered = new Set(Object.values(COVERS).flat());
         expect(rows.filter(r => !covered.has(r))).toEqual([]);
+    });
+});
+
+describe('compatibility does not close transitively', () => {
+    it('lets an edge rusher play inside, and off the ball', () => {
+        expect(rowsFor('EDGE')).toContain('DT.3T');
+        expect(rowsFor('EDGE')).toContain('LB.W');
+    });
+
+    it('but never puts a linebacker on the interior line', () => {
+        // The user's rule: "LB can't play DT and vice versa". EDGE reaches
+        // both, so closing the pairs into a graph would walk LB -> EDGE -> DL.
+        expect(rowsFor('LB')).not.toContain('DT.1T');
+        expect(rowsFor('LB')).not.toContain('DT.3T');
+        expect(rowsFor('DL')).not.toContain('LB.W');
+        expect(rowsFor('DL')).not.toContain('LB.M');
+    });
+
+    it('reads the outside-linebacker vocabularies as linebackers', () => {
+        expect(canonicalPosition('OLB')).toBe('LB.O');
+        expect(canonicalPosition('LOLB')).toBe('LB.O');
+        expect(canonicalPosition('ROLB')).toBe('LB.O');
+        // and the 3-4 edge case is reachable for PLACEMENT, not identity
+        expect(rowsFor('OLB')).toContain('LDE');
+        expect(samePosition('OLB', 'EDGE')).toBe(false);
+    });
+
+    it('ties a nose tackle to the interior line', () => {
+        expect(samePosition('DL', 'NT')).toBe(true);
+        expect(rowsFor('NT')).toContain('DT.1T');
+    });
+});
+
+describe('labels that name a group', () => {
+    it('reaches every member position, so placement can pick by space', () => {
+        expect(rowsFor('OL')).toEqual(expect.arrayContaining(['LT', 'RT', 'LG', 'C', 'RG']));
+        expect(rowsFor('DB')).toEqual(expect.arrayContaining(['CB.L', 'CB.R', 'CB.N', 'S.S', 'S.F']));
+        expect(rowsFor('WR/TE')).toEqual(expect.arrayContaining(['WR.X', 'WR.Z', 'WR.S', 'TE']));
+    });
+
+    it('is never resolved to one member, because that would be a guess', () => {
+        expect(canonicalPosition('OL')).toBe('OL');
+        expect(canonicalPosition('DB')).toBe('DB');
+    });
+
+    it('does not run in the inference direction', () => {
+        // Reading a man out of a row says the position that covers it, never
+        // the group above it.
+        expect(canonicalPosition('LG')).toBe('IOL.G');
+        expect(canonicalPosition('CB.N')).toBe('CB.N');
     });
 });

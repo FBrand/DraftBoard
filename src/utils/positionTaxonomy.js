@@ -49,9 +49,9 @@ export const COVERS = {
     'DL.1T': ['DT.1T'],
     'DL.3T': ['DT.3T'],
     'DL.5T': ['LDE', 'RDE'],
-    LB: ['LB.W', 'LB.M'],
+    LB: ['LB.W', 'LB.M', 'LB.S'],
     'LB.I': ['LB.M'],
-    'LB.O': ['LB.W'],
+    'LB.O': ['LB.W', 'LB.S'],
     CB: ['CB.L', 'CB.R', 'CB.N'],
     'CB.N': ['CB.N'],
     S: ['S.S', 'S.F'],
@@ -74,7 +74,13 @@ export const ALIASES = {
     OG: 'IOL.G',
     G: 'IOL.G',
     OC: 'IOL.C',
+    // OLB means an edge rusher in a 3-4 and an off-ball linebacker in a 4-3.
+    // Containment has to be a function — one label, one position — or
+    // samePosition becomes incoherent, so it resolves to the linebacker family
+    // and the EDGE <-> LB pair below carries the 3-4 case for placement.
     OLB: 'LB.O',
+    LOLB: 'LB.O',
+    ROLB: 'LB.O',
     ILB: 'LB.I',
     MLB: 'LB.I',
     FS: 'S',
@@ -88,13 +94,41 @@ export const ALIASES = {
  * than by guessing.
  */
 export const COMPATIBLE = [
-    ['OT', 'IOL'],
+    ['OT', 'IOL'],     // a tackle kicking inside to guard
+    ['EDGE', 'DL'],    // five-technique and interior rusher are one body
+    ['CB', 'S'],       // the nickel, filed either way by different sources
+    ['EDGE', 'LB'],    // the 3-4 outside linebacker, and the EDGE|LB duplicate
+    ['TE', 'FB'],
 ];
+
+// Pairs, deliberately NOT a graph: EDGE reaches DL and EDGE reaches LB, but a
+// linebacker never reaches an interior line row. "LB can't play DT and vice
+// versa" — closing this transitively would put one there.
 
 // A row maps back to the NARROWEST position that covers it: DT.1T is a
 // 1-tech before it is interior defensive line. Taking the first writer instead
 // made DT.1T read as plain DL, and a player labelled DL.1T then failed to match
 // his own row.
+/**
+ * Labels that name a GROUP rather than a position.
+ *
+ * `OL` does not say tackle or guard; `DB` does not say corner or safety. They
+ * carry real information — just not enough to name one position — so they get
+ * a third relation of their own.
+ *
+ * PLACEMENT ONLY, and in one direction. A group reaches every member's rows,
+ * and `resolvePosition` already prefers the emptiest, so an OL lands wherever
+ * there is most space. It is NOT used the other way: reading a man out of the
+ * LG row still says IOL, never "some offensive lineman". And it never touches
+ * identity — a group cannot be canonicalised to one of its members without
+ * guessing which.
+ */
+export const GROUPS = {
+    OL: ['OT', 'IOL'],
+    DB: ['CB', 'S'],
+    'WR/TE': ['WR', 'TE'],
+};
+
 const ROW_TO_POSITION = (() => {
     const m = new Map();
     Object.entries(COVERS).forEach(([position, rows]) => {
@@ -153,10 +187,25 @@ export function samePosition(a, b) {
 export function rowsFor(label) {
     const position = canonicalPosition(label);
     if (!position) return [];
+
+    // A group reaches every member's rows. The caller picks among them by
+    // space, which is the whole point of not forcing a choice here.
+    const group = GROUPS[position];
+    if (group) {
+        const rows = new Set();
+        group.forEach(member => rowsFor(member).forEach(r => rows.add(r)));
+        return [...rows];
+    }
     const out = new Set(COVERS[position] ?? []);
+
+    // A sub-type inherits its family's pairs: LB.O is a linebacker, so an OLB
+    // reaches the edge rows the EDGE <-> LB pair opens up. Matching only the
+    // exact string left "OLB" with nothing but LB.W and LB.S.
+    const major = position.split('.', 1)[0];
+    const isMine = (label) => label === position || label === major;
     COMPATIBLE.forEach(([a, b]) => {
-        if (a === position) (COVERS[b] ?? []).forEach(r => out.add(r));
-        if (b === position) (COVERS[a] ?? []).forEach(r => out.add(r));
+        if (isMine(a)) (COVERS[b] ?? []).forEach(r => out.add(r));
+        if (isMine(b)) (COVERS[a] ?? []).forEach(r => out.add(r));
     });
     return [...out];
 }
