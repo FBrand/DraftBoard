@@ -1176,6 +1176,59 @@ target the user cannot see. The rule those three share is worth stating once:
 **a test that performs the user's gesture with the browser's powers is not
 testing the user's experience.**
 
+## What a man plays versus where he stands, 2026-09-16
+
+Three vocabularies described the same football and nothing translated between
+them: rankings files say what he **plays** (EDGE, IOL, OT), the picks file says
+whatever its source said (DE, OG, DT), and the depth chart says where he
+**stands** (LDE, LG, DT.1T). `utils/positionTaxonomy.js` is that translation.
+
+**Two relations, and the difference is the safety property.**
+
+- **Containment** — a position and the rows it covers: `OT: [LT, RT]`,
+  `IOL: [LG, C, RG]`, `EDGE: [LDE, RDE]`. A fact about football. It NORMALISES
+  a label, so it is safe for identity: LDE and EDGE are one man written twice.
+- **Compatibility** — two DIFFERENT positions that can fill each other's rows,
+  `OT ↔ IOL`. Also objective, declared once rather than judged per player. It
+  must **never** touch identity: collapsing OT and IOL would merge two men who
+  share a name, one a tackle and one a guard — the failure the registry exists
+  to prevent, arriving through the front door.
+
+So: **identity uses containment only; placement uses both.**
+
+### What it fixed, measured
+
+| | before | after |
+|---|---|---|
+| roster sync: "no matching position row" | **132** | **52** |
+| roster sync: "no free 53-man slot" | 238 | 315 |
+
+Eighty players who could not find a row now find one, and move to "no free
+slot" — which is correct, because the roster is already at 91. That is bug #22,
+deferred since it was found. The three-player difference in the totals is
+exactly the three duplicate rows deleted from the picks file, so the accounting
+closes.
+
+For identity, `basePos` now folds through containment before comparing.
+`tests/unit/crossBoardIdentity.test.js` carried a test named *"does not find him
+when qualified by the alignment — **this is the bug**"*, pinning the Diego
+Pounds failure — the third time that shape had landed. It now asserts the fix:
+LT **is** an OT, and the lookup finds him. A guard row still does not.
+
+### The rules inside it
+
+- A **sub-type is the same man described more precisely**: DL matches DL.1T,
+  because a nose tackle IS a defensive tackle — that was the Seumalo pair. But
+  DL.1T and DL.3T stay apart, since both declared a sub-type and they differ.
+- A row maps back to the **narrowest** position that covers it, so DT.1T reads
+  as DL.1T rather than plain DL.
+- `DB`, `OL` and `WR/TE` are **deliberately absent**. They name a group, not a
+  position, and guessing which half is meant is how a wrong record gets written
+  confidently. They fall through unchanged.
+- Compatibility starts at the single pair that was actually asked for. Every
+  entry there is a scheme opinion the expert owns, so it should grow by editing
+  — it wants to live in Settings beside positional value, which is not done.
+
 ## Standing work, ordered by the user
 
 1. Season rollover — done

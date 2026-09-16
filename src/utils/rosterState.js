@@ -17,6 +17,7 @@ import { getSessionTeam } from './appSettings';
 import { DRAFT_YEAR } from '../constants';
 import { resolve as resolvePlayer, setFactsMany, beginBatch, endBatch } from './playerRegistry';
 import { applyPlayerFacts } from './playerFacts';
+import { rowsFor } from './positionTaxonomy';
 
 // Reasonable 53-man slot defaults by major position
 const DEFAULT_SLOTS53 = {
@@ -465,6 +466,26 @@ export function resolvePosition(declaredPos, positionConfig, depthChart) {
         });
         return exactMatches[0].id;
     }
+    // Third: what he PLAYS against where the chart lets him STAND.
+    //
+    // Exact and major both compare LABELS, so an OT finds nothing when the
+    // chart offers LT and RT — reported as "no matching position row" for 132
+    // players. positionTaxonomy answers the actual question, and includes
+    // positions declared compatible with his, which is what placement is for
+    // and what identity must never use.
+    const allowed = new Set(rowsFor(declaredPos));
+    if (allowed.size) {
+        const covered = allPositions.filter(p => allowed.has(p.label));
+        if (covered.length > 0) {
+            covered.sort((a, b) => {
+                const lenA = (depthChart[a.id] ?? []).filter(Boolean).length;
+                const lenB = (depthChart[b.id] ?? []).filter(Boolean).length;
+                return lenA - lenB;
+            });
+            return covered[0].id;
+        }
+    }
+
     const major = declaredPos.split('.')[0];
     const majorMatches = allPositions.filter(p => p.label.split('.')[0] === major);
     if (majorMatches.length > 0) {

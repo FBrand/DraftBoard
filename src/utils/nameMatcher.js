@@ -1,3 +1,5 @@
+import { canonicalPosition } from './positionTaxonomy';
+
 const NICKNAME_MAP = {
     "kc": "kevin",
     "tj": "t",
@@ -127,8 +129,23 @@ export function buildNameIndex(playersList) {
 // the rankings file and URA from his pick.
 const UNKNOWN_POSITION = 'URA';
 function basePos(position) {
-    const base = String(position ?? '').split('.', 1)[0].trim().toUpperCase();
-    return base === UNKNOWN_POSITION ? '' : base;
+    // Through the taxonomy first, so an ALIGNMENT folds to the position it
+    // belongs to: LDE and RDE are both EDGE, LG and OG are both IOL, NT is
+    // DL. Without it the two vocabularies looked like two men, and seven of
+    // the twelve registry duplicates were exactly that — a rankings file
+    // saying what he plays against a roster or picks file saying where he
+    // stands.
+    //
+    // CONTAINMENT only. `canonicalPosition` never consults the compatibility
+    // table, and must not: OT and IOL can fill each other's rows, but merging
+    // them here would make one record out of two men who share a name, one a
+    // tackle and one a guard.
+    //
+    // URA still folds to nothing — canonicalPosition returns '' for it,
+    // because it declares that the position is unknown rather than naming one.
+    const canonical = canonicalPosition(position);
+    if (!canonical || canonical === UNKNOWN_POSITION) return '';
+    return canonical.split('.', 1)[0];
 }
 
 function normSchool(school) {
