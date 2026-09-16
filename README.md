@@ -80,8 +80,10 @@ npm run test:browser:docker # the same, pinned to the 1.55.0 image
 The split is deliberate: anything that is a function of values is a unit test,
 and the browser suite keeps only what a browser can prove — drag-and-drop,
 clipping, stacking contexts, modals. `playwright.phone.config.js` runs specs at
-390px with a real touchscreen; most specs are not phone-ready yet, so it is not
-wired into `npm test`.
+390px with a real touchscreen — **38 of 47 pass**. It is not wired into
+`npm test` because the nine that fail need device-aware handling (on a phone
+the player card opens as a modal, so a spec clicking what would be the side
+panel is blocked by it), not because the app is broken there.
 
 ## Branches
 

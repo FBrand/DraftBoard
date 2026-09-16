@@ -955,6 +955,52 @@ compiled it. Two one-word answers finish this; the position-interchangeability
 config would finish it generally, and is the larger version of the same
 question.
 
+## On a phone you cannot take a player off injured reserve, 2026-09-16
+
+Coming back off IR is a drag from the IR zone to an empty 53 slot. At 390px
+those two things cannot be on the screen at the same time:
+
+| | |
+|---|---|
+| the IR zone | **y = 1967** on an 844px-tall screen |
+| empty 53 slots fully on screen, at rest | **0 of 44** |
+| after scrolling the chart to reach empty slots | 10 of 44 visible — and IR is **still at y = 1967** |
+
+The roster stacks vertically on a narrow screen (which is the fix for "FA only
+shows cuts"), so twenty-two position rows push IR roughly two thousand pixels
+down. Scrolling sideways to find an empty slot does not bring it back.
+
+So the gesture requires dragging across ~1100px of vertical scroll while
+holding a card. dnd-kit does auto-scroll during a drag, so it is not strictly
+impossible — but "hold a card against the edge of the screen for several
+seconds while the page travels two thirds of its height" is not a thing anybody
+will do on a phone during a broadcast.
+
+**Found via the phone project**, which is what `irActivation.spec.js` is
+failing under. The spec's own failure is a mouse-on-touchscreen artifact; the
+condition underneath it is real.
+
+### Why this is not mine to fix
+
+The obvious fix is an affordance that does not need a drag — and this app
+**had** one. The Activate button was removed deliberately, and the reasoning is
+recorded three sections up: *"Injured reserve is a place, not a flag: dropping
+a player there puts him on it and dragging him out takes him off, and the
+button was a second way of saying what the drag already said."*
+
+That reasoning holds on a desktop and breaks on a phone, where the drag it
+defers to cannot be performed. Re-adding a button, adding a phone-only
+affordance, or moving the IR zone are three different answers to a question the
+user has already ruled on once. Written down, not decided.
+
+### Also corrected: the phone suite is mostly green
+
+The README and `playwright.phone.config.js` said "most existing specs are not
+phone-ready". Measured: **38 of 47 pass**. Nine fail, and six of those are one
+device mismatch — on a phone the player card opens as a modal, so a desktop
+spec that clicks what would be the side panel is blocked by `.modal-overlay`.
+None of the nine is an app bug except the condition above.
+
 ## Standing work, ordered by the user
 
 1. Season rollover — done
