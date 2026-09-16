@@ -5,6 +5,29 @@ This branch is `pastel-lantern` plus one thing: the app can read and write a
 lantern is kept a clean ancestor so the difference stays legible —
 `git log pastel-lantern..firebase` is the whole of it.
 
+## Keeping it that way: rebase, never merge
+
+```sh
+git checkout firebase && git rebase pastel-lantern
+```
+
+**Not `git merge pastel-lantern`.** Merging lantern up works, but it leaves a
+merge commit every time, and they pile up fast enough to bury the branch's
+actual content: 46 commits ahead of lantern, of which 36 were merges, and again
+14-of-which-9 within a day. Rebasing keeps the delta as what it is — the
+Firebase layer, as a short linear series on top of lantern.
+
+Two rules that make it safe:
+
+- **Keep a backup ref before rebasing** (`git branch -f firebase-prerebase <tip>`)
+  and afterwards check `git diff <backup> firebase` comes back **empty**. Same
+  tree, different history. If it is not empty, something was lost — abort and
+  keep the merge history.
+- **`BUGS.md` and `CLAUDE.md` will conflict on nearly every step**, because
+  both branches write to them. Resolving toward the base to get the replay
+  moving is fine, as long as the branch's own sections are restored from the
+  backup at the end and the empty-diff check passes.
+
 ## Why it exists
 
 The app is a broadcast companion. An analyst builds a board on air; the people
