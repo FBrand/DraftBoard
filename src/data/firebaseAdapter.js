@@ -163,6 +163,23 @@ export function createFirebaseAdapter() {
          * whose fields happen to be empty.
          */
         async commit(path, changes) {
+            if (globalThis.__DB_TRACE) {
+                const t0 = Date.now();
+                const n = changes?.length ?? 0;
+                console.log(`[trace] batch issued ${path} x${n}`);
+                try {
+                    const out = await this.commitInner(path, changes);
+                    console.log(`[trace] batch RESOLVED ${path} x${n} after ${Date.now() - t0}ms`);
+                    return out;
+                } catch (e) {
+                    console.log(`[trace] batch REJECTED ${path} x${n} after ${Date.now() - t0}ms: ${e?.code ?? e?.message}`);
+                    throw e;
+                }
+            }
+            return this.commitInner(path, changes);
+        },
+
+        async commitInner(path, changes) {
             assertCollection(path);
             if (!changes?.length) return;
             const { db, doc: docRef, writeBatch } = await api();

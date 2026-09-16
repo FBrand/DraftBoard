@@ -152,6 +152,13 @@ export function createOverlayAdapter({ remote, local, writesRemote, onRemoteErro
             : undefined,
 
         async set(path, id, doc) {
+            // Which half a write goes to is the difference between an expert
+            // broadcasting and a viewer playing along, and it is invisible from
+            // outside. A whole finding about lost writes rested on assuming
+            // this said "remote" when nothing had checked.
+            if (globalThis.__DB_TRACE) {
+                console.log(`[trace] overlay.set ${path}/${id} -> ${canWriteRemote() ? 'REMOTE' : 'local'}`);
+            }
             if (canWriteRemote()) return remote.set(path, id, doc);
             return local.set(path, id, doc);
         },
@@ -162,8 +169,10 @@ export function createOverlayAdapter({ remote, local, writesRemote, onRemoteErro
             // local copy would let the remote one come back.
             return local.set(path, id, tombstone());
         },
-
         async commit(path, changes) {
+            if (globalThis.__DB_TRACE) {
+                console.log(`[trace] overlay.commit ${path} x${changes?.length ?? 0} -> ${canWriteRemote() ? 'REMOTE' : 'local'}`);
+            }
             if (canWriteRemote()) {
                 return remote.commit
                     ? remote.commit(path, changes)

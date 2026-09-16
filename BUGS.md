@@ -352,6 +352,37 @@ about success defeats everything above it.
 This is the whole of what remains, and it is a seam decision — what counts as
 "failed" when a promise resolves and nothing arrives.
 
+### The mechanism, traced 2026-09-16
+
+It is not `setDoc`. A board entry is written by `writeEntries`, which diffs and
+commits a BATCH, so the call is `writeBatch().commit()` — which is why a trace
+on `setDoc` showed nothing and sent me looking for a missing expert instead.
+
+With both adapters traced, an outage reads:
+
+```
+connection cut
+overlay.commit boards/…/entries x1 -> REMOTE
+batch issued boards/…/entries x1
+connection restored
+batch RESOLVED boards/…/entries x1 after 10059ms
+the change is gone
+```
+
+**The batch resolves, ten seconds after the connection returns, and the write
+is not in the store.** The repository then does the only thing it can with a
+success: it releases the queue entry.
+
+That also settles the research that seemed to contradict this. The SDK's
+documented behaviour — a write promise does not resolve until the server
+acknowledges — is written about `setDoc`. A batch commit is a different call
+and does not behave the same way here.
+
+**The probe now refuses to conclude without an edit.** One run in two failed to
+apply the tag at all, and would have reported "the change is gone" about a
+change that was never made. Anything measured before that guard existed should
+be re-run rather than trusted.
+
 Worth fixing at the seam rather than in the app: the adapter should decide when
 a write has failed — a timeout, or Firestore's own connection state — rather
 than waiting for a promise that may never settle either way.
