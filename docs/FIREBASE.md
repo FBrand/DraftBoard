@@ -20,9 +20,20 @@ Firebase layer, as a short linear series on top of lantern.
 Two rules that make it safe:
 
 - **Keep a backup ref before rebasing** (`git branch -f firebase-prerebase <tip>`)
-  and afterwards check `git diff <backup> firebase` comes back **empty**. Same
-  tree, different history. If it is not empty, something was lost — abort and
-  keep the merge history.
+  and afterwards check what changed. The diff must be **exactly lantern's new
+  work and nothing else**:
+
+  ```sh
+  git diff --name-only firebase-prerebase firebase
+  git diff --name-only $(git merge-base firebase-prerebase pastel-lantern) pastel-lantern
+  # these two lists must be identical
+  ```
+
+  When firebase had already merged lantern's tip, that set is empty and the
+  check reads as "same tree, different history" — which is the form it took the
+  first time and is a special case, not the rule. Anything in the first list
+  that is not in the second means the rebase changed something of its own:
+  abort and keep the merge history.
 - **`BUGS.md` and `CLAUDE.md` will conflict on nearly every step**, because
   both branches write to them. Resolving toward the base to get the replay
   moving is fine, as long as the branch's own sections are restored from the
