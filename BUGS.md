@@ -221,24 +221,177 @@ What DOES follow from the question, and is worth doing:
 - the draft should WRITE facts for players it picks, so the pool learns
   what the session did rather than only what the file said
 
-## The storage audit, 2026-09-15
+## The Firebase audit, 2026-09-15
 
-Three bugs in code on this branch, all found by driving the app rather than
-reading it. The shared-backend work that surfaced two of them lives on the
-`firebase` branch, which sits on top of this one; the fixes belong here
-because the code they fix is here.
+Eight bugs. Every one of them invisible against localStorage, because
+localStorage answers synchronously and a remote store does not — so each was a
+piece of code reading state before it had arrived, and getting a confident wrong
+answer instead of waiting. Found by driving the app against the Firestore and
+auth emulators with a real season seeded from a real local build, as a viewer
+and then as an expert.
 
 | # | What | State |
 |---|---|---|
-| C1 | **One early write hid a whole collection** | A write has to prime the in-memory copy — `applyLocal` and `commit` both do, or a change would not show until the store agreed — and `ready()` read a primed cache as a loaded collection. So one document written before a collection loaded became the whole collection, and the store was never asked. `restoreQueue` documents this exact trap (A4) and guards it by hand. **Fixed:** a `loaded` set that only a completed `adapter.load` adds to. **Verified:** `tests/unit/readyAfterWrite.test.js` fails without it. Invisible against localStorage, where the write went to the same place the read would have come from — which is why it needed a store that answers late to find it. |
-| C2 | **Placement documents carried evaluation data, spelled out in full** | `entryFields.lean()` passes a key it does not recognise straight through under its LONG name, and `saveEntry` spreads the whole display shape over the stored one — so an ordinary edit wrote `strengths`, `weaknesses` and `notes` onto a board entry, as empty arrays, on the largest collection in the app. Remarks moved to `evaluations/{player}/remarks` precisely so they would stop riding along on boards, and short field names are most of why this collection fell by 76%. One unrecognised key undoes both. **Fixed:** `filed()` writes the fields an entry declares and drops the rest — a whitelist, because a blacklist fixes today's leak and leaves the next one for production. `athleticMatrixTotal`/`athleticMatrixPosition` were missing from the map too, and would have leaked the first time a board overrode one. |
-| C3 | **The boot froze the main thread for 13 seconds** | Not slow — frozen: no scroll, no click, no repaint, worst single task 3.4s. It surfaced sideways: a loop asking the page a trivial question every 500ms was taking five seconds an answer, and an evaluation cannot be slow on its own. A CPU profile put 1.96s in `getLevenshteinDistance` and 1.64s in `basePos`, both fuzzy name matching, both doing work nobody wanted — the distance function computed the full matrix when the caller rejects anything past 2, and `discriminates()` re-folded position and school for every candidate on every lookup. **Fixed and measured:** blocked time 13,067ms → 7,247ms, worst freeze 3,402ms → 1,507ms; the browser suite went 8.4m → 7.2m without being touched. No behaviour change — 51 identity-matching tests and all 37 browser tests. |
+| B1 | **An expert's board never reached a viewer** | `openBoardEntries()` was `return Promise.resolve()` — "entries load on demand at their own path", true of a store that answers synchronously and false of every other kind. `hasEntries()` then read an unloaded collection, got "no entries", and seeded the shipped CSV over the board that was already there. The local overlay wins over the shared store, so the viewer kept that copy: Firestore said round 1, his screen said round 6, for good. **Fixed:** it loads the boards it is given. **Verified:** move a player to round 1 in Firestore, the viewer's screen shows him at row 1; a viewer now writes no copy of any board at all. |
+| B2 | **One early write hid a whole collection** | A write has to prime the cache — `applyLocal` and `commit` both do, or a change would not show until the network agreed — and `ready()` read a primed cache as a loaded collection, so one document written before the load became the whole collection and the store was never asked. `restoreQueue` documents this exact trap (A4) and guards it by hand. **Fixed:** a `loaded` set only a completed `adapter.load` adds to. **Verified:** regression test fails without it. |
+| B3 | **Free agency filed under a season that does not exist** | `faState.ensureSeeded()` read the season id at mount, before any season had arrived, and wrote to `seasons/_/charts` — invisible to the tab and to Roster's sync, and memoised under `_` so the real season never got a turn. **Fixed:** it waits for the seasons. **Verified:** no `seasons/_` key after boot. |
+| B4 | **An unreachable database looked like a first run** | A shared store that could not be READ answers with an empty collection, deliberately, so a viewer sees his own work rather than a blank page. `openBoards()` read that as "nobody has ever made a board" and seeded a private season over boards that were merely unreachable — then kept it, because local wins. Measured 6 boots out of 6 against a build missing half its Firebase config. **Fixed:** failed reads are distinguishable (`repository.loadFailed`), are not cached as loaded so the next load retries, and seeding declines on an answer it cannot trust. **Verified:** 0 of 3 boots seed, and the app comes up empty instead. |
+| B5 | **Nothing could ever be written to the shared database** | `auth.js` was complete and called from nowhere. No anonymous sign-in, so `isExpert()` was permanently false, so `writesRemote` was permanently false — for experts too. The end-to-end run's "Firestore was never asked for a write the rules would refuse" had been passing for that reason. **Fixed:** `main.jsx` starts a session, for a Firebase build only. **Verified:** `accounts:signUp` succeeds and the session is in IndexedDB. |
+| B6 | **An expert was demoted to a viewer on every page load** | `startAuth()` read `auth.currentUser` to decide whether anybody was signed in, but that is null for a moment after `getAuth()` whether or not anyone is — the session lives in IndexedDB and is restored asynchronously. So it said "nobody", and the anonymous sign-in below REPLACED the expert's session. He signed in, reloaded, and silently became a viewer: his own board read-only, his writes going to localStorage. **Fixed:** it waits for the first auth state. **Verified:** a restored expert session survives and his writes route remotely. |
+| B7 | **Wiring auth would have made every board read-only** | `editRefusal()` asked `isSignedIn()`, which an anonymous viewer answers yes to. Every board carries an `ownerId`, so the moment viewers got sessions, "is this mine?" answered no for every board a viewer opened — including his own play-along. Caught before it shipped, by asking what turning B5 on would do. **Fixed:** it asks `isExpert()`, the distinction `auth.js`'s own header warns about. **Verified:** a signed-in viewer can still tag a player. |
+| B8 | **Placement documents carried evaluation data, spelled out in full** | `entryFields.lean()` passes a key it does not recognise straight through under its LONG name, and `saveEntry` spreads the whole display shape over the stored one — so an edit wrote `strengths`, `weaknesses` and `notes` onto a board entry, as empty arrays, on the largest collection in the app. Remarks moved to `evaluations/{player}/remarks` precisely so they would stop riding along on boards, and short field names are most of why this collection fell by 76%. The same write lost the entry's tag. `athleticMatrixTotal`/`athleticMatrixPosition` were also missing from the map, and would have leaked the first time a board overrode one. **Fixed:** the document carries the fields an entry declares and nothing else — a whitelist, because a blacklist fixes today's leak and leaves the next one for production. **Verified:** every field name on the shared board is one character, and the expert's tag lands. |
 
-| C4 | **The player registry was rewritten 83 times at boot** | Importing a roster resolves one player per slot, and each resolve that created somebody committed the WHOLE collection: 83 rewrites of an 89KB key, 0.55 MB of localStorage writes, for a 91-player roster. `resolveAll` commits once for a list and the parser cannot use it — it needs an id back while it is still parsing the line. **Fixed:** the lookups stay one at a time, the writes batch, and a player minted mid-batch stays visible to the next lookup so the import cannot mint him twice. **Measured:** 83 rewrites -> 7, and 179 localStorage writes at boot -> 103 (0.66 MB -> 0.46 MB). It does NOT move the startup freeze — `setItem` was only ~90ms of that 7.2s, which is the separate C3 story. |
+| B9 | **The player registry was rewritten 83 times at boot** | Importing a roster resolves one player per slot, and each resolve that created somebody committed the WHOLE collection: 83 rewrites of an 89KB key, 0.55 MB of localStorage writes, for a 91-player roster. `resolveAll` commits once for a list and the parser cannot use it — it needs an id back while it is still parsing the line. **Fixed:** the lookups stay one at a time, the writes batch, and a player minted mid-batch stays visible to the next lookup so the import cannot mint him twice. **Measured:** 83 rewrites -> 7, and 179 localStorage writes at boot -> 103 (0.66 MB -> 0.46 MB). It does NOT move the startup freeze — `setItem` was only ~90ms of that 7.2s, which is the separate C3 story. |
+| B10 | **The markers that stop a season being set up twice were unreadable** | `seasons/{id}/setup` holds `season` and `facts`, and both exist so that whoever gets there first does the work and every other client reads the marker and does nothing — which is the entire reason they live in the STORE rather than in one browser. Both are read synchronously, and `openSetup()` returned a resolved promise without loading the collection. So against Firestore they read nothing, and NOTHING READS AS NOT DONE YET: the season is set up again, and the shipped facts are laid back over a draft somebody deliberately cleared — "null out a player's pick, reload, and the file puts it straight back". The same mistake as B1, with the same stated reason ("loads on demand"), true of localStorage and of no other store. **Found by sweeping for exports nobody imports** — `isInitialised` is called from nowhere outside its own file. **Fixed:** `openSetup(seasonId)` loads the markers; the draft hook now waits for `openBoards` first, because the season has to be known before its markers can be addressed. **Verified:** five tests against an adapter with no `loadSync`, which is the Firestore condition. |
+| B11 | **The roster and free agency seeded over the shared ones** | Third instance of B1's shape, found by sweeping for every `open*()` that returns a resolved promise. `openDepthCharts` loaded nothing, so `hasChart()` answered NO for a roster sitting in Firestore and the stage seeded itself from the shipped file. **The end-to-end run had been calling this green from a COUNT** — 91 slots either way, because the app ships a file that produces 91 — which is the same false green already caught for the boards and still standing for the roster. Two more layers underneath: RosterView asked for the chart of season `null`, because `viewedSeason()` reads the repository and the seasons have not arrived when it mounts; and both stages decided "nothing saved here" from a synchronous read before the store had been asked. **Fixed:** charts are loaded for the season, the season is awaited first, and each stage re-reads before seeding. **Verified by changing a name in Firestore** and watching it reach the screen — with no chart document written locally at all. |
+| B12 | **A viewer read the shipped example instead of the expert's evaluations** | Fourth instance, and the one that mattered most — evaluations are what outlives everything else, because the card reads across boards and seasons. `openEvaluations()` was an empty async function and `remarksFor` reads synchronously, so a player an analyst had written about came back with nothing; the shipped worked example then seeded ITSELF into the same paths, where the local overlay wins. Measured: opening ONE card wrote seven evaluation collections without anybody typing, each shadowing the expert's. **Fixed:** `openEvaluations(playerIds)` takes ids, because a remark collection is per player and there are seven hundred; the example asks for the seven paths it would write before deciding they are empty; the card asks for the selected player and bumps the tick it already keeps for this. **Verified:** the expert's remark is on the card and opening it writes nothing. |
+| B13 | **A player added in the app reached nobody else** | The fifth and last of the shape. `openStages` loaded nothing, and what lives there is `prospects_v1` — the players an analyst adds himself, for somebody who declared late or was missed by every rankings file. The shipped season has none, which is why this one could not be measured from the seed and was written down as "assume the same fault". Writing one straight into Firestore settled it: 328 rows and no such player. **Fixed:** the opener loads the collection, and `prospects.write` refuses a season-less write like the charts do. Now 329 rows and he is there. Seven unit tests failed on that guard and were right to — they exercised prospects with NO season and passed only because the code silently filed them under `seasons/_/stages`. |
 
-**Not bugs, checked rather than assumed:** tagging a player shows, stores and
-survives a reload; entries carry only single-character field names after an
-edit.
+**Not bugs, checked rather than assumed:** tagging a player on the local build
+shows, stores and survives a reload; the 37-test browser suite is unaffected by
+all of the above.
+
+**Two things I reported wrongly during the run, corrected here:** "the board came
+out of Firestore" was read off a row count, and the CSV produces the same count
+— the board was in fact local, which is B1. And a "6/6 seeding race" was my own
+build missing half its config, not an app bug; chasing it is what exposed B4,
+which is real.
+
+### The pattern behind B1, B10, B11 and B12
+
+Four bugs, one sentence. Each was an `open*()` that returned a resolved promise
+and loaded nothing, and each carried a comment saying the collection "loads on
+demand at its own path". That is true of localStorage, where `loadSync` fills a
+collection the instant anything asks, and false of every other store — so every
+one of them read as EMPTY against Firestore, and the app then seeded its shipped
+data over the shared data, locally, where the overlay makes it win.
+
+| opener | what was shadowed |
+|---|---|
+| `openBoardEntries` (B1) | the expert's board — 328 CSV entries over 150 real ones |
+| `openSetup` (B10) | the markers that stop a season being set up twice |
+| `openDepthCharts` (B11) | the roster and free agency |
+| `openEvaluations` (B12) | every remark anybody had written |
+
+| `openStages` (B13) | the players an analyst added himself |
+
+That is all five. `openDraft` and `openRegistry` were the same shape and are
+not bugs: both actually load. Every opener in the app has now been checked by
+changing its data in Firestore and looking at the screen.
+
+What made them findable was not reading the code — all four had been read many
+times — but asking one question of the running app: CHANGE SOMETHING IN
+FIRESTORE AND SEE WHETHER THE SCREEN NOTICES. Row counts cannot answer it,
+because the app ships a file that produces the same counts.
+
+### The write side, checked the same way
+
+The opener sweep was about READS. The mirror question is whether an expert's
+changes reach the shared store at all — a stage that reads correctly and writes
+only to this browser looks perfect to the person making the change and is
+invisible to everyone else. Four paths driven as a signed-in expert, each one
+confirmed in Firestore rather than on screen:
+
+| what he changed | result |
+|---|---|
+| a tag on a board entry | reaches Firestore, nothing kept locally |
+| a position row's 53-man count | reaches Firestore, nothing kept locally |
+| a player added with + Add Players | reaches Firestore; not filed under `seasons/_` |
+| a remark on a player card | reaches Firestore, nothing kept locally |
+
+The write side was already right. Worth knowing precisely, given how wrong the
+read side turned out to be — and it also proves the season guards added with
+B11 and B13 do not misfire, which would have made those edits do nothing at all.
+
+### Still open: an expert's change made during a connection drop is lost, silently
+
+The broadcast failure that matters. An expert is on air, the connection goes,
+he tags a player. Driven with the page cut off from Firestore and then
+reconnected:
+
+| | observed |
+|---|---|
+| he can keep working | yes — the board is intact and the tag shows |
+| he is told | yes, while it is down: `Saving…` |
+| the write reaches the store while cut | no, correctly |
+| after reconnecting, within 130s | **never arrives** |
+| the indicator after reconnecting | **nothing — "saved"** |
+| `pending_writes_v1`, the retry queue | **absent** |
+| after a reload | **still gone** |
+
+So the change is lost, and the app says everything is fine. That is precisely
+the failure the sync indicator and the persisted queue exist to prevent — "a
+failed save must be visible, not silent" — and neither engaged.
+
+**Why the safety net did not catch it.** `repository.attempt()` enqueues on
+CATCH. The queue, the retry and the warning all hang off the adapter's promise
+REJECTING. Here it did not reject — the indicator went from `Saving…` to
+nothing, which is `inFlight` falling back to zero — so as far as the repository
+was concerned the write succeeded. A write that neither lands nor fails is a
+case the design does not have.
+
+**The caveat, stated plainly:** this was induced by aborting the page's
+requests to Firestore, not by a real network drop, and the Firestore SDK keeps
+a queue of its own whose behaviour differs between the two. What is NOT in
+doubt is the app-side half: `pending_writes_v1` was empty, so the repository's
+own net never engaged, and that is true however the failure was induced.
+
+Worth fixing at the seam rather than in the app: the adapter should decide when
+a write has failed — a timeout, or Firestore's own connection state — rather
+than waiting for a promise that may never settle either way.
+
+**Re-measured 2026-09-15, after the write-queue change on lantern.** Half of
+this moved and the other half did not, and the difference is worth stating
+precisely:
+
+| | before | now |
+|---|---|---|
+| `pending_writes_v1` DURING the outage | absent | **present** — `boards/b_consensus/entries`, `fernando mendoza\|QB` |
+| after reconnecting | absent, change lost | absent, change lost |
+
+The repository now writes an unacknowledged write down while it is
+unacknowledged, so the reload somebody does mid-outage no longer throws it
+away. That is a real improvement, and it is not the bug on this line.
+
+What still loses the change is the **false acknowledgement**: Firestore
+eventually RESOLVES the promise without the write ever reaching the store, the
+repository correctly releases a write it has been told succeeded, and the queue
+entry goes with it. Nothing above the adapter can tell that apart from a
+success — which is exactly why this wants deciding at the seam rather than
+patching further up.
+
+### Still open: the draft board does not follow the store
+
+ROADMAP calls this the point of the whole phase — "when an expert drafts a
+player, all followers' boards update instantly". Measured with two pages open
+at once, the viewer's never touched after loading:
+
+> The expert drafts. **The pick reaches Firestore.** The viewer's open draft
+> board never notices — 217 cards before and after, for 25 seconds.
+
+`repository.follow` exists, works and is tested — it is wired in `ScoutingView`,
+where an expert's move reaches an open page in about a second. The draft board
+is a different view reading a different collection and was never wired, so the
+half that is finished is the scouting board and the half the ROADMAP names is
+not. That asymmetry was introduced by doing the first half.
+
+It is not a line of wiring. The draft state is reconciled against the parsed
+player pool inside `loadInitialData` — joining saved picks to players by id and
+then by name, twice, in both directions — and that path costs ~1.5s on a
+desktop and several seconds on a throttled phone. Re-running it per pick is the
+wrong shape for a live draft, so following it properly means lifting the
+reconciliation out of the app's most complex hook into something that can take
+(pool, savedState) and hand back the three pieces of state it sets.
+
+Worth doing deliberately. Written down rather than attempted mid-audit.
+
+### Open
+
+| What | Why it matters |
+|---|---|
+| **No sign-in UI at all** — `signInExpert()` has no caller | An expert cannot sign in from the app. The write path is verified by restoring a session the way Firebase does, so the button has somewhere to land, but nobody can press it yet. |
+| **The viewer's board takes 9-20s to populate** against a LOCAL emulator | A real network is slower. Nothing shows a loading state meanwhile. |
+| **GitHub Actions config injection** | The deployed build has no Firebase config yet. |
 
 ## Flows walked on 2026-09-15, hunting rather than confirming
 
@@ -1252,6 +1405,7 @@ LT **is** an OT, and the lookup finds him. A guard row still does not.
 ## Standing work, ordered by the user
 
 1. Season rollover — done
-2. Deep audit, desktop and 390px — done
-3. Shared backend — on the `firebase` branch, which is this branch plus that
-   work. Nothing about it is on this branch, deliberately.
+2. Deep audit, desktop and 390px — done for the local app; redone above against Firebase
+3. Firebase migration — in progress on branch `firebase`; the app reads a
+   season out of Firestore, a viewer follows an expert's board, and an expert's
+   writes reach the shared store. Remaining: a sign-in control, and deploy config.

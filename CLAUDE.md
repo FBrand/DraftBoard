@@ -445,18 +445,24 @@ more, rather than adding a Markdown dependency.
 
 - **Vitest** (`npm run test:unit`, `tests/unit/*.test.js`) — pure logic:
   ranking, grouping, phase detection, name matching, CSV round-trips, the
-  registry, the storage schema. 416 tests in ~45s, node environment, no
-  jsdom. Most bugs here have been logic bugs, so this is the loop to stay in
-  while working.
+  registry, the storage schema, the adapters. 475 tests in ~50s, node
+  environment, no jsdom. Most bugs here have been logic bugs, so this is the
+  loop to stay in while working. (On `pastel-lantern`, which has no shared
+  backend, it is 419 — the difference is the adapter and rules suites.)
 - **Playwright fast** (`npm run test:browser`, `tests/fast/`) — 37 tests in
   ~7 minutes, covering only what a browser can answer: rendering, routing,
   drag and drop, persistence across a reload, modal flows. `test:browser:docker`
   runs it against a container, which is how it is run here.
+- **The emulator suites** (`npm run test:rules`, `tests/rules/`) — 23 tests,
+  NOT part of `npm test`, because they need a JVM and a container. They are
+  the only thing that can answer what the rules PERMIT and what Firestore will
+  actually STORE, and they found real bugs the first time each ran. See
+  tests/README.md for how to start the emulator.
 - `tests/audit/` is the sweep — it LOOKS for problems rather than asserting
   their absence, so it passes while reporting them. A tool to read, not a gate,
   and not part of `npm test`. See tests/README.md.
 
-The old 87-test `tests/*.spec.js` suite is gone, superseded by the two above.
+The old 87-test `tests/*.spec.js` suite is gone, superseded by those above.
 
 Two things make the fast suite fast. `tests/fast/globalSetup.js` boots the app
 ONCE and snapshots the state it settles on, so no test pays the cold bootstrap;
