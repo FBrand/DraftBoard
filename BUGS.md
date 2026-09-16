@@ -458,7 +458,29 @@ for, over the Undo button, a third of a second after the pick.
 Pinned by `tests/fast/doubleClickDraft.spec.js`, which fails against the old
 code with exactly the original symptom.
 
-## The 25s phone boot: the diagnosis was wrong, 2026-09-16
+## The 25s phone boot does not happen on a real phone, 2026-09-16
+
+**Closed by the user, who cleared localStorage and reloaded on his own device
+and saw no load time at all** — and that is the COLD boot, the heaviest case,
+the one that seeds every collection from the files.
+
+The 25s below is real but it is **emulated**: 390px with the CPU throttled 4x,
+standing in for a mid-range handset. That throttle is my choice, not a
+measurement of anybody's hardware, and it does not predict the machine the app
+is actually opened on.
+
+What stays true: the app does ~18s of parse/compile/DOM work for a thousand
+cards **under a 4x throttle**. A genuinely slow device would feel some of that,
+and nobody has reported it. Nothing is being changed for it.
+
+**Second time in a day.** The depth-chart drag was the first: measured
+correctly, concluded wrongly, overturned in a minute by the user trying it on a
+real device. The lesson is not about throttling — it is that **an emulated
+measurement is a hypothesis about hardware, and there is a real phone and a
+server on 4173 available to test it against.** Ask for that before writing an
+entry that says the app is unusable.
+
+### The original measurement, kept for what it does say
 
 The number is real and reproduces exactly. At 390px with the CPU throttled 4x
 (roughly a mid-range handset, which is how it was measured originally), a WARM
