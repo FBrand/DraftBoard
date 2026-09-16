@@ -10,7 +10,7 @@
  * timestamps, no deal terms, no event log. See
  * /home/dev/.claude/plans/structured-growing-cat.md section 3 for why.
  */
-import { defaultState, parseCSV, exportCSV } from './rosterState';
+import { defaultState, parseCSV, exportCSV, stampPlayerIds } from './rosterState';
 import { readChart, writeChart, hasChart, chartVersion, openDepthCharts } from '../data/depthChartStore';
 import { viewedSeason, seasonIsSeeded, openBoards } from './boardRegistry';
 import { canEdit } from './permissions';
@@ -139,7 +139,11 @@ export function saveState(state) {
     const stored = chartVersion(STORAGE_KEY, seasonId());
     if (stored !== null && stored > STATE_VERSION) return;
 
-    writeChart(STORAGE_KEY, seasonId(), { ...state, version: STATE_VERSION });
+    // Same stamping as the roster: a candidate slot says who he IS, so the
+    // sync can carry the id across rather than hand the roster a name to
+    // resolve again, and a reachability question never runs through the
+    // matcher. Shared rather than copied — see rosterState.stampPlayerIds.
+    writeChart(STORAGE_KEY, seasonId(), { ...state, version: STATE_VERSION, depthChart: stampPlayerIds(state.depthChart) });
 }
 
 /**

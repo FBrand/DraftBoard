@@ -15,7 +15,7 @@ import { parseAcquisition } from './draftPhase';
 import { basePosition } from './boardRanking';
 import { getSessionTeam } from './appSettings';
 import { DRAFT_YEAR } from '../constants';
-import { resolve as resolvePlayer, setFactsMany, beginBatch, endBatch } from './playerRegistry';
+import { resolve as resolvePlayer, resolveAll, setFactsMany, beginBatch, endBatch } from './playerRegistry';
 import { applyPlayerFacts } from './playerFacts';
 import { rowsFor } from './positionTaxonomy';
 
@@ -84,11 +84,15 @@ const STORAGE_KEY = 'rosterState';
  * @param {string} name
  * @param {import('../data/types').Slot['zone']} [zone]
  * @param {string|null} [arrival]
+ * @param {string|null} [playerId] who he is, when the caller already knows
  * @returns {import('../data/types').Slot|null}
  */
-export function makeSlot(name, zone = '53', arrival = null) {
+export function makeSlot(name, zone = '53', arrival = null, playerId = null) {
     if (!name) return null;
-    return arrival ? { name, zone, arrival } : { name, zone };
+    const slot = { name, zone };
+    if (arrival) slot.arrival = arrival;
+    if (playerId) slot.playerId = playerId;
+    return slot;
 }
 
 /**
@@ -214,10 +218,65 @@ export function defaultState() {
  */
 export const STATE_VERSION = 1;
 
+/**
+ * Gives every slot the id of the man standing in it.
+ *
+ * Slots carried a NAME and nothing else, so anything asking "who is this"
+ * fuzzy-matched on every read, and asking "is this player referenced" — which
+ * is what a prune rule needs — ran through the matcher too. A false negative
+ * there does not mislabel a card, it deletes somebody who IS referenced.
+ *
+ * NEVER creates a record. `create: false` is the whole safety of doing this
+ * during a load: if the registry has not loaded yet, every lookup returns null
+ * and the slots stay as they were, to be stamped on a later pass. Resolving
+ * with creation here is precisely how the roster import once minted a
+ * duplicate for every player it read.
+ */
+export function stampPlayerIds(chart) {
+    if (!chart || typeof chart !== 'object') return chart;
+
+    // ONE resolveAll for the whole chart. resolve() is resolveAll([x]) and
+    // rebuilds a name index over every record in the registry each time it is
+    // called — stamping ninety slots one at a time rebuilt it ninety times,
+    // synchronously, on the save path, and an import visibly stopped
+    // finishing. Same trap the roster import hit before: per-player calls that
+    // each pay for the whole collection.
+    const pending = [];
+    Object.entries(chart).forEach(([rowId, slots]) => {
+        if (!Array.isArray(slots)) return;
+        slots.forEach((slot, i) => {
+            if (slot?.name && !slot.playerId) pending.push({ rowId, i, name: slot.name });
+        });
+    });
+    if (!pending.length) return chart;
+
+    const ids = resolveAll(pending.map(x => ({ name: x.name })), { create: false });
+    const found = new Map();
+    pending.forEach((x, n) => { if (ids[n]) found.set(`${x.rowId}:${x.i}`, ids[n]); });
+    if (!found.size) return chart;
+
+    // Anything that is not a row of slots is passed through untouched. An
+    // earlier version turned an absent row into an empty array, and the grid
+    // renders a trailing empty slot from that.
+    const out = {};
+    Object.entries(chart).forEach(([rowId, slots]) => {
+        if (!Array.isArray(slots)) { out[rowId] = slots; return; }
+        let rowTouched = false;
+        const next = slots.map((slot, i) => {
+            const id = found.get(`${rowId}:${i}`);
+            if (!id) return slot;
+            rowTouched = true;
+            return { ...slot, playerId: id };
+        });
+        out[rowId] = rowTouched ? next : slots;
+    });
+    return out;
+}
+
+
 function migrate(parsed) {
     const from = typeof parsed.version === 'number' ? parsed.version : 1;
     if (from > STATE_VERSION) return null; // written by a newer app — don't guess
-    // (no migration steps yet; add them here as the shape changes)
     return { ...parsed, version: STATE_VERSION };
 }
 
@@ -255,7 +314,12 @@ export function saveState(state) {
     const stored = chartVersion(STORAGE_KEY, seasonId());
     if (stored !== null && stored > STATE_VERSION) return;
 
-    writeChart(STORAGE_KEY, seasonId(), { ...state, version: STATE_VERSION });
+    // Stamped on the way OUT rather than the way in. Doing it in loadState
+    // wrote nothing — the ids lived in memory until something happened to
+    // save — and the registry is not even open on the roster path, so every
+    // lookup returned null anyway. This is the door every change goes through,
+    // and by the time anything is saved the registry is loaded.
+    writeChart(STORAGE_KEY, seasonId(), { ...state, version: STATE_VERSION, depthChart: stampPlayerIds(state.depthChart) });
 }
 
 // ---------------------------------------------------------------------------

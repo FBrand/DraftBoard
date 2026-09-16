@@ -121,6 +121,10 @@ export const slotFields = renamer({
     name: 'n',
     zone: 'z',
     arrival: 'a',
+    // Who he IS, not what he is called. A slot used to carry a name and
+    // nothing else, so every read of the chart re-derived identity by fuzzy
+    // matching and every reachability question ran through the matcher.
+    playerId: 'i',
 }, 'slot');
 
 /** A season on the stack. `id` is the key. */

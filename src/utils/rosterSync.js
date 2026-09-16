@@ -48,7 +48,10 @@ export function syncFromStages({ state, fa = null, draftedPlayers = [] }) {
         || (next.reserve ?? []).some(r => nameOf(r) === name)
         || (next.cuts ?? []).some(c => nameOf(c) === name);
 
-    const placeInFirstEmpty53 = (name, declaredPos) => {
+    // The id travels with the man. An FA slot carries one now, and a pick
+    // carries one, so the roster slot this creates is exact rather than a name
+    // somebody will have to match again later.
+    const placeInFirstEmpty53 = (name, declaredPos, playerId = null) => {
         if (!name || !declaredPos) return;
         if (isAlreadyOnRoster(name)) { alreadyPresent++; return; }
 
@@ -58,7 +61,7 @@ export function syncFromStages({ state, fa = null, draftedPlayers = [] }) {
         const limit53 = allChips.find(p => p.id === rowId)?.slots53 ?? 2;
         const arr = dc[rowId] = [...(dc[rowId] ?? [])];
         for (let i = 0; i < limit53; i += 1) {
-            if (!arr[i]) { arr[i] = makeSlot(name, '53'); placed += 1; return; }
+            if (!arr[i]) { arr[i] = makeSlot(name, '53', null, playerId); placed += 1; return; }
         }
         rowFull += 1; // full — don't overflow into the practice squad, don't overwrite
     };
@@ -67,11 +70,11 @@ export function syncFromStages({ state, fa = null, draftedPlayers = [] }) {
         const faChips = [...(fa.positionConfig?.offense ?? []), ...(fa.positionConfig?.defense ?? [])];
         Object.entries(fa.depthChart).forEach(([faRowId, slots]) => {
             const label = faChips.find(p => p.id === faRowId)?.label ?? faRowId;
-            (slots || []).forEach(s => { if (s) placeInFirstEmpty53(s.name, label); });
+            (slots || []).forEach(s => { if (s) placeInFirstEmpty53(s.name, label, s.playerId ?? null); });
         });
     }
-    ourPicks.forEach(p => placeInFirstEmpty53(p.name, p.position));
-    udfaSignings.forEach(p => placeInFirstEmpty53(p.name, p.position));
+    ourPicks.forEach(p => placeInFirstEmpty53(p.name, p.position, p.playerId ?? p.id ?? null));
+    udfaSignings.forEach(p => placeInFirstEmpty53(p.name, p.position, p.playerId ?? p.id ?? null));
 
     return {
         next: placed > 0 ? next : state,

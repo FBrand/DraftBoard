@@ -33,6 +33,21 @@ function zoneClass(zone, isNeed) {
 // lists. Caching each list's name index by reference (safe: both come from
 // useDraftState, which always replaces rather than mutates these arrays)
 // turns that from a per-cell rebuild into a one-time-per-render-pass cost.
+const idIndexCache = new WeakMap();
+function getOrBuildIdIndex(list) {
+    if (!list) return null;
+    let map = idIndexCache.get(list);
+    if (!map) {
+        map = new Map();
+        list.forEach((p) => {
+            const id = p?.playerId ?? p?.id;
+            if (id && !map.has(id)) map.set(id, p);
+        });
+        idIndexCache.set(list, map);
+    }
+    return map;
+}
+
 const nameIndexCache = new WeakMap();
 function getOrBuildIndex(list) {
     if (!list) return [];
@@ -54,7 +69,15 @@ function slotMeta(slot, masterPlayers, draftedPlayers) {
         const idx = findMatchingIndex(displayName, getOrBuildIndex(list));
         return idx !== -1 ? list[idx] : null;
     };
-    const draftData = findByRobustName(draftedPlayers) || findByRobustName(masterPlayers);
+    // The slot says who he IS now. Ask that first and the fuzzy match never
+    // runs — it stays as the fallback for slots written before ids existed,
+    // and for anybody the registry has no record of.
+    const findById = (list) => {
+        if (!slot?.playerId || !list) return null;
+        return getOrBuildIdIndex(list)?.get(slot.playerId) ?? null;
+    };
+    const draftData = findById(draftedPlayers) || findById(masterPlayers)
+        || findByRobustName(draftedPlayers) || findByRobustName(masterPlayers);
 
     let topLabel = suffix || '';
     if (draftData && (draftData.round || draftData.pickNumber)) {
