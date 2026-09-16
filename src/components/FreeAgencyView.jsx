@@ -159,13 +159,22 @@ export default function FreeAgencyView({ masterPlayers, draftedPlayers, onInfoOp
     const handleAddCandidate = ({ id: linkedId, name, position, rosterRow, team, previousTeam, draftYear, draftRound }) => {
         // Where a candidate plays now is a fact about him, not about this
         // shortlist, so it goes on his record the same way a signing's does.
+        // Resolved for EVERY candidate, not only one who arrives with facts.
+        // This sat inside the branch below, so a candidate typed in as a bare
+        // name was placed on the shortlist with no registry record at all —
+        // and since the save-time stamp resolves with create:false, he never
+        // acquired one. A player is registered before he is placed; this is
+        // the path where that was not true.
+        //
+        // The record the form was pointed at, when somebody picked one — then
+        // his name, then a new one. Qualifying by position here made a second
+        // record for a player the app already knew.
+        const candidateId = linkedId
+            ?? resolvePlayer({ name }, { create: false })
+            ?? resolvePlayer({ name, position });
+
         if (team || previousTeam || draftYear || draftRound) {
-            // The record the form was pointed at, when somebody picked one —
-            // then his name, then a new one. Qualifying by position here made
-            // a second record for a player the app already knew.
-            const id = linkedId
-                ?? resolvePlayer({ name }, { create: false })
-                ?? resolvePlayer({ name, position });
+            const id = candidateId;
             if (id) setFacts(id, {
                 ...(team ? { team } : {}),
                 ...(previousTeam ? { previousTeam } : {}),
@@ -201,7 +210,7 @@ export default function FreeAgencyView({ masterPlayers, draftedPlayers, onInfoOp
                 const tail = arr.slice(reserveStart).findIndex(s => !s);
                 idx = tail === -1 ? Math.max(arr.length, reserveStart) : reserveStart + tail;
             }
-            arr[idx] = makeSlot(name, idx < s53 ? '53' : 'r');
+            arr[idx] = makeSlot(name, idx < s53 ? '53' : 'r', null, candidateId ?? null);
             next.depthChart[rowId] = arr;
             return next;
         });
