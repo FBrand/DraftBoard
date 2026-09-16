@@ -330,11 +330,27 @@ nothing, which is `inFlight` falling back to zero — so as far as the repositor
 was concerned the write succeeded. A write that neither lands nor fails is a
 case the design does not have.
 
-**The caveat, stated plainly:** this was induced by aborting the page's
-requests to Firestore, not by a real network drop, and the Firestore SDK keeps
-a queue of its own whose behaviour differs between the two. What is NOT in
-doubt is the app-side half: `pending_writes_v1` was empty, so the repository's
-own net never engaged, and that is true however the failure was induced.
+**The caveat is discharged, 2026-09-16.** It was induced by aborting the page's
+requests, and the SDK treats "every request fails instantly" differently from
+"the network is gone". Re-run with `context.setOffline(true)` — a real drop,
+same expert sign-in — and **it reproduces exactly**:
+
+| | with a genuine offline toggle |
+|---|---|
+| he can keep working | yes, and the indicator says `Saving…` |
+| `pending_writes_v1` DURING the outage | **present** — the write IS written down now |
+| after reconnecting, within 130s | **never arrives** |
+| the indicator after reconnecting | **nothing — "saved"** |
+| the queue after reconnecting | **absent — released** |
+| after a reload | **still gone** |
+
+So the app-side net now engages, and is then discarded: Firestore resolves the
+promise without the write landing, the repository correctly releases a write it
+has been told succeeded, and the queue entry goes with it. A store that lies
+about success defeats everything above it.
+
+This is the whole of what remains, and it is a seam decision — what counts as
+"failed" when a promise resolves and nothing arrives.
 
 Worth fixing at the seam rather than in the app: the adapter should decide when
 a write has failed — a timeout, or Firestore's own connection state — rather
