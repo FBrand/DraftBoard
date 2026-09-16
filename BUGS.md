@@ -961,11 +961,16 @@ gets corrected; the matcher does not change.
 
 ### Two things noticed on the way, not acted on
 
-`DL.1T` and `DL.3T` (three rows now, including Seumalo's) do not match the
-depth chart, whose rows are `DT.1T` and `DT.3T`: `resolvePosition` matches the
+`DL.1T` and `DL.3T` (three rows now, including Seumalo's) did not match the
+depth chart, whose rows are `DT.1T` and `DT.3T`: `resolvePosition` compared the
 exact label, then the part before the dot, and `DL` is not `DT`. Those players
-will not auto-place on a roster sync. That is the deferred what-he-plays /
-where-he-lines-up problem (#22), not something to fix inside one CSV.
+would not auto-place on a roster sync.
+
+**Fixed the same day** by `positionTaxonomy` — the very problem it was built
+for. `DL.1T` now reaches `["DT.1T", "LDE", "RDE"]`, and `NT` the same, so
+Seumalo places. Corrected here because the sentence above was written before
+the table existed and would otherwise send somebody looking for a bug that is
+gone.
 
 The user also stated a second principle, recorded here because it is a
 requirement and not yet built: **later expert imports should be reviewed and
