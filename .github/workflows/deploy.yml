@@ -26,23 +26,22 @@ jobs:
       # The shared-backend build needs its whole config or it cannot connect,
       # and a half-configured build does not fail — it comes up with an empty
       # season and a console warning nobody reads. Better to stop here.
+      #
+      # Only the API key is a repository secret. The rest identify the
+      # project rather than authorise anything — firestore.rules is the real
+      # access boundary — so they are inlined below rather than kept as five
+      # more secrets to manage. See .env.example.
       - name: Check the Firebase config is present
         if: github.ref == 'refs/heads/firebase'
         env:
           VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
-          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
-          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
-          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
         run: |
           missing=""
-          for v in VITE_FIREBASE_API_KEY VITE_FIREBASE_AUTH_DOMAIN VITE_FIREBASE_PROJECT_ID VITE_FIREBASE_APP_ID; do
+          for v in VITE_FIREBASE_API_KEY; do
             [ -n "$(printenv "$v")" ] || missing="$missing $v"
           done
           if [ -n "$missing" ]; then
             echo "Missing repository secrets:$missing"
-            echo "None of this is secret — a web app ships its Firebase config to every"
-            echo "browser. They come from the environment so that a fork cannot write"
-            echo "into this project's database. See .env.example."
             exit 1
           fi
 
@@ -52,11 +51,11 @@ jobs:
         # are empty and nothing reads them, so those builds are unchanged.
         env:
           VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
-          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
-          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
-          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
-          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
-          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_AUTH_DOMAIN: warroomsuite.firebaseapp.com
+          VITE_FIREBASE_PROJECT_ID: warroomsuite
+          VITE_FIREBASE_APP_ID: "1:244261605876:web:ec3d9c58c61f4a263229a1"
+          VITE_FIREBASE_STORAGE_BUCKET: warroomsuite.firebasestorage.app
+          VITE_FIREBASE_MESSAGING_SENDER_ID: "244261605876"
         run: |
           if [ "$GITHUB_REF" = "refs/heads/firebase" ]; then
             VITE_BACKEND=firebase VITE_ENABLE_SYNC=true npm run build
