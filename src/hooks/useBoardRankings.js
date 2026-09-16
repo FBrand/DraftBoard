@@ -8,6 +8,7 @@ import * as scoutingState from '../utils/scoutingState';
 import { applyProspects } from '../utils/prospects';
 import { identityKey, nameKey } from '../utils/nameMatcher';
 import { resolveAll, openRegistry, byId } from '../utils/playerRegistry';
+import { storedIdentities, storedIdFor } from '../utils/storedIdentity';
 
 
 import { openBoards, listBoards, viewedSeason } from '../utils/boardRegistry';
@@ -155,12 +156,35 @@ function loadPools() {
         const keyOf = joinKeyFor(files);
         const union = applyProspects(unionOfFiles(files, keyOf));
 
-        // The one place a name becomes an identity. Every player carries a
-        // stable id from here on, so nothing downstream has to re-derive who
-        // he is from his name (see utils/playerRegistry.js). Resolved in one
-        // batch: the name index is built once for the whole pool rather than
-        // once per player.
-        const ids = resolveAll(union);
+        // Identity from what is already written down, not from matching names
+        // again.
+        //
+        // resolveAll below fuzzy-matches every name in the pool against the
+        // registry. Profiling a boot put getLevenshteinDistance at the top of
+        // the list by self time, with findMatchingIndex behind it — and almost
+        // all of that work re-derives an answer the app already has. A board
+        // entry IS the answer: its document key is the player's registry id,
+        // which is why the body deliberately stores no playerId of its own.
+        //
+        // So the entries are read first and the matcher only sees names none
+        // of them account for — a genuinely new prospect, or a first run where
+        // there are no entries yet and this map is empty. Nothing is
+        // persisted, so there is no stale mapping to invalidate: the map is
+        // rebuilt from storage on every load, and a name it does not answer
+        // for falls through to exactly the code that ran before.
+        const stored = storedIdentities();
+        const fromEntries = union.map(p => storedIdFor(stored, p));
+
+        const unresolved = [];
+        fromEntries.forEach((id, i) => { if (!id) unresolved.push(i); });
+        const ids = fromEntries;
+        if (unresolved.length) {
+            const found = resolveAll(unresolved.map(i => union[i]));
+            unresolved.forEach((at, j) => { ids[at] = found[j] ?? null; });
+        }
+        if (globalThis.__DB_TRACE) {
+            console.log(`[trace] pool: ${union.length} players, ${unresolved.length} needed resolving by name`);
+        }
 
         // Matrix scores used to have a store of their own. Now that every
         // player has a record to hang facts on, they move onto it — here,

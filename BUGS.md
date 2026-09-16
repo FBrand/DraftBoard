@@ -435,85 +435,71 @@ for, over the Undo button, a third of a second after the pick.
 
 Pinned by `tests/fast/doubleClickDraft.spec.js`, which fails against the old
 code with exactly the original symptom.
-## Still open, and worse than it looked: the app is unusable on a phone for 25 seconds
 
-The 7.2s of blocked main thread (C3) was measured on a desktop-class box with
-nothing else running. The people this app is FOR are following a broadcast, and
-many of them are on a phone. Measured at 390px with the CPU throttled 4x, which
-is roughly a mid-range handset — the number is not "long tasks", it is how long
-somebody stares at something they cannot use:
+## The 25s phone boot: the diagnosis was wrong, 2026-09-16
 
-| | first visit | second | third |
-|---|---|---|---|
-| answers a tap after | **46.9s** | **29.7s** | **25.1s** |
+The number is real and reproduces exactly. At 390px with the CPU throttled 4x
+(roughly a mid-range handset, which is how it was measured originally), a WARM
+boot takes **25-26s to show cards, ~22s of it blocked main thread**.
 
-A warm boot is only 37% cheaper than a cold one, so this is not a first-run
-cost paid once per browser. **Every visit costs 25 seconds.**
+I nearly deleted this entry. Measuring at 390px *without* the throttle gives
+4.3s warm and 7.9s cold, and on that basis I wrote that the figure "doesn't
+hold" — having skipped the words "with the CPU throttled 4x" in the line above
+my own table. **Read the method before contradicting the measurement.**
 
-It is not the rendering. Forcing each stage to be the one restored at boot:
+### "Not a faster match — fewer matches" was the wrong target
 
-| stage | responsive at | DOM nodes |
+Fewer matches was the right instinct aimed at the wrong thing. Three paths were
+re-resolving names on the read path, each verified by trace rather than
+inference:
+
+| path | before | now |
 |---|---|---|
-| draft | 47.8s | 5117 |
-| roster | 39.9s | 944 |
-| free agency | 39.3s | 782 |
-| scouting | 34.3s | 1470 |
-| udfa | 27.4s | 485 |
+| the scouting pool | 328 resolved by name, every boot | **0** — ids read from board entries |
+| `recordDraftFacts` | 629 picks resolved by name, every boot | **0** — the pick already carries its id |
+| the draft-pool join | 313 file rows with no id, so ~630 name joins | **reverted, see below** |
 
-UDFA renders 485 nodes and still takes 27 seconds. There is a floor of roughly
-25 seconds of work that happens whatever is on screen — the shared boot path:
-read three rankings files, union them, resolve every player against the
-registry, seed the boards, apply the facts.
+None of it moved the wall clock. Across every combination measured, a warm
+throttled boot stayed between **24.8s and 33.4s**, and individual runs of the
+*same* build spread nearly 3s, so nothing in that range is a result.
 
-### Where it goes, and why three fixes did not help
+### The one that was reverted, and why
 
-Profiled by inclusive time on a WARM boot, which is the common case:
-`loadInitialData` 1.5s, `findMatchingIndex` 1.5s (of which `findJoin` 1.0s and
-`getLevenshteinDistance` 0.7s), React rendering 1.2s, `resolveAll` 0.5s.
-Multiply by four for the phone.
+Stamping stored ids onto the draft pool before the joins removed the most CPU
+of any change here: `getLevenshteinDistance` went from **3572ms of self time —
+second only to `(program)` — to absent from the top eighteen**.
 
-Then counted, rather than guessed at — every call to the matcher on one boot:
+It also broke the test suite. Not one test: **a different test failed on each
+run** (routing, then faRoundTrip), each passing in isolation, with the baseline
+clean at 46 passed across a control run. The change needed `openRegistry()` and
+`openBoardEntries()` on the draft path, which is new I/O before first paint,
+and under four parallel workers that was enough to push timing-sensitive tests
+over their thresholds.
 
-| | cold | warm |
-|---|---|---|
-| lookups | 5,602 | 4,001 |
-| hits on strategy 1 (exact normalised name) | 1,188 | 1,821 |
-| hits on strategies 2, 3, 4 | **0** | **0** |
-| hits on strategy 5 (Levenshtein) | 3 | 0 |
-| misses | 1,202 | 334 |
-| average list length scanned | 196 | 308 |
+A 3.5s CPU saving that does not move the wall clock is not worth an unstable
+suite. Reverted, and written down here so the idea is not lost: it is sound,
+and it wants a way to reach the entries **without adding an await to the draft
+path** — reading them only if another view has already loaded them, or moving
+the opens somewhere they are already being paid for.
 
-**Three optimisations were tried, measured, and reverted:**
+### What actually dominates
 
-1. Deferring `RightPanel`'s auto-scroll past the first paint (its rect reads
-   cost 764ms). Blocked time 7,165ms -> 7,588ms.
-2. Collapsing strategies 1-4 from four list scans into one, priority preserved.
-   7,165ms -> 7,266ms and 7,546ms.
-3. Giving the index first-occurrence Maps so the exact strategies are O(1) —
-   aimed straight at the table above, where every hit is strategy 1. Warm got
-   somewhat cheaper (29.7s -> 24.1s on the phone) but cold did not move at all,
-   and three desktop runs came out at 9,359 / 7,665 / 8,286ms against a 7,326ms
-   baseline. Worse, for more code, in the area this project has had the most
-   bugs in.
+| | self time |
+|---|---|
+| `(program)` — V8 internals, parse/compile | **18.2s** |
+| `getLevenshteinDistance` | 3572ms |
+| `findMatchingIndex` | 895ms |
+| garbage collector | 886ms |
+| `setValueForStyle` / `appendChild` / `createElement` / `setTextContent` | ~2s combined |
 
-The third one explains the other two. Making HITS cheap changes little, because
-the cost is in the MISSES: each one falls through to strategy 4, a substring
-test against every player in the list, and then the distance pass. 1,202 misses
-on a cold boot against a list growing to a thousand is the O(n squared) that
-nothing local will fix.
+`(program)` dwarfs everything and no change to the matcher touches it. The app
+renders three boards of 328 players — roughly a thousand cards — and the cost
+is in producing and styling that DOM, not in working out who anybody is.
 
-### What would actually fix it
-
-Not a faster match — fewer matches. The files arrive as names on every boot, so
-the whole pool is re-resolved against the registry every time, even though the
-registry already has an id for almost everybody and the board entries already
-store `playerId`. Persisting the name-to-id resolution and consulting it first
-would make a warm boot nearly free, and leave the cascade for names it has
-genuinely never seen.
-
-That is a design change with a real failure mode — a stale entry maps a name to
-the wrong player, which is precisely the bug this codebase has fought hardest —
-so it is written down rather than attempted: it wants deciding, not slipping in.
+**The fix that would move this number is rendering less**: virtualising the
+board so off-screen tiers cost nothing. That is real work and it is not
+started. Recorded so the next person does not spend another night on the
+matcher — it has now been chased twice.
 
 ## Verified, not assumed: syncing the roster twice, 2026-09-15
 

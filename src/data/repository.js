@@ -399,6 +399,11 @@ export function createRepository(adapter = localAdapter) {
 
     function persistQueue() {
         try {
+            // The overwhelmingly common case: nothing refused, nothing in
+            // flight, nothing on disk. Measured at 114ms of boot before this
+            // early-out — every settled write rebuilt a Map to discover it had
+            // nothing to say. Seeding a season settles hundreds of writes.
+            if (!pending.size && !sending.size && !queueOnDisk) return;
             const all = unlanded();
             if (!all.length) {
                 if (queueOnDisk) { localStorage.removeItem(QUEUE_KEY); queueOnDisk = false; }

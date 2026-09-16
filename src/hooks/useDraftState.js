@@ -51,7 +51,28 @@ const isOurs = (team) => !!team && String(team).toUpperCase() === sessionTeam();
  */
 function recordDraftFacts(drafted) {
     if (!drafted?.length) return [];
-    const ids = resolveAll(drafted.map(p => ({ name: p.name, position: p.position, school: p.school })));
+
+    // A pick that already knows who it is about does not need finding again.
+    //
+    // Resolving by name is the expensive half of a cold start, and this ran it
+    // for EVERY pick on every boot — then threw the answer away for the ones
+    // that already carried a playerId, two lines below, where `identified`
+    // keeps `p.playerId` when it is there. The id is written down precisely so
+    // the matching happens once; see playerRegistry's header, which says the
+    // fuzzy match belongs at first resolution "and never again on the read
+    // path". This is the read path.
+    const ids = drafted.map(p => p.playerId ?? null);
+    const unknown = [];
+    ids.forEach((id, i) => { if (!id) unknown.push(i); });
+    if (unknown.length) {
+        const found = resolveAll(unknown.map(i => ({
+            name: drafted[i].name, position: drafted[i].position, school: drafted[i].school,
+        })));
+        unknown.forEach((at, j) => { ids[at] = found[j] ?? null; });
+    }
+    if (import.meta.env.DEV || globalThis.__DB_TRACE) {
+        console.log(`[trace] recordDraftFacts: ${drafted.length} picks, ${unknown.length} needed resolving by name`);
+    }
 
     // One write for the whole draft. Per player, this was 639 serialisations
     // of the entire players collection on every cold start.
@@ -223,7 +244,6 @@ export const useDraftState = () => {
                 const columnsText = await columnsRes.text().catch(() => "");
                 const parsedPositions = columnsText.split(',').map(p => p.trim()).filter(p => p);
                 setColumnOrder(parsedPositions);
-
                 const parsedPlayers = parseRankings(rankingsText) || [];
                 const parsedOurPicks = parsePicks(picksText) || [];
 
