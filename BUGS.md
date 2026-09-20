@@ -532,6 +532,64 @@ bites the first person on a brand-new project, once, in the browser they set
 it up in — a later viewer's empty browser sees the real seed in Firestore
 immediately and never seeds locally at all.
 
+## Designed, not yet implemented: board/author ownership, 2026-09-20
+
+Restricting *who* can sign in (`allowed_users`, above) doesn't restrict
+*which* board a signed-in expert can write to — `createBoard()` fully
+supports an `ownerId`, but its one call site (`ScoutingView.jsx:551`) never
+passes one, and `ownsBoard()` treats `o == null` as "any expert may write
+this." So today every board, including the shipped Dan/Ryan ones, is
+writable by every expert. Worked out the model to fix that; not built yet.
+
+**Three states**, expressible with the fields that already exist — no
+schema change:
+
+| state | `authorId` | `ownerId` (`o`) |
+|---|---|---|
+| **owned** | set | a specific uid |
+| **orphaned** | set | `null` — a personal board nobody has claimed |
+| **shared** | `null` | `null` — no person behind it, by design, forever |
+
+**Consensus is not special beyond having no author.** Checked directly:
+`CreateBoardModal.jsx`'s author field placeholder is *"blank for a derived
+board"*, and `createBoard()` genuinely creates a second author-less board if
+you do — nothing today stops a duplicate "shared" board from being made.
+Decided: a "new consensus" action should live in the top menu specifically,
+**guarded to only offer/succeed if one doesn't already exist** — not the
+general blank-author path in `CreateBoardModal`, which stays available for
+other legitimately shared boards that aren't THE consensus board.
+
+**Transitions**:
+- orphaned → owned: **claim**, by any expert.
+- owned → orphaned: **explicit**, by the current owner ("orphan my board"),
+  or **automatic**, as a side effect of deactivating that expert.
+- owned → owned(somebody else): **not allowed directly** — must pass through
+  orphaned first. No claiming an actively-owned board out from under someone.
+
+**Two real implementation wrinkles, not yet resolved:**
+
+1. A board and its `authorId`'s author record are **separate documents with
+   separate `o` fields** (`ownsBoard` and `ownsAuthor` check them
+   independently). `createBoard()` already sets both together at creation
+   ("The author carries the SAME ownerId as the board being made"), but
+   claim/orphan need to move both atomically too, or a board and its own
+   evaluations-voice end up owned by different people.
+2. **"Deactivating an expert" isn't a real action yet.** Revoking access is
+   currently console-only (`allow update, delete: if false` on
+   `allowed_users`, per the architect review above), a raw Firestore
+   deletion the app never sees. For deactivation to *automatically* orphan
+   someone's boards, deactivation has to become a proper in-app compound
+   action (remove the allowed_users entry + orphan their boards/authors in
+   one write), not stay a bare console delete with nothing watching for it.
+
+## Parked for later: per-board visibility (private/expert/public)
+
+Every board is currently readable by anyone, including anonymous viewers
+(`allow read: if true`). Idea, not designed yet: a switch per board
+controlling who can see it — private (owner only), expert (any signed-in
+expert, not viewers), public (today's behavior). Revisit alongside the
+ownership work above, since both touch the same records.
+
 ## Flows walked on 2026-09-15, hunting rather than confirming
 
 Driven through a browser against the built app, looking for the failure each
