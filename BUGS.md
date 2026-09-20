@@ -468,9 +468,69 @@ Worth doing deliberately. Written down rather than attempted mid-audit.
 
 | What | Why it matters |
 |---|---|
-| **No sign-in UI at all** — `signInExpert()` has no caller | An expert cannot sign in from the app. The write path is verified by restoring a session the way Firebase does, so the button has somewhere to land, but nobody can press it yet. |
 | **The viewer's board takes 9-20s to populate** against a LOCAL emulator | A real network is slower. Nothing shows a loading state meanwhile. |
-| **GitHub Actions config injection** | The deployed build has no Firebase config yet. |
+
+Resolved since this table was written: `SessionUser.jsx` now has a sign-in
+button calling `signInExpert()`, and GitHub Actions injects the config on
+push (see below) — verified against a real, first-time project, not the
+emulator.
+
+## First real (non-emulator) Firestore project, 2026-09-16
+
+Everything above was checked against the local emulator, which does not
+enforce the same things a real project does — noted throughout as an open
+question. Set up `warroomsuite`, a genuinely fresh project, and pushed
+`firebase` at it. Two things the emulator could not have caught:
+
+**Authorized domains.** Google sign-in refused with `auth/unauthorized-domain`
+on first try — a real project only trusts `localhost` and its own
+`*.firebaseapp.com`/`*.web.app` by default. `fbrand.github.io` has to be added
+by hand under Authentication → Settings → Authorized domains. Not a code fix;
+recorded here because it will bite the next person who spins up a project.
+
+**The seeded authors never wrote — a real rules bug, invisible against the
+emulator.** `openBoards()` (`boardRegistry.js`) seeds the shipped Dan/Ryan
+authors alongside the shipped boards on first run. Checked the raw
+collections against `warroomsuite` (Firestore's read rules are `allow read:
+if true`, so a bare `curl` against the REST API is ground truth, no token
+needed):
+
+| collection | before the fix |
+|---|---|
+| `seasons` | 1 doc |
+| `boards` | 3 docs, one naming author `a_m1j7zikw` |
+| `authors` | **`{}`** — empty |
+
+`firestore.rules`' `authors` create rule reads `request.resource.data.o`
+(ownerId). Boards set `ownerId: null` explicitly on the seed and that
+compares fine; the seed authors never set the field at all, and reading an
+absent property in rules-language errors rather than returning `null` — an
+error denies the write. `createBoard()`, the function used any time a board
+is added by hand later, already gets this right (`ownerId: ownerId ?? null`);
+only the one-time seed path missed it. **FIXED**: seed authors now set
+`ownerId: null` too. No test caught this — `tests/rules/rules.test.js`'s own
+fixtures always set `o` by hand, which is exactly the gap that let the real
+seed path ship without it. Cleared the already-poisoned `seasons`/`boards`/
+`authors` collections on `warroomsuite` (all seed data, minutes old, nothing
+real) so the next load reseeds correctly.
+
+**Signing in didn't retry the write.** `openBoards()` runs once, in the
+initial load effect, however far auth has gotten by then — a viewer boots
+anonymous, firestore.rules correctly refuse his seed write, and nothing
+re-ran it after he actually signed in, so the fix above only takes effect on
+a reload. **FIXED** in `main.jsx`: subscribed to `onAuthChange` and re-run
+`openBoards()` whenever the session becomes an expert; it is already a no-op
+once boards exist, so this costs nothing on an already-seeded project.
+
+Not fixed, and worth naming precisely: this does not repair a browser whose
+**local overlay** already holds a private, anonymous-seeded season from
+before sign-in — `writesRemote` sends an anonymous write local-only, by
+design (that is how a viewer's own mock works), and the merged local+remote
+view then reads as "already initialized" regardless of what is or isn't in
+Firestore. That is what clearing localStorage worked around here. It only
+bites the first person on a brand-new project, once, in the browser they set
+it up in — a later viewer's empty browser sees the real seed in Firestore
+immediately and never seeds locally at all.
 
 ## Flows walked on 2026-09-15, hunting rather than confirming
 
