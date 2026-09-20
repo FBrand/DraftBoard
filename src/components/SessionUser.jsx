@@ -1,5 +1,5 @@
 import React from 'react';
-import { onAuthChange, signInExpert, signOutExpert } from '../utils/auth';
+import { onAuthChange, signInExpert, signOutExpert, recheckAccess } from '../utils/auth';
 import { backendName } from '../data/backend';
 
 /**
@@ -30,7 +30,17 @@ export default function SessionUser() {
 
     if (backendName() !== 'firebase') return null;
 
-    const expert = !!user && !user.isAnonymous;
+    // `isAllowed` rather than `!isAnonymous` — a Google sign-in that failed
+    // the allowed_users check is not an expert, and auth.js never sets this
+    // true for one. See permissions.js for the same rule stated the same way.
+    const expert = !!user && !!user.isAllowed;
+
+    // A real Google session that couldn't be checked against allowed_users
+    // yet — offline, a blip, rules not deployed. Distinct from "never signed
+    // in" on purpose: a bare "Sign in" button here would look identical to
+    // that and give a legitimate expert no clue he already has a session
+    // sitting unconfirmed. See auth.js's shape()/recheckAccess().
+    const unconfirmed = !!user && !!user.unconfirmed;
 
     const attempt = async (fn) => {
         setBusy(true);
@@ -39,10 +49,15 @@ export default function SessionUser() {
             await fn();
         } catch (err) {
             // A closed popup is not an error worth shouting about; anything
-            // else is worth saying out loud rather than failing silently.
+            // else is worth saying out loud rather than failing silently. A
+            // Firebase Auth error has a `.code` worth showing as-is; a plain
+            // Error (the allowed_users rejection, for one) doesn't, and its
+            // `.message` is the whole point of throwing it in the first
+            // place — falling straight to "Sign-in failed" for those was
+            // silently discarding the one message this was built to show.
             const code = err?.code ?? '';
             if (!/popup-closed-by-user|cancelled-popup-request/.test(code)) {
-                setProblem(code || 'Sign-in failed');
+                setProblem(code || err?.message || 'Sign-in failed');
             }
         } finally {
             setBusy(false);
@@ -60,6 +75,24 @@ export default function SessionUser() {
                     onClick={() => attempt(signOutExpert)}
                     title="Stop writing to the shared boards and go back to watching"
                 >Sign out</button>
+            </span>
+        );
+    }
+
+    if (unconfirmed) {
+        return (
+            <span className="session-user">
+                <span className="session-user-problem" role="status">
+                    Signed in as {user.email ?? user.name} — could not confirm access yet
+                </span>
+                {problem && <span className="session-user-problem" role="status">{problem}</span>}
+                <button
+                    type="button"
+                    className="view-tab"
+                    disabled={busy}
+                    onClick={() => attempt(recheckAccess)}
+                    title="Try checking your access again, without signing in again"
+                >{busy ? 'Retrying…' : 'Retry'}</button>
             </span>
         );
     }

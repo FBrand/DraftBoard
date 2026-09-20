@@ -25,8 +25,17 @@ const PROJECT = 'demo-draftboard';
 
 let env;
 
-/** An expert: signed in with a real provider. */
-const expert = (uid) => env.authenticatedContext(uid, { firebase: { sign_in_provider: 'google.com' } }).firestore();
+/**
+ * An expert: signed in with Google, a verified email, defaulting to an
+ * address the beforeEach below actually puts on allowed_users. Pass a
+ * different email to build a Google account that ISN'T listed.
+ */
+const expert = (uid, email = `${uid}@example.com`) =>
+    env.authenticatedContext(uid, {
+        firebase: { sign_in_provider: 'google.com' },
+        email,
+        email_verified: true,
+    }).firestore();
 /** A viewer: signed in anonymously, which is what every follower is. */
 const viewer = () => env.authenticatedContext('anon', { firebase: { sign_in_provider: 'anonymous' } }).firestore();
 /** Nobody at all. */
@@ -56,6 +65,10 @@ beforeEach(async () => {
         await setDoc(doc(db, 'boards/b_dan'), { l: 'Dan', a: 'a_dan', o: 'dan-uid', s: 's_1' });
         await setDoc(doc(db, 'boards/b_consensus'), { l: 'Consensus', a: null, o: null, s: 's_1' });
         await setDoc(doc(db, 'seasons/s_1'), { y: 2026, t: 'current' });
+        // Both test experts must be listed for isExpert() to accept them —
+        // matches the default email expert(uid) builds, `${uid}@example.com`.
+        await setDoc(doc(db, 'allowed_users/dan-uid@example.com'), { email: 'dan-uid@example.com', addedBy: 'system', addedAt: '2026-01-01' });
+        await setDoc(doc(db, 'allowed_users/ryan-uid@example.com'), { email: 'ryan-uid@example.com', addedBy: 'system', addedAt: '2026-01-01' });
     });
 });
 
@@ -172,5 +185,111 @@ describe('the floor', () => {
     it('denies a collection nobody has written a rule for', async () => {
         await assertFails(setDoc(doc(expert('dan-uid'), 'something_invented/x'), { a: 1 }));
         await assertFails(getDoc(doc(viewer(), 'something_invented/x')));
+    });
+});
+
+describe('isExpert requires Google, a verified email, and the whitelist together', () => {
+    // Each of these holds two of the three conditions and fails on the third
+    // — the point is that no single condition is enough on its own.
+
+    it('a listed email signed in through a different provider is refused', async () => {
+        // The bypass this closed: the Firebase config is public, so with any
+        // other sign-in method enabled, anybody could self-register a
+        // password account claiming a listed expert's address.
+        const db = env.authenticatedContext('dan-uid', {
+            firebase: { sign_in_provider: 'password' },
+            email: 'dan-uid@example.com',
+            email_verified: true,
+        }).firestore();
+        await assertFails(setDoc(doc(db, 'boards/b_dan'), { l: 'Hijacked' }));
+    });
+
+    it('a listed Google account with an unverified email is refused', async () => {
+        const db = env.authenticatedContext('dan-uid', {
+            firebase: { sign_in_provider: 'google.com' },
+            email: 'dan-uid@example.com',
+            email_verified: false,
+        }).firestore();
+        await assertFails(setDoc(doc(db, 'boards/b_dan'), { l: 'Unverified' }));
+    });
+
+    it('a verified Google account not on the list is refused', async () => {
+        await assertFails(setDoc(doc(expert('outsider-uid', 'outsider@example.com'), 'boards/b_dan'), { l: 'Stolen' }));
+    });
+});
+
+describe('allowed_users', () => {
+    /** A Google-authenticated, verified user whose email is NOT listed. */
+    const outsider = () => expert('outsider-uid', 'outsider@example.com');
+
+    it('an unlisted account cannot write boards, players, or the draft', async () => {
+        const db = outsider();
+        await assertFails(setDoc(doc(db, 'players/p_1'), { n: 'X' }));
+        await assertFails(setDoc(doc(db, 'boards/b_dan'), { l: 'Stolen' }));
+        await assertFails(setDoc(doc(db, 'draft_state/s_1'), { value: {} }));
+    });
+
+    it('an unlisted account cannot read someone else’s entry', async () => {
+        await assertFails(getDoc(doc(outsider(), 'allowed_users/dan-uid@example.com')));
+    });
+
+    it('any signed-in Google user can read their OWN entry, listed or not — this is what signInExpert() checks', async () => {
+        await assertSucceeds(getDoc(doc(outsider(), 'allowed_users/outsider@example.com')));
+    });
+
+    it('a listed expert can read the whole list', async () => {
+        await assertSucceeds(getDoc(doc(expert('dan-uid'), 'allowed_users/ryan-uid@example.com')));
+    });
+
+    it('a listed expert can add a new expert, self-attributed', async () => {
+        await assertSucceeds(setDoc(doc(expert('dan-uid'), 'allowed_users/newperson@example.com'), {
+            email: 'newperson@example.com',
+            addedBy: 'dan-uid@example.com',
+            addedAt: '2026-09-01',
+        }));
+    });
+
+    it('cannot claim someone else added the entry', async () => {
+        await assertFails(setDoc(doc(expert('dan-uid'), 'allowed_users/newperson@example.com'), {
+            email: 'newperson@example.com',
+            addedBy: 'ryan-uid@example.com',
+            addedAt: '2026-09-01',
+        }));
+    });
+
+    it('the email field must match the document id', async () => {
+        await assertFails(setDoc(doc(expert('dan-uid'), 'allowed_users/newperson@example.com'), {
+            email: 'somebody-else@example.com',
+            addedBy: 'dan-uid@example.com',
+            addedAt: '2026-09-01',
+        }));
+    });
+
+    it('an existing entry cannot be rewritten — immutable once written', async () => {
+        await assertFails(setDoc(doc(expert('dan-uid'), 'allowed_users/ryan-uid@example.com'), {
+            email: 'ryan-uid@example.com',
+            addedBy: 'dan-uid@example.com',
+            addedAt: 'rewritten',
+        }));
+    });
+
+    it('nobody can delete an entry — that is a console operation', async () => {
+        await assertFails(deleteDoc(doc(expert('dan-uid'), 'allowed_users/ryan-uid@example.com')));
+    });
+
+    it('an unlisted account cannot add itself or anybody else', async () => {
+        await assertFails(setDoc(doc(outsider(), 'allowed_users/newperson@example.com'), {
+            email: 'newperson@example.com',
+            addedBy: 'outsider@example.com',
+            addedAt: '2026-09-01',
+        }));
+    });
+
+    it('a viewer cannot touch allowed_users at all', async () => {
+        const db = viewer();
+        await assertFails(getDoc(doc(db, 'allowed_users/dan-uid@example.com')));
+        await assertFails(setDoc(doc(db, 'allowed_users/viewer@example.com'), {
+            email: 'viewer@example.com', addedBy: 'x', addedAt: 'x',
+        }));
     });
 });

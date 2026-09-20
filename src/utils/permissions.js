@@ -54,9 +54,16 @@ export function isSignedIn() {
  * ownerId, so the moment anonymous sign-in is wired up, "is this mine?" starts
  * answering no for every board a viewer opens, and the app stops letting him
  * touch his own play-along.
+ *
+ * Reads `isAllowed` rather than re-deriving "not anonymous" itself — auth.js
+ * only ever sets that flag true once the allowed_users check has actually
+ * succeeded, and firestore.rules requires the same thing server-side. A
+ * second, weaker definition of "expert" computed locally is exactly how this
+ * app once had three different answers to the same question; there is one
+ * source for it now.
  */
 export function isExpert() {
-    return !!currentUser?.id && currentUser.provider !== 'anonymous' && !currentUser.isAnonymous;
+    return !!currentUser?.id && currentUser.isAllowed === true;
 }
 
 /**

@@ -119,6 +119,66 @@ hardcoded is that a fork must not silently write into this project's database.
 firebase deploy --only firestore:rules
 ```
 
+## Authorized experts
+
+Being signed in with Google is not enough to be an expert — the account's
+email must also be listed in the `allowed_users` collection, checked by
+`firestore.rules`' `isExpert()` alongside the provider (`google.com` only)
+and a verified email. Without this, the Firebase config in the bundle is
+public by design (see "Deploying" above), so an unrestricted "any Google
+account" rule would let a stranger publish over a shared board.
+
+**Deploy rules before the client, every time.** The client checks
+`allowed_users` on sign-in; if the new client ships to GitHub Pages ahead of
+`firebase deploy --only firestore:rules`, every expert — including whoever
+would be the first entry — gets refused by the *old* rules' catch-all deny,
+which looks identical to "not on the list" until the rules catch up.
+
+**Adding an expert, once one already exists**: signed-in experts can do this
+from the app itself — Manage → Manage Experts… — which writes through
+`addAllowedExpert()` and is enforced by the rules' own `create` validation
+(the document id must equal the email, `addedBy` must be the caller's own
+address). Nobody can be removed from the app; `allow update, delete: if
+false` on purpose, so the list can't be forged after the fact. Revoking
+access is a console-only operation — delete the `allowed_users/{email}`
+document directly in the Firebase console's Firestore data browser.
+
+**Bootstrapping the very first expert is different, and has to be.** The
+`create` rule itself requires already being an expert — there is no way to
+satisfy that for the first entry from inside the app, by design; a rules
+language with no concept of "the collection is currently empty" can't
+express a self-service exception here that isn't itself a standing hole (an
+admin-console delete can always re-empty the collection later, since delete
+bypasses rules the same way this bootstrap does — so "empty" is never a safe
+one-shot signal to build a founder exception on top of).
+
+The only correct way in is a write that bypasses `firestore.rules`
+entirely — the same authority `firebase deploy` itself uses, i.e. a request
+authenticated with Google Cloud IAM (project Editor/Owner) rather than
+Firebase Auth. Concretely, from a machine logged in via `firebase login`
+with sufficient project access:
+
+```sh
+TOKEN=$(node -e "console.log(JSON.parse(require('fs').readFileSync(process.env.HOME + '/.config/configstore/firebase-tools.json','utf8')).tokens.access_token)")
+curl -X PATCH \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  "https://firestore.googleapis.com/v1/projects/<PROJECT_ID>/databases/(default)/documents/allowed_users/<email, lowercase>" \
+  -d '{"fields": {"email": {"stringValue": "<email, lowercase>"}, "addedBy": {"stringValue": "hand"}}}'
+```
+
+(`firebase firestore:delete` exists for admin-authority deletes; there is no
+equivalent `firestore:write` in the CLI, which is why this goes through the
+REST API directly with the CLI's own refreshed token instead.)
+
+**The document id must exactly match the `email` claim the Google token
+actually returns** — case and domain both. A near-miss (`gmail.com` vs. the
+account's real domain, or any casing difference — the rules compare against
+`request.auth.token.email.lower()`) means `exists()` misses forever, nobody
+ever passes `isExpert()`, and the list can never be extended from the app
+again. Confirm the real value first — signing in once and reading it back
+from Firebase Auth's user list, or from the token itself — rather than
+assuming what an address "should" be.
+
 ## Three things that will bite
 
 **Half a config is worse than none.** All four of `VITE_FIREBASE_API_KEY`,

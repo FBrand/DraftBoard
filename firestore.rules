@@ -26,10 +26,23 @@ service cloud.firestore {
 
     // --- who is who -------------------------------------------------------
 
-    // Signed in with something other than an anonymous session.
+    // Signed in with Google, with a verified email, and that email is on the
+    // allowed_users list.
+    //
+    // Not just "not anonymous": the Firebase config in the deployed bundle is
+    // public by design (see .env.example), and a project with more than one
+    // sign-in method enabled would otherwise let anybody self-register a
+    // password account claiming a listed expert's address and inherit his
+    // access with no verification at all. Pinning the provider to google.com
+    // closes that — a Google account's email is verified by Google itself,
+    // which is also why email_verified is checked explicitly rather than
+    // assumed from the provider.
     function isExpert() {
       return request.auth != null
-          && request.auth.token.firebase.sign_in_provider != 'anonymous';
+          && request.auth.token.firebase.sign_in_provider == 'google.com'
+          && request.auth.token.email_verified == true
+          && request.auth.token.email != null
+          && exists(/databases/$(database)/documents/allowed_users/$(request.auth.token.email.lower()));
     }
 
     // Documents are stored with SHORT FIELD NAMES — see src/data/fieldNames.js,
@@ -91,6 +104,41 @@ service cloud.firestore {
     // Writing is an expert's. The registry is shared: a rename or a corrected
     // school is true for everybody, which is exactly why a viewer must not be
     // able to do it.
+
+    // --- who may sign in as an expert at all -------------------------------
+    //
+    // The circular part: creating an entry requires isExpert(), and isExpert()
+    // requires an entry — so the very first one can never be created through
+    // the app. That is intentional, not a gap to close with a rule. A rule
+    // that could bootstrap itself (e.g. "allowed if the collection is empty")
+    // cannot actually be written here — rules have no primitive for collection
+    // emptiness, only per-document exists()/get() — and the closest expressible
+    // version (a sentinel "bootstrap done" doc) stays open from the moment the
+    // rules deploy until the first person to notice uses it, on a site that is
+    // already public. The first entry is seeded once, out of band, with
+    // project-owner credentials that bypass these rules entirely — the same
+    // access already needed to deploy the rules themselves. See docs/FIREBASE.md.
+    //
+    // Once seeded, entries are immutable — allow update: if false — so an
+    // expert cannot rewrite who added whom after the fact; removing one is a
+    // console operation, not an in-app one, which keeps "who let this person
+    // in" answerable from the data itself.
+    match /allowed_users/{email} {
+      // Any signed-in Google user may check whether HIS OWN address is
+      // listed — that read is what signInExpert() does before deciding
+      // whether to keep the session — without being able to see who else is
+      // on the list until he is on it himself.
+      allow read: if isExpert()
+                  || (request.auth != null
+                      && request.auth.token.email != null
+                      && request.auth.token.email.lower() == email);
+      allow create: if isExpert()
+                    && request.resource.data.email == email
+                    && request.resource.data.addedBy == request.auth.token.email.lower();
+      allow update: if false;
+      allow delete: if false;
+    }
+
     match /players/{playerId} {
       allow read: if true;
       allow write: if isExpert();

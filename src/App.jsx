@@ -11,8 +11,11 @@ import HelpModal from './components/HelpModal';
 import SeasonModal from './components/SeasonModal';
 import SyncStatus from './components/SyncStatus';
 import SessionUser from './components/SessionUser';
+import ManageExpertsModal from './components/ManageExpertsModal';
 import { currentSeason, setViewedSeason } from './utils/boardRegistry';
 import { editRefusal } from './utils/permissions';
+import { onAuthChange } from './utils/auth';
+import { backendName } from './data/backend';
 import { repository } from './data/repository';
 import Toast from './components/Toast';
 import { ConfirmDialog } from './components/Dialogs';
@@ -57,6 +60,15 @@ function App() {
   const [helpOpen, setHelpOpen] = useState(false);
   const [seasonOpen, setSeasonOpen] = useState(false);
   const [seasonEpoch, setSeasonEpoch] = useState(0);
+  const [expertsModalOpen, setExpertsModalOpen] = useState(false);
+
+  // Subscribed directly (not read once) so "Manage Experts…" appears the
+  // moment sign-in actually resolves, rather than staying hidden until some
+  // unrelated re-render happens to run after it. Free on a local build, same
+  // as SessionUser's own subscription — onAuthChange never touches the SDK.
+  const [authUser, setAuthUser] = useState(null);
+  React.useEffect(() => onAuthChange(setAuthUser), []);
+  const isExpertNow = backendName() === 'firebase' && !!authUser?.isAllowed;
 
   const activeTabRef = React.useRef(null);
 
@@ -200,6 +212,9 @@ function App() {
           <Menu
             label="Manage"
             items={[
+              isExpertNow
+                ? { label: 'Manage Experts…', onClick: () => setExpertsModalOpen(true), title: 'View and add authorized experts' }
+                : null,
               { label: 'Seasons…', onClick: () => setSeasonOpen(true), title: 'Switch season, roll over to a new one, or roll back' },
               { label: 'Export Full Session…', onClick: handleSessionExport, title: 'Every stage — draft, roster, FA, scouting — in one JSON file' },
               { label: 'Import Full Session…', file: { accept: '.json', onFile: handleSessionFile }, title: 'Replaces all current state' },
@@ -324,6 +339,11 @@ function App() {
         isOpen={seasonOpen}
         onClose={() => setSeasonOpen(false)}
         onChanged={() => setSeasonEpoch(n => n + 1)}
+      />
+
+      <ManageExpertsModal
+        isOpen={expertsModalOpen}
+        onClose={() => setExpertsModalOpen(false)}
       />
 
     </div>
