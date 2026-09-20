@@ -184,6 +184,12 @@ written about, he can't — the card tells you which boards hold him and offers
 to clear **your** opinions instead. Deleting was never meant to be a way to
 lose somebody else's work.
 
+**Strengths, weaknesses and notes are shared, not private to one board.**
+They belong to you, not to any one board — the same note follows a player
+across every season you've watched him — so they're always visible to anyone
+who can see your work, the same as everything else right now. If a note
+itself is something you're not ready to share, don't write it yet.
+
 ### Adding a player who isn't in the file
 
 **+ Add Players** in Scouting is the only way to create a player who is in no
