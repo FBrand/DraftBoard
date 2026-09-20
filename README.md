@@ -46,6 +46,11 @@ quota actually counts. Worth reading before adding a collection: **one season
 is about 1MB against a 5MB quota**, so the browser holds roughly three to five
 seasons before it refuses to save.
 
+On the `firebase` branch, evaluations (an expert's strengths/weaknesses/notes)
+are globally readable by design, independent of any board-level privacy —
+they're keyed by author and span every board he's built. See
+`docs/FIREBASE.md`.
+
 ## Getting your data in
 
 The app ships with a worked 2026 class so it is usable immediately. Your own

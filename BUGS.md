@@ -582,13 +582,62 @@ other legitimately shared boards that aren't THE consensus board.
    action (remove the allowed_users entry + orphan their boards/authors in
    one write), not stay a bare console delete with nothing watching for it.
 
-## Parked for later: per-board visibility (private/expert/public)
+## Designed, corrected, not yet implemented: per-board visibility (private/expert/public)
 
 Every board is currently readable by anyone, including anonymous viewers
-(`allow read: if true`). Idea, not designed yet: a switch per board
-controlling who can see it — private (owner only), expert (any signed-in
-expert, not viewers), public (today's behavior). Revisit alongside the
-ownership work above, since both touch the same records.
+(`allow read: if true`). A first design pass proposed gating `boards` itself
+via `resource.data.get('vis','public')` — an architect review then measured
+against a real emulator that this is genuinely dangerous: Firestore evaluates
+a `read` rule on a LISTED collection once, against an empty stand-in
+document, so `.get(field, default)` silently returns the default and the
+condition passes — the entire unfiltered collection comes back, private
+boards included. A bare field check fails the opposite way: denies the whole
+query, breaking every viewer's board list.
+
+**Corrected design**: leave `boards` world-readable (it's metadata — label,
+author, owner — not the content), gate `boards/{id}/entries` instead, keyed
+on the path variable `boardId` rather than the listed document's own data —
+measured as both correct and cheap (one extra read per query, not per
+document, even at 300 entries). Field is `v` (not `vis` — matches the
+single-char convention, and must be added to `boardFields` or it silently
+never reaches Firestore). `private` must NOT delegate to `ownsBoard()` (which
+grants any expert access to an unowned board) — needs a strict owner check.
+Default for new personal boards: **`expert`, confirmed by the user
+2026-09-20** — architect's recommendation, matching the real workflow
+(scouting runs August-March, rankings are WIP most of the year, public is
+the exception not the rule).
+
+**Evaluations are explicitly out of scope, decided 2026-09-20**: strengths/
+weaknesses/notes stay globally readable regardless of any board's visibility,
+on purpose — they're keyed by author, span every board/season, and no single
+board could correctly govern them. Documented in `docs/FIREBASE.md`,
+`README.md`, and `public/USER_GUIDE.md`. If per-author note privacy is ever
+wanted, it needs its own flag on the author record, not inheritance.
+
+Ready to implement — no open calls left on this one.
+
+## Decided, not yet implemented: expert deactivation via an `active` flag
+
+Chosen over console-only revocation, 2026-09-20: `allowed_users/{email}`
+gains an `active` field (missing/true = active, matching the safe-default
+pattern already used for `ownerId`/visibility). Rules allow updating
+*only* that field — `email`/`addedBy`/`addedAt` must stay byte-identical
+via `diff().affectedKeys()` — so the immutable, forgery-proof audit trail
+`allowed_users` was built for stays intact; only future write access is
+revocable, the history of who was added when and by whom never is.
+`isExpert()` (both `firestore.rules` and `auth.js`'s `isEmailAllowed()`)
+checks `active != false`. A deactivated person stays visible in
+`ManageExpertsModal` with a status pill rather than disappearing — a
+feature, not a gap: it's a record of who used to have access.
+
+Touches `firestore.rules` write semantics again — same as the whitelist
+and ownership work, route through the architect before building, not
+because it's hard but because it's a trust-boundary change on a live
+public app.
+
+Queued behind the visibility switch per the user's explicit sequencing
+(2026-09-20): one task fully done — committed, no reviewer complaints —
+before the next one starts.
 
 ## Flows walked on 2026-09-15, hunting rather than confirming
 

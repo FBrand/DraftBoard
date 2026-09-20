@@ -61,6 +61,16 @@ It is enforced in `firestore.rules` and **nowhere else**. `canEdit()` in the app
 decides what the interface offers; it is not a security boundary, because
 anything the browser decides, the browser can be made to decide differently.
 
+**Evaluations (an expert's strengths/weaknesses/notes on a player) are
+globally readable, and this stays true even once board-level visibility
+exists.** They're keyed by author, not by board — one man's view of a player
+runs across every board and season he's watched him — so no single board's
+visibility setting could correctly govern them without either hiding an
+author's notes from his OWN other boards, or requiring a duplicate
+per-board copy of the same opinion. Decided, not overlooked: if per-author
+note privacy is ever wanted, it needs its own flag on the author record,
+not inheritance from a board.
+
 ## How a viewer gets both
 
 `overlayAdapter` reads from Firestore and writes locally. A viewer sees the
