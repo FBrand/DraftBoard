@@ -285,3 +285,30 @@ export function findMatchingIndex(targetName, mappedList, qualifier = null) {
 export function findMatchingPlayerIndex(targetName, playersList) {
     return findMatchingIndex(targetName, buildNameIndex(playersList));
 }
+
+/**
+ * Finds `player` in `list` the way ordinary operation should: by id first,
+ * since the caller almost always already has one (the player came from a
+ * card the UI already resolved to render it) — never by fuzzy name matching
+ * a player you can already point at directly. Falls back to a qualified
+ * name match (never bare) only when there's genuinely no id to use, or the
+ * id doesn't resolve against this particular list (a stale id, or a list
+ * that doesn't happen to carry this player).
+ *
+ * `listIdField` names the id field on LIST items — `player` itself is
+ * always read via `.id`, but what it's being matched against isn't always
+ * shaped the same way: a player registry list uses `id`, a board's scouting
+ * entries use `playerId`.
+ *
+ * Fuzzy matching belongs at ingestion, where a name is all external data
+ * ever had — not here, where re-deriving identity from a name the caller
+ * could have used an id for instead is how two same-named players collide.
+ */
+export function resolvePlayerIndex(player, list, listIdField = 'id') {
+    if (player?.id) {
+        const byId = list.findIndex(p => p[listIdField] === player.id);
+        if (byId !== -1) return byId;
+    }
+    if (!player?.name) return -1;
+    return findMatchingIndex(player.name, buildNameIndex(list), player);
+}

@@ -275,6 +275,11 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
     // ordering and the card is only showing one player.
     const commit = (patch) => {
         (onEntryChange ?? onChange)({
+            // Already resolved above (id-first, falling back to a
+            // no-create lookup by name+position) — the one place in this
+            // component that knows who this card is about, so the entry
+            // being saved carries it too instead of losing it one layer up.
+            playerId: entry?.playerId ?? playerId,
             name: player.name,
             position: player.position,
             tag: entry?.tag ?? null,

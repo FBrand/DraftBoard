@@ -106,7 +106,13 @@ function slotMeta(slot, masterPlayers, draftedPlayers) {
     const rawPos = draftData?.position || '';
     const displayPos = POS_TRANSLATIONS[rawPos] || rawPos;
 
-    return { displayName, nameColor, topLabel, displayPos };
+    // findById already resolved this above when the slot carries a playerId;
+    // carrying the id on rather than discarding it is what lets onInfoOpen
+    // hand PlayerInfoModal an exact match instead of a name for it to
+    // re-resolve (and possibly miss, on a name shared by two players).
+    const id = draftData?.id ?? draftData?.playerId ?? null;
+
+    return { displayName, nameColor, topLabel, displayPos, id };
 }
 
 // ── Shared card content (also reused by the DragOverlay clone) ────────────
@@ -146,9 +152,11 @@ function SlotCell({ slot, zone, posId, slotIdx, targetZone, onInfoOpen, masterPl
     const openInfo = (e) => {
         if (!slot || !onInfoOpen) return;
         e.preventDefault();
-        // Roster slots store a name + zone, not a player record; the info card
-        // only reads name/position (see PlayerInfoModal).
-        onInfoOpen({ name: meta.displayName, position: meta.displayPos });
+        // Roster slots store a name + zone, not a player record, but slotMeta
+        // already resolved an id above (findById, before its name fallback)
+        // whenever the slot has one — pass it on rather than making
+        // PlayerInfoModal re-resolve from the bare name a second time.
+        onInfoOpen({ name: meta.displayName, position: meta.displayPos, id: meta.id });
     };
 
     const { setNodeRef: setDropRef, isOver } = useDroppable({

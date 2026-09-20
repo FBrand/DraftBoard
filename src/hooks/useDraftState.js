@@ -102,7 +102,7 @@ function recordDraftFacts(drafted) {
     setFactsMany(updates);
     return ids;
 }
-import { findMatchingPlayerIndex, buildNameIndex, findMatchingIndex } from '../utils/nameMatcher';
+import { findMatchingPlayerIndex, buildNameIndex, findMatchingIndex, resolvePlayerIndex } from '../utils/nameMatcher';
 
 const DRAFT_STORAGE_KEY = 'nfl_draft_board_state';
 const IS_LIVE_SYNC_KEY = 'nfl_draft_live_sync';
@@ -426,7 +426,10 @@ export const useDraftState = () => {
 
         const team = isOurPick ? TEAM_CONFIG.abbreviation : (remoteMatch?.team || '-');
 
-        const matchIdx = findMatchingPlayerIndex(player.name, players);
+        // `player` came from a card already resolved to render it — id-first,
+        // never bare-name matching for a normal draft/sign action. The real
+        // fallback case is UnrankedModal's typed-name-with-no-id path.
+        const matchIdx = resolvePlayerIndex(player, players);
         
         setPlayers(prev => prev.map((p, idx) =>
             idx === matchIdx
@@ -494,7 +497,10 @@ export const useDraftState = () => {
         const club = player.team === undefined ? sessionTeam() : (player.team || null);
         const signed = { ...player, drafted: true, pickNumber, draftedByUs: club === sessionTeam(), team: club };
 
-        const matchIdx = findMatchingPlayerIndex(player.name, players);
+        // `player` came from a card already resolved to render it — id-first,
+        // never bare-name matching for a normal draft/sign action. The real
+        // fallback case is UnrankedModal's typed-name-with-no-id path.
+        const matchIdx = resolvePlayerIndex(player, players);
         setPlayers(prev => prev.map((p, idx) => (idx === matchIdx ? { ...p, ...signed } : p)));
         setDraftedPlayers(prev => [...prev, signed]);
 
@@ -541,7 +547,13 @@ export const useDraftState = () => {
         // The CSV import sets draftedByUs on each entry; fall back to checking if team === KC.
         const playersIndex = buildNameIndex(players);
         const enrichedDrafted = importedDrafted.map(id => {
-            const matchIdx = findMatchingIndex(id.name, playersIndex);
+            // Imported rows never carry a registry id (sessionSerializer's
+            // columns are overall/player/position/team) so resolvePlayerIndex
+            // would always fall through to this anyway - qualify directly by
+            // position instead, and reuse the pre-built index rather than
+            // rebuilding it per row (resolvePlayerIndex builds its own each
+            // call, which for ~300 picks is the difference that mattered).
+            const matchIdx = findMatchingIndex(id.name, playersIndex, id);
             const draftedByUs = id.draftedByUs === true || id.team === TEAM_CONFIG.abbreviation;
             if (matchIdx !== -1) {
                 const playerFromRankings = players[matchIdx];
@@ -642,6 +654,14 @@ export const useDraftState = () => {
                     if (rp.player) {
                         const isOurPick = (rp.team === TEAM_CONFIG.abbreviation);
 
+                        // Bare name match, no qualifier available - ESPNProvider.js
+                        // only extracts { name: pick.athlete.displayName } from
+                        // ESPN's real payload, which does carry a stable athlete
+                        // id and position, just not read yet. Same bug class as
+                        // the id-first fixes elsewhere in this file; deferred,
+                        // since ESPN sync is an explicit proof-of-concept not
+                        // used on the public instance (see CLAUDE.md) - fixing
+                        // this properly means touching the provider too.
                         const playerIndex = findMatchingIndex(rp.player.name, updatedPlayersIndex);
 
                         if (playerIndex !== -1) {
@@ -681,6 +701,8 @@ export const useDraftState = () => {
                             }
                         } else {
                             // Player NOT found on rankings board (Unranked)
+                            // Same deferred ESPN gap as above - no qualifier
+                            // available without touching ESPNProvider.js.
                             const unrankedIdx = findMatchingPlayerIndex(rp.player.name, updatedDrafted);
 
                             if (unrankedIdx === -1) {

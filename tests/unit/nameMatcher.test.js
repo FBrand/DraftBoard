@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
     buildNameIndex, findMatchingIndex, findMatchingPlayerIndex,
-    identityKey, nameKey,
+    identityKey, nameKey, resolvePlayerIndex,
 } from '../../src/utils/nameMatcher.js';
 
 const idx = (players) => buildNameIndex(players);
@@ -108,5 +108,40 @@ describe('the one-off wrapper', () => {
     it('matches the batched form', () => {
         const list = [{ name: 'Only One', position: 'TE' }];
         expect(findMatchingPlayerIndex('only one', list)).toBe(0);
+    });
+});
+
+// The identity a normal operation (draft, sign, save) already has in hand —
+// never re-derive it from a name when an id was sitting right there.
+describe('resolvePlayerIndex — id-first for normal operation, fuzzy only as a fallback', () => {
+    // OT/LT are the same position family in this app's own taxonomy (LT is
+    // an alignment WITHIN OT, not a different position) — genuinely
+    // different positions needed here so the qualifier actually discriminates.
+    const list = [
+        { id: 'p1', name: 'Diego Pounds', position: 'OT' },
+        { id: 'p2', name: 'Diego Pounds', position: 'DT' },
+    ];
+
+    it('an id hit wins outright, even with two same-named players in the list', () => {
+        expect(resolvePlayerIndex({ id: 'p2', name: 'Diego Pounds' }, list)).toBe(1);
+        expect(resolvePlayerIndex({ id: 'p1', name: 'Diego Pounds' }, list)).toBe(0);
+    });
+
+    it('falls back to a qualified name match when the id is absent', () => {
+        expect(resolvePlayerIndex({ name: 'Diego Pounds', position: 'DT' }, list)).toBe(1);
+    });
+
+    it('falls back when the id is present but not in THIS list (stale, or a different pool)', () => {
+        expect(resolvePlayerIndex({ id: 'p9', name: 'Diego Pounds', position: 'OT' }, list)).toBe(0);
+    });
+
+    it('with no qualifier at all, matches the first same-named entry rather than refusing — the established name-only behaviour, unchanged by this helper', () => {
+        expect(resolvePlayerIndex({ name: 'Diego Pounds' }, list)).toBe(0);
+        expect(resolvePlayerIndex({}, list)).toBe(-1);
+    });
+
+    it('matches against a list keyed by a different id field, given the field name', () => {
+        const entries = [{ playerId: 'p1', name: 'Diego Pounds' }, { playerId: 'p2', name: 'Diego Pounds' }];
+        expect(resolvePlayerIndex({ id: 'p2', name: 'Diego Pounds' }, entries, 'playerId')).toBe(1);
     });
 });

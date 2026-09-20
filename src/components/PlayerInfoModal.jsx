@@ -112,10 +112,13 @@ export default function PlayerInfoModal({ player, players = [], onClose, editsOp
         return i !== -1 ? ranked[i] : player;
     }, [player, ranked, rankedIndex]);
 
-    // A veteran opened from the roster arrives as a bare { name, position } —
-    // no id, because a depth-chart slot holds a name. He IS registered, so
-    // resolving without creating finds him; a player genuinely unknown to the
-    // registry simply gets no remarks rather than a new record minted behind
+    // A depth-chart slot holds a name, not a player record, but slotMeta
+    // resolves and forwards an id whenever it found one for the slot — so
+    // this only falls back to a fresh, unqualified name resolution for a
+    // slot slotMeta itself couldn't resolve (written before ids existed, or
+    // nobody the registry has a record of). Resolving without creating finds
+    // him if he IS registered; a player genuinely unknown to the registry
+    // simply gets no remarks rather than a new record minted behind
     // somebody's back.
     // By NAME, not by name and position — same rule as `resolved` above, and
     // it bites here for the same reason. A depth-chart row says "DL" while the
@@ -174,6 +177,12 @@ export default function PlayerInfoModal({ player, players = [], onClose, editsOp
         const board = scoutingState.loadState(activeBoard);
         const entries = [...board.entries];
 
+        // `resolved` (target) carries the board-aware id when there is one —
+        // id-first, then a BARE name fallback, deliberately unqualified: see
+        // the comment on `resolved` above. Position differs by analyst
+        // (Rueben Bain Jr is DL.3T on consensus, EDGE elsewhere), and
+        // qualifying by it here once made the lookup miss and duplicate an
+        // entry instead of updating it. Same rule `entryFor` already uses.
         const target = resolved;
         let at = target.id ? entries.findIndex(e => e.playerId === target.id) : -1;
         if (at === -1) at = findMatchingIndex(target.name, buildNameIndex(entries));

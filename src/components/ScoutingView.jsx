@@ -7,7 +7,7 @@ import BoardSwitcher from './BoardSwitcher';
 import { parseRankings } from '../utils/dataParser';
 import CreateBoardModal from './CreateBoardModal';
 import * as scoutingState from '../utils/scoutingState';
-import { buildNameIndex, findMatchingIndex } from '../utils/nameMatcher';
+import { buildNameIndex, findMatchingIndex, resolvePlayerIndex } from '../utils/nameMatcher';
 import useScoutingLayout from '../hooks/useScoutingLayout';
 import Menu from './Menu';
 import { exportBoardCSV } from '../utils/boardCsv';
@@ -309,7 +309,14 @@ export default function ScoutingView({ players }) {
 
         const boardState = boards[activeBoard];
         let entries = [...boardState.entries];
-        const idx = findMatchingIndex(updated.name, buildNameIndex(entries));
+        // `updated` now carries playerId (see ScoutingControls.commit()) for
+        // any card that had one to give — id-first, never re-deriving
+        // identity from a name this save already knows.
+        const idx = resolvePlayerIndex(
+            { id: updated.playerId, name: updated.name, position: updated.position },
+            entries,
+            'playerId',
+        );
         // personalRank is derived, never stored — strip it before persisting
         // so a stale copy can't start competing with the derivation.
         const { personalRank: _drop, ...persisted } = updated;
@@ -428,10 +435,27 @@ export default function ScoutingView({ players }) {
             .filter(r => !boardPlayers.some(p => p.name === r.name))
             .map(r => toPoolPlayer(r))];
 
+        // rankBoard calls its resolver as entryFor(p.name, p) — the same
+        // shape as this file's own `entryFor` above — so `pool`'s existing,
+        // already-registered players carry a real id in that second argument
+        // and should be matched on it, same as everywhere else in this file.
+        // The bare fallback stays qualified-only for entries genuinely
+        // lacking one: a brand-new prospect typed into this very submission
+        // (see toPoolPlayer, which never sets an id — there is nothing to
+        // match by yet, so this is honest ingestion, not a missed id-first
+        // check) or a legacy entry written before ids existed. Previously
+        // this returned a one-argument closure that silently discarded
+        // whatever qualifier rankBoard passed it, so even the
+        // already-registered half of `pool` was never matched by id at all.
         const lookup = (list) => {
             const i = buildNameIndex(list);
-            return (name) => {
-                const at = findMatchingIndex(name, i);
+            const byId = new Map(list.filter(e => e.playerId).map(e => [e.playerId, e]));
+            return (name, qualifier) => {
+                if (qualifier?.id) {
+                    const hit = byId.get(qualifier.id);
+                    if (hit) return hit;
+                }
+                const at = findMatchingIndex(name, i, qualifier);
                 return at !== -1 ? list[at] : null;
             };
         };
@@ -493,7 +517,11 @@ export default function ScoutingView({ players }) {
         const next = {};
         boardList.forEach(({ id: b }) => {
             const board = scoutingState.loadState(b);
-            const idx = findMatchingIndex(previous.name, buildNameIndex(board.entries), previous);
+            // previous.id first — a rename propagates by IDENTITY, not by
+            // whatever name/position/school he happened to have a moment ago
+            // on THIS particular board. Qualified name match stays the
+            // fallback for a board written before ids existed.
+            const idx = resolvePlayerIndex(previous, board.entries, 'playerId');
             if (idx !== -1) {
                 // The position lands on the board being edited and nowhere
                 // else. Every other board keeps whatever its analyst thinks.
