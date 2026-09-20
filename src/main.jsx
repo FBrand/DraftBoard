@@ -23,7 +23,23 @@ requestPersistentStorage()
 // viewer building a private mock is doing.
 if (backendName() === 'firebase') {
   import('./utils/auth')
-    .then(({ startAuth }) => startAuth())
+    .then(async ({ startAuth, onAuthChange, isExpert }) => {
+      await startAuth()
+
+      // openBoards() runs once at boot, before sign-in has necessarily
+      // finished — a viewer arrives anonymous, and firestore.rules refuse an
+      // anonymous seed write. Retrying it here means signing in makes the
+      // seed land without needing a reload; openBoards() itself is the thing
+      // that decides "not yet initialized" (no boards found) and is a no-op
+      // once they exist, so calling it again on an already-seeded project
+      // costs nothing.
+      onAuthChange(() => {
+        if (!isExpert()) return
+        import('./utils/boardRegistry')
+          .then(({ openBoards }) => openBoards())
+          .catch(err => console.warn('Could not seed the shared board records.', err?.code ?? err))
+      })
+    })
     .catch(err => console.warn('Could not start a session; continuing as a reader.', err?.code ?? err))
 }
 
