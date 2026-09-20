@@ -189,6 +189,34 @@ export function createOverlayAdapter({ remote, local, writesRemote, onRemoteErro
         },
 
         /**
+         * Like commit(), but items carry their OWN path each rather than
+         * sharing one — a cross-collection atomic write (claiming a board
+         * also claims its author record, a different collection). Routes the
+         * WHOLE batch to remote or local together, same as commit() does for
+         * one collection: an expert's multi-document write is either all
+         * published or all local, never split across the boundary this
+         * adapter exists to draw.
+         */
+        async commitMany(items) {
+            if (globalThis.__DB_TRACE) {
+                console.log(`[trace] overlay.commitMany x${items?.length ?? 0} -> ${canWriteRemote() ? 'REMOTE' : 'local'}`);
+            }
+            if (canWriteRemote()) {
+                return remote.commitMany
+                    ? remote.commitMany(items)
+                    : Promise.all(items.map(c => (c.doc === null
+                        ? remote.remove(c.path, c.id)
+                        : remote.set(c.path, c.id, c.doc))));
+            }
+            const localised = items.map(c => (
+                c.doc === null ? { ...c, doc: tombstone() } : c
+            ));
+            return local.commitMany
+                ? local.commitMany(localised)
+                : Promise.all(localised.map(c => local.set(c.path, c.id, c.doc)));
+        },
+
+        /**
          * Clearing drops YOUR copy, not theirs.
          *
          * For a viewer this is "start my mock again", and it must leave the

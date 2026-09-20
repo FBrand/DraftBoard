@@ -62,6 +62,18 @@ export function createMemoryAdapter({ latency = 0, failWrites = false } = {}) {
             await write(collection, docs);
         },
 
+        /** Like commit(), but items may span different collections. */
+        async commitMany(items) {
+            const byPath = new Map();
+            items.forEach(({ path, id, doc }) => {
+                if (!byPath.has(path)) byPath.set(path, read(path));
+                const docs = byPath.get(path);
+                if (doc === null) delete docs[id];
+                else docs[id] = doc;
+            });
+            for (const [path, docs] of byPath) await write(path, docs);
+        },
+
         async clear(collection) {
             await wait();
             store.delete(collection);

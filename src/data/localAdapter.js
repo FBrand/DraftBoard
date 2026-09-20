@@ -101,6 +101,18 @@ export const localAdapter = {
         writeAll(collection, docs);
     },
 
+    /** Like commit(), but items may span different collections. */
+    async commitMany(items) {
+        const byPath = new Map();
+        items.forEach(({ path, id, doc }) => {
+            if (!byPath.has(path)) byPath.set(path, readAll(path));
+            const docs = byPath.get(path);
+            if (doc === null) delete docs[id];
+            else docs[id] = doc;
+        });
+        byPath.forEach((docs, path) => writeAll(path, docs));
+    },
+
     async clear(collection) {
         try { localStorage.removeItem(keyFor(collection)); } catch { /* ignore */ }
     },

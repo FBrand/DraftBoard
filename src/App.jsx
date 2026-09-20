@@ -12,8 +12,9 @@ import SeasonModal from './components/SeasonModal';
 import SyncStatus from './components/SyncStatus';
 import SessionUser from './components/SessionUser';
 import ManageExpertsModal from './components/ManageExpertsModal';
-import { currentSeason, setViewedSeason } from './utils/boardRegistry';
-import { editRefusal } from './utils/permissions';
+import { currentSeason, setViewedSeason, createBoard, hasSharedBoard } from './utils/boardRegistry';
+import { invalidateBoards } from './hooks/useBoardRankings';
+import { editRefusal, getCurrentUser } from './utils/permissions';
 import { onAuthChange } from './utils/auth';
 import { backendName } from './data/backend';
 import { repository } from './data/repository';
@@ -146,6 +147,22 @@ function App() {
     setPendingImport({ name: file.name, text: await file.text() });
   };
 
+  /**
+   * The guarded "new consensus" action — a shared (author-less) board, made
+   * through the same createBoard() every other board uses, but only offered
+   * (see isExpertNow && !hasSharedBoard() on the menu item below) and only
+   * attempted while none already exists for the season. CreateBoardModal's
+   * own blank-author field stays available for other legitimately shared
+   * boards; this is specifically the guarded, single-purpose version.
+   */
+  const handleCreateConsensus = async () => {
+    if (hasSharedBoard()) return;
+    const board = await createBoard({ label: 'Consensus', authorName: '' });
+    if (!board) return;
+    invalidateBoards();
+    setSeasonEpoch(n => n + 1);
+  };
+
   const applySessionImport = () => {
     const { text } = pendingImport;
     setPendingImport(null);
@@ -214,6 +231,9 @@ function App() {
             items={[
               isExpertNow
                 ? { label: 'Manage Experts…', onClick: () => setExpertsModalOpen(true), title: 'View and add authorized experts' }
+                : null,
+              isExpertNow && !hasSharedBoard()
+                ? { label: 'New Consensus Board', onClick: handleCreateConsensus, title: 'A shared board nobody owns individually — offered once, when the season has none yet' }
                 : null,
               { label: 'Seasons…', onClick: () => setSeasonOpen(true), title: 'Switch season, roll over to a new one, or roll back' },
               { label: 'Export Full Session…', onClick: handleSessionExport, title: 'Every stage — draft, roster, FA, scouting — in one JSON file' },

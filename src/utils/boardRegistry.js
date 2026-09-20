@@ -427,3 +427,81 @@ export async function createBoard({ label, authorName = '', ownerId = null } = {
     await write(BOARDS_COLLECTION, boardFields, board);
     return board;
 }
+
+/**
+ * Whether the season already has an author-less ("shared") board — the
+ * guard for a "new consensus"-style action, so it offers/succeeds at most
+ * once per season. Not specific to the literal consensus slug: ANY board
+ * with no author is this kind, on purpose (see the file header) — this just
+ * stops a second one being made by the guarded action, not by hand via
+ * CreateBoardModal's own blank-author field, which stays general on purpose.
+ */
+export function hasSharedBoard(seasonId = currentSeason()?.id) {
+    return listBoards(seasonId).some(b => !b.authorId);
+}
+
+/** `{collection, id, doc}` for commitMany — the lean-with-short-keys shape write() uses for one document. */
+const leaned = (collection, fields, record) => {
+    const { id, ...rest } = record;
+    return { collection, id, doc: fields.lean(rest) };
+};
+
+/**
+ * Claims an orphaned personal board for `ownerId` — the caller's own uid,
+ * always; this takes it as a parameter rather than asking auth.js itself
+ * because boardRegistry is imported by permissions.js, which auth.js also
+ * feeds, and importing auth.js back here would close that into a cycle.
+ * Same shape createBoard's own ownerId param already uses.
+ *
+ * Sets ownerId on BOTH the board and its author record — separate documents
+ * with separate owners (see BUGS.md, "board/author ownership") — in ONE
+ * commitMany() rather than two independent writes. Two experts racing to
+ * claim the same pair could otherwise interleave and split ownership between
+ * the two documents; repository.commitMany reaches Firestore as a single
+ * writeBatch, so this either lands whole or not at all. An already-owned
+ * board is refused here with a reason rather than left to the rules layer's
+ * silent deny, though the rules refuse it independently too (ownsBoard fails
+ * for anyone but the actual owner) — this is a courtesy, not the security
+ * boundary. The rules also refuse a non-null owner on a SHARED (no-author)
+ * board outright, structurally, not just via the `!board.authorId` check
+ * below — see firestore.rules.
+ */
+export async function claimBoard(id, ownerId) {
+    if (!ownerId) return { ok: false, reason: 'not-signed-in' };
+    const board = boardById(id);
+    if (!board) return { ok: false, reason: 'not-found' };
+    if (!board.authorId) return { ok: false, reason: 'shared' };
+    if (board.ownerId) return { ok: false, reason: 'owned' };
+    const author = authorOf(board);
+    // Defensive: an author already owned by somebody else while its board
+    // sits orphaned is an inconsistent state this function never creates,
+    // but could inherit from data written before this existed. Refuse
+    // rather than attempt a write the rules would half-accept.
+    if (author?.ownerId) return { ok: false, reason: 'author-owned' };
+    const items = [leaned(BOARDS_COLLECTION, boardFields, { ...board, ownerId })];
+    if (author) items.push(leaned(AUTHORS, authorFields, { ...author, ownerId }));
+    await repository.commitMany(items);
+    return { ok: true };
+}
+
+/**
+ * Releases ownership back to orphaned. Only the current owner may — checked
+ * against the caller-supplied `ownerId` the same way the rules check
+ * request.auth.uid. Never hands a board directly to somebody else; per
+ * BUGS.md that has to pass through orphaned first, so this only ever writes
+ * null, never another uid. Board and author move together in one
+ * commitMany(), same reasoning as claimBoard() above.
+ */
+export async function orphanBoard(id, ownerId) {
+    if (!ownerId) return { ok: false, reason: 'not-signed-in' };
+    const board = boardById(id);
+    if (!board) return { ok: false, reason: 'not-found' };
+    if (board.ownerId !== ownerId) return { ok: false, reason: 'not-owner' };
+    const author = authorOf(board);
+    const items = [leaned(BOARDS_COLLECTION, boardFields, { ...board, ownerId: null })];
+    if (author && author.ownerId === ownerId) {
+        items.push(leaned(AUTHORS, authorFields, { ...author, ownerId: null }));
+    }
+    await repository.commitMany(items);
+    return { ok: true };
+}

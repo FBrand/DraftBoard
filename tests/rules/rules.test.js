@@ -64,6 +64,11 @@ beforeEach(async () => {
         await setDoc(doc(db, 'authors/a_ryan'), { n: 'Ryan', o: 'ryan-uid' });
         await setDoc(doc(db, 'boards/b_dan'), { l: 'Dan', a: 'a_dan', o: 'dan-uid', s: 's_1' });
         await setDoc(doc(db, 'boards/b_consensus'), { l: 'Consensus', a: null, o: null, s: 's_1' });
+        // A personal board/author nobody has claimed — the "orphaned" state
+        // the claim/orphan tests below exercise, distinct from consensus
+        // (which has no author at all, not merely an unset owner).
+        await setDoc(doc(db, 'authors/a_orphan'), { n: 'Orphan', o: null });
+        await setDoc(doc(db, 'boards/b_orphan'), { l: 'Orphan', a: 'a_orphan', o: null, s: 's_1' });
         await setDoc(doc(db, 'seasons/s_1'), { y: 2026, t: 'current' });
         // Both test experts must be listed for isExpert() to accept them —
         // matches the default email expert(uid) builds, `${uid}@example.com`.
@@ -290,6 +295,106 @@ describe('allowed_users', () => {
         await assertFails(getDoc(doc(db, 'allowed_users/dan-uid@example.com')));
         await assertFails(setDoc(doc(db, 'allowed_users/viewer@example.com'), {
             email: 'viewer@example.com', addedBy: 'x', addedAt: 'x',
+        }));
+    });
+});
+
+describe('board/author ownership: claim and orphan', () => {
+    it('any expert can claim an orphaned board, for himself', async () => {
+        await assertSucceeds(setDoc(doc(expert('ryan-uid'), 'boards/b_orphan'), {
+            l: 'Orphan', a: 'a_orphan', o: 'ryan-uid', s: 's_1',
+        }));
+    });
+
+    it('any expert can claim an orphaned author, for himself', async () => {
+        await assertSucceeds(setDoc(doc(expert('ryan-uid'), 'authors/a_orphan'), {
+            n: 'Orphan', o: 'ryan-uid',
+        }));
+    });
+
+    it('claiming an orphaned board on somebody ELSE\'S behalf is refused', async () => {
+        await assertFails(setDoc(doc(expert('ryan-uid'), 'boards/b_orphan'), {
+            l: 'Orphan', a: 'a_orphan', o: 'some-other-uid', s: 's_1',
+        }));
+    });
+
+    it('claiming an orphaned author on somebody ELSE\'S behalf is refused', async () => {
+        await assertFails(setDoc(doc(expert('ryan-uid'), 'authors/a_orphan'), {
+            n: 'Orphan', o: 'some-other-uid',
+        }));
+    });
+
+    it('a non-owner cannot touch an owned board at all, claim included', async () => {
+        await assertFails(setDoc(doc(expert('ryan-uid'), 'boards/b_dan'), {
+            l: 'Dan', a: 'a_dan', o: 'ryan-uid', s: 's_1',
+        }));
+    });
+
+    it('a non-owner cannot touch an owned author at all, claim included', async () => {
+        await assertFails(setDoc(doc(expert('ryan-uid'), 'authors/a_dan'), {
+            n: 'Dan', o: 'ryan-uid',
+        }));
+    });
+
+    it('the owner can orphan his own board', async () => {
+        await assertSucceeds(setDoc(doc(expert('dan-uid'), 'boards/b_dan'), {
+            l: 'Dan', a: 'a_dan', o: null, s: 's_1',
+        }));
+    });
+
+    it('the owner can orphan his own author', async () => {
+        await assertSucceeds(setDoc(doc(expert('dan-uid'), 'authors/a_dan'), {
+            n: 'Dan', o: null,
+        }));
+    });
+
+    it('a non-owner cannot orphan somebody else\'s board', async () => {
+        await assertFails(setDoc(doc(expert('ryan-uid'), 'boards/b_dan'), {
+            l: 'Dan', a: 'a_dan', o: null, s: 's_1',
+        }));
+    });
+
+    it('the owner cannot hand his board directly to somebody else — must orphan first', async () => {
+        await assertFails(setDoc(doc(expert('dan-uid'), 'boards/b_dan'), {
+            l: 'Dan', a: 'a_dan', o: 'ryan-uid', s: 's_1',
+        }));
+    });
+
+    it('the owner cannot hand his author directly to somebody else — must orphan first', async () => {
+        await assertFails(setDoc(doc(expert('dan-uid'), 'authors/a_dan'), {
+            n: 'Dan', o: 'ryan-uid',
+        }));
+    });
+
+    it('an expert may still edit an orphaned board\'s other fields without claiming it', async () => {
+        await assertSucceeds(setDoc(doc(expert('ryan-uid'), 'boards/b_orphan'), {
+            l: 'Orphan (renamed)', a: 'a_orphan', o: null, s: 's_1',
+        }));
+    });
+
+    it('the consensus board (no author at all) is still writable by any expert, unaffected', async () => {
+        await assertSucceeds(setDoc(doc(expert('ryan-uid'), 'boards/b_consensus'), {
+            l: 'Consensus', a: null, o: null, s: 's_1',
+        }));
+    });
+
+    it('the consensus board can never be claimed - no authorId means no owner, ever', async () => {
+        await assertFails(setDoc(doc(expert('ryan-uid'), 'boards/b_consensus'), {
+            l: 'Consensus', a: null, o: 'ryan-uid', s: 's_1',
+        }));
+    });
+
+    it('a viewer cannot claim an orphaned board', async () => {
+        await assertFails(setDoc(doc(viewer(), 'boards/b_orphan'), {
+            l: 'Orphan', a: 'a_orphan', o: 'anon', s: 's_1',
+        }));
+    });
+
+    it('deleting the consensus board and recreating it solely owned is refused too - not just editing it in place', async () => {
+        const db = expert('ryan-uid');
+        await assertSucceeds(deleteDoc(doc(db, 'boards/b_consensus')));
+        await assertFails(setDoc(doc(db, 'boards/b_consensus'), {
+            l: 'Consensus', a: null, o: 'ryan-uid', s: 's_1',
         }));
     });
 });

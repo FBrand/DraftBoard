@@ -64,6 +64,21 @@ service cloud.firestore {
       return exists(/databases/$(database)/documents/boards/$(boardId));
     }
 
+    // Whether an ownership pair (o, a) is ever safe to accept: `o` may only
+    // be null (unowned) or the caller's own uid (self-claim), and self-
+    // ownership additionally requires an author — a board with no author is
+    // SHARED and must never be owned. One function for both create and
+    // update so the two checks cannot drift the way they already did once
+    // (create had no author guard at all until this fix let deleting and
+    // recreating the shared board land it owned, bypassing update's guard
+    // entirely). `a` means something different at each call site — the
+    // INCOMING value on create (nothing else exists yet to check), the
+    // board's value BEFORE this write on update (so a write cannot invent an
+    // author in the same breath it claims with) — callers pass the right one.
+    function ownershipWouldBeSafe(o, a) {
+      return o == null || (o == request.auth.uid && a != null);
+    }
+
     // A board with no ownerId is unowned — the consensus board is the case
     // that matters, since it is derived rather than written by a person. Any
     // expert may maintain it; no viewer may.
@@ -150,10 +165,27 @@ service cloud.firestore {
     // over the evaluations with it.
     match /authors/{authorId} {
       allow read: if true;
+      // Every author document that exists represents a real named person —
+      // there is no "shared, never-owned" author the way consensus is a
+      // shared board — so the second argument is always `true`: nothing
+      // beyond "o is null or my own uid" ever needs checking here. Passed
+      // through ownershipWouldBeSafe anyway rather than writing the o-only
+      // check inline a second time, which is exactly how create and update
+      // drifted apart on the boards side below.
       allow create: if isExpert()
-                    && (request.resource.data.o == null
-                        || request.resource.data.o == request.auth.uid);
-      allow update, delete: if ownsAuthor(authorId);
+                    && ownershipWouldBeSafe(request.resource.data.o, true);
+      // ownsAuthor already refuses anyone but the actual owner of an OWNED
+      // author, so claiming somebody else's is refused structurally. What it
+      // does not refuse: an expert who already has write access to an
+      // ORPHANED one (o == null grants that to any expert, on purpose) could
+      // set o to an arbitrary OTHER uid, not just his own — claiming on
+      // somebody else's behalf. This also blocks a direct owned-to-owned
+      // handoff by the current owner: o may only ever become null (orphan)
+      // or the caller's own uid (claim), never a third uid, so a transfer
+      // has to pass through orphaned first, same as boards below.
+      allow update: if ownsAuthor(authorId)
+                    && ownershipWouldBeSafe(request.resource.data.o, true);
+      allow delete: if ownsAuthor(authorId);
     }
 
     match /seasons/{seasonId} {
@@ -177,10 +209,34 @@ service cloud.firestore {
       allow read: if true;
       // Creating a board requires claiming it: an expert may not mint a board
       // owned by somebody else, which is the whole point of storing ownerId.
+      //
+      // A board with no authorId (a == null) is SHARED, not orphaned - the
+      // consensus board is the case that matters, and it is meant to have no
+      // owner ever, not just until somebody claims it. Checked here, not only
+      // on update: creating a board is also how you CLAIM one, since deleting
+      // an unowned board and recreating it lands on create, not update — the
+      // exact path that let an expert delete the shared board and recreate it
+      // solely owned before this rule existed. Both call ownershipWouldBeSafe
+      // rather than writing the check inline twice, which is how that gap
+      // opened in the first place: on the incoming data itself here, since
+      // nothing else exists yet to check.
       allow create: if isExpert()
-                    && (request.resource.data.o == null
-                        || request.resource.data.o == request.auth.uid);
-      allow update, delete: if ownsBoard(boardId);
+                    && ownershipWouldBeSafe(request.resource.data.o, request.resource.data.a);
+      // Same shape, checked against the board's state BEFORE this write
+      // (boardNow) rather than the incoming data, since an update cannot
+      // invent an author in the same breath it claims with.
+      //
+      // ownsBoard already refuses a non-owner on an OWNED board, but not an
+      // expert with an orphaned board's blanket access setting o to somebody
+      // ELSE's uid — o may only become null or the caller's own uid, so a
+      // transfer has to pass through orphaned first. There is no equivalent
+      // gap on authors: every author record that exists represents a real
+      // named person (consensus gets no author record at all - see
+      // boardRegistry.js openBoards()), so there is no "shared author" to
+      // protect the same way.
+      allow update: if ownsBoard(boardId)
+                    && ownershipWouldBeSafe(request.resource.data.o, boardNow(boardId).a);
+      allow delete: if ownsBoard(boardId);
 
       // The placements — one line about one board, where a flat collection
       // with a boardId field would need a predicate holding for every document

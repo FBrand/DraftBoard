@@ -22,10 +22,10 @@ import { addProspect, savePlayerEdit, deletePlayer, restorePlayer, hiddenPlayers
 import * as athleticMatrix from '../utils/athleticMatrix';
 import * as playerRegistry from '../utils/playerRegistry';
 
-import { createBoard, listBoards, boardBySlug, boardById, renameBoard, listSeasons, currentSeason } from '../utils/boardRegistry';
+import { createBoard, listBoards, boardBySlug, boardById, renameBoard, listSeasons, currentSeason, claimBoard, orphanBoard } from '../utils/boardRegistry';
 import { repository } from '../data/repository';
 import { entriesPath } from '../data/boardEntries';
-import { canEdit } from '../utils/permissions';
+import { canEdit, isExpert, getCurrentUser } from '../utils/permissions';
 import { ownerIdFor, remarksFor, addRemark, removeRemark, openEvaluations } from '../utils/evaluations';
 
 const TAG_FILTERS = [
@@ -548,7 +548,15 @@ export default function ScoutingView({ players }) {
      * until somebody places him.
      */
     const handleCreateBoard = async ({ label, authorName, file }) => {
-        const board = await createBoard({ label, authorName });
+        // Whoever makes a PERSONAL board owns it from the start — the gap
+        // this used to leave (every new board shipped orphaned, writable by
+        // any expert) is exactly what let an unrelated expert overwrite a
+        // just-created one. A blank author name means a shared board on
+        // purpose (see CreateBoardModal's own placeholder), and a shared
+        // board has no owner to set — passing one here would quietly turn it
+        // into a fourth, undefined state (no author, but owned).
+        const ownerId = String(authorName ?? '').trim() ? (getCurrentUser()?.id ?? null) : null;
+        const board = await createBoard({ label, authorName, ownerId });
         if (!board) return;
 
         if (file) {
@@ -600,6 +608,27 @@ export default function ScoutingView({ players }) {
         setActiveBoard(board.id);
     };
 
+    /**
+     * Claim/orphan — the board/author ownership model from BUGS.md. Both
+     * take the caller's own uid explicitly (getCurrentUser()?.id) rather
+     * than boardRegistry reading auth.js itself: boardRegistry is imported
+     * by permissions.js, which auth.js also feeds, and closing that into a
+     * cycle isn't worth it for one id. boardById/authorOf read the live
+     * repository directly, not boardList — setBoardList(listBoards()) below
+     * only forces the re-render, same as renameBoard's own refresh above.
+     */
+    const handleClaimBoard = async () => {
+        const result = await claimBoard(activeBoard, getCurrentUser()?.id ?? null);
+        if (!result.ok) return;
+        setBoardList(listBoards());
+    };
+
+    const handleOrphanBoard = async () => {
+        const result = await orphanBoard(activeBoard, getCurrentUser()?.id ?? null);
+        if (!result.ok) return;
+        setBoardList(listBoards());
+    };
+
     const handleExportSpreadsheet = () => {
         const csv = exportBoardCSV(effectivePlayers, {
             entryFor: (p) => entryFor(p.name, p),
@@ -648,6 +677,30 @@ export default function ScoutingView({ players }) {
                     activeId={activeBoard}
                     onSelect={(b) => setActiveBoard(b.id)}
                 />
+
+                {/* Only a personal board (has an authorId) has anything to
+                    claim or release — a shared board has no owner to set.
+                    Not shown to a viewer: claiming/orphaning is an expert
+                    action, same gate as everything else that writes. */}
+                {isExpert() && boardById(activeBoard)?.authorId && (
+                    boardById(activeBoard)?.ownerId
+                        ? (boardById(activeBoard)?.ownerId === getCurrentUser()?.id) && (
+                            <button
+                                type="button"
+                                className="action-pill"
+                                onClick={handleOrphanBoard}
+                                title="Release ownership — any expert can claim it again afterward"
+                            >Release Ownership</button>
+                        )
+                        : (
+                            <button
+                                type="button"
+                                className="action-pill"
+                                onClick={handleClaimBoard}
+                                title="Nobody owns this board yet — claim it as your own"
+                            >Claim This Board</button>
+                        )
+                )}
 
                 <div className="roster-zoom-ctrl" style={{ gap: 6 }}>
                     {TAG_FILTERS.map(f => (

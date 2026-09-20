@@ -648,6 +648,59 @@ export function createRepository(adapter = localAdapter) {
             .finally(() => { cancelPersist(); settled.forEach(done => done()); persistQueue(); inFlight = Math.max(0, inFlight - 1); announce(); });
     }
 
+    /**
+     * Several documents across DIFFERENT collections, as one write —
+     * commit() only ever spanned one collection because that was this
+     * function's own shape, not a limit Firestore itself has (its writeBatch
+     * always could cross collections; see firebaseAdapter.js commitMany).
+     * Needed wherever two documents in different collections must land
+     * together or not at all — see boardRegistry.js claimBoard()/
+     * orphanBoard(), which move a board and its author record as one unit.
+     *
+     * Items are { collection, id, doc }. Mirrors commit() item for item,
+     * generalised to a per-item collection instead of one shared collection.
+     */
+    function commitMany(items) {
+        const byCollection = new Map();
+        items.forEach(({ collection, id, doc }) => {
+            if (!byCollection.has(collection)) byCollection.set(collection, { ...(cache.get(collection) ?? {}) });
+            const next = byCollection.get(collection);
+            if (doc === null) delete next[id];
+            else next[id] = doc;
+        });
+        byCollection.forEach((next, collection) => { cache.set(collection, next); notify(collection); });
+
+        const write = adapter.commitMany
+            ? adapter.commitMany(items.map(({ collection, id, doc }) => ({ path: collection, id, doc })))
+            : Promise.all(items.map(c => (c.doc === null
+                ? adapter.remove(c.collection, c.id)
+                : adapter.set(c.collection, c.id, c.doc))));
+
+        inFlight += 1;
+        const settled = items.map(c => startSending(
+            c.collection, c.id, c.doc, c.doc === null ? 'remove' : 'set',
+        ));
+        const cancelPersist = persistIfStillSending();
+        announce();
+        return Promise.resolve(write)
+            .then(() => { lastError = null; })
+            .catch(err => {
+                const verdict = classifyWriteError(err);
+                lastError = err?.message ?? String(err);
+                lastAdvice = verdict.advice;
+                items.forEach(c => enqueue({
+                    collection: c.collection, id: c.id, doc: c.doc, op: c.doc === null ? 'remove' : 'set',
+                }));
+                if (verdict.permanent) { gaveUp = true; persistQueue(); }
+                // One collection is reported for a multi-collection write the
+                // same way commit() reports one — an approximation, not a new
+                // error shape; the queued entries above carry each item's own
+                // collection precisely, this is only the summary event.
+                reportWriteError({ collection: items[0]?.collection ?? null, id: null, op: 'commitMany', error: err, permanent: verdict.permanent, advice: verdict.advice });
+            })
+            .finally(() => { cancelPersist(); settled.forEach(done => done()); persistQueue(); inFlight = Math.max(0, inFlight - 1); announce(); });
+    }
+
     function clear(collection) {
         cache.delete(collection);
         loaded.delete(collection);
@@ -677,7 +730,7 @@ export function createRepository(adapter = localAdapter) {
 
     return {
         ready, ensureLoaded, docs, isLoaded, loadFailed, isLive, follow, get, all, query,
-        set, update, remove, commit, clear, subscribe, invalidate,
+        set, update, remove, commit, commitMany, clear, subscribe, invalidate,
         onWriteError, onSyncChange, syncState, retryNow, adapter,
     };
 }

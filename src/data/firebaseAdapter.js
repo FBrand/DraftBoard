@@ -196,6 +196,34 @@ export function createFirebaseAdapter() {
         },
 
         /**
+         * Like commit(), but items span DIFFERENT collections and still land
+         * in one writeBatch() together — Firestore's batch was never limited
+         * to one collection, only this file's own commit(path, changes) shape
+         * was. Needed wherever two documents in different collections must
+         * land together or not at all (claiming a board also claims its
+         * author record, and two independent commits can interleave and split
+         * ownership between them — see boardRegistry.js claimBoard()).
+         * Chunked the same way and for the same reason as commit(): a group
+         * over 500 stops being one atomic write regardless of which
+         * collections it touches, which is a Firestore limit, not a choice.
+         */
+        async commitMany(items) {
+            if (!items?.length) return;
+            items.forEach(({ path }) => assertCollection(path));
+            const { db, doc: docRef, writeBatch } = await api();
+
+            for (const group of chunk(items)) {
+                const batch = writeBatch(db);
+                group.forEach(({ path, id, doc }) => {
+                    const ref = docRef(db, path, id);
+                    if (doc === null) batch.delete(ref);
+                    else batch.set(ref, doc);
+                });
+                await batch.commit();
+            }
+        },
+
+        /**
          * Firestore has no "delete this collection" — that is a server-side
          * operation, because a collection does not exist apart from its
          * documents. So it is a read and then a batched delete, which is what
