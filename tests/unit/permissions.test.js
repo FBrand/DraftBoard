@@ -63,19 +63,19 @@ describe('whose board it is', () => {
     });
 
     it('allows a signed-in expert his own board', () => {
-        setCurrentUser({ id: 'u_ryan' });
+        setCurrentUser({ id: 'u_ryan', isAllowed: true });
         expect(canEdit({ ownerId: 'u_ryan' })).toBe(true);
     });
 
     it('refuses somebody else’s, and points at the way forward', () => {
-        setCurrentUser({ id: 'u_ryan' });
+        setCurrentUser({ id: 'u_ryan', isAllowed: true });
         const no = editRefusal({ ownerId: 'u_dan' });
         expect(no.reason).toBe('not-yours');
         expect(no.message).toContain('Copy it');
     });
 
     it('asks the season first — an old board of your own is still history', async () => {
-        setCurrentUser({ id: 'u_ryan' });
+        setCurrentUser({ id: 'u_ryan', isAllowed: true });
         const first = currentSeason();
         await startSeason(first.year + 1);
         setViewedSeason(first.id);

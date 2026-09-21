@@ -13,7 +13,11 @@ import { setCurrentUser, isSignedIn, isExpert, canEdit, editRefusal } from '../.
  * own play-along with it.
  */
 const viewer = { id: 'anon-uid', name: 'Signed in', provider: 'anonymous', isAnonymous: true };
-const dan = { id: 'dan-uid', name: 'Dan', provider: 'google.com', isAnonymous: false };
+// isAllowed: true is load-bearing here, not decoration — isExpert() reads
+// it rather than re-deriving "not anonymous" (see permissions.js's own
+// comment on why), so a fixture missing it is indistinguishable from an
+// unlisted Google account, not an expert.
+const dan = { id: 'dan-uid', name: 'Dan', provider: 'google.com', isAnonymous: false, isAllowed: true };
 
 afterEach(() => setCurrentUser(null));
 
