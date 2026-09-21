@@ -5,7 +5,12 @@ import { pickNumberOf } from './draftPhase';
  */
 export const serializeDraftState = (draftedPlayers, ourPicksLeft) => {
     const timestamp = new Date().toISOString();
-    const headers = ["overall", "player", "position", "team"];
+    // playerId is the registry id, when the pick has one — resolved once at
+    // ingestion (see reconcileDraft.js) rather than re-derived by name every
+    // time this file is read back in. See pickJoin.js: a pick is joined by
+    // this field first, name only as the fallback for a pick that predates
+    // it or was never resolved.
+    const headers = ["overall", "player", "position", "team", "playerId"];
 
     let csv = `# DraftBoard Session Export\n`;
     csv += `# Exported: ${timestamp}\n`;
@@ -17,7 +22,8 @@ export const serializeDraftState = (draftedPlayers, ourPicksLeft) => {
             p.pickNumber || "",
             `"${(p.name || "").replace(/"/g, '""')}"`,
             `"${(p.position || "").replace(/"/g, '""')}"`,
-            `"${(p.team || "").replace(/"/g, '""')}"`
+            `"${(p.team || "").replace(/"/g, '""')}"`,
+            `"${(p.playerId || "").replace(/"/g, '""')}"`
         ];
         csv += row.join(",") + "\n";
     });
@@ -69,12 +75,17 @@ export const deserializeDraftState = (csvText) => {
         const name = (parts[1] || "").replace(/^"|"$/g, "").replace(/""/g, '"');
         const position = (parts[2] || "").replace(/^"|"$/g, "").replace(/""/g, '"');
         const team = (parts[3] || "").replace(/^"|"$/g, "").replace(/""/g, '"');
+        // Absent on a file written before this column existed, or a pick
+        // that was never resolved to a registry id — either way, absence
+        // just means "join by name," the fallback pickJoin.js already has.
+        const playerId = (parts[4] || "").replace(/^"|"$/g, "").replace(/""/g, '"') || null;
 
         draftedPlayers.push({
             name: name || "Unknown Player",
             position: position || "",
             pickNumber,
             team: team || "-",
+            playerId,
             drafted: true,
             draftedByUs: false // Will be reconciled by the hook
         });

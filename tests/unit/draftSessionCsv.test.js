@@ -82,6 +82,24 @@ describe('a session round trip', () => {
         expect(draftedPlayers[0].name).toBe('Unknown Player');
         expect(draftedPlayers[1].name).toBe('Somebody');
     });
+
+    it('carries a registry id through the round trip, so a live/imported pick can be joined by id rather than name', () => {
+        const csv = serializeDraftState([{ ...player(1, 'Arvell Reese', 'EDGE', 'NYG'), playerId: 'p_abc123' }], []);
+        expect(csv).toContain('playerId');
+        expect(deserializeDraftState(csv).draftedPlayers[0].playerId).toBe('p_abc123');
+    });
+
+    it('reads a file with no playerId column at all as null, not throwing — the pre-existing 4-column format', () => {
+        const csv = '# DraftBoard Session Export\noverall,player,position,team\n1,"Arvell Reese","EDGE","NYG"\n';
+        const { draftedPlayers } = deserializeDraftState(csv);
+        expect(draftedPlayers[0].playerId).toBeNull();
+        expect(draftedPlayers[0].name).toBe('Arvell Reese');
+    });
+
+    it('reads an explicitly empty playerId column as null, not an empty string', () => {
+        const csv = serializeDraftState([player(1, 'No Id Yet')], []);
+        expect(deserializeDraftState(csv).draftedPlayers[0].playerId).toBeNull();
+    });
 });
 
 describe('the export filename', () => {
