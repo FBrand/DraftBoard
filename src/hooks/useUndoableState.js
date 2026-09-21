@@ -20,9 +20,12 @@ const DEFAULT_LIMIT = 25;
  * `initial` may be a value or a lazy initialiser, like useState — the stores
  * read localStorage to build theirs, which must not run on every render.
  *
- * Returns `[state, setState, { undo, canUndo, reset }]`.
+ * Returns `[state, setState, { undo, canUndo, reset, adoptRemote }]`.
  * `reset` replaces the state *and* clears history, for loads and imports where
  * undoing back into the previous session's data would be nonsense.
+ * `adoptRemote` replaces the state and touches neither history nor storage —
+ * see the comment on it below for why `setState`/`reset` are both wrong for
+ * a value that arrived from a live remote snapshot.
  */
 export default function useUndoableState(initial, persist, limit = DEFAULT_LIMIT) {
     const [state, setStateRaw] = useState(initial);
@@ -60,5 +63,17 @@ export default function useUndoableState(initial, persist, limit = DEFAULT_LIMIT
         persist?.(value);
     }, [persist]);
 
-    return [state, setState, { undo, canUndo, reset }];
+    // For a value that arrived FROM storage rather than from this browser's
+    // own edits — a live snapshot from another expert's device. `setState`
+    // and `reset` are both wrong for this: `setState` would push it onto the
+    // undo stack, so pressing Undo afterward reverts someone ELSE's change
+    // instead of the user's own; either one calling `persist` would write
+    // the same value straight back out, echoing it to every other open
+    // client. This sets what's on screen and nothing else — history and
+    // storage are both left alone, since the data is already there.
+    const adoptRemote = useCallback((value) => {
+        setStateRaw(value);
+    }, []);
+
+    return [state, setState, { undo, canUndo, reset, adoptRemote }];
 }

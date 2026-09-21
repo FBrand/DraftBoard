@@ -11,7 +11,8 @@
  * /home/dev/.claude/plans/structured-growing-cat.md section 3 for why.
  */
 import { defaultState, parseCSV, exportCSV, stampPlayerIds } from './rosterState';
-import { readChart, writeChart, hasChart, chartVersion, openDepthCharts } from '../data/depthChartStore';
+import { readChart, writeChart, hasChart, chartVersion, openDepthCharts, rowsPath, bandsPath } from '../data/depthChartStore';
+import { repository } from '../data/repository';
 import { viewedSeason, seasonIsSeeded, openBoards } from './boardRegistry';
 import { canEdit } from './permissions';
 
@@ -24,6 +25,20 @@ const seasonId = () => viewedSeason()?.id ?? null;
 const STORAGE_KEY = 'fa_state_v1';
 
 export { parseCSV, exportCSV };
+
+/**
+ * Notifies `onChange` whenever another device's write to this season's
+ * candidate board reaches this browser. See rosterState.js's `followState` —
+ * identical shape, same reason (two collections per chart, re-read rather
+ * than handed a value, no-op when there's no live season or backend).
+ */
+export function followState(onChange) {
+    const sid = seasonId();
+    if (!sid || !repository.isLive()) return () => {};
+    const unsubRows = repository.follow(rowsPath(STORAGE_KEY, sid), onChange);
+    const unsubBands = repository.follow(bandsPath(STORAGE_KEY, sid), onChange);
+    return () => { unsubRows(); unsubBands(); };
+}
 
 export function hasSavedState() {
     try {

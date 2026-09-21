@@ -3,7 +3,8 @@
  * Stored in localStorage under key 'rosterState'.
  */
 import { parseCsvLine, csvField } from './csvUtils';
-import { readChart, writeChart, hasChart, chartVersion } from '../data/depthChartStore';
+import { readChart, writeChart, hasChart, chartVersion, rowsPath, bandsPath } from '../data/depthChartStore';
+import { repository } from '../data/repository';
 import { viewedSeason } from './boardRegistry';
 import { canEdit } from './permissions';
 
@@ -67,6 +68,26 @@ export const POS_TRANSLATIONS = {
 
 
 const STORAGE_KEY = 'rosterState';
+
+/**
+ * Notifies `onChange` whenever another device's write to this season's roster
+ * reaches this browser — an expert editing the same roster from a second
+ * device, or a co-owner making a change of their own. A chart is two
+ * collections (rows, bands), not one, so this follows both and fires once per
+ * underlying snapshot; the caller re-reads with `loadState()` rather than
+ * being handed a value directly, same as the store's other callers do.
+ *
+ * A no-op, returning a no-op unsubscribe, when there's no live season to
+ * follow or the backend isn't a shared one — matching `repository.isLive()`'s
+ * use elsewhere as the local-build/no-Firebase guard.
+ */
+export function followState(onChange) {
+    const sid = seasonId();
+    if (!sid || !repository.isLive()) return () => {};
+    const unsubRows = repository.follow(rowsPath(STORAGE_KEY, sid), onChange);
+    const unsubBands = repository.follow(bandsPath(STORAGE_KEY, sid), onChange);
+    return () => { unsubRows(); unsubBands(); };
+}
 
 // ---------------------------------------------------------------------------
 // Slot helpers

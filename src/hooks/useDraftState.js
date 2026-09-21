@@ -1,8 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { readStage, removeStage, openStages } from '../data/stageStore';
 import { joinIndex, findJoin } from '../utils/pickJoin';
 import { openDepthCharts } from '../data/depthChartStore';
-import { readDraft, writeDraft, hasDraft, openDraft } from '../data/draftStore';
+import { readDraft, writeDraft, hasDraft, openDraft, DRAFT_STATE } from '../data/draftStore';
+import { repository } from '../data/repository';
+import { PLAYERS } from '../utils/playerRegistry';
+import { reconcileDraft } from '../utils/draftReconcile';
 import { openSetup } from '../utils/seasonInit';
 import { viewedSeason, seasonIsSeeded } from '../utils/boardRegistry';
 
@@ -114,6 +117,12 @@ const chopAudio = new Audio(`${import.meta.env.BASE_URL}chiefs_tomahawk_chop.mp3
 chopAudio.volume = 0.6;
 
 export const useDraftState = () => {
+    // The rankings pool, resolved against the registry once at load — see
+    // reconcileDraft()'s comment. A ref, not state: the live-follow effect
+    // below needs to re-run reconciliation against it on every remote
+    // snapshot without re-fetching or re-resolving anything, and it must
+    // never trigger a render on its own.
+    const poolRef = useRef([]);
     const [players, setPlayers] = useState([]);
     const [ourPicksLeft, setOurPicksLeft] = useState([]);
     const [draftedPlayers, setDraftedPlayers] = useState([]);
@@ -244,7 +253,16 @@ export const useDraftState = () => {
                 const columnsText = await columnsRes.text().catch(() => "");
                 const parsedPositions = columnsText.split(',').map(p => p.trim()).filter(p => p);
                 setColumnOrder(parsedPositions);
-                const parsedPlayers = parseRankings(rankingsText) || [];
+                const rawPlayers = parseRankings(rankingsText) || [];
+                // Resolved ONCE, here, against the registry — a rankings CSV
+                // never carries an id of its own. Without this, every join
+                // below (and every one a live update runs later) falls
+                // through to a full fuzzy scan regardless of which side
+                // iterates, because there is no id on either side to match
+                // by. See reconcileDraft()'s own comment for the rest of why.
+                const poolIds = resolveAll(rawPlayers.map(p => ({ name: p.name, position: p.position, school: p.school })));
+                const parsedPlayers = rawPlayers.map((p, i) => (poolIds[i] ? { ...p, id: poolIds[i] } : p));
+                poolRef.current = parsedPlayers;
                 const parsedOurPicks = parsePicks(picksText) || [];
 
                 // Picks as documents — see data/draftStore.js. The blob is the
@@ -287,58 +305,9 @@ export const useDraftState = () => {
                         const savedDrafted = Array.isArray(parsedState.draftedPlayers) ? parsedState.draftedPlayers : seedDrafted;
                         const savedKCLeft = Array.isArray(parsedState.ourPicksLeft) ? parsedState.ourPicksLeft : seedKCLeft;
 
-                        // 1. Reconcile fresh parsedPlayers with saved history (Board View)
-                        // By id where there is one, by name where there is not
-                        // — see utils/pickJoin.js. A pick used to say only the
-                        // name, so correcting a drafted player's spelling made
-                        // his pick stop finding him.
-                        const savedDraftedIndex = joinIndex(savedDrafted);
-                        const reconciledPlayers = parsedPlayers.map(p => {
-                            const matchIdx = findJoin(p, savedDraftedIndex);
-                            if (matchIdx !== -1) {
-                                const match = savedDrafted[matchIdx];
-                                return {
-                                    ...p,
-                                    drafted: true,
-                                    pickNumber: match.pickNumber,
-                                    team: match.team,
-                                    // Who MADE the pick, not whose list the
-                                    // number was on. picks.txt is what we
-                                    // owned going in; the draft file is what
-                                    // happened after trades, and they differ
-                                    // for five of nine picks in the shipped
-                                    // season — so Spencer Fano, taken 9th by
-                                    // Cleveland, painted as a Chief.
-                                    draftedByUs: isOurs(match.team),
-                                };
-                            }
-                            return p;
-                        });
-
-                        // 2. Re-enrich saved draft history (Right Panel View) with fresh metadata
-                        // NOTE: use sd.draftedByUs (persisted value) — savedKCLeft only has *remaining* picks,
-                        // so re-computing from it would always yield false for already-drafted players.
-                        const parsedPlayersIndex = joinIndex(parsedPlayers);
-                        const enrichedDrafted = savedDrafted.map(sd => {
-                            const matchIdx = findJoin(sd, parsedPlayersIndex);
-                            // The club on the pick is the answer, and it is
-                            // always present on a real pick. Only a pick with
-                            // no club at all falls back to what was persisted
-                            // — an undrafted signing nobody has placed yet.
-                            const draftedByUs = sd.team ? isOurs(sd.team) : sd.draftedByUs === true;
-                            if (matchIdx !== -1) {
-                                const updatedMetadata = parsedPlayers[matchIdx];
-                                return {
-                                    ...updatedMetadata,
-                                    playerId: sd.playerId ?? updatedMetadata.id ?? null,
-                                    pickNumber: sd.pickNumber,
-                                    team: sd.team,
-                                    drafted: true,
-                                    draftedByUs
-                                };
-                            }
-                            return { ...sd, draftedByUs };
-                        });
+                        // Both joins, now id-first for anyone the registry
+                        // already knows — see reconcileDraft()'s own comment.
+                        const { players: reconciledPlayers, draftedPlayers: enrichedDrafted } = reconcileDraft(parsedPlayers, savedDrafted);
 
                         // A draft loaded from file never passed through
                         // draftPlayer, so nothing had recorded what it says
@@ -396,6 +365,46 @@ export const useDraftState = () => {
 
         loadInitialData();
     }, []);
+
+    // Live sync — an expert's pick reaches every open board within about a
+    // second, the same way ScoutingView already follows a board's entries.
+    // `players` is what actually changes on a pick (draftStore.js: a pick is
+    // recorded ON THE PLAYER, not in a separate picks collection);
+    // `draft_state` is turn-tracking (currentPick/ourPicksLeft/remotePicks)
+    // only. Both are cheap to re-adopt because the pool was already resolved
+    // once in loadInitialData — see reconcileDraft()'s comment for why that
+    // is what makes re-running this per snapshot safe. Deliberately does NOT
+    // call recordDraftFacts: a remote pick already carries a full registry
+    // record (that is what following `players` means), so there is nothing
+    // left to resolve — recordDraftFacts exists for a draft loaded from a
+    // file that never passed through a real pick, which this is not.
+    useEffect(() => {
+        if (loading || !repository.isLive()) return undefined;
+        const sid = seasonId();
+
+        const adopt = () => {
+            const savedState = hasDraft(sid) ? readDraft(sid) : null;
+            if (!savedState) return;
+            const { players: nextPlayers, draftedPlayers: nextDrafted } = reconcileDraft(
+                poolRef.current,
+                Array.isArray(savedState.draftedPlayers) ? savedState.draftedPlayers : [],
+            );
+            setPlayers(nextPlayers);
+            setDraftedPlayers(nextDrafted);
+            setYourPicks(nextDrafted.filter(p => p.draftedByUs));
+            if (Array.isArray(savedState.ourPicksLeft)) setOurPicksLeft(savedState.ourPicksLeft);
+            // Cold-start-only derivation lives in loadInitialData; a remote
+            // snapshot's own currentPick is the answer, never re-derived from
+            // the highest pick seen — that would reset whose turn it is on
+            // every single live update.
+            if (typeof savedState.currentPick === 'number') setCurrentPick(savedState.currentPick);
+            if (Array.isArray(savedState.remotePicks)) setRemotePicks(savedState.remotePicks);
+        };
+
+        const stopPlayers = repository.follow(PLAYERS, adopt);
+        const stopDraft = repository.follow(DRAFT_STATE, adopt);
+        return () => { stopPlayers(); stopDraft(); };
+    }, [loading]);
 
     // Persist State
     useEffect(() => {

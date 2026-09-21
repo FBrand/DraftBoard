@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import useIsMobile from '../hooks/useIsMobile';
 import { CSV_TEMPLATE } from '../utils/rosterState';
 import {
-    loadState, saveState, defaultState,
+    loadState, saveState, defaultState, followState,
     parseCSV, exportCSV, makeSlot, resolvePosition, deletePositionRow, clearInjuryArrival,
     SPECIALIST_IDS, hasRosterSourceAdapter, fetchAdapterRoster, fetchLocalRoster, fetchSeasonStartStructure, parseHTMLToRoster
 } from '../utils/rosterState';
@@ -100,6 +100,19 @@ export default function RosterView({ masterPlayers, draftedPlayers, onInfoOpen }
     const setState = useCallback(next => {
         setUndoableState(prev => normalizeState(typeof next === 'function' ? next(prev) : next));
     }, [setUndoableState, normalizeState]);
+
+    // Another device's write to this season's roster — a co-owner on a
+    // second screen, or this same expert elsewhere. adoptRemote (not
+    // setState) so it neither re-writes what storage already has nor lands
+    // on the undo stack as something THIS browser's Undo button could revert.
+    useEffect(() => {
+        return followState(() => {
+            const loaded = loadState() ?? defaultState();
+            if (!loaded.cuts) loaded.cuts = [];
+            if (!loaded.reserve) loaded.reserve = [];
+            history.adoptRemote(normalizeState(loaded));
+        });
+    }, [history, normalizeState]);
 
     // One-shot: only runs when there is nothing saved and we're in seeded mode.
     // Any later edit writes state, so this never fires again and can't overwrite

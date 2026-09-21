@@ -32,6 +32,17 @@ export default function FreeAgencyView({ masterPlayers, draftedPlayers, onInfoOp
         useCallback(next => faState.saveState(next), []),
     );
 
+    // Another device's write to this season's candidate board. adoptRemote
+    // (not setState/reset) — see rosterState.js's identical effect and
+    // useUndoableState's adoptRemote for why: this must neither echo the
+    // value back to storage nor land on the undo stack as something this
+    // browser's own Undo could revert.
+    useEffect(() => {
+        return faState.followState(() => {
+            history.adoptRemote(faState.loadState());
+        });
+    }, [history]);
+
     // Free agency opens on last season's roster rather than an empty grid —
     // that's the squad you actually carry into it, and the thing needs are
     // judged against. Only when nothing has been saved yet, so it can never
