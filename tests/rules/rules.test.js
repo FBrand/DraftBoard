@@ -2,7 +2,7 @@ import { describe, it, beforeAll, afterAll, beforeEach } from 'vitest';
 import {
     initializeTestEnvironment, assertSucceeds, assertFails,
 } from '@firebase/rules-unit-testing';
-import { doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { readFileSync } from 'node:fs';
 
 /**
@@ -297,6 +297,57 @@ describe('allowed_users', () => {
             email: 'viewer@example.com', addedBy: 'x', addedAt: 'x',
         }));
     });
+
+    it('an expert can deactivate another expert by updating ONLY active', async () => {
+        await assertSucceeds(updateDoc(doc(expert('dan-uid'), 'allowed_users/ryan-uid@example.com'), {
+            active: false,
+        }));
+    });
+
+    it('an update touching any other field alongside active is refused', async () => {
+        await assertFails(updateDoc(doc(expert('dan-uid'), 'allowed_users/ryan-uid@example.com'), {
+            active: false, addedBy: 'dan-uid@example.com',
+        }));
+    });
+
+    it('a deactivated expert (active: false) is refused a board write', async () => {
+        await env.withSecurityRulesDisabled(async (ctx) => {
+            await setDoc(doc(ctx.firestore(), 'allowed_users/ryan-uid@example.com'), {
+                email: 'ryan-uid@example.com', addedBy: 'dan-uid@example.com', addedAt: '2026-01-01', active: false,
+            });
+        });
+        // players, not a board — b_dan is dan-uid's board, so writing it as
+        // ryan would fail on ownership alone and not actually isolate the
+        // active-flag mechanism this test is about.
+        await assertFails(setDoc(doc(expert('ryan-uid'), 'players/p_active_test'), { n: 'Should be refused' }));
+    });
+
+    it('active as a string ("false") is also refused — not just the boolean', async () => {
+        await env.withSecurityRulesDisabled(async (ctx) => {
+            await setDoc(doc(ctx.firestore(), 'allowed_users/ryan-uid@example.com'), {
+                email: 'ryan-uid@example.com', addedBy: 'dan-uid@example.com', addedAt: '2026-01-01', active: 'false',
+            });
+        });
+        await assertFails(setDoc(doc(expert('ryan-uid'), 'players/p_active_test'), { n: 'Should be refused' }));
+    });
+
+    it('a type-mismatched active value is refused on the write that sets it, too', async () => {
+        await assertFails(updateDoc(doc(expert('dan-uid'), 'allowed_users/ryan-uid@example.com'), {
+            active: 'false',
+        }));
+    });
+
+    it('reactivating restores write access', async () => {
+        await env.withSecurityRulesDisabled(async (ctx) => {
+            await setDoc(doc(ctx.firestore(), 'allowed_users/ryan-uid@example.com'), {
+                email: 'ryan-uid@example.com', addedBy: 'dan-uid@example.com', addedAt: '2026-01-01', active: false,
+            });
+        });
+        await assertSucceeds(updateDoc(doc(expert('dan-uid'), 'allowed_users/ryan-uid@example.com'), {
+            active: true,
+        }));
+        await assertSucceeds(setDoc(doc(expert('ryan-uid'), 'players/p_active_test'), { n: 'Restored' }));
+    });
 });
 
 describe('board/author ownership: claim and orphan', () => {
@@ -366,9 +417,54 @@ describe('board/author ownership: claim and orphan', () => {
         }));
     });
 
-    it('an expert may still edit an orphaned board\'s other fields without claiming it', async () => {
-        await assertSucceeds(setDoc(doc(expert('ryan-uid'), 'boards/b_orphan'), {
+    it('an expert may NOT edit an orphaned board\'s other fields without claiming it — orphaned is writable by nobody', async () => {
+        await assertFails(setDoc(doc(expert('ryan-uid'), 'boards/b_orphan'), {
             l: 'Orphan (renamed)', a: 'a_orphan', o: null, s: 's_1',
+        }));
+    });
+
+    it('an orphaned board\'s entries are readable by any expert, regardless of a private/expert v stored on it', async () => {
+        await env.withSecurityRulesDisabled(async (ctx) => {
+            await setDoc(doc(ctx.firestore(), 'boards/b_orphan'), {
+                l: 'Orphan', a: 'a_orphan', o: null, s: 's_1', v: 'private',
+            });
+            await setDoc(doc(ctx.firestore(), 'boards/b_orphan/entries/p_1'), { r: 1 });
+        });
+        await assertSucceeds(getDoc(doc(expert('ryan-uid'), 'boards/b_orphan/entries/p_1')));
+    });
+
+    it('a viewer still cannot read an orphaned board\'s entries, even one stored as v: expert — the orphaned floor is expert-only, not public', async () => {
+        // b_orphan's default fixture has no v field, which already defaults
+        // to public — a viewer reading THAT proves nothing about the
+        // orphaned clause specifically, since it would pass on v alone. Set
+        // v explicitly so only the orphaned-clause could be granting access.
+        await env.withSecurityRulesDisabled(async (ctx) => {
+            await setDoc(doc(ctx.firestore(), 'boards/b_orphan'), {
+                l: 'Orphan', a: 'a_orphan', o: null, s: 's_1', v: 'expert',
+            });
+            await setDoc(doc(ctx.firestore(), 'boards/b_orphan/entries/p_1'), { r: 1 });
+        });
+        await assertFails(getDoc(doc(viewer(), 'boards/b_orphan/entries/p_1')));
+    });
+
+    it('orphaning a private board no longer locks out reads — any expert can see it, but nobody (including the former owner) can write it', async () => {
+        await env.withSecurityRulesDisabled(async (ctx) => {
+            await setDoc(doc(ctx.firestore(), 'authors/a_private'), { n: 'Private', o: 'dan-uid' });
+            await setDoc(doc(ctx.firestore(), 'boards/b_private'), {
+                l: 'Private', a: 'a_private', o: null, s: 's_1', v: 'private',
+            });
+            await setDoc(doc(ctx.firestore(), 'boards/b_private/entries/p_1'), { r: 1 });
+        });
+        // The former owner reads fine now (any expert can, while orphaned) —
+        // but cannot write: ownsBoard no longer covers an orphaned board, and
+        // this isn't a claim (o stays null).
+        await assertSucceeds(getDoc(doc(expert('dan-uid'), 'boards/b_private/entries/p_1')));
+        await assertFails(setDoc(doc(expert('dan-uid'), 'boards/b_private/entries/p_1'), { r: 2 }));
+        // A different expert reads fine too, and CAN claim it (the one write
+        // orphaned allows) — after which the ex-owner has no special status.
+        await assertSucceeds(getDoc(doc(expert('ryan-uid'), 'boards/b_private/entries/p_1')));
+        await assertSucceeds(setDoc(doc(expert('ryan-uid'), 'boards/b_private'), {
+            l: 'Private', a: 'a_private', o: 'ryan-uid', s: 's_1', v: 'private',
         }));
     });
 
@@ -396,5 +492,64 @@ describe('board/author ownership: claim and orphan', () => {
         await assertFails(setDoc(doc(db, 'boards/b_consensus'), {
             l: 'Consensus', a: null, o: 'ryan-uid', s: 's_1',
         }));
+    });
+});
+
+describe('board visibility: private/expert/public entries', () => {
+    // The board DOCUMENT is never gated by visibility — only its entries
+    // subcollection is (see boardVisible() in firestore.rules for why: a
+    // rule on a listed collection reading its own resource.data either
+    // leaks or breaks the whole list, measured, not theoretical). So every
+    // one of these seeds a board whose own read stays open and checks the
+    // entries collection specifically.
+    const seedBoard = (id, authorId, ownerId, visibility) => env.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), `boards/${id}`), { l: id, a: authorId, o: ownerId, s: 's_1', v: visibility });
+        await setDoc(doc(ctx.firestore(), `boards/${id}/entries/p_1`), { r: 1 });
+    });
+
+    it('a public board (no v, or v: public) is readable by anyone, including a viewer', async () => {
+        // No `v` at all - existing/legacy boards, must default to public.
+        await env.withSecurityRulesDisabled(async (ctx) => {
+            await setDoc(doc(ctx.firestore(), 'boards/b_dan/entries/p_nov'), { r: 1 });
+        });
+        await assertSucceeds(getDoc(doc(viewer(), 'boards/b_dan/entries/p_nov')));
+
+        await seedBoard('b_pub', 'a_dan', 'dan-uid', 'public');
+        await assertSucceeds(getDoc(doc(viewer(), 'boards/b_pub/entries/p_1')));
+        await assertSucceeds(getDoc(doc(stranger(), 'boards/b_pub/entries/p_1')));
+    });
+
+    it('an expert-tier board is readable by any signed-in expert, refused for a viewer', async () => {
+        await seedBoard('b_exp', 'a_dan', 'dan-uid', 'expert');
+        await assertSucceeds(getDoc(doc(expert('dan-uid'), 'boards/b_exp/entries/p_1')));
+        await assertSucceeds(getDoc(doc(expert('ryan-uid'), 'boards/b_exp/entries/p_1')));
+        await assertFails(getDoc(doc(viewer(), 'boards/b_exp/entries/p_1')));
+        await assertFails(getDoc(doc(stranger(), 'boards/b_exp/entries/p_1')));
+    });
+
+    it('a private board is readable only by its owner - not another expert, not a viewer', async () => {
+        await seedBoard('b_priv', 'a_dan', 'dan-uid', 'private');
+        await assertSucceeds(getDoc(doc(expert('dan-uid'), 'boards/b_priv/entries/p_1')));
+        await assertFails(getDoc(doc(expert('ryan-uid'), 'boards/b_priv/entries/p_1')));
+        await assertFails(getDoc(doc(viewer(), 'boards/b_priv/entries/p_1')));
+    });
+
+    it('the shared/consensus board stays public regardless of any v value stored on it', async () => {
+        // Nothing in the app can set v on a no-author board to anything that
+        // would matter, but confirm the RULE itself doesn't trust the stored
+        // value for a shared board - authorId null is what settles it.
+        await seedBoard('b_shared_priv', null, null, 'private');
+        await assertSucceeds(getDoc(doc(viewer(), 'boards/b_shared_priv/entries/p_1')));
+    });
+
+    it('entries under a board that does not exist read as public rather than erroring', async () => {
+        await assertSucceeds(getDoc(doc(viewer(), 'boards/b_invented/entries/p_1')));
+    });
+
+    it('an owner can change visibility, and the new value takes effect immediately', async () => {
+        await seedBoard('b_change', 'a_dan', 'dan-uid', 'private');
+        await assertFails(getDoc(doc(expert('ryan-uid'), 'boards/b_change/entries/p_1')));
+        await assertSucceeds(updateDoc(doc(expert('dan-uid'), 'boards/b_change'), { v: 'public' }));
+        await assertSucceeds(getDoc(doc(expert('ryan-uid'), 'boards/b_change/entries/p_1')));
     });
 });

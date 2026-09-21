@@ -37,12 +37,26 @@ service cloud.firestore {
     // closes that — a Google account's email is verified by Google itself,
     // which is also why email_verified is checked explicitly rather than
     // assumed from the provider.
+    // The allowed_users doc is checked twice on purpose rather than hoisted
+    // into a `let` — a `let` evaluates eagerly, before the short-circuit
+    // above it, so `request.auth.token.email.lower()` would run for every
+    // anonymous viewer and throw instead of denying cleanly. Same repeated-
+    // get() shape ownsAuthor() already uses on one document; proven
+    // tolerable against the access budget.
     function isExpert() {
       return request.auth != null
           && request.auth.token.firebase.sign_in_provider == 'google.com'
           && request.auth.token.email_verified == true
           && request.auth.token.email != null
-          && exists(/databases/$(database)/documents/allowed_users/$(request.auth.token.email.lower()));
+          && exists(/databases/$(database)/documents/allowed_users/$(request.auth.token.email.lower()))
+          // == true, not != false: active is meant to be a boolean, enforced
+          // on write below, but a rule still has to decide what an already-
+          // malformed value means. `!= false` let a stored string "false"
+          // through, since it is never equal to the boolean false — `==
+          // true` fails closed on anything that is not exactly the boolean
+          // true, missing-defaults-true included.
+          && get(/databases/$(database)/documents/allowed_users/$(request.auth.token.email.lower()))
+               .data.get('active', true) == true;
     }
 
     // Documents are stored with SHORT FIELD NAMES — see src/data/fieldNames.js,
@@ -51,7 +65,7 @@ service cloud.firestore {
     // not deny quietly: it raised "Property ownerId is undefined on object",
     // which denies EVERYTHING, and an expert could not write his own board.
     //
-    //     board   g slug  l label  a authorId  o ownerId  s seasonId
+    //     board   g slug  l label  a authorId  o ownerId  s seasonId  v visibility
     //     author  n name  o ownerId
 
     // The board being touched, as it is stored right now. Null for a board
@@ -79,22 +93,31 @@ service cloud.firestore {
       return o == null || (o == request.auth.uid && a != null);
     }
 
-    // A board with no ownerId is unowned — the consensus board is the case
-    // that matters, since it is derived rather than written by a person. Any
-    // expert may maintain it; no viewer may.
+    // Owned by ME, or SHARED (no author at all — consensus is the case that
+    // matters, derived rather than written by a person). Any expert may
+    // maintain a shared board. An ORPHANED board (has an author, o is null —
+    // a personal board nobody has claimed yet) is deliberately NOT covered
+    // here: it is readable by any expert (see boardVisible) but writable by
+    // nobody except the specific act of claiming it, which the boards
+    // update rule below carves out on its own rather than through this
+    // function. A board that does not exist yet counts as writable so that
+    // `create` can function at all.
     function ownsBoard(boardId) {
       return isExpert()
           && (!boardExists(boardId)
-              || boardNow(boardId).o == null
-              || boardNow(boardId).o == request.auth.uid);
+              || boardNow(boardId).o == request.auth.uid
+              || boardNow(boardId).a == null);
     }
 
-    // The same question about an AUTHOR, who is a person rather than a board.
+    // The same question about an AUTHOR, who is a person rather than a
+    // board and so has no "shared, always-writable" case — every author
+    // that exists represents someone real. An orphaned (unclaimed) author
+    // is writable by nobody, same reasoning as an orphaned board, carved
+    // out on its own in the authors update rule below.
     function ownsAuthor(authorId) {
       return isExpert()
           && exists(/databases/$(database)/documents/authors/$(authorId))
-          && (get(/databases/$(database)/documents/authors/$(authorId)).data.o == null
-              || get(/databases/$(database)/documents/authors/$(authorId)).data.o == request.auth.uid);
+          && get(/databases/$(database)/documents/authors/$(authorId)).data.o == request.auth.uid;
     }
 
     // Whose voice an evaluation is in. It is keyed by AUTHOR for a personal
@@ -108,6 +131,38 @@ service cloud.firestore {
     function ownsVoice(voiceId) {
       return ownsAuthor(voiceId)
           || (boardExists(voiceId) && ownsBoard(voiceId));
+    }
+
+    // Whether this board's ENTRIES (the rankings themselves) are visible to
+    // the caller. The board document is NOT gated this way — see the read
+    // rule on /boards below — because a rule on a LISTED collection that
+    // reads its own resource.data is evaluated once against an empty
+    // stand-in: `.get(field, default)` silently returns the default and lets
+    // the whole collection through (a leak), while a bare field read throws
+    // and denies the whole collection (breaking every viewer's board list).
+    // Measured against a real emulator, not theoretical. A get() on ONE
+    // document, addressed by the path variable boardId, has neither failure
+    // mode — which is why entries (queried per-board, one path variable) can
+    // be gated this way and the boards collection (queried flat, no
+    // per-document variable to key on) cannot.
+    //
+    // boardExists(boardId) is checked FIRST via short-circuit, same as
+    // ownsBoard() above — never hoisted into a `let` ahead of it, which
+    // would call boardNow() on a possibly-nonexistent document before
+    // anything has asked whether it exists (see isExpert()'s active-flag
+    // check for this exact trap in a different function).
+    function boardVisible(boardId) {
+      return !boardExists(boardId)
+          || boardNow(boardId).a == null   // shared/consensus: always public
+          // orphaned (has an author, unowned): any expert, regardless of
+          // whatever v is stored — an unclaimed board is not one person's
+          // to keep private from the rest of the team.
+          || (boardNow(boardId).o == null && isExpert())
+          || boardNow(boardId).get('v', 'public') == 'public'
+          || (isExpert() && boardNow(boardId).get('v', 'public') == 'expert')
+          || (request.auth != null
+              && boardNow(boardId).o == request.auth.uid
+              && boardNow(boardId).get('v', 'public') == 'private');
     }
 
     // --- the shared record ------------------------------------------------
@@ -134,15 +189,20 @@ service cloud.firestore {
     // project-owner credentials that bypass these rules entirely — the same
     // access already needed to deploy the rules themselves. See docs/FIREBASE.md.
     //
-    // Once seeded, entries are immutable — allow update: if false — so an
-    // expert cannot rewrite who added whom after the fact; removing one is a
-    // console operation, not an in-app one, which keeps "who let this person
-    // in" answerable from the data itself.
+    // Once seeded, who-added-whom is immutable — email/addedBy/addedAt can
+    // never change after create — so "who let this person in" stays
+    // answerable from the data itself. What CAN change is `active`: any
+    // expert may deactivate or reactivate any OTHER entry (the app enforces
+    // not-yourself client-side, to avoid self-lockout/self-unlock; the rule
+    // does not need to, since either direction is fine for someone else's
+    // entry). Removing an entry outright is still a console operation.
     match /allowed_users/{email} {
       // Any signed-in Google user may check whether HIS OWN address is
       // listed — that read is what signInExpert() does before deciding
       // whether to keep the session — without being able to see who else is
-      // on the list until he is on it himself.
+      // on the list until he is on it himself. This also means a deactivated
+      // expert can still read his own entry and see active: false, rather
+      // than the read simply stopping.
       allow read: if isExpert()
                   || (request.auth != null
                       && request.auth.token.email != null
@@ -150,7 +210,14 @@ service cloud.firestore {
       allow create: if isExpert()
                     && request.resource.data.email == email
                     && request.resource.data.addedBy == request.auth.token.email.lower();
-      allow update: if false;
+      // hasOnly(['active']) covers active being added, removed or changed —
+      // not just rewritten — and admits the empty set (a no-op write)
+      // harmlessly. `create` stays a separate rule on purpose: folding this
+      // into `allow create, update` would block creating a new expert, which
+      // legitimately writes email/addedBy/addedAt together.
+      allow update: if isExpert()
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['active'])
+                    && request.resource.data.active is bool;
       allow delete: if false;
     }
 
@@ -174,17 +241,25 @@ service cloud.firestore {
       // drifted apart on the boards side below.
       allow create: if isExpert()
                     && ownershipWouldBeSafe(request.resource.data.o, true);
-      // ownsAuthor already refuses anyone but the actual owner of an OWNED
-      // author, so claiming somebody else's is refused structurally. What it
-      // does not refuse: an expert who already has write access to an
-      // ORPHANED one (o == null grants that to any expert, on purpose) could
-      // set o to an arbitrary OTHER uid, not just his own — claiming on
-      // somebody else's behalf. This also blocks a direct owned-to-owned
-      // handoff by the current owner: o may only ever become null (orphan)
-      // or the caller's own uid (claim), never a third uid, so a transfer
-      // has to pass through orphaned first, same as boards below.
-      allow update: if ownsAuthor(authorId)
-                    && ownershipWouldBeSafe(request.resource.data.o, true);
+      // ownsAuthor refuses anyone but the actual owner of an OWNED author,
+      // and (since it no longer treats o == null as writable by any expert)
+      // refuses everyone on an ORPHANED one too — except the one write this
+      // carve-out exists for: claiming it, o going from null to exactly the
+      // caller's own uid. ownershipWouldBeSafe still blocks a direct
+      // owned-to-owned handoff (o may only become null or the caller's own
+      // uid, never a third uid) and claiming on somebody else's behalf.
+      // The claim carve-out needs isExpert() of its own — it does not
+      // inherit it from ownsAuthor() (that's the OTHER half of the ||). Its
+      // own condition is just "was unowned, becomes exactly my own uid",
+      // which a signed-in-but-unlisted account or even a viewer can satisfy
+      // by construction (their own real uid always equals itself) — caught
+      // live: a viewer's test uid is literally the string 'anon', and
+      // setting o: 'anon' passed this clause with no expert check at all.
+      allow update: if ownershipWouldBeSafe(request.resource.data.o, true)
+                    && (ownsAuthor(authorId)
+                        || (isExpert()
+                            && get(/databases/$(database)/documents/authors/$(authorId)).data.o == null
+                            && request.resource.data.o == request.auth.uid));
       allow delete: if ownsAuthor(authorId);
     }
 
@@ -226,16 +301,25 @@ service cloud.firestore {
       // (boardNow) rather than the incoming data, since an update cannot
       // invent an author in the same breath it claims with.
       //
-      // ownsBoard already refuses a non-owner on an OWNED board, but not an
-      // expert with an orphaned board's blanket access setting o to somebody
-      // ELSE's uid — o may only become null or the caller's own uid, so a
-      // transfer has to pass through orphaned first. There is no equivalent
-      // gap on authors: every author record that exists represents a real
-      // named person (consensus gets no author record at all - see
-      // boardRegistry.js openBoards()), so there is no "shared author" to
-      // protect the same way.
-      allow update: if ownsBoard(boardId)
-                    && ownershipWouldBeSafe(request.resource.data.o, boardNow(boardId).a);
+      // ownsBoard covers an OWNED board (must be the owner) and a SHARED one
+      // (any expert). It deliberately does NOT cover an ORPHANED board — has
+      // an author, o is null — so the second clause here carves out the one
+      // write that's allowed on one anyway: claiming it, o going from null
+      // to exactly the caller's own uid. ownershipWouldBeSafe still blocks
+      // claiming on somebody else's behalf or a direct owned-to-owned
+      // handoff (must pass through orphaned first).
+      // The claim carve-out needs isExpert() of its own — see the identical
+      // note on authors' update rule above; caught live by a viewer test
+      // (their own real uid trivially equals itself, no expert check
+      // otherwise gates this clause).
+      allow update: if ownershipWouldBeSafe(request.resource.data.o, boardNow(boardId).a)
+                    && (ownsBoard(boardId)
+                        || (isExpert()
+                            && boardNow(boardId).o == null
+                            && request.resource.data.o == request.auth.uid));
+      // Nobody may delete an orphaned board (ownsBoard no longer covers it),
+      // which matches "written by nobody" - only claiming is exempted, and
+      // deleting is not claiming.
       allow delete: if ownsBoard(boardId);
 
       // The placements — one line about one board, where a flat collection
@@ -247,7 +331,10 @@ service cloud.firestore {
       // would otherwise let anybody scatter entries under ids belonging to no
       // board at all.
       match /entries/{playerId} {
-        allow read: if true;
+        // The content a visibility setting actually hides. See
+        // boardVisible() above for why this is where the gate lives instead
+        // of on the board document itself.
+        allow read: if boardVisible(boardId);
         allow write: if boardExists(boardId) && ownsBoard(boardId);
       }
     }
