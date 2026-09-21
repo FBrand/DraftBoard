@@ -22,7 +22,7 @@ import { addProspect, savePlayerEdit, deletePlayer, restorePlayer, hiddenPlayers
 import * as athleticMatrix from '../utils/athleticMatrix';
 import * as playerRegistry from '../utils/playerRegistry';
 
-import { createBoard, listBoards, boardBySlug, boardById, renameBoard, listSeasons, currentSeason, claimBoard, orphanBoard } from '../utils/boardRegistry';
+import { createBoard, listBoards, boardBySlug, boardById, renameBoard, listSeasons, currentSeason, claimBoard, orphanBoard, setBoardVisibility } from '../utils/boardRegistry';
 import { repository } from '../data/repository';
 import { entriesPath } from '../data/boardEntries';
 import { canEdit, isExpert, getCurrentUser } from '../utils/permissions';
@@ -575,16 +575,20 @@ export default function ScoutingView({ players }) {
      * app — and an empty board is a real option: every player shows unranked
      * until somebody places him.
      */
-    const handleCreateBoard = async ({ label, authorName, file }) => {
+    const handleCreateBoard = async ({ label, authorName, visibility, file }) => {
         // Whoever makes a PERSONAL board owns it from the start — the gap
         // this used to leave (every new board shipped orphaned, writable by
         // any expert) is exactly what let an unrelated expert overwrite a
         // just-created one. A blank author name means a shared board on
         // purpose (see CreateBoardModal's own placeholder), and a shared
         // board has no owner to set — passing one here would quietly turn it
-        // into a fourth, undefined state (no author, but owned).
-        const ownerId = String(authorName ?? '').trim() ? (getCurrentUser()?.id ?? null) : null;
-        const board = await createBoard({ label, authorName, ownerId });
+        // into a fourth, undefined state (no author, but owned). Same reason
+        // visibility is only passed through for a personal board — createBoard
+        // itself defaults a shared board to 'public' regardless of what's
+        // asked for, but there's no reason to even offer the choice here.
+        const isPersonal = String(authorName ?? '').trim();
+        const ownerId = isPersonal ? (getCurrentUser()?.id ?? null) : null;
+        const board = await createBoard({ label, authorName, ownerId, visibility: isPersonal ? visibility : undefined });
         if (!board) return;
 
         if (file) {
@@ -700,8 +704,17 @@ export default function ScoutingView({ players }) {
 
                 <div style={{ width: '20px' }} />
 
+                {/* Display only, not the security boundary — the rules
+                    enforce entries visibility regardless of what shows here.
+                    This just keeps a board nobody but its owner (or no
+                    viewer at all) can actually open out of the switcher. */}
                 <BoardSwitcher
-                    boards={boardList}
+                    boards={boardList.filter(b => {
+                        const vis = b.authorId ? (b.visibility ?? 'expert') : 'public';
+                        if (vis === 'public') return true;
+                        if (vis === 'expert') return isExpert();
+                        return b.ownerId === getCurrentUser()?.id; // private
+                    })}
                     activeId={activeBoard}
                     onSelect={(b) => setActiveBoard(b.id)}
                 />
@@ -728,6 +741,26 @@ export default function ScoutingView({ players }) {
                                 title="Nobody owns this board yet — claim it as your own"
                             >Claim This Board</button>
                         )
+                )}
+
+                {/* Only the actual owner — matches what firestore.rules
+                    itself would accept for a write to this field. */}
+                {isExpert() && boardById(activeBoard)?.authorId
+                    && boardById(activeBoard)?.ownerId === getCurrentUser()?.id && (
+                    <select
+                        value={boardById(activeBoard)?.visibility ?? 'expert'}
+                        onChange={(e) => {
+                            setBoardVisibility(activeBoard, e.target.value);
+                            setBoardList(listBoards());
+                        }}
+                        className="rv-ctrl-btn"
+                        style={{ width: 'auto' }}
+                        title="Who can see this board's rankings"
+                    >
+                        <option value="expert">Experts only</option>
+                        <option value="private">Just you</option>
+                        <option value="public">Everyone</option>
+                    </select>
                 )}
 
                 <div className="roster-zoom-ctrl" style={{ gap: 6 }}>

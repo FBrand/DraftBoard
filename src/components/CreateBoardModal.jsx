@@ -17,6 +17,7 @@ import useEscapeKey from '../hooks/useEscapeKey';
 export default function CreateBoardModal({ isOpen, onClose, onCreate }) {
     const [label, setLabel] = useState('');
     const [author, setAuthor] = useState('');
+    const [visibility, setVisibility] = useState('expert');
     const [file, setFile] = useState(null);
     const [busy, setBusy] = useState(false);
     const fileRef = useRef(null);
@@ -29,7 +30,7 @@ export default function CreateBoardModal({ isOpen, onClose, onCreate }) {
         if (!label.trim() || busy) return;
         setBusy(true);
         try {
-            await onCreate({ label: label.trim(), authorName: author.trim(), file });
+            await onCreate({ label: label.trim(), authorName: author.trim(), visibility, file });
             onClose();
         } finally {
             setBusy(false);
@@ -67,6 +68,21 @@ export default function CreateBoardModal({ isOpen, onClose, onCreate }) {
                             className="text-input"
                         />
                     </div>
+
+                    {author.trim() && (
+                        <div className="form-group">
+                            <label>Who can see it</label>
+                            <select
+                                value={visibility}
+                                onChange={e => setVisibility(e.target.value)}
+                                className="text-input"
+                            >
+                                <option value="expert">Experts only — while you're still working on it</option>
+                                <option value="private">Just you</option>
+                                <option value="public">Everyone, including viewers</option>
+                            </select>
+                        </div>
+                    )}
 
                     <div className="form-group">
                         <label>Start from a CSV <span className="ap-hint-inline">optional</span></label>

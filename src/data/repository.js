@@ -188,14 +188,31 @@ export function createRepository(adapter = localAdapter) {
                 cache.set(collection, withPending(collection, docs));
                 notify(collection);
             },
-            (err) => reportWriteError({
-                collection,
-                id: null,
-                op: 'watch',
-                error: err,
-                permanent: false,
-                advice: 'Live updates stopped. What is on screen is the last the store sent.',
-            }),
+            (err) => {
+                // A denial (a board just went private, or an expert's own
+                // access changed under him) is not an outage. Firestore's
+                // own error code says which: `permission-denied` means the
+                // rules judged this specific request and said no, and will
+                // say no again forever, so retrying is pointless and raising
+                // the same "Live updates stopped" alarm a real connectivity
+                // failure gets would tell somebody his internet is broken
+                // when the honest answer is "not for you". Stop quietly and
+                // drop the stale cache instead of leaving the last thing he
+                // was allowed to see on screen forever.
+                if (classifyWriteError(err).reason === 'permission-denied') {
+                    invalidate(collection);
+                    notify(collection);
+                    return;
+                }
+                reportWriteError({
+                    collection,
+                    id: null,
+                    op: 'watch',
+                    error: err,
+                    permanent: false,
+                    advice: 'Live updates stopped. What is on screen is the last the store sent.',
+                });
+            },
         );
         watchers.set(collection, stop);
     }

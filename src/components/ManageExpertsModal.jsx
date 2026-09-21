@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import useEscapeKey from '../hooks/useEscapeKey';
-import { listAllowedExperts, addAllowedExpert } from '../utils/auth';
+import { listAllowedExperts, addAllowedExpert, setExpertActive, currentUser } from '../utils/auth';
 
 /**
  * Modal for viewing and adding authorized experts (allowed_users).
@@ -9,7 +9,11 @@ import { listAllowedExperts, addAllowedExpert } from '../utils/auth';
  * expert, so no permission check is needed here — the Firestore rules are
  * the real gate.
  *
- * Delete is intentionally omitted for now.
+ * Delete is intentionally omitted — removal is a console operation on
+ * purpose, so the audit trail (who added whom, when) can never be erased.
+ * Deactivating (below) is the in-app way to revoke write access; a
+ * deactivated expert stays listed, with a status pill, rather than
+ * disappearing.
  */
 export default function ManageExpertsModal({ isOpen, onClose }) {
     const [experts, setExperts]     = useState([]);
@@ -18,6 +22,8 @@ export default function ManageExpertsModal({ isOpen, onClose }) {
     const [adding, setAdding]       = useState(false);
     const [error, setError]         = useState(null);
     const [successMsg, setSuccessMsg] = useState(null);
+    const [togglingEmail, setTogglingEmail] = useState(null);
+    const myEmail = (currentUser()?.email ?? '').toLowerCase();
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -61,6 +67,20 @@ export default function ManageExpertsModal({ isOpen, onClose }) {
         }
     };
 
+    const handleToggle = async (targetEmail, nextActive) => {
+        setError(null);
+        setSuccessMsg(null);
+        setTogglingEmail(targetEmail);
+        try {
+            await setExpertActive(targetEmail, nextActive);
+            await load();
+        } catch (err) {
+            setError(err.message ?? 'Could not update that expert.');
+        } finally {
+            setTogglingEmail(null);
+        }
+    };
+
     const fmtDate = (iso) => {
         if (!iso) return '—';
         try {
@@ -94,14 +114,36 @@ export default function ManageExpertsModal({ isOpen, onClose }) {
                     <p style={{ padding: '0.5rem 0', color: 'var(--c-muted, #888)' }}>No experts registered yet.</p>
                 ) : (
                     <ul className="season-list" style={{ marginBottom: '1rem' }}>
-                        {experts.map(({ email: e, addedBy, addedAt }) => (
-                            <li key={e} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '0.5rem' }}>
-                                <span style={{ fontWeight: 500 }}>{e}</span>
-                                <span style={{ fontSize: '0.8em', color: 'var(--c-muted, #888)', whiteSpace: 'nowrap' }}>
-                                    {addedBy ? `added by ${addedBy}` : ''}{addedBy && addedAt ? ', ' : ''}{fmtDate(addedAt)}
-                                </span>
-                            </li>
-                        ))}
+                        {experts.map(({ email: e, addedBy, addedAt, active }) => {
+                            const isSelf = e === myEmail;
+                            return (
+                                <li key={e} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
+                                    <span style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem', minWidth: 0 }}>
+                                        <span style={{ fontWeight: 500 }}>{e}</span>
+                                        <span
+                                            className={`action-pill${active ? ' active' : ''}`}
+                                            style={{ fontSize: '0.75em', padding: '0.1em 0.5em', pointerEvents: 'none' }}
+                                        >{active ? 'Active' : 'Inactive'}</span>
+                                    </span>
+                                    <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
+                                        <span style={{ fontSize: '0.8em', color: 'var(--c-muted, #888)', whiteSpace: 'nowrap' }}>
+                                            {addedBy ? `added by ${addedBy}` : ''}{addedBy && addedAt ? ', ' : ''}{fmtDate(addedAt)}
+                                        </span>
+                                        {!isSelf && (
+                                            <button
+                                                type="button"
+                                                className="action-pill"
+                                                disabled={togglingEmail === e}
+                                                onClick={() => handleToggle(e, !active)}
+                                                title={active ? 'Revoke this expert\'s write access' : 'Restore this expert\'s write access'}
+                                            >
+                                                {togglingEmail === e ? '…' : (active ? 'Deactivate' : 'Reactivate')}
+                                            </button>
+                                        )}
+                                    </span>
+                                </li>
+                            );
+                        })}
                     </ul>
                 )}
 

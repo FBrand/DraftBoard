@@ -271,6 +271,23 @@ export function renameBoard(id, label) {
     return true;
 }
 
+const VISIBILITIES = new Set(['private', 'expert', 'public']);
+
+/**
+ * Changes who can see a board's ENTRIES (not the board record itself, which
+ * is always metadata-visible — see firestore.rules' boardVisible()). Only
+ * meaningful for a personal board: a shared (author-less) board is always
+ * public regardless of what is stored here, enforced server-side too, so
+ * this refuses to touch one rather than write a value nothing will honor.
+ */
+export function setBoardVisibility(id, visibility) {
+    const board = boardById(id);
+    if (!board || !board.authorId) return false;
+    if (!VISIBILITIES.has(visibility) || visibility === board.visibility) return false;
+    write(BOARDS_COLLECTION, boardFields, { ...board, visibility });
+    return true;
+}
+
 export function renameAuthor(id, name) {
     const author = oneOf(AUTHORS, 'author', id);
     const next = String(name ?? '').trim();
@@ -375,7 +392,7 @@ export async function scrapSeason() {
     return { ok: true, dropped: outgoing, now: previous, boardsRemoved: doomed.length };
 }
 
-export async function createBoard({ label, authorName = '', ownerId = null } = {}) {
+export async function createBoard({ label, authorName = '', ownerId = null, visibility } = {}) {
     const name = String(label ?? '').trim();
     if (!name) return null;
 
@@ -417,6 +434,15 @@ export async function createBoard({ label, authorName = '', ownerId = null } = {
         label: name,
         authorId,
         ownerId: ownerId ?? null,
+        // A personal board defaults to expert-only: scouting runs
+        // August-March, and a board is work in progress for most of that —
+        // public is the deliberate, later exception, not the default. A
+        // shared (author-less) board has no owner to keep anything from, so
+        // it stays 'public' regardless — the rules also enforce this
+        // server-side (boardVisible()'s `a == null` short-circuit), this is
+        // just so the stored value reads truthfully rather than relying on
+        // a reader to know the override exists.
+        visibility: visibility ?? (authorId ? 'expert' : 'public'),
         seasonId: season.id,
         // Boards made in the app have no file behind them — they are seeded
         // from whatever is imported into them, or start empty.

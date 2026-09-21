@@ -63,7 +63,13 @@ vi.mock('firebase/firestore', () => ({
     doc: (_db, _collection, id) => ({ id }),
     getDoc: async ({ id }) => {
         if (allowedResult instanceof Error) throw allowedResult;
-        return { exists: () => allowedResult === 'yes' && id === 'dan@example.com' };
+        // allowedUserState() (auth.js) reads both exists() and data() — the
+        // active-flag work added data().active, and a mock missing it made
+        // every check throw (calling undefined as a function), which this
+        // file's own recheckAccess() catch swallowed into a misleading
+        // "could not verify" error instead of the real cause.
+        const found = allowedResult === 'yes' && id === 'dan@example.com';
+        return { exists: () => found, data: () => (found ? { active: true } : undefined) };
     },
 }));
 

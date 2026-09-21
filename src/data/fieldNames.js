@@ -146,6 +146,7 @@ export const boardFields = renamer({
     order: 'r',
     seeded: 'd',
     createdAt: 'c',
+    visibility: 'v',
 }, 'board');
 
 /** A person. `id` is the key. */

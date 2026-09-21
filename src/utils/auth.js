@@ -89,18 +89,16 @@ function shape(user, isAllowed = false, unconfirmed = false) {
 }
 
 /**
- * Whether an email is on the allowed_users list — a DEFINITIVE answer.
- *
- * Resolves true/false only once Firestore has actually answered. On anything
- * else — offline, a blocked request, the rules not deployed yet — this
- * THROWS rather than returning false, so a caller can tell "confirmed not
- * allowed" apart from "could not check". Collapsing those two into one false
- * is exactly the shape of the bug documented below in startAuth(): a
- * perfectly good expert would be judged not-allowed on a network hiccup and
- * demoted.
+ * The raw allowed_users state for an email — exists and active, separately —
+ * not just one boolean, so a caller can tell "never listed" apart from
+ * "listed but deactivated" and say the right thing for each. THROWS on
+ * anything but a definitive answer (offline, a blocked request, the rules
+ * not deployed yet), same reasoning as the old isEmailAllowed: collapsing
+ * "could not check" into "not allowed" is the bug documented below in
+ * startAuth() — a perfectly good expert demoted on a network hiccup.
  */
-export async function isEmailAllowed(email) {
-    if (!email) return false;
+export async function allowedUserState(email) {
+    if (!email) return { exists: false, active: false };
     const normalized = email.trim().toLowerCase();
     const { connect } = await import('../data/firebaseApp');
     const [{ firestore }, { doc, getDoc }] = await Promise.all([
@@ -108,7 +106,20 @@ export async function isEmailAllowed(email) {
         import('firebase/firestore'),
     ]);
     const snap = await getDoc(doc(firestore, 'allowed_users', normalized));
-    return snap.exists();
+    if (!snap.exists()) return { exists: false, active: false };
+    const data = snap.data() || {};
+    return { exists: true, active: data.active !== false };
+}
+
+/**
+ * Whether an email is on the allowed_users list AND active — a DEFINITIVE
+ * answer. A thin wrapper over allowedUserState for callers that only need
+ * the one bit; see that function for the exists-vs-active distinction and
+ * why this throws instead of returning false on an inconclusive check.
+ */
+export async function isEmailAllowed(email) {
+    const state = await allowedUserState(email);
+    return state.exists && state.active;
 }
 
 /** Every allowed_users entry — only reachable once the caller is one. */
@@ -126,9 +137,33 @@ export async function listAllowedExperts() {
             email: d.id,
             addedBy: data.addedBy ?? null,
             addedAt: data.addedAt ?? null,
+            active: data.active !== false,
         });
     });
     return list.sort((a, b) => a.email.localeCompare(b.email));
+}
+
+/**
+ * Activates or deactivates another expert. firestore.rules enforces that
+ * only `active` may ever change on this document — email/addedBy/addedAt
+ * stay exactly as they were at creation, so the audit trail can't be
+ * rewritten by this. The app itself refuses to target your OWN entry, so
+ * you cannot lock yourself out or quietly reactivate yourself; the rules
+ * don't need to enforce that half, since either direction is fine for
+ * someone else's entry.
+ */
+export async function setExpertActive(email, active) {
+    if (!email) throw new Error('Missing email.');
+    const normalized = email.trim().toLowerCase();
+    if (current?.email && normalized === current.email.trim().toLowerCase()) {
+        throw new Error('You cannot change your own active status.');
+    }
+    const { connect } = await import('../data/firebaseApp');
+    const [{ firestore }, { doc, updateDoc }] = await Promise.all([
+        connect(),
+        import('firebase/firestore'),
+    ]);
+    await updateDoc(doc(firestore, 'allowed_users', normalized), { active: !!active });
 }
 
 /**
@@ -190,9 +225,9 @@ export async function startAuth() {
 
     fb.onAuthStateChanged(auth, async (user) => {
         if (user && !user.isAnonymous) {
-            let allowed;
+            let state;
             try {
-                allowed = await isEmailAllowed(user.email);
+                state = await allowedUserState(user.email);
             } catch (err) {
                 // Could not confirm either way — offline, a blocked request,
                 // or allowed_users unreachable. NOT the same as "confirmed
@@ -210,8 +245,13 @@ export async function startAuth() {
                 announce();
                 return;
             }
-            if (!allowed) {
+            if (!state.exists) {
                 console.warn(`${user.email} is not on the allowed experts list; continuing as a viewer.`);
+                await demoteToViewer(fb);
+                return;
+            }
+            if (!state.active) {
+                console.warn(`${user.email}'s access has been revoked; continuing as a viewer.`);
                 await demoteToViewer(fb);
                 return;
             }
@@ -277,18 +317,22 @@ export async function signInExpert() {
         throw new Error('Sign-in provider did not provide an email address.');
     }
 
-    let allowed;
+    let state;
     try {
-        allowed = await isEmailAllowed(email);
+        state = await allowedUserState(email);
     } catch (err) {
         // Leave the real Google session in place — the listener above will
         // retry the same check independently — rather than guessing either
         // way from a failed lookup.
         throw new Error('Could not verify your access right now. Try again in a moment.');
     }
-    if (!allowed) {
+    if (!state.exists) {
         await demoteToViewer(fb);
         throw new Error(`Access restricted: "${email}" is not on the allowed experts list.`);
+    }
+    if (!state.active) {
+        await demoteToViewer(fb);
+        throw new Error('Your access has been revoked. Ask another expert to reactivate you.');
     }
 
     current = shape(user, true);
@@ -305,16 +349,20 @@ export async function recheckAccess() {
     if (!auth?.currentUser || auth.currentUser.isAnonymous) return current;
     const user = auth.currentUser;
 
-    let allowed;
+    let state;
     try {
-        allowed = await isEmailAllowed(user.email);
+        state = await allowedUserState(user.email);
     } catch {
         throw new Error('Could not verify your access right now. Try again in a moment.');
     }
-    if (!allowed) {
-        const fb = await import('firebase/auth');
+    const fb = await import('firebase/auth');
+    if (!state.exists) {
         await demoteToViewer(fb);
         throw new Error(`Access restricted: "${user.email}" is not on the allowed experts list.`);
+    }
+    if (!state.active) {
+        await demoteToViewer(fb);
+        throw new Error('Your access has been revoked. Ask another expert to reactivate you.');
     }
 
     current = shape(user, true);
