@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { repository } from '../data/repository';
 import { openStages } from '../data/stageStore';
-import { openBoardEntries, readEntries, entriesPath } from '../data/boardEntries';
+import { openBoardEntries, readEntries, entriesLoaded } from '../data/boardEntries';
 import { openDepthCharts } from '../data/depthChartStore';
 import { openSetup } from '../utils/seasonInit';
 import { parseRankings } from '../utils/dataParser';
@@ -372,7 +371,7 @@ function loadPools({ allBoards = false } = {}) {
             // the honest question. An unread board is not this pass's
             // business — whoever opens it reads it first, and seeds it then
             // if it genuinely needs it.
-            if (repository.isLive() && !repository.isLoaded(entriesPath(board))) return;
+            if (!entriesLoaded(board)) return;
             // The file creates the initial state and then steps out of the
             // way: after this the board lives in storage and is read from
             // there. Favourites are seeded as part of it.

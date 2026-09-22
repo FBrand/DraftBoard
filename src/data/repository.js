@@ -667,6 +667,45 @@ export function createRepository(adapter = localAdapter) {
         }
     }
 
+    /**
+     * Throws the queue away, on purpose.
+     *
+     * The queue exists so that work is never lost to a store that is merely
+     * unreachable, and every other path here protects it. This one is for the
+     * case that protection turns against the person: a write the store has
+     * JUDGED and refused will be refused every time, so it can neither land
+     * nor leave — and until it does both, withPending lays it over the store's
+     * own answer on every read. That is not a safety net. That is somebody
+     * being shown their own rejected copy of a board belonging to somebody
+     * else, for good.
+     *
+     * "Try again" cannot fix it and neither can a reload, because the queue
+     * outlives the tab by design. Discarding is the only way out, so it is
+     * offered — once the app has actually given up, never while a write still
+     * has a chance of landing.
+     *
+     * The local cache still holds the refused values: applyLocal put them
+     * there before the store ever saw them, and taking them out here would
+     * mean invalidating collections that may have live watchers on them,
+     * which stopWatching does not put back. So the caller reloads instead.
+     * The queue is gone from localStorage by then, and the app comes up
+     * reading the store.
+     */
+    function discardPending() {
+        const count = pending.size;
+        if (!count) return 0;
+        pending.clear();
+        if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; }
+        gaveUp = false;
+        lastError = null;
+        lastAdvice = null;
+        // Nothing pending now, so this removes the stored queue — unless
+        // something is still in flight, which is still worth writing down.
+        persistQueue();
+        announce();
+        return count;
+    }
+
     /** Try again now, from a button. */
     function retryNow() {
         gaveUp = false;
@@ -844,7 +883,7 @@ export function createRepository(adapter = localAdapter) {
     return {
         ready, readyVia, ensureLoaded, docs, isLoaded, loadFailed, isLive, follow, get, all, query,
         set, update, remove, commit, commitMany, clear, subscribe, invalidate,
-        onWriteError, onSyncChange, syncState, retryNow, adapter,
+        onWriteError, onSyncChange, syncState, retryNow, discardPending, adapter,
         identity, newAuthorId, isExpert,
     };
 }

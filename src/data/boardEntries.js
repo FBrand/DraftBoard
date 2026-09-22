@@ -50,6 +50,28 @@ import { entryFields } from './fieldNames';
 export const entriesPath = (boardId) => `boards/${boardId}/entries`;
 
 /**
+ * Whether this board's entries have actually been read.
+ *
+ * The distinction the rest of this module cannot make. `readEntries` and
+ * `hasEntries` are synchronous, so an unloaded collection answers "no
+ * entries" in exactly the words an empty one uses, and a caller that takes
+ * that as a fact about the BOARD rather than about the CACHE is one step from
+ * writing the emptiness back.
+ *
+ * That has now happened twice. First when `openBoardEntries` was a no-op and
+ * a viewer's CSV seeded over the live board for good; then when boot began
+ * loading one board instead of four, and opening somebody else's board
+ * re-seeded all 328 of his placements — refused, once per document.
+ *
+ * Against a local adapter there is nothing to distinguish: `loadSync` fills
+ * the cache the moment anything reads it, so this is always true and every
+ * guard built on it costs nothing.
+ */
+export function entriesLoaded(boardId) {
+    return repository.isLoaded(entriesPath(boardId));
+}
+
+/**
  * Loads the named boards' entries, so a synchronous read can answer for them.
  *
  * This used to return a resolved promise and do nothing, on the reasoning that

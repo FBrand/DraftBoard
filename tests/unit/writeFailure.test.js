@@ -308,3 +308,78 @@ describe('a write the store will never take', () => {
         expect(repo.syncState().state).toBe('saved');
     });
 });
+
+/**
+ * The way out of a refusal that will never resolve.
+ *
+ * Keeping a refused write is right while there is any chance it lands, and
+ * wrong forever after. The store has judged it, so "Try again" buys another
+ * identical refusal — and until it leaves, withPending lays it over the
+ * store's own answer on every read. Somebody opening a board that belongs to
+ * another analyst was shown his own rejected copy of it, reload after reload,
+ * with no way to get back to what the database actually held.
+ */
+describe('discarding writes the store will never take', () => {
+    const refusing = () => ({
+        name: 'refusing',
+        async load() { return {}; },
+        loadSync() { return {}; },
+        async set() { throw Object.assign(new Error('permission-denied'), { code: 'permission-denied' }); },
+        async remove() { throw Object.assign(new Error('permission-denied'), { code: 'permission-denied' }); },
+    });
+
+    it('empties the queue and says how many it threw away', async () => {
+        const repo = createRepository(refusing());
+        await repo.set('boards', 'b1', { id: 'b1' });
+        await repo.set('boards', 'b2', { id: 'b2' });
+        expect(repo.syncState()).toMatchObject({ state: 'failed', pending: 2 });
+
+        expect(repo.discardPending()).toBe(2);
+        expect(repo.syncState()).toMatchObject({ state: 'saved', pending: 0 });
+    });
+
+    it('takes it off disk too, or the next visit picks it straight back up', async () => {
+        const repo = createRepository(refusing());
+        await repo.set('boards', 'b1', { id: 'b1' });
+        expect(localStorage.getItem('pending_writes_v1')).toBeTruthy();
+
+        repo.discardPending();
+
+        expect(localStorage.getItem('pending_writes_v1')).toBeNull();
+        // The thing the whole feature is for: a fresh repository over the same
+        // storage comes up clean rather than resuming the refusal.
+        expect(createRepository(refusing()).syncState().state).toBe('saved');
+    });
+
+    it('stops laying the refused write over what the store says', async () => {
+        const adapter = refusing();
+        const repo = createRepository(adapter);
+        await repo.ready('boards');
+        await repo.set('boards', 'b1', { id: 'b1', label: 'My rejected copy' });
+        // Refused, and still winning the read — this is the bug.
+        expect(repo.get('boards', 'b1').label).toBe('My rejected copy');
+
+        repo.discardPending();
+
+        // The cache still holds it, which is why the UI reloads after this;
+        // what matters here is that the QUEUE no longer forces it back on top
+        // of whatever the store returns.
+        const reloaded = createRepository(adapter);
+        await reloaded.ready('boards');
+        expect(reloaded.get('boards', 'b1')).toBeNull();
+    });
+
+    it('does nothing, and says so, when there is nothing to discard', () => {
+        const repo = createRepository(adapterThat());
+        expect(repo.discardPending()).toBe(0);
+        expect(repo.syncState().state).toBe('saved');
+    });
+
+    it('leaves a merely unreachable write alone — that one is still coming', async () => {
+        // Guard against the button ever being offered in the retrying state:
+        // discarding here would lose work that was never actually lost.
+        const repo = createRepository(adapterThat({ fail: true }));
+        await repo.set('players', 'p1', { id: 'p1', name: 'Coming Back' });
+        expect(repo.syncState().state).toBe('retrying');
+    });
+});
