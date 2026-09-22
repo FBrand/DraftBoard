@@ -77,7 +77,17 @@ export default function PlayerInfoModal({ player, players = [], onClose, editsOp
     // Each analyst ranks a different pool (their own rankings file), so paging
     // boards has to re-rank against that board's players — not re-rank one
     // shared list three times, which would give the same number every time.
-    const { pools } = useBoardRankings(players);
+    // Every board, but only once a card is actually open.
+    //
+    // This component is always mounted — App renders it with player={null}
+    // and it returns null — so asking for every board's entries here meant
+    // every page load paid for all four, 1,312 documents, including the
+    // viewer who only ever watches the draft board and never opens a card.
+    // Gating on `player` keeps the paging above correct (it needs each
+    // analyst's own pool, or the ‹/› arrows would re-rank one shared list and
+    // report the same number for everybody) while charging for it only when
+    // somebody is looking.
+    const { pools } = useBoardRankings(players, { allBoards: !!player });
     const pool = pools?.[activeBoard] ?? players;
 
     // Ranking the pool is the same work Scouting does for its own view; it's

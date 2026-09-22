@@ -190,9 +190,42 @@ function poolFromEntries(boardId) {
         .filter(Boolean);
 }
 
-function loadPools() {
+/**
+ * Which boards' entries to read at boot.
+ *
+ * Every board holds an entry per player — 328 each here, four boards, 1,312
+ * documents — and only Scouting ever looks at more than one of them at a
+ * time. On the free tier that is most of a page load's read budget spent on
+ * three boards nobody has opened.
+ *
+ * Scouting asks for all of them (see its own note about the info card paging
+ * between analysts' takes). Everything else takes the active board alone,
+ * which is enough because of what the OTHER consumers actually need:
+ *
+ *   - the pool, which a seeded board rebuilds from its own entries;
+ *   - storedIdentities, which reuses ids already written down so resolveAll
+ *     does not have to fuzzy-match names again.
+ *
+ * Both are satisfied by one board, because seedBoard materialises a placement
+ * for every player in the union rather than only the ones a file ranked — so
+ * any single seeded board carries the whole cast. A board that somehow does
+ * not simply contributes fewer known ids, and the names it misses fall
+ * through to the matcher exactly as they did before any of this existed.
+ */
+function boardsToOpen(all) {
+    const boards = listBoards();
+    if (all) return boards.map(b => b.id);
+    const slug = (() => {
+        try { return new URLSearchParams(window.location.search).get('board') ?? ''; }
+        catch { return ''; }
+    })();
+    const active = boards.find(b => b.slug === slug) ?? boards[0];
+    return active ? [active.id] : [];
+}
+
+function loadPools({ allBoards = false } = {}) {
     return openBoards()
-        .then(() => Promise.all([loadFiles(), openRegistry(), openEvaluations(), openStages(viewedSeason()?.id ?? null), openBoardEntries(listBoards().map(b => b.id)), openDepthCharts(viewedSeason()?.id ?? null), openSetup(viewedSeason()?.id ?? null)]))
+        .then(() => Promise.all([loadFiles(), openRegistry(), openEvaluations(), openStages(viewedSeason()?.id ?? null), openBoardEntries(boardsToOpen(allBoards)), openDepthCharts(viewedSeason()?.id ?? null), openSetup(viewedSeason()?.id ?? null)]))
         .then(([fetched]) => {
         // Files for the boards that still need one, entries for the rest.
         // Done HERE rather than inside loadFiles because it needs the entries
@@ -373,7 +406,7 @@ export function invalidateBoards() {
 /** What the last load found wrong with the files. See duplicatesIn. */
 let fileDuplicates = [];
 
-export default function useBoardRankings(fallback) {
+export default function useBoardRankings(fallback, { allBoards = false } = {}) {
     const [pools, setPools] = useState(null);
     const [gen, setGen] = useState(generation);
 
@@ -385,9 +418,9 @@ export default function useBoardRankings(fallback) {
 
     useEffect(() => {
         let cancelled = false;
-        loadPools().then(loaded => { if (!cancelled) setPools(loaded); });
+        loadPools({ allBoards }).then(loaded => { if (!cancelled) setPools(loaded); });
         return () => { cancelled = true; };
-    }, [gen]);
+    }, [gen, allBoards]);
 
     // Memoised so the returned object is stable between renders. Callers use
     // it as an effect dependency — "the pools have arrived" is the signal that

@@ -67,7 +67,11 @@ export default function ScoutingView({ players }) {
     const setActiveBoard = (id) => setBoardSlug(boardById(id)?.slug ?? '');
     // Each analyst's own rankings file — switching board switches the actual
     // player pool, not just the overlay on top of one shared list.
-    const { pools, duplicates } = useBoardRankings(players);
+    // Scouting is the one view that genuinely needs every board at once:
+    // the info card pages between analysts' takes on the same player, and
+    // switching boards must not wait on a fetch. Everywhere else pays for
+    // the active board alone — see boardsToOpen.
+    const { pools, duplicates } = useBoardRankings(players, { allBoards: true });
     const boardPlayers = pools?.[activeBoard] ?? players;
     const [selectedNameParam, setSelectedNameParam] = useUrlParam('player', '');
     const selectedName = selectedNameParam || null;
