@@ -76,6 +76,10 @@ export function createRepository(adapter = localAdapter) {
      * that guard made general.
      */
     const loaded = new Set();
+    // Collections being loaded BY their watcher (see readyVia). The snapshot
+    // guard below has to let their first snapshot through: it is the load,
+    // not a late arrival after an invalidate.
+    const loadingByWatch = new Set();
 
     /**
      * Collections being kept up to date by the store, and how to stop.
@@ -133,6 +137,67 @@ export function createRepository(adapter = localAdapter) {
     }
 
     /**
+     * Loads a collection by WATCHING it, rather than reading it and then
+     * watching it as well.
+     *
+     * ready() + follow() on the same collection is two queries, and Firestore
+     * bills both: a get charges per document, and a listener "charges the
+     * initial result set once, then one read per changed document". The
+     * player registry is 728 documents and the draft follows it, so every
+     * page load was paying about 1,456 reads for one collection — on a free
+     * tier of 50,000 a day, that alone is most of a load.
+     *
+     * The first snapshot carries exactly what the load would have returned,
+     * so the load is redundant. What it is NOT is guaranteed to arrive: the
+     * existing comment on follow() is right that a first snapshot that never
+     * comes would hang the app rather than show it a stale board. So this
+     * keeps that promise by racing — whichever answers first settles it, and
+     * a watch that stays silent falls back to the ordinary read instead of
+     * leaving a caller awaiting forever.
+     *
+     * Returns the same shape ready() does, and is a no-op difference for any
+     * adapter with no watch: local and memory fall straight through.
+     */
+    function readyVia(collection, { timeoutMs = 4000 } = {}) {
+        if (loaded.has(collection)) return Promise.resolve(cache.get(collection));
+        if (loading.has(collection)) return loading.get(collection);
+        if (!adapter.watch) return ready(collection);
+
+        let settle;
+        const promise = new Promise((resolve) => { settle = resolve; });
+        loading.set(collection, promise);
+
+        let done = false;
+        const finish = () => {
+            if (done) return;
+            done = true;
+            clearTimeout(timer);
+            loading.delete(collection);
+            settle(cache.get(collection));
+        };
+
+        // The fallback. Not an error path — a watch can be slow for ordinary
+        // reasons — so it reads the collection the old way and lets the
+        // watcher keep running underneath for whenever it does arrive.
+        const timer = setTimeout(() => {
+            if (done) return;
+            loadingByWatch.delete(collection);
+            loading.delete(collection);
+            ready(collection).then(finish, finish);
+        }, timeoutMs);
+
+        // subscribe() fires on every notify, and startWatching's callback
+        // notifies once the first snapshot lands — which is the moment the
+        // collection is loaded.
+        const stop = subscribe(collection, () => { stop(); finish(); });
+        followers.set(collection, (followers.get(collection) ?? 0) + 1);
+        loadingByWatch.add(collection);
+        startWatching(collection);
+
+        return promise;
+    }
+
+    /**
      * Keeps a collection up to date once it has loaded.
      *
      * The load still happens first and is still what ready() resolves on: a
@@ -183,8 +248,15 @@ export function createRepository(adapter = localAdapter) {
             (docs) => {
                 // Dropped rather than applied if the collection has since been
                 // invalidated — a late snapshot would otherwise resurrect what
-                // a wipe has just removed.
-                if (!loaded.has(collection)) return;
+                // a wipe has just removed. A collection loading THROUGH its
+                // watcher is the one exception: its first snapshot is the
+                // load itself, and dropping it would hang the caller waiting
+                // on it (readyVia).
+                if (!loaded.has(collection)) {
+                    if (!loadingByWatch.has(collection)) return;
+                    loadingByWatch.delete(collection);
+                    if (!adapter.readFailed?.(collection)) loaded.add(collection);
+                }
                 cache.set(collection, withPending(collection, docs));
                 notify(collection);
             },
@@ -770,7 +842,7 @@ export function createRepository(adapter = localAdapter) {
     restoreQueue();
 
     return {
-        ready, ensureLoaded, docs, isLoaded, loadFailed, isLive, follow, get, all, query,
+        ready, readyVia, ensureLoaded, docs, isLoaded, loadFailed, isLive, follow, get, all, query,
         set, update, remove, commit, commitMany, clear, subscribe, invalidate,
         onWriteError, onSyncChange, syncState, retryNow, adapter,
         identity, newAuthorId, isExpert,

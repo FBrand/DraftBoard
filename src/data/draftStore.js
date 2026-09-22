@@ -49,7 +49,10 @@ function yearOf(seasonId) {
 }
 
 export function openDraft() {
-    return Promise.all([repository.ready(DRAFT_STATE), repository.ready(PLAYERS), repository.ready('seasons')]);
+    // PLAYERS and DRAFT_STATE are both followed by useDraftState, so both
+    // load through their watcher rather than being read and then watched —
+    // see openRegistry for why that halves what the registry costs.
+    return Promise.all([repository.readyVia(DRAFT_STATE), repository.readyVia(PLAYERS), repository.ready('seasons')]);
 }
 
 /**

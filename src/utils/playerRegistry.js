@@ -33,7 +33,19 @@ export const STATE_VERSION = 1;
  * after that is synchronous, off the repository's in-memory copy.
  */
 export async function openRegistry() {
-    await repository.ready(PLAYERS);
+    // Loaded by WATCHING rather than reading-then-watching.
+    //
+    // This is the biggest collection in the app — 728 documents — and the
+    // draft follows it, because a pick is recorded on the player. Reading it
+    // and then opening a listener on it is two queries, and Firestore bills
+    // the get per document AND the listener's initial result set, so one
+    // collection was costing about 1,456 reads on every page load. The first
+    // snapshot is the same data the read would have returned.
+    //
+    // readyVia falls back to an ordinary read if no snapshot arrives, so the
+    // promise still settles on a store that cannot push — which is what stops
+    // a silent watcher hanging the app instead of showing it a stale board.
+    await repository.readyVia(PLAYERS);
 }
 
 // The rest of this module reads and writes through the repository but keeps a
