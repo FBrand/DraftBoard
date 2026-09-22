@@ -97,11 +97,30 @@ function parseListField(raw) {
 }
 
 export function loadState(boardId) {
+    // `seeded` comes from the BOARD RECORD, not from whether its entries
+    // happen to be in memory — and the difference is not academic.
+    //
+    // Entries are loaded per board now rather than all at once, so "no
+    // entries here" no longer means "this board has none". It also means
+    // "nobody has read this board yet". This branch used to return no
+    // `seeded` field at all, which reads as false, which told seedBoard the
+    // board had never been materialised — so opening a board whose entries
+    // had not loaded rewrote all 328 of its placements from the rankings
+    // file. On somebody else's board every one of those writes is refused,
+    // and the queue fills with them.
+    //
+    // The record is the authority either way: it is what seedBoard sets when
+    // it finishes, and what survives a reload. Absent means a genuinely new
+    // board that has never been seeded, which is the one case that SHOULD
+    // seed.
+    // The two defaults differ because the evidence does. Entries present and
+    // no flag means a board materialised before the flag existed — seeded.
+    // Nothing present and no flag means a board nobody has ever seeded.
     if (hasEntries(boardId)) {
         return { version: 1, seeded: boardById(boardId)?.seeded ?? true, entries: readEntries(boardId) };
     }
 
-    return { version: 1, entries: [] };
+    return { version: 1, seeded: boardById(boardId)?.seeded ?? false, entries: [] };
 }
 
 export { openBoardEntries };

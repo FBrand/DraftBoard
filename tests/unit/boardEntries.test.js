@@ -258,3 +258,37 @@ describe('two analysts editing one board', () => {
         expect(after.entries.find(e => e.name === 'Caleb Downs').round).toBe(3);
     });
 });
+
+/**
+ * The 329-write bug: opening a board whose entries had not been read
+ * rewrote every one of its placements from the rankings file.
+ *
+ * Entries load per board now, so "no entries in memory" stopped meaning
+ * "this board has none" and started also meaning "nobody has read it yet".
+ * loadState returned no `seeded` field in that case, which reads as false,
+ * which told seedBoard to materialise the board from scratch — 328 entry
+ * writes plus the board's own stamp. On a board owned by somebody else
+ * every one is refused, and that is what the queue filled with.
+ */
+describe('a seeded board whose entries have not been read', () => {
+    it('still reports itself as seeded, so nothing re-materialises it', () => {
+        const id = board();
+        saveState(id, { version: 1, entries: three() });
+        expect(loadState(id).seeded).toBe(true);
+
+        // Drop the entries from memory WITHOUT unseeding the board — exactly
+        // the state a board is in when another board was the one loaded.
+        repository.invalidate(entriesPath(id));
+        const state = loadState(id);
+        expect(state.entries).toHaveLength(0);
+        expect(state.seeded).toBe(true);
+    });
+
+    it('a board that genuinely never was seeded still reports false', () => {
+        // The one case that SHOULD seed must not be broken by the fix.
+        const fresh = allBoards().find(b => b.id !== board());
+        if (!fresh) return;
+        repository.invalidate(entriesPath(fresh.id));
+        expect(loadState(fresh.id).seeded).toBe(boardById(fresh.id)?.seeded ?? false);
+    });
+});

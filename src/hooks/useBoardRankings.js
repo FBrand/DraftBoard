@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
+import { repository } from '../data/repository';
 import { openStages } from '../data/stageStore';
-import { openBoardEntries, readEntries } from '../data/boardEntries';
+import { openBoardEntries, readEntries, entriesPath } from '../data/boardEntries';
 import { openDepthCharts } from '../data/depthChartStore';
 import { openSetup } from '../utils/seasonInit';
 import { parseRankings } from '../utils/dataParser';
@@ -356,6 +357,22 @@ function loadPools({ allBoards = false } = {}) {
         // can never overwrite an analyst's own tag.
         Object.keys(pools).forEach(board => {
             if (!pools[board]?.length) return;
+            // Never seed a board whose entries were not read.
+            //
+            // Entries load per board now, so an unread board looks EMPTY
+            // rather than absent — and every board is handed the full union
+            // as its pool regardless of whether its own file or entries
+            // arrived, so the length check above does not catch it. Seeding
+            // on that reading rewrites all 328 placements from the file. On
+            // a board somebody else owns every one of those writes is
+            // refused, and the queue fills with them: 328 entries and the
+            // board's own stamp, 329 failures for opening a board.
+            //
+            // Asking the repository whether the collection actually loaded is
+            // the honest question. An unread board is not this pass's
+            // business — whoever opens it reads it first, and seeds it then
+            // if it genuinely needs it.
+            if (repository.isLive() && !repository.isLoaded(entriesPath(board))) return;
             // The file creates the initial state and then steps out of the
             // way: after this the board lives in storage and is read from
             // there. Favourites are seeded as part of it.
