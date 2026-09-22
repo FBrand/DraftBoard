@@ -612,6 +612,40 @@ export default function ScoutingView({ players }) {
         // asked for, but there's no reason to even offer the choice here.
         const isPersonal = String(authorName ?? '').trim();
         const ownerId = isPersonal ? (getCurrentUser()?.id ?? null) : null;
+
+        // Make sure the author record exists BEFORE creating a board that
+        // will be owned by that uid.
+        //
+        // An expert with an invite but no author document can still create
+        // boards — isExpert() asks about the invite and nothing else, which
+        // is the ordering that breaks the bootstrap — and the resulting
+        // board is unrecoverable: ownerRevoked() finds no author, fails
+        // closed, and reports him not revoked, so nobody may claim it;
+        // nobody but him may write it; if it is private nobody may read it;
+        // and the missing author record cannot be written by anyone else,
+        // because creating one demands the id be your OWN uid. The Firebase
+        // console is the only way back. ensureAuthorRecord's own failure
+        // path is deliberately non-fatal and silent, so the app can produce
+        // that state by itself — this is where it gets stopped.
+        //
+        // Only for a PERSONAL board: a shared one has no owner, so there is
+        // no uid to strand it against. Only on a live backend, and imported
+        // dynamically, so a local build never pulls the Firebase SDK in for
+        // a check that has nothing to check.
+        if (isPersonal && repository.isLive()) {
+            const { ensureAuthorRecordNow } = await import('../utils/auth');
+            if (!await ensureAuthorRecordNow()) {
+                // Thrown rather than returned: CreateBoardModal keeps itself
+                // open and shows this, so the click does not simply appear
+                // to do nothing.
+                throw new Error(
+                    'Could not set up your author record just now, so the board was not created. '
+                    + 'A board created without one cannot be claimed, released or recovered afterwards. '
+                    + 'Check your connection and try again.',
+                );
+            }
+        }
+
         const board = await createBoard({ label, authorName, ownerId, visibility: isPersonal ? visibility : undefined });
         if (!board) return;
 

@@ -20,6 +20,7 @@ export default function CreateBoardModal({ isOpen, onClose, onCreate }) {
     const [visibility, setVisibility] = useState('expert');
     const [file, setFile] = useState(null);
     const [busy, setBusy] = useState(false);
+    const [error, setError] = useState(null);
     const fileRef = useRef(null);
 
     useEscapeKey(onClose, isOpen);
@@ -29,9 +30,14 @@ export default function CreateBoardModal({ isOpen, onClose, onCreate }) {
         e.preventDefault();
         if (!label.trim() || busy) return;
         setBusy(true);
+        setError(null);
         try {
             await onCreate({ label: label.trim(), authorName: author.trim(), visibility, file });
             onClose();
+        } catch (err) {
+            // Stays open, says why. A refusal used to close nothing and
+            // report nothing, which reads as the button not working.
+            setError(err?.message ?? 'Could not create that board.');
         } finally {
             setBusy(false);
         }
@@ -100,6 +106,8 @@ export default function CreateBoardModal({ isOpen, onClose, onCreate }) {
                             />
                         </div>
                     </div>
+
+                    {error && <div className="ap-error">{error}</div>}
 
                     <div className="modal-actions" style={{ marginTop: 20 }}>
                         <div style={{ flex: 1 }} />

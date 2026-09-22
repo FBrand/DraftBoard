@@ -174,6 +174,50 @@ async function ensureAuthorRecord(user) {
 }
 
 /**
+ * The same thing, but insisted upon — and the reason it has to be insisted
+ * upon is worth stating, because the obvious reading is that this is
+ * belt-and-braces.
+ *
+ * An expert with no author record can still create boards: isExpert() asks
+ * about the invite and nothing else, deliberately, because that ordering is
+ * what breaks the bootstrap. So a board can end up owned by a uid that has
+ * no author document — and THAT state is unrecoverable:
+ *
+ *   - ownerRevoked() finds no author, fails closed, reports "not revoked",
+ *     so nobody can claim the board;
+ *   - ownsBoardData needs o == your uid, so nobody else can write it;
+ *   - if it is private, boardVisible needs the same, so nobody can read it;
+ *   - authors is `delete: if false` and create demands the id be your OWN
+ *     uid, so nobody can even write the missing record to undo it.
+ *
+ * Nothing short of the Firebase console gets that board back. The callers
+ * below treat a failure here as non-fatal because a man with an invite IS an
+ * expert and being unable to write his profile must not lock him out of the
+ * app — which is right, but it means the app produces the stranding state on
+ * its own, quietly, with no retry. Hence this: retry before anything that
+ * could create a board, and let the caller decide whether to proceed.
+ *
+ * Returns true once the record exists. Retries are immediate rather than
+ * backed off: the caller is a person waiting on a click, and three quick
+ * attempts covers the transient case this is actually for.
+ */
+export async function ensureAuthorRecordNow(attempts = 3) {
+    if (!auth?.currentUser || auth.currentUser.isAnonymous) return false;
+    for (let i = 0; i < attempts; i += 1) {
+        try {
+            await ensureAuthorRecord(auth.currentUser);
+            return true;
+        } catch (err) {
+            if (i === attempts - 1) {
+                console.warn('Could not create the author record.', err?.code ?? err);
+                return false;
+            }
+        }
+    }
+    return false;
+}
+
+/**
  * Everyone who may act as an expert, plus everyone who has been invited and
  * never signed in.
  *
