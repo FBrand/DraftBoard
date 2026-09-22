@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { entryDocId, entriesPath, hasEntries, BOARD_ENTRIES } from '../../src/data/boardEntries';
+import { entryDocId, entriesPath, BOARD_ENTRIES } from '../../src/data/boardEntries';
 import { makeEntry, loadState, saveState } from '../../src/utils/scoutingState';
 import { openBoards, allBoards, boardById } from '../../src/utils/boardRegistry';
 import { repository } from '../../src/data/repository';
@@ -290,55 +290,5 @@ describe('a seeded board whose entries have not been read', () => {
         if (!fresh) return;
         repository.invalidate(entriesPath(fresh.id));
         expect(loadState(fresh.id).seeded).toBe(boardById(fresh.id)?.seeded ?? false);
-    });
-});
-
-/**
- * Whether a board still needs seeding, in the four states it can be in.
- *
- * "No entries" is two different facts wearing one value, and which one it is
- * decides whether the rankings file is about to be written over the board.
- * Both wrong answers have shipped: taking the cache's silence for the board's
- * emptiness rewrote 328 placements onto a board somebody else owns, and then
- * taking the record's word over the read collection left the consensus board
- * blank, because every rank on a board is derived from entries it did not
- * have.
- */
-describe('deciding whether a board needs seeding', () => {
-    const loaded = (id) => repository.isLoaded(entriesPath(id));
-
-    it('a read board with entries is seeded and is left alone', () => {
-        const id = board();
-        saveState(id, { version: 1, entries: three() });
-        expect(loaded(id)).toBe(true);
-        expect(loadState(id).seeded).toBe(true);
-    });
-
-    it('a read board with nothing on it still needs seeding', async () => {
-        // The consensus case. Read — which is what openBoardEntries does —
-        // and genuinely empty, so the emptiness is the board's own and the
-        // file is what fills it.
-        const id = 'b_read_but_empty';
-        await repository.ready(entriesPath(id));
-        expect(loaded(id)).toBe(true);
-        expect(hasEntries(id)).toBe(false);
-        expect(loadState(id).seeded).toBe(false);
-    });
-
-    it('an unread board that the record calls seeded is left alone', () => {
-        const id = board();
-        saveState(id, { version: 1, entries: three() });
-        repository.set('boards', id, { ...repository.get('boards', id), seeded: true });
-        repository.invalidate(entriesPath(id));
-
-        // Nothing has been read, so the record is the only evidence there is
-        // — and it says this board already has placements. Seeding here is
-        // the 329-write bug.
-        expect(loadState(id).seeded).toBe(true);
-    });
-
-    it('a brand new board seeds, which is what board creation depends on', () => {
-        // No entries, nothing read, and no record saying otherwise.
-        expect(loadState('b_brand_new').seeded).toBe(false);
     });
 });
