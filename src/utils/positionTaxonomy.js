@@ -281,6 +281,39 @@ export function samePosition(a, b) {
     return !xSub || !ySub;
 }
 
+/**
+ * Whether two labels are COMPATIBLE — close enough that one man could
+ * plausibly be described either way by two different people.
+ *
+ * Deliberately not the same question as samePosition(), and deliberately not
+ * wired into it. samePosition decides IDENTITY and stays strict: EDGE and DL
+ * are different positions, and treating them as one would merge two men who
+ * really are different. This is the softer question, and it exists for one
+ * purpose — PROPOSING a match to somebody who can say yes or no.
+ *
+ * The live registry is what argued for it. Seven players were in it twice,
+ * every pair the same man under two labels neither source could reconcile:
+ * Mauigoa as OT and IOL, Faulk as EDGE and DL, Casey as IOL.G and OT, Bain as
+ * DL.3T and EDGE. All four pairs are in the compatibility table already,
+ * because the table was built for exactly this relationship — it was just
+ * only being consulted for where a man can LINE UP, never for whether two
+ * records describe him.
+ *
+ * Sub-types inherit their family's pairs, same rule rowsFor uses: an OLB is a
+ * linebacker, so LB.O is compatible with everything LB is.
+ */
+export function compatiblePositions(a, b) {
+    const x = canonicalPosition(a);
+    const y = canonicalPosition(b);
+    if (!x || !y || x === y) return false;
+
+    const majorOf = (p) => p.split('.', 1)[0];
+    const reaches = (label, p) => label === p || label === majorOf(p);
+
+    return getCompatible().some(([l, r]) =>
+        (reaches(l, x) && reaches(r, y)) || (reaches(l, y) && reaches(r, x)));
+}
+
 /** Every row `label` may fill: its own, plus those of compatible positions. */
 export function rowsFor(label) {
     const position = canonicalPosition(label);

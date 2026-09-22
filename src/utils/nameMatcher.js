@@ -1,4 +1,4 @@
-import { canonicalPosition } from './positionTaxonomy';
+import { canonicalPosition, compatiblePositions } from './positionTaxonomy';
 
 const NICKNAME_MAP = {
     "kc": "kevin",
@@ -207,6 +207,45 @@ function discriminates(entry, qualifier) {
  * Callers that know nothing beyond the name pass nothing and get the original
  * name-only behaviour.
  */
+/**
+ * A match the position qualifier REFUSED, where the two positions are merely
+ * compatible rather than contradictory — one man two sources describe
+ * differently, or two men who happen to share a name. This cannot tell those
+ * apart, which is exactly why it does not decide anything.
+ *
+ * Separate from findMatchingIndex on purpose, and opt-in on purpose. Folding
+ * compatibility into the ordinary path would make every boot quietly merge
+ * records nobody approved — and boot is where there is no one to ask. The one
+ * caller is prospects.classify(), which hands the result to a person: the Add
+ * Players verification step already blocks submit on a collision and offers
+ * the existing player's card, so a proposal has somewhere to go.
+ *
+ * Returns -1 unless the name matches AND the only thing standing in the way
+ * was a compatible position. A school that genuinely disagrees still refuses:
+ * the point is to question the weakest evidence, not to abandon evidence.
+ */
+export function findCompatibleIndex(targetName, mappedList, qualifier = null) {
+    if (!targetName || !mappedList?.length || !qualifier) return -1;
+    const q = typeof qualifier === 'string' ? { position: qualifier } : qualifier;
+    if (!q.position) return -1;
+
+    // Already an ordinary match — nothing to propose.
+    if (findMatchingIndex(targetName, mappedList, q) !== -1) return -1;
+
+    const qBase = basePos(q.position);
+    const qSchool = normSchool(q.school);
+    const plausible = mappedList.filter((p) => {
+        if (qSchool && p.school && (p.normSchool ?? normSchool(p.school)) !== qSchool) return false;
+        const pBase = p.basePosition ?? basePos(p.position);
+        return pBase && qBase && pBase !== qBase && compatiblePositions(pBase, qBase);
+    });
+    if (!plausible.length) return -1;
+
+    // Name-only among the plausible ones: position has already done all the
+    // work it is entitled to do here.
+    return findMatchingIndex(targetName, plausible);
+}
+
 export function findMatchingIndex(targetName, mappedList, qualifier = null) {
     if (!targetName || !mappedList || mappedList.length === 0) return -1;
 

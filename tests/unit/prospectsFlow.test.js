@@ -151,3 +151,34 @@ describe('the pool a board actually draws from', () => {
         expect(applyProspects(null)).toEqual([]);
     });
 });
+
+describe('a name that matches except for a compatible position', () => {
+    // The real shape from the live registry: a rankings file names him at one
+    // position with no school, the facts file at another with one. Seven
+    // players ended up with two records each exactly this way.
+    const KNOWN = [{ name: 'Francis Mauigoa', position: 'OT', school: 'Miami' }];
+
+    it('is proposed for confirmation, not silently added as a new player', () => {
+        const out = classify('Francis Mauigoa', KNOWN, { position: 'IOL' });
+        expect(out.kind).toBe('similar');
+        expect(out.match.name).toBe('Francis Mauigoa');
+        // Says WHY, so the step that shows it can explain itself.
+        expect(out.reason).toBe('position');
+    });
+
+    it('is still NEW when the positions are genuinely unrelated', () => {
+        // Two men of one name, one a tackle and one a corner, must stay two.
+        expect(classify('Francis Mauigoa', KNOWN, { position: 'CB' }).kind).toBe('new');
+    });
+
+    it('is still NEW when the schools actually disagree', () => {
+        // Compatible positions are weak evidence; a school that both sides
+        // declare and that differs is strong evidence, and still wins.
+        const out = classify('Francis Mauigoa', KNOWN, { position: 'IOL', school: 'Alabama' });
+        expect(out.kind).toBe('new');
+    });
+
+    it('does not disturb an ordinary exact match', () => {
+        expect(classify('Francis Mauigoa', KNOWN, { position: 'OT' }).kind).toBe('exact');
+    });
+});

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
-    canonicalPosition, samePosition, rowsFor, COVERS,
+    canonicalPosition, samePosition, compatiblePositions, rowsFor, COVERS,
     getCompatible, setCompatible, setGroups, parsePairs, parseGroups,
 } from '../../src/utils/positionTaxonomy';
 
@@ -204,5 +204,38 @@ describe('the editable tables', () => {
         // matching starts minting duplicate records, which is not a setting.
         expect(samePosition('EDGE', 'LDE')).toBe(true);
         expect(canonicalPosition('LG')).toBe('IOL.G');
+    });
+});
+
+describe('compatiblePositions — for proposing a match, never for deciding one', () => {
+    it('accepts the pairs that actually produced duplicate registry records', () => {
+        // Every one of these is a real pair from the live registry, where one
+        // man ended up with two records because two sources labelled him
+        // differently and neither declared a school.
+        expect(compatiblePositions('OT', 'IOL')).toBe(true);
+        expect(compatiblePositions('EDGE', 'DL')).toBe(true);
+        expect(compatiblePositions('IOL.G', 'OT')).toBe(true);
+        expect(compatiblePositions('DL.3T', 'EDGE')).toBe(true);
+    });
+
+    it('refuses positions that are genuinely unrelated', () => {
+        expect(compatiblePositions('QB', 'CB')).toBe(false);
+        expect(compatiblePositions('RB', 'DL')).toBe(false);
+        // The taxonomy's own rule: a linebacker is not a defensive tackle.
+        expect(compatiblePositions('LB', 'DL.1T')).toBe(false);
+    });
+
+    it('is not reflexive — the same position is not a COMPATIBILITY question', () => {
+        // samePosition answers that, and answers it strictly. If this returned
+        // true the caller could not tell "already matched" from "worth asking".
+        expect(compatiblePositions('EDGE', 'EDGE')).toBe(false);
+        expect(compatiblePositions('DL', 'DL')).toBe(false);
+    });
+
+    it('does not change what samePosition decides', () => {
+        // The whole safety property: identity stays strict, so nothing merges
+        // at boot where there is nobody to ask.
+        expect(samePosition('EDGE', 'DL')).toBe(false);
+        expect(samePosition('OT', 'IOL')).toBe(false);
     });
 });

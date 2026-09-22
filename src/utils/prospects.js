@@ -11,7 +11,7 @@
  * prospect added by one analyst appears on every board untiered and untagged —
  * that he exists is a fact, where he belongs is an opinion.
  */
-import { buildNameIndex, findMatchingIndex } from './nameMatcher';
+import { buildNameIndex, findMatchingIndex, findCompatibleIndex } from './nameMatcher';
 import { readStage, writeStage } from '../data/stageStore';
 import { viewedSeason } from './boardRegistry';
 
@@ -111,7 +111,28 @@ export function classify(name, existingPlayers, position = null) {
 
     const index = buildNameIndex(existingPlayers);
     const i = findMatchingIndex(clean, index, position);
-    if (i === -1) return { kind: 'new' };
+    if (i === -1) {
+        // Before calling him new: is there somebody of this name whose only
+        // difference is a position the two sources could BOTH be right about?
+        //
+        // This is where the registry's duplicates came from. A rankings file
+        // says Francis Mauigoa, IOL; the facts file says Francis Mauigoa, OT,
+        // Miami. The names match, the schools cannot disagree because one side
+        // has none, and the positions differ — so the match was refused and a
+        // second record minted for a man who already had one. Seven players
+        // are in the live registry twice for exactly this reason, every pair a
+        // compatible one: OT/IOL, EDGE/DL, IOL.G/OT, DL.3T/EDGE.
+        //
+        // Reported as 'similar', not merged. Compatible is not the same as
+        // identical — two men called Chris Jones, one an edge and one a
+        // tackle, look exactly like this — so it goes to the person who can
+        // tell, through the collision step Add Players already has. The
+        // strict path above is untouched, which is what keeps boot from
+        // silently merging anything while nobody is watching.
+        const c = findCompatibleIndex(clean, index, position);
+        if (c === -1) return { kind: 'new' };
+        return { kind: 'similar', match: existingPlayers[c], reason: 'position' };
+    }
 
     const match = existingPlayers[i];
     const same = String(match.name).trim().toLowerCase() === clean.toLowerCase();
