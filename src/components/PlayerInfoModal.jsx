@@ -166,6 +166,33 @@ export default function PlayerInfoModal({ player, players = [], onClose, editsOp
     }, [playerId]);
 
     /**
+     * Re-read the boards once their entries have actually arrived.
+     *
+     * `boards` above is read in a useState initialiser, which runs once, at
+     * mount. That was fine while every board's entries were loaded before
+     * anything could open this card. They are not any more — boot reads the
+     * board being looked at and leaves the rest — so the initialiser ran
+     * against collections that had not been read yet, got the empty answer
+     * they give in that state, and kept it.
+     *
+     * Empty entries are not a blank card, they are a WRONG one: total and
+     * position rank are derived from the entries by rankBoard rather than
+     * stored, so a board with none ranks nobody and every number on it comes
+     * back null. The card showed ??? for players every analyst has ranked.
+     *
+     * Keyed on `pools` rather than on the entries load it starts, because
+     * loading is not the last thing that happens to a board — seeding it
+     * from its rankings file is, and that runs inside the same pass. Reading
+     * when the entries merely arrived would take the pre-seed answer for a
+     * board that was about to be filled in. ScoutingView keys its own
+     * re-read on exactly this, for exactly this reason.
+     */
+    useEffect(() => {
+        if (!pools) return;
+        setBoards(Object.fromEntries(boardList.map(b => [b.id, scoutingState.loadState(b.id)])));
+    }, [pools, boardList]);
+
+    /**
      * What every board has said about him, stacked.
      *
      * This read the remarks off each board's ENTRY, which is where they used
