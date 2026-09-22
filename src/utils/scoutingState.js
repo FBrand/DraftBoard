@@ -27,7 +27,7 @@
 import { parseCsvLine, csvField } from './csvUtils';
 import { buildNameIndex, findMatchingIndex } from './nameMatcher';
 import { parseTier, tierLabel, spaceEvenly } from './boardRanking';
-import { readEntries, writeEntries, hasEntries, openBoardEntries } from '../data/boardEntries';
+import { readEntries, writeEntries, hasEntries, entriesLoaded, openBoardEntries } from '../data/boardEntries';
 import { boardById, BOARDS_COLLECTION } from './boardRegistry';
 import { canEdit } from './permissions';
 import { repository } from '../data/repository';
@@ -120,6 +120,23 @@ export function loadState(boardId) {
         return { version: 1, seeded: boardById(boardId)?.seeded ?? true, entries: readEntries(boardId) };
     }
 
+    // No entries — and which of the two things that means decides whether
+    // this board is about to be filled in from its rankings file.
+    //
+    // Having READ the collection and found nothing is a fact about the
+    // BOARD: it has no placements, and seeding is how a board gets its
+    // first ones. The consensus board sat blank for exactly this reason —
+    // its record claimed seeded, its entries were not there, and taking the
+    // record's word for it meant nothing ever filled it. Every rank on it
+    // is derived from entries, so an empty board ranks nobody.
+    //
+    // NOT having read it is a fact about the CACHE and says nothing about
+    // the board at all. There the record is the only evidence there is, and
+    // a board it calls seeded must be left alone — re-materialising one from
+    // the file on that reading is what rewrote 328 placements onto somebody
+    // else's board. A brand new board has no such record and still seeds,
+    // which is what board creation depends on.
+    if (entriesLoaded(boardId)) return { version: 1, seeded: false, entries: [] };
     return { version: 1, seeded: boardById(boardId)?.seeded ?? false, entries: [] };
 }
 
