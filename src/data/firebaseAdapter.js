@@ -56,7 +56,12 @@ function assertCollection(path) {
     }
 }
 
-export function createFirebaseAdapter() {
+/**
+ * @param {object}   [config]
+ * @param {Function} [config.identity]  () => the signed-in uid, or null
+ * @param {Function} [config.isExpert]  () => boolean
+ */
+export function createFirebaseAdapter({ identity = null, isExpert = null } = {}) {
     // Imported once, on the first call, and reused. The SDK is a large
     // dependency and a build that never talks to Firebase should never pay
     // for it.
@@ -72,6 +77,33 @@ export function createFirebaseAdapter() {
         name: 'firebase',
 
         // No loadSync, and that is the feature. See the header.
+
+        /**
+         * WHO is acting, and WHAT a new author's id should be.
+         *
+         * An author IS the signed-in person here, so his record is keyed by
+         * the Firebase Auth uid and `newAuthorId` is simply that uid. This is
+         * what makes the identity question free in firestore.rules: "is this
+         * author me" is `authorId == request.auth.uid`, a comparison against
+         * the token, with no document to read. The alternative — an opaque
+         * author id plus a stored uid to match it against — would put a
+         * lookup in front of every ownership check in the file.
+         *
+         * `taken` is ignored: a uid is already unique, and there is exactly
+         * one author per person by construction.
+         */
+        identity() {
+            return identity ? identity() : null;
+        },
+
+        // eslint-disable-next-line no-unused-vars
+        newAuthorId(taken) {
+            return identity ? identity() : null;
+        },
+
+        isExpert() {
+            return isExpert ? isExpert() : false;
+        },
 
         async load(path) {
             assertCollection(path);

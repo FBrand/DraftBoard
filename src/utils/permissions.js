@@ -56,7 +56,7 @@ export function isSignedIn() {
  * touch his own play-along.
  *
  * Reads `isAllowed` rather than re-deriving "not anonymous" itself — auth.js
- * only ever sets that flag true once the allowed_users check has actually
+ * only ever sets that flag true once the email2author check has actually
  * succeeded, and firestore.rules requires the same thing server-side. A
  * second, weaker definition of "expert" computed locally is exactly how this
  * app once had three different answers to the same question; there is one

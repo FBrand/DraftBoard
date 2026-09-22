@@ -150,8 +150,15 @@ export const boardFields = renamer({
 }, 'board');
 
 /** A person. `id` is the key. */
+// An author IS a person now: the document key is his Firebase Auth uid, so
+// there is no ownerId to store — "whose is this" and "who is signed in" are
+// the same fact, and a rule answers it from the token without a read.
+// `deactivated` is informational only (see firestore.rules): the interface
+// shows that somebody's access was revoked; deleting his email2author entry
+// is what actually revoked it.
 export const authorFields = renamer({
     name: 'n',
-    ownerId: 'o',
+    email: 'e',
+    deactivated: 'x',
     createdAt: 'c',
 }, 'author');

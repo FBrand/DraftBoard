@@ -4281,3 +4281,113 @@ body.export-mode .card-glow {
 @media (max-width: 480px) {
   .session-user-name { display: none; }
 }
+
+/* --- Manage Experts ---------------------------------------------------- */
+/* Built from the same pieces the other modals use — .settings-body,
+   .settings-field, .season-list, .action-pill — with only the row layout
+   and the three status tones added here. */
+
+.expert-list {
+  margin: 0;
+}
+
+.expert-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+}
+
+.expert-who {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+
+.expert-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.expert-email {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Not a button: it reports a state rather than offering an action, so it is
+   deliberately not an .action-pill wearing pointer-events: none. */
+.expert-status {
+  flex-shrink: 0;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+}
+
+.expert-status.active {
+  color: var(--text-main);
+  border-color: var(--border-color);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.expert-status.invited {
+  color: var(--text-dim);
+  border-color: var(--border-color);
+  background: transparent;
+}
+
+.expert-status.revoked {
+  color: var(--text-dim);
+  border-color: transparent;
+  background: rgba(255, 255, 255, 0.04);
+  text-decoration: line-through;
+}
+
+.expert-self {
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  font-style: italic;
+  padding: 0 6px;
+}
+
+.expert-empty {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 0.82rem;
+}
+
+.expert-invite {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.expert-invite .text-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.expert-notice {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  line-height: 1.45;
+}
+
+@media (max-width: 480px) {
+  .expert-row { flex-wrap: wrap; }
+  .expert-who { flex-basis: 100%; }
+  .expert-invite { flex-direction: column; }
+}

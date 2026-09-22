@@ -63,14 +63,18 @@ vi.mock('firebase/firestore', () => ({
     doc: (_db, _collection, id) => ({ id }),
     getDoc: async ({ id }) => {
         if (allowedResult instanceof Error) throw allowedResult;
-        // allowedUserState() (auth.js) reads both exists() and data() — the
-        // active-flag work added data().active, and a mock missing it made
-        // every check throw (calling undefined as a function), which this
-        // file's own recheckAccess() catch swallowed into a misleading
-        // "could not verify" error instead of the real cause.
+        // Two different reads land here now: the email2author invite, keyed
+        // by address, and the author record, keyed by uid. Only the first
+        // decides anything — existence IS the permission — so the uid read
+        // answers "no such document" and lets ensureAuthorRecord create one.
+        if (id === 'u1') return { exists: () => false, data: () => undefined };
         const found = allowedResult === 'yes' && id === 'dan@example.com';
-        return { exists: () => found, data: () => (found ? { active: true } : undefined) };
+        return { exists: () => found, data: () => (found ? {} : undefined) };
     },
+    // ensureAuthorRecord writes through this on first sign-in. Present so
+    // that path actually RUNS in these tests rather than throwing into
+    // auth.js's catch, which would hide a real break behind a console.warn.
+    setDoc: vi.fn(async () => {}),
 }));
 
 /** Boot with a trivial anonymous session — no branching, no reentrancy risk. */
@@ -135,7 +139,7 @@ describe('auth.js state machine', () => {
 
         const fb = await import('firebase/auth');
         allowedResult = 'no';
-        await expect(auth.recheckAccess()).rejects.toThrow(/not on the allowed experts list/);
+        await expect(auth.recheckAccess()).rejects.toThrow(/has not been invited as an expert/);
         expect(fb.signOut).toHaveBeenCalledTimes(1);
         expect(auth.isExpert()).toBe(false);
     });

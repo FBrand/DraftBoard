@@ -30,7 +30,20 @@
  * what it is, there is no `__` anywhere, and a write touches only the
  * collection that changed.
  */
+import { prefixedId } from '../utils/ids';
+
 const PREFIX = 'db_';
+
+/**
+ * Who the local store thinks you are.
+ *
+ * A constant, because there is nobody else here. localStorage is one browser
+ * and one person; there is no sign-in to distinguish a second one and nothing
+ * for an ownership check to protect against. Boards written here carry it as
+ * their owner so the same code path works on both backends, and it simply
+ * never means anything locally.
+ */
+const LOCAL_IDENTITY = 'local';
 
 const keyFor = (collection) => `${PREFIX}${collection}`;
 
@@ -55,6 +68,39 @@ function writeAll(collection, docs) {
 /** @type {import('./types').Adapter} */
 export const localAdapter = {
     name: 'local',
+
+    /**
+     * WHO is acting, and WHAT a new author's id should be — both answered by
+     * the adapter, because both are things only the backend knows.
+     *
+     * On Firebase an author IS the signed-in person: the record is keyed by
+     * his uid, so `newAuthorId` hands back that uid and a rule can check
+     * "is this author me" against the token without reading anything. Here
+     * there is no auth and no uid, so an author is what it has always been —
+     * a display label with a generated id, several of which can coexist
+     * (Dan, Ryan, consensus). Keeping that decision behind the seam is what
+     * lets boardRegistry create an author the same way on both backends.
+     *
+     * `taken` comes from the caller because uniqueness is checked against a
+     * collection the caller already has loaded; the adapter decides the id's
+     * SHAPE, not what is in the store.
+     */
+    identity() {
+        return LOCAL_IDENTITY;
+    },
+
+    newAuthorId(taken) {
+        return prefixedId('a', taken);
+    },
+
+    /**
+     * Always. There is no shared store to be refused by and no second person
+     * to be refused on behalf of — every write lands in this browser, which
+     * is the whole local-only app.
+     */
+    isExpert() {
+        return true;
+    },
 
     // Async by contract even though localStorage is synchronous, so callers
     // are written against the interface a network will have rather than the

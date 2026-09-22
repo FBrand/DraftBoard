@@ -290,6 +290,30 @@ export function createRepository(adapter = localAdapter) {
         return adapter.readFailed?.(collection) ?? false;
     }
 
+    /**
+     * Who is acting, what a new author's id should be, and whether this
+     * person's writes will be accepted — all three forwarded from the
+     * adapter, because all three are things only the backend knows.
+     *
+     * They live here so that a store can ask without importing auth.js. On a
+     * local build there is no auth.js to import at all, and on a Firebase one
+     * importing it from `boardRegistry` would close a real cycle
+     * (boardRegistry -> auth -> permissions -> boardRegistry). The adapter
+     * was handed the answers when `backend.js` built it; everything above
+     * asks the same way regardless of which backend is underneath.
+     */
+    function identity() {
+        return adapter.identity?.() ?? null;
+    }
+
+    function newAuthorId(taken) {
+        return adapter.newAuthorId?.(taken) ?? null;
+    }
+
+    function isExpert() {
+        return adapter.isExpert?.() ?? false;
+    }
+
     function get(collection, id) {
         return ensureLoaded(collection)?.[id] ?? null;
     }
@@ -749,6 +773,7 @@ export function createRepository(adapter = localAdapter) {
         ready, ensureLoaded, docs, isLoaded, loadFailed, isLive, follow, get, all, query,
         set, update, remove, commit, commitMany, clear, subscribe, invalidate,
         onWriteError, onSyncChange, syncState, retryNow, adapter,
+        identity, newAuthorId, isExpert,
     };
 }
 

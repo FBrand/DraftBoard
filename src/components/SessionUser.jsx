@@ -31,11 +31,11 @@ export default function SessionUser() {
     if (backendName() !== 'firebase') return null;
 
     // `isAllowed` rather than `!isAnonymous` — a Google sign-in that failed
-    // the allowed_users check is not an expert, and auth.js never sets this
+    // the email2author check is not an expert, and auth.js never sets this
     // true for one. See permissions.js for the same rule stated the same way.
     const expert = !!user && !!user.isAllowed;
 
-    // A real Google session that couldn't be checked against allowed_users
+    // A real Google session that could not be checked against email2author
     // yet — offline, a blip, rules not deployed. Distinct from "never signed
     // in" on purpose: a bare "Sign in" button here would look identical to
     // that and give a legitimate expert no clue he already has a session
@@ -51,7 +51,7 @@ export default function SessionUser() {
             // A closed popup is not an error worth shouting about; anything
             // else is worth saying out loud rather than failing silently. A
             // Firebase Auth error has a `.code` worth showing as-is; a plain
-            // Error (the allowed_users rejection, for one) doesn't, and its
+            // Error (the invite rejection, for one) does not, and its
             // `.message` is the whole point of throwing it in the first
             // place — falling straight to "Sign-in failed" for those was
             // silently discarding the one message this was built to show.

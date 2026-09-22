@@ -68,6 +68,15 @@ export const AUTHORS = 'authors';
 export const BOARDS_COLLECTION = 'boards';
 
 /**
+ * Who may act as an expert. Existence is the permission — there is no flag
+ * inside — and it is keyed by email because an invite has to exist before
+ * its person does. See firestore.rules and utils/auth.js; nothing in this
+ * module reads it to decide anything, it is written here only so the shipped
+ * placeholders show up as experts who can be revoked.
+ */
+export const EMAIL2AUTHOR = 'email2author';
+
+/**
  * A new id, checked against the collection it is joining.
  *
  * Boards, authors and seasons are a handful of records each and always loaded,
@@ -116,17 +125,28 @@ export async function openBoards() {
     const authors = [];
     const boards = [];
 
+    const invites = [];
+
     INITIAL_BOARDS.forEach((b, order) => {
         let authorId = null;
         if (b.author) {
-            // Unclaimed, like the board itself — see the comment on
-            // boards.ownerId below. Omitting the field entirely instead of
-            // stating null makes `authors`' create rule read an undefined
-            // property, which errors rather than compares false, and an
-            // error denies the write: the shipped Dan/Ryan authors silently
-            // never reached a real Firestore project while their boards did.
-            const author = { id: newId('a'), name: b.author, ownerId: null, createdAt: season.createdAt };
+            // A PLACEHOLDER author, and deliberately not keyed by a uid: no
+            // Google account exists for Dan or Ryan, so there is no uid to
+            // key one by. They keep the opaque id the collection has always
+            // given them, which means `authorId == request.auth.uid` is
+            // never true for one — so nobody can write in their voice, which
+            // is the correct outcome for a placeholder.
+            //
+            // The mock invite alongside is what makes them show up as real
+            // experts in the list, so they can be revoked like anybody else
+            // and their boards taken over by whoever actually does the work.
+            // The address is on a `.local` domain: RFC 6762 reserves it, so
+            // no Google account can ever exist there and the mock can never
+            // become a real way in.
+            const email = `${b.author.toLowerCase()}@draftboard.local`;
+            const author = { id: newId('a'), name: b.author, email, createdAt: season.createdAt };
             authors.push(author);
+            invites.push({ id: email, doc: { invitedBy: 'seed', invitedAt: season.createdAt } });
             authorId = author.id;
         }
         boards.push({
@@ -151,6 +171,7 @@ export async function openBoards() {
         write(SEASONS, seasonFields, season),
         repository.commit(AUTHORS, authors.map(({ id, ...rest }) => ({ id, doc: authorFields.lean(rest) }))),
         repository.commit(BOARDS_COLLECTION, boards.map(({ id, ...rest }) => ({ id, doc: boardFields.lean(rest) }))),
+        repository.commit(EMAIL2AUTHOR, invites),
     ]);
 }
 
@@ -407,19 +428,20 @@ export async function createBoard({ label, authorName = '', ownerId = null, visi
         );
         if (existing) authorId = existing.id;
         else {
-            authorId = newId('a');
-            // The author carries the SAME ownerId as the board being made.
-            //
-            // An evaluation is keyed by author, not by board — one man's view
-            // of a player runs across every season, while the boards he built
-            // are separate artifacts. So "may this person write this
-            // evaluation" is a question about the author, and without a uid on
-            // the author record there was nothing for a rule to check: it fell
-            // through to "does a board with this id exist", which for an author
-            // id it never does, and answered yes to every expert.
-            await write(AUTHORS, authorFields, {
-                id: authorId, name: author, ownerId: ownerId ?? null,
-            });
+            // The ADAPTER decides an author's id, because only the backend
+            // knows what one is. On Firebase an author IS the signed-in
+            // person, so this is his uid and the record he already has —
+            // which is why the write below only fills one in if it is
+            // genuinely absent, rather than renaming him to whatever was
+            // typed into this form. Locally there is no auth and an author
+            // is a display label, so it is a fresh opaque id and several can
+            // coexist.
+            authorId = repository.newAuthorId(
+                new Set(repository.all(AUTHORS).map(a => a.id)),
+            ) ?? newId('a');
+            if (!oneOf(AUTHORS, 'author', authorId)) {
+                await write(AUTHORS, authorFields, { id: authorId, name: author });
+            }
         }
     }
 
@@ -479,34 +501,36 @@ const leaned = (collection, fields, record) => {
  * feeds, and importing auth.js back here would close that into a cycle.
  * Same shape createBoard's own ownerId param already uses.
  *
- * Sets ownerId on BOTH the board and its author record — separate documents
- * with separate owners (see BUGS.md, "board/author ownership") — in ONE
- * commitMany() rather than two independent writes. Two experts racing to
- * claim the same pair could otherwise interleave and split ownership between
- * the two documents; repository.commitMany reaches Firestore as a single
- * writeBatch, so this either lands whole or not at all. An already-owned
- * board is refused here with a reason rather than left to the rules layer's
- * silent deny, though the rules refuse it independently too (ownsBoard fails
- * for anyone but the actual owner) — this is a courtesy, not the security
- * boundary. The rules also refuse a non-null owner on a SHARED (no-author)
- * board outright, structurally, not just via the `!board.authorId` check
- * below — see firestore.rules.
+ * Only the BOARD changes now. An author used to carry an ownerId of its own
+ * and had to move with it — two documents, two owners, which is why this
+ * uses commitMany and why splitting them was a real hazard. An author no
+ * longer has one: the record IS the person, keyed by his uid, so there is
+ * nothing about him left to claim. Board ownership stays separate on
+ * purpose — whose board it is (authorId) and who is holding it (ownerId) are
+ * different questions, and a board changing hands does not make anybody a
+ * different person.
+ *
+ * An already-owned board is refused here with a reason rather than left to
+ * the rules layer's silent deny, though the rules refuse it independently
+ * too — this is a courtesy, not the security boundary. The rules also refuse
+ * a non-null owner on a SHARED (no-author) board outright, structurally, not
+ * just via the `!board.authorId` check below.
  */
 export async function claimBoard(id, ownerId) {
     if (!ownerId) return { ok: false, reason: 'not-signed-in' };
     const board = boardById(id);
     if (!board) return { ok: false, reason: 'not-found' };
     if (!board.authorId) return { ok: false, reason: 'shared' };
-    if (board.ownerId) return { ok: false, reason: 'owned' };
-    const author = authorOf(board);
-    // Defensive: an author already owned by somebody else while its board
-    // sits orphaned is an inconsistent state this function never creates,
-    // but could inherit from data written before this existed. Refuse
-    // rather than attempt a write the rules would half-accept.
-    if (author?.ownerId) return { ok: false, reason: 'author-owned' };
-    const items = [leaned(BOARDS_COLLECTION, boardFields, { ...board, ownerId })];
-    if (author) items.push(leaned(AUTHORS, authorFields, { ...author, ownerId }));
-    await repository.commitMany(items);
+    // A held board is refused unless the man holding it has been revoked —
+    // ownership is never stripped when somebody loses access, so his boards
+    // stay his until claimed, and this is what makes them claimable. Asked
+    // from cache, like everything else here; the rules re-derive it against
+    // live data and refuse independently. Somebody's own board answers
+    // 'owned' too: he cannot be revoked and be asking.
+    if (board.ownerId && !ownerRevokedLocally(board.ownerId)) return { ok: false, reason: 'owned' };
+    await repository.commitMany([
+        leaned(BOARDS_COLLECTION, boardFields, { ...board, ownerId }),
+    ]);
     return { ok: true };
 }
 
@@ -515,19 +539,123 @@ export async function claimBoard(id, ownerId) {
  * against the caller-supplied `ownerId` the same way the rules check
  * request.auth.uid. Never hands a board directly to somebody else; per
  * BUGS.md that has to pass through orphaned first, so this only ever writes
- * null, never another uid. Board and author move together in one
- * commitMany(), same reasoning as claimBoard() above.
+ * null, never another uid. Only the board moves — see claimBoard() for why
+ * the author no longer travels with it.
  */
 export async function orphanBoard(id, ownerId) {
     if (!ownerId) return { ok: false, reason: 'not-signed-in' };
     const board = boardById(id);
     if (!board) return { ok: false, reason: 'not-found' };
     if (board.ownerId !== ownerId) return { ok: false, reason: 'not-owner' };
-    const author = authorOf(board);
-    const items = [leaned(BOARDS_COLLECTION, boardFields, { ...board, ownerId: null })];
-    if (author && author.ownerId === ownerId) {
-        items.push(leaned(AUTHORS, authorFields, { ...author, ownerId: null }));
-    }
-    await repository.commitMany(items);
+    await repository.commitMany([
+        leaned(BOARDS_COLLECTION, boardFields, { ...board, ownerId: null }),
+    ]);
     return { ok: true };
 }
+
+/**
+ * Loads the invite list into the cache, for deciding what to OFFER.
+ *
+ * Expert-only, because the rules are: any signed-in Google account may read
+ * its own entry, and nobody reads the whole collection until he is an expert
+ * himself. A viewer's read is refused, which the repository records as a
+ * failed load rather than an empty one (see overlayAdapter's failedPaths) —
+ * and `ownerRevokedLocally` below treats both the same way anyway, so a
+ * refusal degrades to "don't know", not to "everybody is revoked".
+ */
+export function openInvites() {
+    return repository.ready(EMAIL2AUTHOR);
+}
+
+/**
+ * Drops the cached invite list so the next read fetches it again.
+ *
+ * Inviting and revoking go straight through the SDK in utils/auth.js rather
+ * than the repository — they are single-document writes on a collection
+ * nothing else stores through — so the cache here does not hear about them
+ * and would keep answering with the list as it was at sign-in. Everything it
+ * feeds is display (see ownerRevokedLocally), so a stale answer is a button
+ * drawn wrongly rather than a wrong decision, but a button drawn wrongly for
+ * the rest of the session is worth one re-read to avoid.
+ */
+export function invalidateInvites() {
+    repository.invalidate(EMAIL2AUTHOR);
+}
+
+/**
+ * Whether this uid's access has been revoked, answered from cache.
+ *
+ * The same question firestore.rules' `ownerRevoked()` asks, and deliberately
+ * NOT the same answer: this one is for deciding whether to draw a button. The
+ * rules decide whether the write lands, and they re-ask against live data
+ * every time. Keeping the cheap copy here is what stops the expensive rules
+ * branch being evaluated on speculative claims — it runs on real attempts
+ * only — but nothing may ever substitute it for the real check. See the note
+ * at the top of firestore.rules about canEdit().
+ *
+ * Every uncertain case answers FALSE, and that is the harmless direction: a
+ * button that fails to appear hides an option until the next load, where a
+ * button wrongly appearing would produce a permission error the person
+ * cannot act on. Not loaded yet, load refused, an author with no stored
+ * address, an author record that never got written — all of them mean "no
+ * reason to think he is revoked".
+ *
+ * An EMPTY invite set counts as unknown rather than "nobody is invited". It
+ * cannot be genuinely empty here: only an expert asks, and an expert has an
+ * invite by definition, so empty means unloaded or refused.
+ */
+export function ownerRevokedLocally(ownerId) {
+    if (!ownerId) return false;
+    if (repository.loadFailed(EMAIL2AUTHOR)) return false;
+    const invites = repository.docs(EMAIL2AUTHOR);
+    if (!invites || !Object.keys(invites).length) return false;
+    const email = oneOf(AUTHORS, 'author', ownerId)?.email;
+    if (!email) return false;
+    return !Object.prototype.hasOwnProperty.call(invites, String(email).trim().toLowerCase());
+}
+
+/**
+ * Whether `byOwnerId` may claim this board — for the interface only.
+ *
+ * Three ways a personal board is up for grabs, and only the third is new:
+ * nobody has ever claimed it, or whoever held it released it (both `ownerId`
+ * null), or the man holding it has been revoked. A SHARED board is never
+ * claimable — there is no owner to be, which the rules enforce structurally
+ * via ownershipWouldBeSafe rather than trusting this.
+ */
+export function boardClaimableBy(board, byOwnerId) {
+    if (!byOwnerId || !board?.authorId) return false;
+    if (!board.ownerId) return true;
+    if (board.ownerId === byOwnerId) return false;
+    return ownerRevokedLocally(board.ownerId);
+}
+
+/**
+ * Marks an author as revoked, or puts the mark back.
+ *
+ * INFORMATIONAL ONLY. Nothing anywhere decides access from this — the rules
+ * never read it, and `isExpert()` asks about the email2author invite and
+ * nothing else. It exists so the interface can say somebody was revoked
+ * instead of having him silently vanish from the list, and so a record that
+ * outlives its access still says what happened to it. Deleting the invite is
+ * what revokes; this is the label on the result.
+ */
+export async function markAuthorDeactivated(authorId, deactivated = true) {
+    const author = oneOf(AUTHORS, 'author', authorId);
+    if (!author) return { ok: false, reason: 'not-found' };
+    await write(AUTHORS, authorFields, { ...author, deactivated: deactivated || null });
+    return { ok: true };
+}
+
+// orphanBoardsOf() and reassignBoardsTo() used to live here, and were
+// deleted when revoking stopped rewriting boards.
+//
+// Releasing a revoked man's boards by setting ownerId to null, then handing
+// back the unclaimed ones on reinstatement, was maintained state saying what
+// the rules now derive: ownerRevoked(board.o) asks whether the owner is
+// still invited, against live data, so nothing has to be rewritten for his
+// boards to become claimable. Keeping ownership intact also means
+// reinstating him restores his boards AND their visibility settings for
+// free, and removes a two-write sequence that could half-apply — the invite
+// delete landing while the board rewrite did not, leaving a man locked out
+// with his boards still held and nothing to finish the job.

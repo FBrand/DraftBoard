@@ -27,8 +27,12 @@ let env;
 
 /**
  * An expert: signed in with Google, a verified email, defaulting to an
- * address the beforeEach below actually puts on allowed_users. Pass a
- * different email to build a Google account that ISN'T listed.
+ * address the beforeEach below actually gives an email2author invite. Pass a
+ * different email to build a Google account that has NOT been invited.
+ *
+ * The uid matters as much as the email now: an author IS the person, keyed
+ * by uid, so `expert('dan-uid')` is simultaneously the signed-in session and
+ * the author `dan-uid`.
  */
 const expert = (uid, email = `${uid}@example.com`) =>
     env.authenticatedContext(uid, {
@@ -60,20 +64,26 @@ beforeEach(async () => {
     // seeding is not what is under test.
     await env.withSecurityRulesDisabled(async (ctx) => {
         const db = ctx.firestore();
-        await setDoc(doc(db, 'authors/a_dan'), { n: 'Dan', o: 'dan-uid' });
-        await setDoc(doc(db, 'authors/a_ryan'), { n: 'Ryan', o: 'ryan-uid' });
-        await setDoc(doc(db, 'boards/b_dan'), { l: 'Dan', a: 'a_dan', o: 'dan-uid', s: 's_1' });
+        // An author IS a person, keyed by his uid — so these are the same
+        // strings the expert() contexts sign in as.
+        await setDoc(doc(db, 'authors/dan-uid'), { n: 'Dan', e: 'dan-uid@example.com' });
+        await setDoc(doc(db, 'authors/ryan-uid'), { n: 'Ryan', e: 'ryan-uid@example.com' });
+        await setDoc(doc(db, 'boards/b_dan'), { l: 'Dan', a: 'dan-uid', o: 'dan-uid', s: 's_1' });
         await setDoc(doc(db, 'boards/b_consensus'), { l: 'Consensus', a: null, o: null, s: 's_1' });
-        // A personal board/author nobody has claimed — the "orphaned" state
-        // the claim/orphan tests below exercise, distinct from consensus
-        // (which has no author at all, not merely an unset owner).
-        await setDoc(doc(db, 'authors/a_orphan'), { n: 'Orphan', o: null });
+        // A personal board nobody has claimed — the "orphaned" state the
+        // claim/orphan tests exercise, distinct from consensus (which has no
+        // author at all, not merely an unset owner). Its author is a
+        // PLACEHOLDER with an opaque id, like the shipped Dan/Ryan seeds:
+        // nobody signs in as him, so nobody can ever be him, and his board is
+        // exactly the one a real expert is meant to be able to take over.
+        await setDoc(doc(db, 'authors/a_orphan'), { n: 'Orphan', e: 'orphan@draftboard.local' });
         await setDoc(doc(db, 'boards/b_orphan'), { l: 'Orphan', a: 'a_orphan', o: null, s: 's_1' });
         await setDoc(doc(db, 'seasons/s_1'), { y: 2026, t: 'current' });
-        // Both test experts must be listed for isExpert() to accept them —
+        // Both test experts need an invite for isExpert() to accept them —
         // matches the default email expert(uid) builds, `${uid}@example.com`.
-        await setDoc(doc(db, 'allowed_users/dan-uid@example.com'), { email: 'dan-uid@example.com', addedBy: 'system', addedAt: '2026-01-01' });
-        await setDoc(doc(db, 'allowed_users/ryan-uid@example.com'), { email: 'ryan-uid@example.com', addedBy: 'system', addedAt: '2026-01-01' });
+        // Existence is the whole permission; there is nothing inside to read.
+        await setDoc(doc(db, 'email2author/dan-uid@example.com'), { invitedBy: 'system', invitedAt: '2026-01-01' });
+        await setDoc(doc(db, 'email2author/ryan-uid@example.com'), { invitedBy: 'system', invitedAt: '2026-01-01' });
     });
 });
 
@@ -83,7 +93,7 @@ describe('a viewer', () => {
         await assertSucceeds(getDoc(doc(db, 'players/p_1')));
         await assertSucceeds(getDoc(doc(db, 'boards/b_dan')));
         await assertSucceeds(getDoc(doc(db, 'boards/b_dan/entries/p_1')));
-        await assertSucceeds(getDoc(doc(db, 'evaluations/p_1/remarks/a_dan')));
+        await assertSucceeds(getDoc(doc(db, 'evaluations/p_1/remarks/dan-uid')));
     });
 
     it('cannot write a player, a board, or anybody’s placements', async () => {
@@ -96,7 +106,7 @@ describe('a viewer', () => {
 
     it('cannot write an evaluation, a season, or the draft', async () => {
         const db = viewer();
-        await assertFails(setDoc(doc(db, 'evaluations/p_1/remarks/a_dan'), { s: [] }));
+        await assertFails(setDoc(doc(db, 'evaluations/p_1/remarks/dan-uid'), { s: [] }));
         await assertFails(setDoc(doc(db, 'seasons/s_1'), { y: 2027 }));
         await assertFails(setDoc(doc(db, 'seasons/s_1/charts/rosterState/rows/qb'), { l: 'QB' }));
         await assertFails(setDoc(doc(db, 'draft_state/s_1'), { value: {} }));
@@ -120,7 +130,7 @@ describe('somebody not signed in at all', () => {
 describe('an expert', () => {
     it('writes his own board and its placements', async () => {
         const db = expert('dan-uid');
-        await assertSucceeds(setDoc(doc(db, 'boards/b_dan'), { l: 'Dan', a: 'a_dan', o: 'dan-uid', s: 's_1' }));
+        await assertSucceeds(setDoc(doc(db, 'boards/b_dan'), { l: 'Dan', a: 'dan-uid', o: 'dan-uid', s: 's_1' }));
         await assertSucceeds(setDoc(doc(db, 'boards/b_dan/entries/p_1'), { r: 1, w: 1 }));
     });
 
@@ -154,7 +164,7 @@ describe('an expert', () => {
 
 describe('evaluations, which are keyed by author', () => {
     it('let the author write his own', async () => {
-        await assertSucceeds(setDoc(doc(expert('dan-uid'), 'evaluations/p_1/remarks/a_dan'), {
+        await assertSucceeds(setDoc(doc(expert('dan-uid'), 'evaluations/p_1/remarks/dan-uid'), {
             s_1: { s: [{ t: 'Sticky in man coverage', a: 1 }] },
         }));
     });
@@ -164,7 +174,7 @@ describe('evaluations, which are keyed by author', () => {
         // a composite key and look the left half up in /boards — for a personal
         // board that half is an AUTHOR id, the lookup found nothing, and every
         // expert could overwrite every other expert's evaluations.
-        await assertFails(setDoc(doc(expert('ryan-uid'), 'evaluations/p_1/remarks/a_dan'), {
+        await assertFails(setDoc(doc(expert('ryan-uid'), 'evaluations/p_1/remarks/dan-uid'), {
             s_1: { n: [{ t: 'Not mine to write', a: 1 }] },
         }));
     });
@@ -182,7 +192,7 @@ describe('evaluations, which are keyed by author', () => {
     });
 
     it('refuse a viewer entirely', async () => {
-        await assertFails(setDoc(doc(viewer(), 'evaluations/p_1/remarks/a_dan'), { s_1: { n: [{ t: 'x', a: 1 }] } }));
+        await assertFails(setDoc(doc(viewer(), 'evaluations/p_1/remarks/dan-uid'), { s_1: { n: [{ t: 'x', a: 1 }] } }));
     });
 });
 
@@ -223,130 +233,131 @@ describe('isExpert requires Google, a verified email, and the whitelist together
     });
 });
 
-describe('allowed_users', () => {
-    /** A Google-authenticated, verified user whose email is NOT listed. */
+describe('email2author — the invite, which IS the permission', () => {
+    /** A Google-authenticated, verified user who has NOT been invited. */
     const outsider = () => expert('outsider-uid', 'outsider@example.com');
 
-    it('an unlisted account cannot write boards, players, or the draft', async () => {
+    it('an uninvited account cannot write boards, players, or the draft', async () => {
         const db = outsider();
         await assertFails(setDoc(doc(db, 'players/p_1'), { n: 'X' }));
         await assertFails(setDoc(doc(db, 'boards/b_dan'), { l: 'Stolen' }));
         await assertFails(setDoc(doc(db, 'draft_state/s_1'), { value: {} }));
     });
 
-    it('an unlisted account cannot read someone else’s entry', async () => {
-        await assertFails(getDoc(doc(outsider(), 'allowed_users/dan-uid@example.com')));
+    it('an uninvited account cannot read someone else’s invite', async () => {
+        await assertFails(getDoc(doc(outsider(), 'email2author/dan-uid@example.com')));
     });
 
-    it('any signed-in Google user can read their OWN entry, listed or not — this is what signInExpert() checks', async () => {
-        await assertSucceeds(getDoc(doc(outsider(), 'allowed_users/outsider@example.com')));
+    it('any signed-in Google user can read their OWN invite — this is what signInExpert() checks', async () => {
+        await assertSucceeds(getDoc(doc(outsider(), 'email2author/outsider@example.com')));
     });
 
-    it('a listed expert can read the whole list', async () => {
-        await assertSucceeds(getDoc(doc(expert('dan-uid'), 'allowed_users/ryan-uid@example.com')));
+    it('an invited expert can read the whole list', async () => {
+        await assertSucceeds(getDoc(doc(expert('dan-uid'), 'email2author/ryan-uid@example.com')));
     });
 
-    it('a listed expert can add a new expert, self-attributed', async () => {
-        await assertSucceeds(setDoc(doc(expert('dan-uid'), 'allowed_users/newperson@example.com'), {
-            email: 'newperson@example.com',
-            addedBy: 'dan-uid@example.com',
-            addedAt: '2026-09-01',
+    it('an expert can invite somebody, self-attributed', async () => {
+        await assertSucceeds(setDoc(doc(expert('dan-uid'), 'email2author/newperson@example.com'), {
+            invitedBy: 'dan-uid@example.com',
+            invitedAt: '2026-09-01',
         }));
     });
 
-    it('cannot claim someone else added the entry', async () => {
-        await assertFails(setDoc(doc(expert('dan-uid'), 'allowed_users/newperson@example.com'), {
-            email: 'newperson@example.com',
-            addedBy: 'ryan-uid@example.com',
-            addedAt: '2026-09-01',
+    it('cannot claim somebody else did the inviting', async () => {
+        await assertFails(setDoc(doc(expert('dan-uid'), 'email2author/newperson@example.com'), {
+            invitedBy: 'ryan-uid@example.com',
+            invitedAt: '2026-09-01',
         }));
     });
 
-    it('the email field must match the document id', async () => {
-        await assertFails(setDoc(doc(expert('dan-uid'), 'allowed_users/newperson@example.com'), {
-            email: 'somebody-else@example.com',
-            addedBy: 'dan-uid@example.com',
-            addedAt: '2026-09-01',
+    it('an existing invite cannot be rewritten — who invited whom is immutable', async () => {
+        await assertFails(updateDoc(doc(expert('dan-uid'), 'email2author/ryan-uid@example.com'), {
+            invitedBy: 'dan-uid@example.com',
         }));
     });
 
-    it('an existing entry cannot be rewritten — immutable once written', async () => {
-        await assertFails(setDoc(doc(expert('dan-uid'), 'allowed_users/ryan-uid@example.com'), {
-            email: 'ryan-uid@example.com',
-            addedBy: 'dan-uid@example.com',
-            addedAt: 'rewritten',
+    it('an uninvited account cannot invite itself or anybody else', async () => {
+        await assertFails(setDoc(doc(outsider(), 'email2author/newperson@example.com'), {
+            invitedBy: 'outsider@example.com',
+            invitedAt: '2026-09-01',
         }));
     });
 
-    it('nobody can delete an entry — that is a console operation', async () => {
-        await assertFails(deleteDoc(doc(expert('dan-uid'), 'allowed_users/ryan-uid@example.com')));
-    });
-
-    it('an unlisted account cannot add itself or anybody else', async () => {
-        await assertFails(setDoc(doc(outsider(), 'allowed_users/newperson@example.com'), {
-            email: 'newperson@example.com',
-            addedBy: 'outsider@example.com',
-            addedAt: '2026-09-01',
-        }));
-    });
-
-    it('a viewer cannot touch allowed_users at all', async () => {
+    it('a viewer cannot touch email2author at all', async () => {
         const db = viewer();
-        await assertFails(getDoc(doc(db, 'allowed_users/dan-uid@example.com')));
-        await assertFails(setDoc(doc(db, 'allowed_users/viewer@example.com'), {
-            email: 'viewer@example.com', addedBy: 'x', addedAt: 'x',
+        await assertFails(getDoc(doc(db, 'email2author/dan-uid@example.com')));
+        await assertFails(setDoc(doc(db, 'email2author/viewer@example.com'), {
+            invitedBy: 'x', invitedAt: 'x',
         }));
     });
 
-    it('an expert can deactivate another expert by updating ONLY active', async () => {
-        await assertSucceeds(updateDoc(doc(expert('dan-uid'), 'allowed_users/ryan-uid@example.com'), {
-            active: false,
+    // --- revocation: deleting the invite, and nothing else ----------------
+
+    it('an expert can revoke another by deleting his invite', async () => {
+        await assertSucceeds(deleteDoc(doc(expert('dan-uid'), 'email2author/ryan-uid@example.com')));
+    });
+
+    it('revocation takes effect immediately — no flag, no stale token', async () => {
+        await assertSucceeds(setDoc(doc(expert('ryan-uid'), 'players/p_before'), { n: 'Still allowed' }));
+        await assertSucceeds(deleteDoc(doc(expert('dan-uid'), 'email2author/ryan-uid@example.com')));
+        // players, not a board: b_dan is dan-uid's, so a board write would
+        // fail on ownership alone and not isolate the mechanism under test.
+        await assertFails(setDoc(doc(expert('ryan-uid'), 'players/p_after'), { n: 'Refused now' }));
+    });
+
+    it('a revoked expert cannot write his own author record any more', async () => {
+        await assertSucceeds(deleteDoc(doc(expert('dan-uid'), 'email2author/ryan-uid@example.com')));
+        await assertFails(setDoc(doc(expert('ryan-uid'), 'authors/ryan-uid'), {
+            n: 'Back In', e: 'ryan-uid@example.com',
         }));
     });
 
-    it('an update touching any other field alongside active is refused', async () => {
-        await assertFails(updateDoc(doc(expert('dan-uid'), 'allowed_users/ryan-uid@example.com'), {
-            active: false, addedBy: 'dan-uid@example.com',
+    it('a revoked expert cannot re-invite himself', async () => {
+        await assertSucceeds(deleteDoc(doc(expert('dan-uid'), 'email2author/ryan-uid@example.com')));
+        await assertFails(setDoc(doc(expert('ryan-uid'), 'email2author/ryan-uid@example.com'), {
+            invitedBy: 'ryan-uid@example.com', invitedAt: '2026-09-01',
         }));
     });
 
-    it('a deactivated expert (active: false) is refused a board write', async () => {
-        await env.withSecurityRulesDisabled(async (ctx) => {
-            await setDoc(doc(ctx.firestore(), 'allowed_users/ryan-uid@example.com'), {
-                email: 'ryan-uid@example.com', addedBy: 'dan-uid@example.com', addedAt: '2026-01-01', active: false,
-            });
-        });
-        // players, not a board — b_dan is dan-uid's board, so writing it as
-        // ryan would fail on ownership alone and not actually isolate the
-        // active-flag mechanism this test is about.
-        await assertFails(setDoc(doc(expert('ryan-uid'), 'players/p_active_test'), { n: 'Should be refused' }));
+    it('deleting and recreating an author does not get access back', async () => {
+        // The delete-and-recreate bypass, checked against the new shape:
+        // authors cannot be deleted at all, and even if the record were gone
+        // the invite is what grants access, not the record.
+        await assertSucceeds(deleteDoc(doc(expert('dan-uid'), 'email2author/ryan-uid@example.com')));
+        await assertFails(deleteDoc(doc(expert('ryan-uid'), 'authors/ryan-uid')));
+        await assertFails(setDoc(doc(expert('ryan-uid'), 'authors/ryan-uid'), { n: 'Fresh' }));
     });
 
-    it('active as a string ("false") is also refused — not just the boolean', async () => {
-        await env.withSecurityRulesDisabled(async (ctx) => {
-            await setDoc(doc(ctx.firestore(), 'allowed_users/ryan-uid@example.com'), {
-                email: 'ryan-uid@example.com', addedBy: 'dan-uid@example.com', addedAt: '2026-01-01', active: 'false',
-            });
-        });
-        await assertFails(setDoc(doc(expert('ryan-uid'), 'players/p_active_test'), { n: 'Should be refused' }));
+    it('reinstating restores write access', async () => {
+        await assertSucceeds(deleteDoc(doc(expert('dan-uid'), 'email2author/ryan-uid@example.com')));
+        await assertFails(setDoc(doc(expert('ryan-uid'), 'players/p_x'), { n: 'Refused' }));
+        await assertSucceeds(setDoc(doc(expert('dan-uid'), 'email2author/ryan-uid@example.com'), {
+            invitedBy: 'dan-uid@example.com', invitedAt: '2026-09-02',
+        }));
+        await assertSucceeds(setDoc(doc(expert('ryan-uid'), 'players/p_y'), { n: 'Restored' }));
     });
 
-    it('a type-mismatched active value is refused on the write that sets it, too', async () => {
-        await assertFails(updateDoc(doc(expert('dan-uid'), 'allowed_users/ryan-uid@example.com'), {
-            active: 'false',
+    // --- first sign-in: the bootstrap the invite exists to break ----------
+
+    it('an invited newcomer creates his OWN author record on first sign-in', async () => {
+        await assertSucceeds(setDoc(doc(expert('dan-uid'), 'email2author/new-uid@example.com'), {
+            invitedBy: 'dan-uid@example.com', invitedAt: '2026-09-01',
+        }));
+        await assertSucceeds(setDoc(doc(expert('new-uid'), 'authors/new-uid'), {
+            n: 'Newcomer', e: 'new-uid@example.com',
         }));
     });
 
-    it('reactivating restores write access', async () => {
-        await env.withSecurityRulesDisabled(async (ctx) => {
-            await setDoc(doc(ctx.firestore(), 'allowed_users/ryan-uid@example.com'), {
-                email: 'ryan-uid@example.com', addedBy: 'dan-uid@example.com', addedAt: '2026-01-01', active: false,
-            });
-        });
-        await assertSucceeds(updateDoc(doc(expert('dan-uid'), 'allowed_users/ryan-uid@example.com'), {
-            active: true,
+    it('cannot create an author under a uid that is not his', async () => {
+        await assertFails(setDoc(doc(expert('ryan-uid'), 'authors/dan-uid-2'), {
+            n: 'Impersonation', e: 'ryan-uid@example.com',
         }));
-        await assertSucceeds(setDoc(doc(expert('ryan-uid'), 'players/p_active_test'), { n: 'Restored' }));
+    });
+
+    it('an uninvited account cannot create an author at all', async () => {
+        await assertFails(setDoc(doc(outsider(), 'authors/outsider-uid'), {
+            n: 'Outsider', e: 'outsider@example.com',
+        }));
     });
 });
 
@@ -357,9 +368,19 @@ describe('board/author ownership: claim and orphan', () => {
         }));
     });
 
-    it('any expert can claim an orphaned author, for himself', async () => {
-        await assertSucceeds(setDoc(doc(expert('ryan-uid'), 'authors/a_orphan'), {
-            n: 'Orphan', o: 'ryan-uid',
+    it('an author cannot be claimed at all — he is a person, not a seat', async () => {
+        // The counterpart to claiming a board, and deliberately the opposite
+        // answer. A board changes hands; an identity does not. There is no
+        // ownership field left to claim WITH, so the nearest thing to taking
+        // one over is rewriting who he is — which is what this attempts.
+        //
+        // The write has to CHANGE something to be a real attempt: the
+        // not-me branch is a hasOnly(['x']) diff, and an empty diff (writing
+        // a document's own current contents back) satisfies hasOnly
+        // trivially. That no-op is harmless by construction — it cannot
+        // alter anything — but it is not what this test is about.
+        await assertFails(setDoc(doc(expert('ryan-uid'), 'authors/a_orphan'), {
+            n: 'Ryan Now', e: 'ryan-uid@example.com',
         }));
     });
 
@@ -369,52 +390,60 @@ describe('board/author ownership: claim and orphan', () => {
         }));
     });
 
-    it('claiming an orphaned author on somebody ELSE\'S behalf is refused', async () => {
-        await assertFails(setDoc(doc(expert('ryan-uid'), 'authors/a_orphan'), {
-            n: 'Orphan', o: 'some-other-uid',
+    it('an expert writes his OWN author record, and only his own', async () => {
+        await assertSucceeds(setDoc(doc(expert('ryan-uid'), 'authors/ryan-uid'), {
+            n: 'Ryan Renamed', e: 'ryan-uid@example.com',
         }));
     });
 
     it('a non-owner cannot touch an owned board at all, claim included', async () => {
         await assertFails(setDoc(doc(expert('ryan-uid'), 'boards/b_dan'), {
-            l: 'Dan', a: 'a_dan', o: 'ryan-uid', s: 's_1',
+            l: 'Dan', a: 'dan-uid', o: 'ryan-uid', s: 's_1',
         }));
     });
 
-    it('a non-owner cannot touch an owned author at all, claim included', async () => {
-        await assertFails(setDoc(doc(expert('ryan-uid'), 'authors/a_dan'), {
-            n: 'Dan', o: 'ryan-uid',
+    it('an expert cannot rewrite somebody else\'s author record', async () => {
+        await assertFails(setDoc(doc(expert('ryan-uid'), 'authors/dan-uid'), {
+            n: 'Not Dan', e: 'ryan-uid@example.com',
         }));
+    });
+
+    it('an author can never be deleted, not even by himself', async () => {
+        // Deleting one would strand every evaluation written in that voice
+        // and every board that names him.
+        await assertFails(deleteDoc(doc(expert('dan-uid'), 'authors/dan-uid')));
     });
 
     it('the owner can orphan his own board', async () => {
         await assertSucceeds(setDoc(doc(expert('dan-uid'), 'boards/b_dan'), {
-            l: 'Dan', a: 'a_dan', o: null, s: 's_1',
+            l: 'Dan', a: 'dan-uid', o: null, s: 's_1',
         }));
     });
 
-    it('the owner can orphan his own author', async () => {
-        await assertSucceeds(setDoc(doc(expert('dan-uid'), 'authors/a_dan'), {
-            n: 'Dan', o: null,
+    it('another expert may set the deactivated flag, and ONLY that flag', async () => {
+        // Informational, not a permission — deleting the invite is what
+        // revokes. Revoking somebody must not also be a licence to rename
+        // him, which is why the not-me branch is a one-key diff.
+        await assertSucceeds(updateDoc(doc(expert('ryan-uid'), 'authors/dan-uid'), { x: true }));
+        await assertFails(updateDoc(doc(expert('ryan-uid'), 'authors/dan-uid'), {
+            x: true, n: 'Renamed While Revoking',
         }));
     });
 
     it('a non-owner cannot orphan somebody else\'s board', async () => {
         await assertFails(setDoc(doc(expert('ryan-uid'), 'boards/b_dan'), {
-            l: 'Dan', a: 'a_dan', o: null, s: 's_1',
+            l: 'Dan', a: 'dan-uid', o: null, s: 's_1',
         }));
     });
 
     it('the owner cannot hand his board directly to somebody else — must orphan first', async () => {
         await assertFails(setDoc(doc(expert('dan-uid'), 'boards/b_dan'), {
-            l: 'Dan', a: 'a_dan', o: 'ryan-uid', s: 's_1',
+            l: 'Dan', a: 'dan-uid', o: 'ryan-uid', s: 's_1',
         }));
     });
 
-    it('the owner cannot hand his author directly to somebody else — must orphan first', async () => {
-        await assertFails(setDoc(doc(expert('dan-uid'), 'authors/a_dan'), {
-            n: 'Dan', o: 'ryan-uid',
-        }));
+    it('a viewer cannot create an author, even one keyed by his own uid', async () => {
+        await assertFails(setDoc(doc(viewer(), 'authors/anon'), { n: 'Sneaky', e: 'x@y.z' }));
     });
 
     it('an expert may NOT edit an orphaned board\'s other fields without claiming it — orphaned is writable by nobody', async () => {
@@ -449,7 +478,7 @@ describe('board/author ownership: claim and orphan', () => {
 
     it('orphaning a private board no longer locks out reads — any expert can see it, but nobody (including the former owner) can write it', async () => {
         await env.withSecurityRulesDisabled(async (ctx) => {
-            await setDoc(doc(ctx.firestore(), 'authors/a_private'), { n: 'Private', o: 'dan-uid' });
+            await setDoc(doc(ctx.firestore(), 'authors/a_private'), { n: 'Private', e: 'private@draftboard.local' });
             await setDoc(doc(ctx.firestore(), 'boards/b_private'), {
                 l: 'Private', a: 'a_private', o: null, s: 's_1', v: 'private',
             });
@@ -514,13 +543,13 @@ describe('board visibility: private/expert/public entries', () => {
         });
         await assertSucceeds(getDoc(doc(viewer(), 'boards/b_dan/entries/p_nov')));
 
-        await seedBoard('b_pub', 'a_dan', 'dan-uid', 'public');
+        await seedBoard('b_pub', 'dan-uid', 'dan-uid', 'public');
         await assertSucceeds(getDoc(doc(viewer(), 'boards/b_pub/entries/p_1')));
         await assertSucceeds(getDoc(doc(stranger(), 'boards/b_pub/entries/p_1')));
     });
 
     it('an expert-tier board is readable by any signed-in expert, refused for a viewer', async () => {
-        await seedBoard('b_exp', 'a_dan', 'dan-uid', 'expert');
+        await seedBoard('b_exp', 'dan-uid', 'dan-uid', 'expert');
         await assertSucceeds(getDoc(doc(expert('dan-uid'), 'boards/b_exp/entries/p_1')));
         await assertSucceeds(getDoc(doc(expert('ryan-uid'), 'boards/b_exp/entries/p_1')));
         await assertFails(getDoc(doc(viewer(), 'boards/b_exp/entries/p_1')));
@@ -528,7 +557,7 @@ describe('board visibility: private/expert/public entries', () => {
     });
 
     it('a private board is readable only by its owner - not another expert, not a viewer', async () => {
-        await seedBoard('b_priv', 'a_dan', 'dan-uid', 'private');
+        await seedBoard('b_priv', 'dan-uid', 'dan-uid', 'private');
         await assertSucceeds(getDoc(doc(expert('dan-uid'), 'boards/b_priv/entries/p_1')));
         await assertFails(getDoc(doc(expert('ryan-uid'), 'boards/b_priv/entries/p_1')));
         await assertFails(getDoc(doc(viewer(), 'boards/b_priv/entries/p_1')));
@@ -547,9 +576,137 @@ describe('board visibility: private/expert/public entries', () => {
     });
 
     it('an owner can change visibility, and the new value takes effect immediately', async () => {
-        await seedBoard('b_change', 'a_dan', 'dan-uid', 'private');
+        await seedBoard('b_change', 'dan-uid', 'dan-uid', 'private');
         await assertFails(getDoc(doc(expert('ryan-uid'), 'boards/b_change/entries/p_1')));
         await assertSucceeds(updateDoc(doc(expert('dan-uid'), 'boards/b_change'), { v: 'public' }));
         await assertSucceeds(getDoc(doc(expert('ryan-uid'), 'boards/b_change/entries/p_1')));
+    });
+});
+
+/**
+ * A revoked expert's boards, and why nothing rewrites them.
+ *
+ * Revoking deletes the invite and nothing else. The board keeps his uid in
+ * `o`, and becomes claimable because the rules ASK whether that owner is
+ * still invited — `ownerRevoked()` — rather than because some earlier write
+ * remembered to release it. Two things fall out of that, and both are tested
+ * here: a board can never be left frozen by a half-finished revocation, and
+ * reinstating him gives everything back, private settings included, because
+ * nothing was ever taken away.
+ */
+describe('a revoked expert’s boards', () => {
+    // dan-uid holds b_dan and has an author carrying his address; deleting
+    // the invite is the whole of a revocation.
+    const revokeDan = () => env.withSecurityRulesDisabled(async (ctx) => {
+        await deleteDoc(doc(ctx.firestore(), 'email2author/dan-uid@example.com'));
+    });
+    const reinstateDan = () => env.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'email2author/dan-uid@example.com'), {
+            invitedBy: 'system', invitedAt: '2026-01-02',
+        });
+    });
+
+    it('are claimable by another expert once the invite is gone', async () => {
+        await revokeDan();
+        await assertSucceeds(setDoc(doc(expert('ryan-uid'), 'boards/b_dan'), {
+            l: 'Dan', a: 'dan-uid', o: 'ryan-uid', s: 's_1',
+        }));
+    });
+
+    it('are NOT claimable while he still holds an invite', async () => {
+        // The same write, refused purely because he has not been revoked —
+        // this is what proves the test above is testing revocation and not
+        // some general permissiveness.
+        await assertFails(setDoc(doc(expert('ryan-uid'), 'boards/b_dan'), {
+            l: 'Dan', a: 'dan-uid', o: 'ryan-uid', s: 's_1',
+        }));
+    });
+
+    it('still cannot be claimed on a third party’s behalf', async () => {
+        await revokeDan();
+        await assertFails(setDoc(doc(expert('ryan-uid'), 'boards/b_dan'), {
+            l: 'Dan', a: 'dan-uid', o: 'someone-else-uid', s: 's_1',
+        }));
+    });
+
+    it('still cannot be claimed by a viewer', async () => {
+        await revokeDan();
+        await assertFails(setDoc(doc(viewer(), 'boards/b_dan'), {
+            l: 'Dan', a: 'dan-uid', o: 'anon', s: 's_1',
+        }));
+    });
+
+    it('does not make the SHARED board claimable — it has no owner to revoke', async () => {
+        await revokeDan();
+        await assertFails(setDoc(doc(expert('ryan-uid'), 'boards/b_consensus'), {
+            l: 'Consensus', a: null, o: 'ryan-uid', s: 's_1',
+        }));
+    });
+
+    it('leaves a private board readable by any expert, rather than by nobody', async () => {
+        // The lockout this branch exists to prevent: the owner-match branch
+        // needs o == my uid, and a revoked man's uid is nobody else's, so
+        // without ownerRevoked() his private board would be unreadable by
+        // everyone — including him.
+        await env.withSecurityRulesDisabled(async (ctx) => {
+            await setDoc(doc(ctx.firestore(), 'boards/b_dan'), {
+                l: 'Dan', a: 'dan-uid', o: 'dan-uid', s: 's_1', v: 'private',
+            });
+            await setDoc(doc(ctx.firestore(), 'boards/b_dan/entries/p_1'), { r: 1 });
+        });
+        await assertFails(getDoc(doc(expert('ryan-uid'), 'boards/b_dan/entries/p_1')));
+        await revokeDan();
+        await assertSucceeds(getDoc(doc(expert('ryan-uid'), 'boards/b_dan/entries/p_1')));
+    });
+
+    it('keeps a private board hidden from a VIEWER even after revocation', async () => {
+        await env.withSecurityRulesDisabled(async (ctx) => {
+            await setDoc(doc(ctx.firestore(), 'boards/b_dan'), {
+                l: 'Dan', a: 'dan-uid', o: 'dan-uid', s: 's_1', v: 'private',
+            });
+            await setDoc(doc(ctx.firestore(), 'boards/b_dan/entries/p_1'), { r: 1 });
+        });
+        await revokeDan();
+        await assertFails(getDoc(doc(viewer(), 'boards/b_dan/entries/p_1')));
+    });
+
+    it('come back to him on reinstatement, with no reassignment step', async () => {
+        await revokeDan();
+        await reinstateDan();
+        // He owns it again because `o` never stopped saying so.
+        await assertSucceeds(setDoc(doc(expert('dan-uid'), 'boards/b_dan'), {
+            l: 'Dan', a: 'dan-uid', o: 'dan-uid', s: 's_1',
+        }));
+        // And it is nobody else's to take again.
+        await assertFails(setDoc(doc(expert('ryan-uid'), 'boards/b_dan'), {
+            l: 'Dan', a: 'dan-uid', o: 'ryan-uid', s: 's_1',
+        }));
+    });
+
+    it('stay with whoever claimed them while he was gone', async () => {
+        await revokeDan();
+        await assertSucceeds(setDoc(doc(expert('ryan-uid'), 'boards/b_dan'), {
+            l: 'Dan', a: 'dan-uid', o: 'ryan-uid', s: 's_1',
+        }));
+        await reinstateDan();
+        // Reinstating him does not take it back off Ryan.
+        await assertFails(setDoc(doc(expert('dan-uid'), 'boards/b_dan'), {
+            l: 'Dan', a: 'dan-uid', o: 'dan-uid', s: 's_1',
+        }));
+    });
+
+    it('an owner with no author record at all is not treated as revoked', async () => {
+        // ensureAuthorRecord's failure path is deliberately non-fatal, so an
+        // active expert can hold a board while having no author document.
+        // ownerRevoked() guards on exists() precisely so that reads as "not
+        // revoked" rather than throwing — a thrown rule denies everything.
+        await env.withSecurityRulesDisabled(async (ctx) => {
+            await setDoc(doc(ctx.firestore(), 'boards/b_noauthor'), {
+                l: 'No author', a: 'ghost-uid', o: 'ghost-uid', s: 's_1',
+            });
+        });
+        await assertFails(setDoc(doc(expert('ryan-uid'), 'boards/b_noauthor'), {
+            l: 'No author', a: 'ghost-uid', o: 'ryan-uid', s: 's_1',
+        }));
     });
 });

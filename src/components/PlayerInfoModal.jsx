@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import ScoutingControls from './ScoutingControls';
 import * as scoutingState from '../utils/scoutingState';
 import { buildNameIndex, findMatchingIndex } from '../utils/nameMatcher';
@@ -6,7 +6,7 @@ import { rankBoard } from '../utils/boardRanking';
 import useBoardRankings from '../hooks/useBoardRankings';
 
 import { allBoards, boardById, currentSeason, listSeasons } from '../utils/boardRegistry';
-import { ownerIdFor, remarksFor, allRemarksFor, addRemark, removeRemark } from '../utils/evaluations';
+import { ownerIdFor, remarksFor, allRemarksFor, addRemark, removeRemark, openEvaluations } from '../utils/evaluations';
 import { resolve as resolvePlayer } from '../utils/playerRegistry';
 
 // The player card, opened by right-click / long-press on a player anywhere
@@ -128,6 +128,32 @@ export default function PlayerInfoModal({ player, players = [], onClose, editsOp
     // the ability to write anything at all.
     const playerId = resolved?.id
         ?? (resolved ? resolvePlayer({ name: resolved.name }, { create: false }) : null);
+
+    // Load this player's remarks when the card opens.
+    //
+    // Nothing else does it outside Scouting. Remarks are one collection PER
+    // PLAYER — `evaluations/{player}/remarks` — so openEvaluations() with no
+    // argument is a deliberate no-op (seven hundred players, seven hundred
+    // reads to show one card), and ScoutingView is the only caller that ever
+    // names an id. Against localStorage that never showed, because loadSync
+    // fills a collection the instant anything asks; against a store that
+    // answers later, the card read a collection nobody had opened and drew
+    // whatever Scouting happened to have left in memory — usually exactly
+    // one author, which is what this looked like from the outside.
+    //
+    // ONE read, and only the first time: repository.ready() resolves from
+    // cache once a collection has loaded (repository.js — `if
+    // (loaded.has(collection))`), so opening the same card again costs
+    // nothing. The whole collection is every author's remarks for this
+    // player, which is what the stack below wants anyway. Deliberately not
+    // followed: a remark is not a draft pick, and a listener per open card
+    // for something written on another screen is not worth the stream.
+    useEffect(() => {
+        if (!playerId) return undefined;
+        let cancelled = false;
+        openEvaluations([playerId]).then(() => { if (!cancelled) setRemarkTick(t => t + 1); });
+        return () => { cancelled = true; };
+    }, [playerId]);
 
     /**
      * What every board has said about him, stacked.

@@ -14,7 +14,7 @@ import SessionUser from './components/SessionUser';
 import ManageExpertsModal from './components/ManageExpertsModal';
 import { currentSeason, setViewedSeason, createBoard, hasSharedBoard } from './utils/boardRegistry';
 import { invalidateBoards } from './hooks/useBoardRankings';
-import { editRefusal, getCurrentUser } from './utils/permissions';
+import { editRefusal } from './utils/permissions';
 import { onAuthChange } from './utils/auth';
 import { backendName } from './data/backend';
 import { repository } from './data/repository';

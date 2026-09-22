@@ -114,6 +114,30 @@ export function createOverlayAdapter({ remote, local, writesRemote, onRemoteErro
         readFailed: (path) => failedPaths.has(path),
 
         /**
+         * Identity comes from the REMOTE half, always — even for a viewer,
+         * whose writes land locally.
+         *
+         * A viewer has a uid too (anonymous sign-in), and it is the right
+         * answer to "who is acting": his own overlay is his, and nothing he
+         * writes is ever judged against somebody else's. Falling back to the
+         * local adapter's constant would make every viewer claim to be the
+         * same person, which is only harmless until two of them share a
+         * browser profile — and it would hand the ONE identity that the rules
+         * actually check a value the rules have never heard of.
+         */
+        identity() {
+            return remote.identity ? remote.identity() : null;
+        },
+
+        newAuthorId(taken) {
+            return remote.newAuthorId ? remote.newAuthorId(taken) : null;
+        },
+
+        isExpert() {
+            return canWriteRemote();
+        },
+
+        /**
          * No loadSync, even though the local half has one.
          *
          * Offering it would answer with only the local overlay — which for a

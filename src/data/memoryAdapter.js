@@ -18,6 +18,8 @@
  * It is also useful on its own: a test can have a repository that starts empty
  * and leaves nothing behind.
  */
+import { prefixedId } from '../utils/ids';
+
 export function createMemoryAdapter({ latency = 0, failWrites = false } = {}) {
     const store = new Map();
 
@@ -37,6 +39,21 @@ export function createMemoryAdapter({ latency = 0, failWrites = false } = {}) {
         name: 'memory',
 
         // No loadSync. See the note above — its absence is the feature.
+
+        // Same answers localAdapter gives, and for the same reason: no auth,
+        // nobody else here. See its note for why the adapter is what decides
+        // an author's id at all.
+        identity() {
+            return 'local';
+        },
+
+        newAuthorId(taken) {
+            return prefixedId('a', taken);
+        },
+
+        isExpert() {
+            return true;
+        },
 
         async load(collection) {
             await wait();

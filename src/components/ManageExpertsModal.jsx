@@ -1,37 +1,49 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import useEscapeKey from '../hooks/useEscapeKey';
-import { listAllowedExperts, addAllowedExpert, setExpertActive, currentUser } from '../utils/auth';
+import { listExperts, inviteExpert, revokeExpert, reinstateExpert, currentUser } from '../utils/auth';
 
 /**
- * Modal for viewing and adding authorized experts (allowed_users).
+ * Who may act as an expert, and the two buttons that change it.
  *
  * Only reachable from the Manage menu when the current user is already an
- * expert, so no permission check is needed here — the Firestore rules are
- * the real gate.
+ * expert, so there is no permission check here — firestore.rules is the real
+ * gate and this would be a courtesy at best.
  *
- * Delete is intentionally omitted — removal is a console operation on
- * purpose, so the audit trail (who added whom, when) can never be erased.
- * Deactivating (below) is the in-app way to revoke write access; a
- * deactivated expert stays listed, with a status pill, rather than
- * disappearing.
+ * **Access is the INVITE, and the invite is a document that exists or does
+ * not.** There is no active flag anywhere: revoking deletes the
+ * `email2author` entry, which refuses his next write immediately and
+ * everywhere, and reinstating writes it back. The list below therefore shows
+ * three states rather than two, because the middle one is real and worth
+ * seeing:
+ *
+ *   Active    invited, and has signed in — he has an author record
+ *   Invited   invited, never turned up — no author yet, nothing to revoke
+ *             from except the invite itself
+ *   Revoked   his invite is gone, but his author record remains, because an
+ *             author is permanent: his boards still name him and his
+ *             evaluations are still in his voice
+ *
+ * Revoking also releases the boards he was holding, back to unclaimed — see
+ * auth.revokeExpert. Reinstating hands back only the ones nobody else picked
+ * up meanwhile.
  */
 export default function ManageExpertsModal({ isOpen, onClose }) {
-    const [experts, setExperts]     = useState([]);
-    const [loading, setLoading]     = useState(false);
-    const [email, setEmail]         = useState('');
-    const [adding, setAdding]       = useState(false);
-    const [error, setError]         = useState(null);
-    const [successMsg, setSuccessMsg] = useState(null);
-    const [togglingEmail, setTogglingEmail] = useState(null);
+    const [experts, setExperts] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [email, setEmail] = useState('');
+    const [inviting, setInviting] = useState(false);
+    const [error, setError] = useState(null);
+    const [notice, setNotice] = useState(null);
+    const [busyEmail, setBusyEmail] = useState(null);
     const myEmail = (currentUser()?.email ?? '').toLowerCase();
 
     const load = useCallback(async () => {
         setLoading(true);
         setError(null);
         try {
-            setExperts(await listAllowedExperts());
+            setExperts(await listExperts());
         } catch (err) {
-            setError(err.message ?? 'Could not load expert list.');
+            setError(err.message ?? 'Could not load the expert list.');
         } finally {
             setLoading(false);
         }
@@ -41,7 +53,7 @@ export default function ManageExpertsModal({ isOpen, onClose }) {
         if (isOpen) {
             setEmail('');
             setError(null);
-            setSuccessMsg(null);
+            setNotice(null);
             load();
         }
     }, [isOpen, load]);
@@ -50,125 +62,151 @@ export default function ManageExpertsModal({ isOpen, onClose }) {
 
     if (!isOpen) return null;
 
-    const handleAdd = async (e) => {
+    const handleInvite = async (e) => {
         e.preventDefault();
         setError(null);
-        setSuccessMsg(null);
-        setAdding(true);
+        setNotice(null);
+        setInviting(true);
         try {
-            await addAllowedExpert(email.trim());
-            setSuccessMsg(`${email.trim().toLowerCase()} added.`);
+            const { email: added } = await inviteExpert(email);
+            setNotice(`${added} invited. They become an expert the first time they sign in.`);
             setEmail('');
             await load();
         } catch (err) {
-            setError(err.message ?? 'Could not add expert.');
+            setError(err.message ?? 'Could not invite that address.');
         } finally {
-            setAdding(false);
+            setInviting(false);
         }
     };
 
-    const handleToggle = async (targetEmail, nextActive) => {
+    const handleRevoke = async (target) => {
         setError(null);
-        setSuccessMsg(null);
-        setTogglingEmail(targetEmail);
+        setNotice(null);
+        setBusyEmail(target.email);
         try {
-            await setExpertActive(targetEmail, nextActive);
+            await revokeExpert(target.email);
+            // No count to report: his boards are not rewritten, they simply
+            // answer "claimable" from now on because he is no longer invited.
+            setNotice(`${target.email} revoked. Any board of theirs can now be claimed by another expert.`);
             await load();
         } catch (err) {
-            setError(err.message ?? 'Could not update that expert.');
+            setError(err.message ?? 'Could not revoke that expert.');
         } finally {
-            setTogglingEmail(null);
+            setBusyEmail(null);
         }
     };
 
-    const fmtDate = (iso) => {
-        if (!iso) return '—';
+    const handleReinstate = async (target) => {
+        setError(null);
+        setNotice(null);
+        setBusyEmail(target.email);
         try {
-            return new Date(iso).toLocaleDateString(undefined, { dateStyle: 'medium' });
-        } catch {
-            return iso;
+            await reinstateExpert(target.email, target.authorId);
+            setNotice(`${target.email} reinstated. Anything still theirs is theirs again; anything claimed while they were gone stays with whoever took it.`);
+            await load();
+        } catch (err) {
+            setError(err.message ?? 'Could not reinstate that expert.');
+        } finally {
+            setBusyEmail(null);
         }
+    };
+
+    const statusOf = (x) => {
+        if (!x.active) return { label: 'Revoked', tone: 'revoked' };
+        if (!x.signedIn) return { label: 'Invited', tone: 'invited' };
+        return { label: 'Active', tone: 'active' };
     };
 
     return (
         <div className="modal-overlay" onClick={onClose}>
-            <div
-                className="modal-content"
-                style={{ maxWidth: 480 }}
-                onClick={e => e.stopPropagation()}
-            >
+            <div className="modal-content app-settings" onClick={e => e.stopPropagation()}>
                 <div className="modal-header">
                     <h2>Manage Experts</h2>
-                    <button
-                        type="button"
-                        className="close-button"
-                        onClick={onClose}
-                        aria-label="Close"
-                    >×</button>
+                    <button className="close-button" onClick={onClose} aria-label="Close">&times;</button>
                 </div>
 
-                {/* Expert list */}
-                {loading ? (
-                    <p style={{ padding: '0.5rem 0', color: 'var(--c-muted, #888)' }}>Loading…</p>
-                ) : experts.length === 0 ? (
-                    <p style={{ padding: '0.5rem 0', color: 'var(--c-muted, #888)' }}>No experts registered yet.</p>
-                ) : (
-                    <ul className="season-list" style={{ marginBottom: '1rem' }}>
-                        {experts.map(({ email: e, addedBy, addedAt, active }) => {
-                            const isSelf = e === myEmail;
-                            return (
-                                <li key={e} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
-                                    <span style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem', minWidth: 0 }}>
-                                        <span style={{ fontWeight: 500 }}>{e}</span>
-                                        <span
-                                            className={`action-pill${active ? ' active' : ''}`}
-                                            style={{ fontSize: '0.75em', padding: '0.1em 0.5em', pointerEvents: 'none' }}
-                                        >{active ? 'Active' : 'Inactive'}</span>
-                                    </span>
-                                    <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
-                                        <span style={{ fontSize: '0.8em', color: 'var(--c-muted, #888)', whiteSpace: 'nowrap' }}>
-                                            {addedBy ? `added by ${addedBy}` : ''}{addedBy && addedAt ? ', ' : ''}{fmtDate(addedAt)}
-                                        </span>
-                                        {!isSelf && (
-                                            <button
-                                                type="button"
-                                                className="action-pill"
-                                                disabled={togglingEmail === e}
-                                                onClick={() => handleToggle(e, !active)}
-                                                title={active ? 'Revoke this expert\'s write access' : 'Restore this expert\'s write access'}
-                                            >
-                                                {togglingEmail === e ? '…' : (active ? 'Deactivate' : 'Reactivate')}
-                                            </button>
-                                        )}
-                                    </span>
-                                </li>
-                            );
-                        })}
-                    </ul>
-                )}
+                {error && <div className="ap-error">{error}</div>}
 
-                {/* Add form */}
-                <form onSubmit={handleAdd} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                    <input
-                        type="email"
-                        value={email}
-                        onChange={e => setEmail(e.target.value)}
-                        placeholder="expert@example.com"
-                        required
-                        disabled={adding}
-                        style={{ flex: 1, minWidth: 0 }}
-                    />
-                    <button
-                        type="submit"
-                        className="action-pill"
-                        disabled={adding || !email.trim()}
-                    >
-                        {adding ? 'Adding…' : 'Add Expert'}
-                    </button>
-                </form>
+                <div className="settings-body">
+                    <div className="settings-field">
+                        <span className="settings-label">Who may publish</span>
+                        <span className="settings-hint">
+                            An expert writes the shared boards; everybody else reads them and
+                            keeps their own work in their own browser. Revoking takes effect
+                            on their next action and releases the boards they were holding —
+                            their own work stays theirs, and their name stays on it.
+                        </span>
 
-                {error    && <p className="ap-error" style={{ marginTop: '0.5rem' }}>{error}</p>}
-                {successMsg && <p style={{ marginTop: '0.5rem', color: 'var(--c-success, green)', fontSize: '0.9em' }}>{successMsg}</p>}
+                        {loading ? (
+                            <p className="expert-empty">Loading…</p>
+                        ) : experts.length === 0 ? (
+                            <p className="expert-empty">Nobody has been invited yet.</p>
+                        ) : (
+                            <ul className="season-list expert-list">
+                                {experts.map((x) => {
+                                    const status = statusOf(x);
+                                    const isSelf = x.email === myEmail;
+                                    const busy = busyEmail === x.email;
+                                    return (
+                                        <li key={x.email} className="expert-row">
+                                            <span className="expert-who">
+                                                <span className="expert-name">{x.name ?? x.email}</span>
+                                                {x.name && <span className="expert-email">{x.email}</span>}
+                                            </span>
+                                            <span className={`expert-status ${status.tone}`}>{status.label}</span>
+                                            {isSelf ? (
+                                                <span className="expert-self">you</span>
+                                            ) : (
+                                                <button
+                                                    type="button"
+                                                    className="action-pill"
+                                                    disabled={busy}
+                                                    onClick={() => (x.active ? handleRevoke(x) : handleReinstate(x))}
+                                                    title={x.active
+                                                        ? 'Delete their invite — refuses every write from their next action on'
+                                                        : 'Write their invite back, and return any board of theirs nobody else claimed'}
+                                                >
+                                                    {busy ? '…' : (x.active ? 'Revoke' : 'Reinstate')}
+                                                </button>
+                                            )}
+                                        </li>
+                                    );
+                                })}
+                            </ul>
+                        )}
+                    </div>
+
+                    <form className="settings-field" onSubmit={handleInvite}>
+                        <span className="settings-label">Invite an expert</span>
+                        <span className="settings-hint">
+                            The address they sign in to Google with. Nothing is created for
+                            them until they actually sign in — the invite is only permission
+                            to.
+                        </span>
+                        <div className="expert-invite">
+                            <input
+                                type="email"
+                                className="text-input"
+                                value={email}
+                                onChange={e => setEmail(e.target.value)}
+                                placeholder="expert@example.com"
+                                required
+                                disabled={inviting}
+                            />
+                            <button
+                                type="submit"
+                                className="action-button primary"
+                                disabled={inviting || !email.trim()}
+                            >{inviting ? 'Inviting…' : 'Invite'}</button>
+                        </div>
+                        {notice && <span className="expert-notice">{notice}</span>}
+                    </form>
+                </div>
+
+                <div className="modal-actions ap-actions">
+                    <div style={{ flex: 1 }} />
+                    <button type="button" className="action-button secondary" onClick={onClose}>Done</button>
+                </div>
             </div>
         </div>
     );

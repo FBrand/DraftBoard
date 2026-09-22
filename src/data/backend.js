@@ -26,7 +26,7 @@ import { localAdapter } from './localAdapter';
 import { createMemoryAdapter } from './memoryAdapter';
 import { createFirebaseAdapter } from './firebaseAdapter';
 import { createOverlayAdapter } from './overlayAdapter';
-import { isExpert } from '../utils/auth';
+import { isExpert, currentUserId } from '../utils/auth';
 
 export const BACKENDS = ['local', 'memory', 'firebase'];
 
@@ -42,7 +42,13 @@ export function backendName() {
 export function createAdapter(name = backendName()) {
     switch (name) {
         case 'firebase': return createOverlayAdapter({
-            remote: createFirebaseAdapter(),
+            // auth.js is imported HERE and nowhere below it. The stores ask
+            // the repository who is acting; the repository asks the adapter;
+            // the adapter was handed these when it was built. That is what
+            // keeps boardRegistry — which permissions.js imports, which
+            // auth.js imports — from having to import auth.js back and close
+            // the cycle.
+            remote: createFirebaseAdapter({ identity: currentUserId, isExpert }),
             local: localAdapter,
             // Asked on every write rather than captured once: signing in is
             // something that happens while the app is running, and a captured

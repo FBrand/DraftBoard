@@ -131,63 +131,90 @@ firebase deploy --only firestore:rules
 
 ## Authorized experts
 
-Being signed in with Google is not enough to be an expert — the account's
-email must also be listed in the `allowed_users` collection, checked by
-`firestore.rules`' `isExpert()` alongside the provider (`google.com` only)
-and a verified email. Without this, the Firebase config in the bundle is
-public by design (see "Deploying" above), so an unrestricted "any Google
-account" rule would let a stranger publish over a shared board.
+Two collections, and the split matters:
+
+- **`email2author/{email}`** — the access mechanism. **Existence is the
+  permission**: an entry means that address may sign in as an expert, create
+  its own author record, and read expert-gated content. The body holds only
+  `invitedBy`/`invitedAt`; nothing inside it is read for a decision.
+- **`authors/{uid}`** — the identity, keyed by the Firebase Auth **uid**.
+  Created by the person themselves at first sign-in. Holds `name`, `email`,
+  and an optional `deactivated` flag that is **informational only** — no rule
+  reads it, ever.
+
+`isExpert()` is therefore `google.com` + `email_verified` +
+`exists(email2author/{lowercased email})` — **one** identity read. Keying
+authors by uid is what keeps it to one: "which author am I" is answered by
+the token itself (`request.auth.uid`), and "is this mine" is a field
+comparison, so neither costs a lookup. `authors` is never consulted for
+permission.
 
 **Deploy rules before the client, every time.** The client checks
-`allowed_users` on sign-in; if the new client ships to GitHub Pages ahead of
+`email2author` on sign-in; if the new client ships to GitHub Pages ahead of
 `firebase deploy --only firestore:rules`, every expert — including whoever
 would be the first entry — gets refused by the *old* rules' catch-all deny,
-which looks identical to "not on the list" until the rules catch up.
+which looks identical to "not invited" until the rules catch up.
 
-**Adding an expert, once one already exists**: signed-in experts can do this
-from the app itself — Manage → Manage Experts… — which writes through
-`addAllowedExpert()` and is enforced by the rules' own `create` validation
-(the document id must equal the email, `addedBy` must be the caller's own
-address). Nobody can be removed from the app; `allow update, delete: if
-false` on purpose, so the list can't be forged after the fact. Revoking
-access is a console-only operation — delete the `allowed_users/{email}`
-document directly in the Firebase console's Firestore data browser.
+**Adding an expert, once one already exists**: from the app — Manage →
+Manage Experts… — which creates the `email2author` entry with `invitedBy`
+set to the caller's own address (the rules enforce that; you cannot
+attribute an invite to somebody else). Entries are immutable: `allow
+update: if false`, so who-invited-whom cannot be rewritten after the fact.
 
-**Bootstrapping the very first expert is different, and has to be.** The
-`create` rule itself requires already being an expert — there is no way to
-satisfy that for the first entry from inside the app, by design; a rules
-language with no concept of "the collection is currently empty" can't
-express a self-service exception here that isn't itself a standing hole (an
-admin-console delete can always re-empty the collection later, since delete
-bypasses rules the same way this bootstrap does — so "empty" is never a safe
-one-shot signal to build a founder exception on top of).
+**Deactivating**: deletes the `email2author` entry — that alone revokes,
+immediately and everywhere, because existence *is* the permission. The app
+also sets `deactivated: true` on the author (for display) and orphans that
+person's boards, setting `o: null` so another expert can claim them. The
+author record itself is never deleted (`allow delete: if false`): it is a
+permanent identity, and every evaluation ever written in that voice is keyed
+to it.
 
-The only correct way in is a write that bypasses `firestore.rules`
-entirely — the same authority `firebase deploy` itself uses, i.e. a request
-authenticated with Google Cloud IAM (project Editor/Owner) rather than
-Firebase Auth. Concretely, from a machine logged in via `firebase login`
-with sufficient project access:
+**Reactivating**: recreates the `email2author` entry, clears the flag, and
+reassigns boards where `a == <that uid> && o == null` — the ones still
+unclaimed. Anything another expert took over meanwhile has `o != null` and
+is deliberately left with them.
+
+**Bootstrapping a project is different, and has to be.** The `create` rule
+requires already being an expert, so the first `email2author` entry can
+never come from inside the app — by design; a rules language with no concept
+of "this collection is empty" cannot express a self-service founder
+exception that isn't itself a standing hole (an admin delete can re-empty
+the collection later, so "empty" is never a safe one-shot signal).
+
+A **fresh** project needs two kinds of out-of-band write, both bypassing
+`firestore.rules` with Google Cloud IAM authority — the same access
+`firebase deploy` itself uses:
+
+1. **The founder's invite**, so somebody can sign in at all.
+2. **The placeholder authors** (`a_dan`, `a_ryan` and their mock invites at
+   `@draftboard.local`). These have *opaque* ids rather than uids, because
+   nobody ever signs in as them — and `authors` `create` requires
+   `authorId == request.auth.uid`, so the app itself correctly refuses to
+   write them. That refusal is the rule working, not a gap to widen.
+   `.local` is reserved by RFC 6762, so no real Google account can ever
+   exist at those addresses and the mock invites can never become a way in.
+
+From a machine logged in via `firebase login` with project access:
 
 ```sh
 TOKEN=$(node -e "console.log(JSON.parse(require('fs').readFileSync(process.env.HOME + '/.config/configstore/firebase-tools.json','utf8')).tokens.access_token)")
 curl -X PATCH \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  "https://firestore.googleapis.com/v1/projects/<PROJECT_ID>/databases/(default)/documents/allowed_users/<email, lowercase>" \
-  -d '{"fields": {"email": {"stringValue": "<email, lowercase>"}, "addedBy": {"stringValue": "hand"}}}'
+  "https://firestore.googleapis.com/v1/projects/<PROJECT_ID>/databases/(default)/documents/email2author/<email, lowercase>" \
+  -d '{"fields": {"invitedBy": {"stringValue": "hand"}, "invitedAt": {"stringValue": "2026-01-01"}}}'
 ```
 
 (`firebase firestore:delete` exists for admin-authority deletes; there is no
 equivalent `firestore:write` in the CLI, which is why this goes through the
-REST API directly with the CLI's own refreshed token instead.)
+REST API directly with the CLI's own refreshed token.)
 
 **The document id must exactly match the `email` claim the Google token
 actually returns** — case and domain both. A near-miss (`gmail.com` vs. the
 account's real domain, or any casing difference — the rules compare against
 `request.auth.token.email.lower()`) means `exists()` misses forever, nobody
-ever passes `isExpert()`, and the list can never be extended from the app
-again. Confirm the real value first — signing in once and reading it back
-from Firebase Auth's user list, or from the token itself — rather than
-assuming what an address "should" be.
+passes `isExpert()`, and no invite can ever be extended from the app again.
+Confirm the real value first — sign in once and read it back from Firebase
+Auth's user list — rather than assuming what an address "should" be.
 
 ## Three things that will bite
 

@@ -22,7 +22,7 @@ import { addProspect, savePlayerEdit, deletePlayer, restorePlayer, hiddenPlayers
 import * as athleticMatrix from '../utils/athleticMatrix';
 import * as playerRegistry from '../utils/playerRegistry';
 
-import { createBoard, listBoards, boardBySlug, boardById, renameBoard, listSeasons, currentSeason, claimBoard, orphanBoard, setBoardVisibility } from '../utils/boardRegistry';
+import { createBoard, listBoards, boardBySlug, boardById, renameBoard, listSeasons, currentSeason, claimBoard, orphanBoard, setBoardVisibility, boardClaimableBy, openInvites } from '../utils/boardRegistry';
 import { repository } from '../data/repository';
 import { entriesPath } from '../data/boardEntries';
 import { canEdit, isExpert, getCurrentUser } from '../utils/permissions';
@@ -131,6 +131,30 @@ export default function ScoutingView({ players }) {
             setBoards(prev => ({ ...prev, [activeBoard]: scoutingState.loadState(activeBoard) }));
         });
     }, [pools, activeBoard]);
+
+    // The invite list, so the Claim control knows whether a board's owner
+    // still has access. One collection read for a signed-in expert, cached
+    // from then on — and nothing but a button depends on it, so a viewer
+    // (whose read the rules refuse) and an offline session both degrade to
+    // "no reason to think anybody is revoked", which hides the control
+    // rather than offering one that would fail. See ownerRevokedLocally.
+    const [invitesLoaded, setInvitesLoaded] = useState(0);
+    useEffect(() => {
+        if (!repository.isLive() || !isExpert()) return undefined;
+        let cancelled = false;
+        openInvites().then(() => { if (!cancelled) setInvitesLoaded(n => n + 1); }).catch(() => {});
+        return () => { cancelled = true; };
+    }, [activeBoard]);
+
+    // Whether the Claim control should be offered at all. Answered from the
+    // cache above; the rules re-ask against live data when the claim is
+    // actually attempted, and they are the ones that decide.
+    const claimable = useMemo(
+        () => boardClaimableBy(boardById(activeBoard), getCurrentUser()?.id ?? null),
+        // invitesLoaded: the list arrived, so the answer may have changed.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [activeBoard, invitesLoaded],
+    );
 
     const state = boards[activeBoard] ?? { version: 1, entries: [] };
 
@@ -722,10 +746,20 @@ export default function ScoutingView({ players }) {
                 {/* Only a personal board (has an authorId) has anything to
                     claim or release — a shared board has no owner to set.
                     Not shown to a viewer: claiming/orphaning is an expert
-                    action, same gate as everything else that writes. */}
+                    action, same gate as everything else that writes.
+
+                    Release for the man holding it; Claim when it is up for
+                    grabs — unclaimed, released, or held by somebody whose
+                    access has been revoked. That last case is answered from
+                    the cached invite list (boardClaimableBy), which costs no
+                    read per board opened and keeps the rules' own three-read
+                    check for real attempts rather than speculative ones. It
+                    is display only: a stale cache showing the button too
+                    eagerly gets a clean permission error, and hiding it
+                    wrongly hides an option until the next load. */}
                 {isExpert() && boardById(activeBoard)?.authorId && (
-                    boardById(activeBoard)?.ownerId
-                        ? (boardById(activeBoard)?.ownerId === getCurrentUser()?.id) && (
+                    boardById(activeBoard)?.ownerId === getCurrentUser()?.id
+                        ? (
                             <button
                                 type="button"
                                 className="action-pill"
@@ -733,12 +767,14 @@ export default function ScoutingView({ players }) {
                                 title="Release ownership — any expert can claim it again afterward"
                             >Release Ownership</button>
                         )
-                        : (
+                        : claimable && (
                             <button
                                 type="button"
                                 className="action-pill"
                                 onClick={handleClaimBoard}
-                                title="Nobody owns this board yet — claim it as your own"
+                                title={boardById(activeBoard)?.ownerId
+                                    ? 'The expert who held this board no longer has access — claim it as your own'
+                                    : 'Nobody owns this board yet — claim it as your own'}
                             >Claim This Board</button>
                         )
                 )}
