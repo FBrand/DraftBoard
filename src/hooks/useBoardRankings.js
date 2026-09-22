@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { openStages } from '../data/stageStore';
-import { openBoardEntries } from '../data/boardEntries';
+import { openBoardEntries, readEntries } from '../data/boardEntries';
 import { openDepthCharts } from '../data/depthChartStore';
 import { openSetup } from '../utils/seasonInit';
 import { parseRankings } from '../utils/dataParser';
@@ -43,6 +43,27 @@ function loadFiles() {
     filesPromise = Promise.all(listBoards().map(async (board) => {
         try {
             if (!board.rankingsFile) return [board.id, null];
+            // A SEEDED board does not need its file.
+            //
+            // The file answers one question — who is in the pool — and after
+            // seeding, that board's entries answer it too: seedBoard
+            // materialises a placement for every player in the union, so the
+            // entries are a superset of the file, and they are already being
+            // loaded a few lines below for the placements themselves.
+            // Re-fetching and re-parsing the file to learn something the app
+            // is about to read anyway is work nobody needs.
+            //
+            // Not a read-quota saving — these are static files off the CDN and
+            // cost Firestore nothing. What it removes is three fetches, a
+            // parse, and a SECOND source of truth for pool membership that
+            // could disagree with the first.
+            //
+            // `seeded` is the same flag that already decides whether a file
+            // may overwrite placements (scoutingState.seedBoard), so this does
+            // not invent a new notion of when a file stops mattering — it
+            // reuses the existing one. An unseeded board, or one whose entries
+            // have not loaded, still falls through to the fetch below.
+            if (board.seeded) return [board.id, null];
             const res = await fetch(`${base}${board.rankingsFile}`);
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const players = parseRankings(await res.text()) || [];
@@ -141,10 +162,48 @@ function unionOfFiles(files, keyOf) {
     return [...seen.values()];
 }
 
+/**
+ * The pool a seeded board contributes, rebuilt from what is already loaded.
+ *
+ * An entry's document key IS the player's registry id, and the registry holds
+ * his name, position and school — so between them they say everything the
+ * rankings file said about who exists, without the file. Shaped exactly like a
+ * parsed file row so unionOfFiles and joinKeyFor cannot tell the difference.
+ *
+ * `group` is deliberately absent: a file row carries the tier it was read at,
+ * but a seeded board's tier lives in the entry and is applied by rankBoard
+ * later. Putting it here too would be two answers to one question.
+ */
+function poolFromEntries(boardId) {
+    return readEntries(boardId)
+        .map((e) => {
+            const record = e.playerId ? byId(e.playerId) : null;
+            const name = record?.name ?? e.name;
+            if (!name) return null;
+            return {
+                name,
+                position: record?.position ?? e.position ?? '',
+                school: record?.school ?? '',
+                id: e.playerId ?? null,
+            };
+        })
+        .filter(Boolean);
+}
+
 function loadPools() {
     return openBoards()
         .then(() => Promise.all([loadFiles(), openRegistry(), openEvaluations(), openStages(viewedSeason()?.id ?? null), openBoardEntries(listBoards().map(b => b.id)), openDepthCharts(viewedSeason()?.id ?? null), openSetup(viewedSeason()?.id ?? null)]))
-        .then(([files]) => {
+        .then(([fetched]) => {
+        // Files for the boards that still need one, entries for the rest.
+        // Done HERE rather than inside loadFiles because it needs the entries
+        // and the registry, which are loaded by the Promise.all above — and
+        // deriving it inside would have forced those to be awaited first,
+        // serialising two things that are currently parallel.
+        const files = Object.fromEntries(listBoards().map((b) => {
+            if (fetched[b.id]) return [b.id, fetched[b.id]];
+            const fromEntries = poolFromEntries(b.id);
+            return [b.id, fromEntries.length ? fromEntries : null];
+        }));
         // Base data edited in-app — players added, corrected, or removed — is
         // shared by every board, so it is applied before anything ranks,
         // places, tags or exports. From here down there is no such thing as an
