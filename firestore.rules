@@ -336,9 +336,30 @@ service cloud.firestore {
       // Create and update carry the SAME self-check rather than one being
       // looser — create-vs-update drift is how a guard got bypassed here
       // once already (delete the document, recreate it without the guard).
-      allow create: if isExpert() && authorId == request.auth.uid;
+      // `e` is FROZEN, and this is the load-bearing line of the whole
+      // revocation model rather than a tidiness rule.
+      //
+      // ownerRevoked() derives "has this owner lost access" by following
+      // board.o -> authors/{o}.e -> email2author/{e}. Leave `e` writable by
+      // its own subject and that chain runs through a field the person being
+      // revoked controls: one legitimate write before leaving, pointing `e`
+      // at a COLLEAGUE'S address, and revoking him afterwards does nothing —
+      // the lookup finds the colleague's live invite and reports him still
+      // invited, permanently. His boards then cannot be claimed by anyone and
+      // his private boards cannot be read by anyone, with no way back that
+      // does not involve the Firebase console. Revocation state has to sit
+      // where the person being revoked cannot reach it.
+      //
+      // On create it must equal the caller's own verified address, or the
+      // same capture is available by writing the record wrong in the first
+      // place. lower() to match how the invite is keyed and how
+      // ensureAuthorRecord writes it.
+      allow create: if isExpert()
+                    && authorId == request.auth.uid
+                    && request.resource.data.e == request.auth.token.email.lower();
       allow update: if isExpert()
-                    && (authorId == request.auth.uid
+                    && ((authorId == request.auth.uid
+                         && request.resource.data.e == resource.data.e)
                         || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['x']));
       // An author is permanent. Deleting one would strand every evaluation
       // written in that voice and every board that names him.
@@ -414,7 +435,28 @@ service cloud.firestore {
       // way, and the explicit `== request.auth.uid` keeps it self-only —
       // nobody claims on a third party's behalf, and a revoked man's board
       // cannot be handed straight to somebody who was not asking for it.
-      allow update: if ownershipWouldBeSafe(request.resource.data.o, resource.data.a)
+      // `a` is FROZEN after creation, and without this the shared board can
+      // be captured in TWO writes rather than one.
+      //
+      // ownershipWouldBeSafe reads `a` from the document BEFORE this write
+      // and `o` from the incoming one, so it can only judge the regime a
+      // board is already in. Nothing else constrained `a`, so an expert
+      // could write `a: <himself>, o: null` to the consensus board — allowed,
+      // because with `a` still null beforehand it is the shared board and any
+      // expert may maintain it — and then claim it on a second write, because
+      // by then `a` is set and it looks like an ordinary orphan. Then mark it
+      // private and no other expert, and no viewer, can read the consensus
+      // board again. Reproduced against the emulator; the single-write form
+      // this file's tests used does fail, which is why the suite did not see
+      // it.
+      //
+      // `a` selects which ownership regime a board is under, so a rule that
+      // branches on its previous value is only an invariant if the same write
+      // cannot change it. Authorship is also the answer to "whose opinion is
+      // this", which is the question this whole app exists to keep straight —
+      // it is set once by createBoard and nothing legitimately rewrites it.
+      allow update: if request.resource.data.a == resource.data.a
+                    && ownershipWouldBeSafe(request.resource.data.o, resource.data.a)
                     && (ownsBoardData(resource.data)
                         || (isExpert()
                             && resource.data.o == null

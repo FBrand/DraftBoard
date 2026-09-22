@@ -710,3 +710,95 @@ describe('a revoked expert’s boards', () => {
         }));
     });
 });
+
+/**
+ * The two holes an independent review reproduced after the identity rebuild
+ * shipped, both of which this file's comments had asserted were impossible.
+ *
+ * Both were invisible to the tests above for the same structural reason:
+ * every board test here writes the whole document in ONE setDoc, and both
+ * attacks need two writes. A rule that branches on a field's previous value
+ * is only an invariant if the same write cannot change that field, and
+ * nothing was stopping either one.
+ */
+describe('multi-write attacks the single-write tests could not see', () => {
+    it('cannot capture the shared board by setting an author first, then claiming', async () => {
+        const db = expert('ryan-uid');
+        // Step one used to be ALLOWED: with `a` still null beforehand this is
+        // the shared board, which any expert may maintain.
+        await assertFails(setDoc(doc(db, 'boards/b_consensus'), {
+            l: 'Consensus', a: 'ryan-uid', o: null, s: 's_1',
+        }));
+        // And with step one refused, step two has nothing to stand on — but
+        // assert it directly too, so the test still means something if the
+        // first line's reason ever changes.
+        await assertFails(setDoc(doc(db, 'boards/b_consensus'), {
+            l: 'Consensus', a: 'ryan-uid', o: 'ryan-uid', s: 's_1',
+        }));
+    });
+
+    it('cannot rewrite authorship while claiming an orphaned board', async () => {
+        // Claiming b_orphan is legitimate; erasing whose work it was in the
+        // same write is not.
+        await assertFails(setDoc(doc(expert('ryan-uid'), 'boards/b_orphan'), {
+            l: 'Orphan', a: 'ryan-uid', o: 'ryan-uid', s: 's_1',
+        }));
+        // The honest claim, leaving authorship alone, still works.
+        await assertSucceeds(setDoc(doc(expert('ryan-uid'), 'boards/b_orphan'), {
+            l: 'Orphan', a: 'a_orphan', o: 'ryan-uid', s: 's_1',
+        }));
+    });
+
+    it('cannot reattribute a board he already owns', async () => {
+        await assertFails(setDoc(doc(expert('dan-uid'), 'boards/b_dan'), {
+            l: 'Dan', a: 'ryan-uid', o: 'dan-uid', s: 's_1',
+        }));
+    });
+
+    it('cannot point his own author record at somebody else’s invite', async () => {
+        // The capture that made revocation unenforceable: rewrite `e` to a
+        // colleague's address, and ownerRevoked() afterwards follows it to
+        // that colleague's live invite and reports you still invited — for
+        // good, with your boards unclaimable and your private boards
+        // unreadable by anyone.
+        await assertFails(setDoc(doc(expert('dan-uid'), 'authors/dan-uid'), {
+            n: 'Dan', e: 'ryan-uid@example.com',
+        }));
+    });
+
+    it('can still write his own author record, leaving the address alone', async () => {
+        await assertSucceeds(setDoc(doc(expert('dan-uid'), 'authors/dan-uid'), {
+            n: 'Dan The Man', e: 'dan-uid@example.com',
+        }));
+    });
+
+    it('cannot create an author record carrying an address that is not his', async () => {
+        // Same capture, taken at creation instead of by amendment. Seeded
+        // with rules off rather than via the fixtures, so the invite exists
+        // only for this test — the suite has another that asserts an expert
+        // can CREATE this very invite, and a pre-existing one would turn that
+        // create into an update, which email2author refuses by design.
+        await env.withSecurityRulesDisabled(async (ctx) => {
+            await setDoc(doc(ctx.firestore(), 'email2author/new-uid@example.com'), {
+                invitedBy: 'system', invitedAt: '2026-01-01',
+            });
+        });
+        await assertFails(setDoc(doc(expert('new-uid', 'new-uid@example.com'), 'authors/new-uid'), {
+            n: 'New', e: 'dan-uid@example.com',
+        }));
+    });
+
+    it('revocation still bites after an attempted address rewrite', async () => {
+        // End to end: the rewrite is refused, so revoking works normally and
+        // the board becomes claimable the way it should.
+        await assertFails(setDoc(doc(expert('dan-uid'), 'authors/dan-uid'), {
+            n: 'Dan', e: 'ryan-uid@example.com',
+        }));
+        await env.withSecurityRulesDisabled(async (ctx) => {
+            await deleteDoc(doc(ctx.firestore(), 'email2author/dan-uid@example.com'));
+        });
+        await assertSucceeds(setDoc(doc(expert('ryan-uid'), 'boards/b_dan'), {
+            l: 'Dan', a: 'dan-uid', o: 'ryan-uid', s: 's_1',
+        }));
+    });
+});
