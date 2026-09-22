@@ -802,3 +802,41 @@ describe('multi-write attacks the single-write tests could not see', () => {
         }));
     });
 });
+
+/**
+ * An author record carries a real person's email address, so it is the one
+ * shared record here that is NOT world-readable.
+ */
+describe('author records are not public', () => {
+    it('a viewer cannot read an author, and neither can a stranger', async () => {
+        await assertFails(getDoc(doc(viewer(), 'authors/dan-uid')));
+        await assertFails(getDoc(doc(stranger(), 'authors/dan-uid')));
+    });
+
+    it('an expert can read them — the experts list and revoke both need it', async () => {
+        await assertSucceeds(getDoc(doc(expert('ryan-uid'), 'authors/dan-uid')));
+    });
+
+    it('a revoked person can still read his OWN record, to be told he was revoked', async () => {
+        await env.withSecurityRulesDisabled(async (ctx) => {
+            await deleteDoc(doc(ctx.firestore(), 'email2author/dan-uid@example.com'));
+        });
+        // No longer an expert, so somebody else's record is refused...
+        await assertFails(getDoc(doc(expert('dan-uid'), 'authors/ryan-uid')));
+        // ...but his own still answers, which is what lets the app say
+        // "revoked" rather than "never invited".
+        await assertSucceeds(getDoc(doc(expert('dan-uid'), 'authors/dan-uid')));
+    });
+
+    it('revocation still derives correctly even though the author is now private', async () => {
+        // ownerRevoked() reads the author with a rule-internal get(), which
+        // is not subject to the read rule above — so making authors private
+        // must not change any ownership answer.
+        await env.withSecurityRulesDisabled(async (ctx) => {
+            await deleteDoc(doc(ctx.firestore(), 'email2author/dan-uid@example.com'));
+        });
+        await assertSucceeds(setDoc(doc(expert('ryan-uid'), 'boards/b_dan'), {
+            l: 'Dan', a: 'dan-uid', o: 'ryan-uid', s: 's_1',
+        }));
+    });
+});

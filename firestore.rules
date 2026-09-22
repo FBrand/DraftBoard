@@ -332,7 +332,28 @@ service cloud.firestore {
     // request.auth.uid` is simply never true for one, which is the correct
     // outcome and needs no special case.
     match /authors/{authorId} {
-      allow read: if true;
+      // NOT world-readable, unlike every other shared record here — an
+      // author carries `e`, the person's real email address, and this app is
+      // deployed to a public URL for two named people whose colleagues are
+      // also named people. World-readable meant ten real addresses were one
+      // unauthenticated request away, which also made the careful gating on
+      // email2author below worth nothing: the same addresses were on the
+      // next collection over.
+      //
+      // Nothing viewer-facing needs an author. A board carries its own
+      // `label`, evaluations group by the owner ID in their path, and
+      // authorOf() has no caller outside the tests. Every real consumer —
+      // the experts list, revoke, reinstate, the Claim control's cached
+      // check — is expert-only already.
+      //
+      // Reading your OWN record survives losing expert status on purpose, so
+      // a revoked person can still be told he was revoked rather than shown
+      // the same screen as somebody who was never invited.
+      //
+      // This does NOT affect ownerRevoked(): a get() inside a rule is not
+      // subject to these read rules, so the uid -> email -> invite
+      // derivation keeps working for everyone it needs to work for.
+      allow read: if isExpert() || authorId == request.auth.uid;
       // Create and update carry the SAME self-check rather than one being
       // looser — create-vs-update drift is how a guard got bypassed here
       // once already (delete the document, recreate it without the guard).
