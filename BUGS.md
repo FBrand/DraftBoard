@@ -303,7 +303,50 @@ The write side was already right. Worth knowing precisely, given how wrong the
 read side turned out to be — and it also proves the season guards added with
 B11 and B13 do not misfire, which would have made those edits do nothing at all.
 
-### Still open: an expert's change made during a connection drop is lost, silently
+### RESOLVED 2026-09-22: it was the emulator. Real Firestore does not do this
+
+**Read this before acting on anything in the three sections below.** They
+describe a false acknowledgement — a batch commit resolving while the write
+never lands — measured repeatedly against the emulator. The sections
+themselves say, correctly, that this had to be reproduced against a real
+project before being called a Firestore bug. It now has been, and it does not
+reproduce.
+
+Measured 2026-09-22 against **real Firestore** (a disposable project, client
+SDK, one scratch collection, deleted afterwards):
+
+| | observed |
+|---|---|
+| `commit()` while offline | **stays pending** — as documented |
+| the write on the server while offline | absent, correctly |
+| after reconnecting | resolves **and** the document is on the server |
+| false acknowledgement | **did not occur** |
+
+Verified through an independent path: the REST API rather than the SDK's own
+cache, so "on the server" means the server, not something the client believed.
+
+So the emulator diverges from production here, which is exactly what the
+caveat below predicted and nobody had tested. The complaint everyone else
+reports — a commit that *hangs* offline — is the real backend's failure mode,
+and a false resolve appears to be an emulator artifact.
+
+**One variant is still untested, and it is the one a broadcast produces.**
+This used `disableNetwork()`, a clean offline the SDK is told about. The
+original reproductions cut the transport out from under it (Playwright's
+`setOffline`, an aborted request) — the SDK is not told, it simply stops
+getting answers. That is venue wifi. Those can behave differently, so this
+downgrades the finding from likely-real to probably-emulator-only rather than
+closing it outright.
+
+What still holds regardless, and is still not implemented: nothing above the
+adapter can tell a false acknowledgement from a real one, because the app
+treats promise resolution as proof of durability. `waitForPendingWrites` and
+`hasPendingWrites` appear nowhere in `src/`. That is a design gap whether or
+not this particular bug is real.
+
+---
+
+### Was: an expert's change made during a connection drop is lost, silently — EMULATOR ONLY, see above
 
 The broadcast failure that matters. An expert is on air, the connection goes,
 he tags a player. Driven with the page cut off from Firestore and then
@@ -408,6 +451,10 @@ when a measurement contradicts behaviour thousands of applications depend on,
 the emulator diverging is far likelier than Firestore losing acknowledged
 writes. **This should be reproduced against a real project before it is called
 a Firestore bug** — which needs credentials.
+
+> **It was, on 2026-09-22, and the emulator was indeed the difference.** See
+> the resolution at the top of this block. This paragraph called it right:
+> the divergence was the emulator's, not Firestore's.
 
 What holds either way: the app must not treat the resolve as proof. The
 established mechanism for "has this reached the server" is
