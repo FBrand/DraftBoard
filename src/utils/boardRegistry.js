@@ -554,6 +554,29 @@ export async function orphanBoard(id, ownerId) {
 }
 
 /**
+ * Keeps the board list current while a page is open.
+ *
+ * `boards` is FOUR documents, so watching it costs about as little as
+ * watching anything can — and it is the collection whose staleness actually
+ * showed: ownership, visibility and the list itself all live here, all three
+ * changed meaning recently, and none of them was refreshed after boot. A
+ * board somebody else claimed, hid, or created went on reading as it had
+ * been until a reload, which is exactly how claiming a board that looked
+ * unowned came as a surprise.
+ *
+ * It also earns its keep twice over, because `write()` sends whole
+ * documents built from the cached copy: a live cache is what stops a board
+ * write being assembled from a stale one.
+ *
+ * Returns an unsubscribe. A no-op on a store that cannot push — the local
+ * adapter cannot change behind the app's back, so there is nothing to hear.
+ */
+export function followBoards(onChange) {
+    if (!repository.isLive()) return () => {};
+    return repository.follow(BOARDS_COLLECTION, onChange);
+}
+
+/**
  * Loads the invite list into the cache, for deciding what to OFFER.
  *
  * Expert-only, because the rules are: any signed-in Google account may read

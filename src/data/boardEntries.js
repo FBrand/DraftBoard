@@ -18,6 +18,15 @@
  */
 import { repository } from './repository';
 import { identityKey } from '../utils/nameMatcher';
+
+// Named here rather than imported from boardRegistry, which already imports
+// THIS module (removeBoardEntries) — taking it back the other way would
+// close a cycle for the sake of one string.
+const BOARDS = 'boards';
+// The short name of boardFields.entriesStampedAt. Written straight onto the
+// stored document, which is already in short form, so the renamer is not in
+// the path here.
+const ENTRIES_STAMP = 'u';
 import { byId } from '../utils/playerRegistry';
 import { entryFields } from './fieldNames';
 
@@ -170,7 +179,35 @@ export function writeEntries(boardId, entries) {
     current.forEach((_doc, id) => { if (!seen.has(id)) changes.push({ id, doc: null }); });
 
     if (!changes.length) return Promise.resolve();
-    return repository.commit(path, changes);
+
+    // Stamp the board so other devices can tell, for one already-cached
+    // document, whether these 328 are worth re-reading.
+    //
+    // Without it the only way to know whether a board changed is to fetch it
+    // and look, which costs the whole collection every time somebody opens
+    // the Draft board — paid in full on the overwhelmingly common case where
+    // nothing changed at all. `boards` is followed (see followBoards), so the
+    // stamp arrives live at no extra read, and the comparison is free.
+    //
+    // In the SAME batch as the entries, not after them: two writes could land
+    // apart, and a stamp that moved while the entries did not would tell
+    // every other device to re-read for nothing, while entries that moved
+    // without the stamp would leave them all reading a stale board and never
+    // finding out. Atomicity is what makes the marker trustworthy rather than
+    // merely usually right.
+    //
+    // Only when something really changed — the early return above means an
+    // idle save does not stamp, so it does not wake anybody up.
+    const board = repository.get(BOARDS, boardId);
+    const items = changes.map(c => ({ collection: path, id: c.id, doc: c.doc }));
+    if (board) {
+        items.push({
+            collection: BOARDS,
+            id: boardId,
+            doc: { ...board, [ENTRIES_STAMP]: Date.now() },
+        });
+    }
+    return repository.commitMany(items);
 }
 
 /**

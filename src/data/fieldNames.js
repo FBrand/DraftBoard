@@ -147,6 +147,11 @@ export const boardFields = renamer({
     seeded: 'd',
     createdAt: 'c',
     visibility: 'v',
+    // When this board's ENTRIES last changed. Not when the board document
+    // did — it is stamped by writeEntries, in the same batch as the entries
+    // themselves, so another device can decide whether its cached 328 are
+    // worth re-reading by looking at one document it already has.
+    entriesStampedAt: 'u',
 }, 'board');
 
 /** A person. `id` is the key. */

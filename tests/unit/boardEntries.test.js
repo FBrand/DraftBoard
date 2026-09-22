@@ -104,7 +104,17 @@ describe('what a board is stored as', () => {
 });
 
 describe('saving a board writes only what moved', () => {
-    const commitsFrom = (spy) => spy.mock.calls.map(([, changes]) => changes);
+    // writeEntries goes through commitMany, not commit: the entries and the
+    // board's own "entries changed at" stamp have to land together or the
+    // stamp is not trustworthy — see the note in data/boardEntries.js. So the
+    // items are flat {collection, id, doc}, and the entry writes are the ones
+    // filed under the entries path.
+    const entryWrites = (spy, id) => spy.mock.calls
+        .flatMap(([items]) => items)
+        .filter(i => i.collection === entriesPath(id));
+    const boardWrites = (spy) => spy.mock.calls
+        .flatMap(([items]) => items)
+        .filter(i => i.collection === 'boards');
 
     it('writes one document when one player moves', () => {
         const id = board();
@@ -114,11 +124,11 @@ describe('saving a board writes only what moved', () => {
         // app has. Rebuilding entries from scratch would re-stamp updatedAt on
         // all of them and there would be nothing for the diff to skip.
         const loaded = loadState(id).entries;
-        const spy = vi.spyOn(repository, 'commit');
+        const spy = vi.spyOn(repository, 'commitMany');
         const moved = loaded.map(e => (e.name === 'Arvell Reese' ? { ...e, round: 1, tier: 2 } : e));
         saveState(id, { version: 1, entries: moved });
 
-        const changes = commitsFrom(spy).flat();
+        const changes = entryWrites(spy, id);
         expect(changes).toHaveLength(1);
         // Identified by the document key, since the name is the registry's now.
         expect(changes[0].id).toContain('p_reese');
@@ -127,14 +137,37 @@ describe('saving a board writes only what moved', () => {
         spy.mockRestore();
     });
 
-    it('writes nothing at all when nothing changed', () => {
+    it('stamps the board in the SAME write, so the two cannot disagree', () => {
         const id = board();
         saveState(id, { version: 1, entries: three() });
 
         const loaded = loadState(id).entries;
-        const spy = vi.spyOn(repository, 'commit');
+        const spy = vi.spyOn(repository, 'commitMany');
+        const moved = loaded.map(e => (e.name === 'Arvell Reese' ? { ...e, round: 3 } : e));
+        saveState(id, { version: 1, entries: moved });
+
+        // One call, carrying both — not two calls that could land apart.
+        expect(spy).toHaveBeenCalledTimes(1);
+        const stamped = boardWrites(spy);
+        expect(stamped).toHaveLength(1);
+        expect(stamped[0].id).toBe(id);
+        expect(stamped[0].doc.u).toEqual(expect.any(Number));
+        // And the board it stamped keeps its identity: a whole-document write
+        // built from a stale cache is how authorship would get lost.
+        expect(stamped[0].doc.a).toBe(repository.get('boards', id).a);
+        spy.mockRestore();
+    });
+
+    it('writes nothing at all when nothing changed — including no stamp', () => {
+        const id = board();
+        saveState(id, { version: 1, entries: three() });
+
+        const loaded = loadState(id).entries;
+        const spy = vi.spyOn(repository, 'commitMany');
         saveState(id, { version: 1, entries: loaded });
 
+        // The stamp must not move on an idle save, or every other device
+        // re-reads 328 documents for nothing.
         expect(spy).not.toHaveBeenCalled();
         spy.mockRestore();
     });

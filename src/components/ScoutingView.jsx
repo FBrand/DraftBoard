@@ -22,7 +22,7 @@ import { addProspect, savePlayerEdit, deletePlayer, restorePlayer, hiddenPlayers
 import * as athleticMatrix from '../utils/athleticMatrix';
 import * as playerRegistry from '../utils/playerRegistry';
 
-import { createBoard, listBoards, boardBySlug, boardById, renameBoard, listSeasons, currentSeason, claimBoard, orphanBoard, setBoardVisibility, boardClaimableBy, openInvites } from '../utils/boardRegistry';
+import { createBoard, listBoards, boardBySlug, boardById, renameBoard, listSeasons, currentSeason, claimBoard, orphanBoard, setBoardVisibility, boardClaimableBy, openInvites, followBoards } from '../utils/boardRegistry';
 import { repository } from '../data/repository';
 import { entriesPath } from '../data/boardEntries';
 import { canEdit, isExpert, getCurrentUser } from '../utils/permissions';
@@ -113,6 +113,12 @@ export default function ScoutingView({ players }) {
         setBoardList(list);
         setBoards(Object.fromEntries(list.map(b => [b.id, scoutingState.loadState(b.id)])));
     }, [pools]);
+
+    // And kept current afterwards. Four documents, so this is the cheapest
+    // subscription in the app, and it covers the staleness that actually
+    // bit: a board claimed, released, hidden or created on another device
+    // used to read as it was at boot until somebody reloaded.
+    useEffect(() => followBoards(() => setBoardList(listBoards())), []);
 
     // Following the board, rather than having read it once.
     //

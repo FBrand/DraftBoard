@@ -1,8 +1,8 @@
-import { useMemo, useCallback, useEffect, useState } from 'react';
+import { useMemo, useCallback, useEffect, useState, useRef } from 'react';
 import * as scoutingState from '../utils/scoutingState';
 import { buildNameIndex, findMatchingIndex } from '../utils/nameMatcher';
 
-import { listBoards } from '../utils/boardRegistry';
+import { listBoards, followBoards } from '../utils/boardRegistry';
 import { repository } from '../data/repository';
 import { entriesPath } from '../data/boardEntries';
 
@@ -63,6 +63,14 @@ export function tagFor(name, qualifier, loaded) {
 export default function usePlayerTags(board = null) {
     const key = board ?? boardForCurrentRankings();
     const [fresh, setFresh] = useState(0);
+    // The stamp each board's cached entries were last read at. A ref, not
+    // state: changing it must not itself cause a render, it only records
+    // what the last read saw.
+    const seenStamp = useRef(new Map());
+    // Bumped when the boards collection changes, so the effect below re-runs
+    // and looks at the stamp again. Four documents — see followBoards.
+    const [boardStamp, setBoardStamp] = useState(0);
+    useEffect(() => followBoards(() => setBoardStamp(n => n + 1)), []);
 
     // Re-read the board's entries when it opens, because "loaded at boot" is
     // not the same as "current".
@@ -88,14 +96,33 @@ export default function usePlayerTags(board = null) {
     // hook is only ever called from DraftView and UdfaView — so Scouting is
     // always unmounted, and its watcher already stopped, by the time this
     // runs.
+    // And only when the board ACTUALLY changed.
+    //
+    // This used to re-read unconditionally, which is 328 documents every
+    // time somebody opens the Draft board — paid in full on the common case
+    // where nobody has touched the board since. writeEntries now stamps the
+    // board document in the same batch as the entries, and `boards` is
+    // followed, so the stamp is already here: comparing it costs nothing and
+    // skips the whole read when it has not moved.
+    //
+    // A board with no stamp yet (nothing has been written since this landed)
+    // re-reads once and then records whatever it finds, including undefined
+    // — so it settles rather than re-reading forever.
     useEffect(() => {
         if (!key || !repository.isLive()) return undefined;
+        const stamp = repository.get('boards', key)?.u ?? null;
+        if (seenStamp.current.get(key) === stamp) return undefined;
+
         let cancelled = false;
         const path = entriesPath(key);
         repository.invalidate(path);
-        repository.ready(path).then(() => { if (!cancelled) setFresh(n => n + 1); });
+        repository.ready(path).then(() => {
+            if (cancelled) return;
+            seenStamp.current.set(key, stamp);
+            setFresh(n => n + 1);
+        });
         return () => { cancelled = true; };
-    }, [key]);
+    }, [key, boardStamp]);
 
     // Memoise the data, not a closure over it — a useMemo that returns a
     // function defeats the React compiler's memoisation checks.
