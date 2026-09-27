@@ -1,3 +1,5 @@
+import { resetMemoryAdapters } from '../../src/data/memoryAdapter';
+
 /**
  * A localStorage good enough for the modules under test.
  *
@@ -19,4 +21,17 @@ class MemoryStorage {
 globalThis.localStorage = new MemoryStorage();
 
 // Object.keys(localStorage) is used in places; back it with real properties.
-globalThis.resetStorage = () => { globalThis.localStorage = new MemoryStorage(); };
+//
+// And the ADAPTER'S own store, which is a different place entirely. The suite
+// runs on the memory adapter (see vitest.config.js), whose documents live in a
+// Map inside it rather than in localStorage — so replacing localStorage leaves
+// every board, draft and player from the previous test exactly where it was.
+// Resetting one and not the other is worse than resetting neither, because the
+// two then disagree: the cache is cleared and the store is not.
+//
+// A no-op when the config points at localAdapter, which keeps its documents IN
+// localStorage and needs nothing more than the line above.
+globalThis.resetStorage = () => {
+    globalThis.localStorage = new MemoryStorage();
+    resetMemoryAdapters();
+};

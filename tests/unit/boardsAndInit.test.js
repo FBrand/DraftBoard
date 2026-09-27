@@ -87,7 +87,10 @@ describe('one analyst’s board is not another’s', () => {
 
     it('gives a board nobody has touched an empty state rather than somebody else’s', () => {
         const board = allBoards()[0];
-        expect(loadState(board.id)).toEqual({ version: 1, entries: [] });
+        // `seeded` is part of the answer now, and false is the honest one for a
+        // board nobody has touched: it is what tells seedBoard the rankings
+        // file still has work to do here.
+        expect(loadState(board.id)).toEqual({ version: 1, seeded: false, entries: [] });
     });
 
 });

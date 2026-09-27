@@ -60,11 +60,20 @@ describe('fillMany', () => {
         const roster = Array.from({ length: 60 }, (_, i) => ({ name: `Player ${i}`, position: 'WR' }));
         const ids = await freshRegistry(roster);
 
+        // Counted at the ADAPTER, not at localStorage. What matters is how
+        // many times the collection is handed to the store, which is the same
+        // question whichever store that is — and the suite does not run on
+        // localStorage any more (see vitest.config.js).
         let writes = 0;
-        const setItem = globalThis.localStorage.setItem.bind(globalThis.localStorage);
-        globalThis.localStorage.setItem = (k, v) => { if (k === `db_${PLAYERS}`) writes += 1; return setItem(k, v); };
+        const { adapter } = repository;
+        const realSet = adapter.set?.bind(adapter);
+        const realCommit = adapter.commit?.bind(adapter);
+        if (realSet) adapter.set = (c, id, doc) => { if (c === PLAYERS) writes += 1; return realSet(c, id, doc); };
+        if (realCommit) adapter.commit = (c, changes) => { if (c === PLAYERS) writes += 1; return realCommit(c, changes); };
 
         fillMany(ids.map((id, i) => ({ id, base: { school: `School ${i}` } })));
+        if (realSet) adapter.set = realSet;
+        if (realCommit) adapter.commit = realCommit;
 
         expect(writes).toBe(1);
     });

@@ -20,8 +20,27 @@
  */
 import { prefixedId } from '../utils/ids';
 
+// Every adapter built, so a test can empty all of them without having to
+// reach the one the repository happens to be holding.
+//
+// The unit suite runs on this adapter, and its isolation used to be "replace
+// globalThis.localStorage" — which isolates nothing once the documents live in
+// a Map in here. Reaching the instance through the repository would work and
+// costs too much: importing the repository into the suite's setup file pulls
+// backend.js and firebaseApp.js in with it, and the adapter test mocks
+// firebase/firestore partially, so the real module being in the graph first
+// broke six tests that had nothing to do with any of this. This module's only
+// import is ids, which is why the registry lives here.
+const built = new Set();
+
+/** Empties every memory adapter. Tests only. */
+export function resetMemoryAdapters() {
+    built.forEach(reset => reset());
+}
+
 export function createMemoryAdapter({ latency = 0, failWrites = false } = {}) {
     const store = new Map();
+    built.add(() => store.clear());
 
     const wait = () => (latency > 0
         ? new Promise(resolve => setTimeout(resolve, latency))

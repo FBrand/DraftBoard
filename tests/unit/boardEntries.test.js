@@ -274,6 +274,11 @@ describe('a seeded board whose entries have not been read', () => {
     it('still reports itself as seeded, so nothing re-materialises it', () => {
         const id = board();
         saveState(id, { version: 1, entries: three() });
+        // Seeded means the RECORD says so — that is what seedBoard writes when
+        // it finishes, and it is the only evidence that survives the entries
+        // being dropped from memory. saveState does not set it, so a test that
+        // only saves is not testing a seeded board.
+        repository.set('boards', id, { ...repository.get('boards', id), seeded: true });
         expect(loadState(id).seeded).toBe(true);
 
         // Drop the entries from memory WITHOUT unseeding the board — exactly
