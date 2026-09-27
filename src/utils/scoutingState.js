@@ -143,6 +143,24 @@ export { openBoardEntries };
  */
 export function seedBoard(board, players) {
     if (!players?.length) return false;
+
+    // A pool in which NOBODY is placed is not a board, it is a pool that
+    // arrived without its rankings file.
+    //
+    // loadFiles skips the fetch for a board whose record says seeded, and
+    // poolFromEntries deliberately carries no group, so a board whose record
+    // claims seeded while its entries are missing — because they were never
+    // written, or because the store refused to hand them over — assembles a
+    // full cast with not one tier among them. Seeding from that writes a
+    // placement of null, null for all 328 of them: it destroys nothing that
+    // was there, and creates 328 documents that say nothing, on a shared
+    // board, once per page load.
+    //
+    // No analyst has ever produced a board where nobody is placed, so there
+    // is no legitimate reading of this to protect. Refusing costs a board
+    // that genuinely has no tiers its seeding, which is the same nothing it
+    // would have got.
+    if (players.every(p => p.round == null)) return false;
     const state = loadState(board);
     if (state.seeded) return false;
 

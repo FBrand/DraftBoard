@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { entryDocId, entriesPath, BOARD_ENTRIES } from '../../src/data/boardEntries';
-import { makeEntry, loadState, saveState } from '../../src/utils/scoutingState';
+import { makeEntry, loadState, saveState, seedBoard } from '../../src/utils/scoutingState';
 import { openBoards, allBoards, boardById } from '../../src/utils/boardRegistry';
 import { repository } from '../../src/data/repository';
 import { entryFields, boardFields } from '../../src/data/fieldNames';
@@ -290,5 +290,40 @@ describe('a seeded board whose entries have not been read', () => {
         if (!fresh) return;
         repository.invalidate(entriesPath(fresh.id));
         expect(loadState(fresh.id).seeded).toBe(boardById(fresh.id)?.seeded ?? false);
+    });
+});
+
+/**
+ * A pool that arrived without its rankings file must not be written down.
+ *
+ * loadFiles skips the fetch for a board whose record says seeded, and
+ * poolFromEntries carries no group — so a board whose record claims seeded
+ * while its entries are missing assembles the full cast with not one tier
+ * among them. Seeding from that writes 328 documents saying nothing, onto a
+ * shared board, once per page load.
+ */
+describe('seeding from a pool with nobody placed', () => {
+    const unplaced = () => [
+        { id: 'p_mendoza', name: 'Fernando Mendoza', position: 'QB', round: null, tier: null },
+        { id: 'p_reese', name: 'Arvell Reese', position: 'EDGE', round: null, tier: null },
+    ];
+
+    // A board that has NOT been seeded, so seedBoard gets as far as the pool.
+    // Using one of the fixture boards tests nothing: those are seeded already
+    // and it returns false on that, whatever the pool looks like.
+    const fresh = 'b_unseeded';
+
+    it('is refused, and writes nothing', () => {
+        const spy = vi.spyOn(repository, 'commitMany');
+        expect(seedBoard(fresh, unplaced())).toBe(false);
+        expect(spy).not.toHaveBeenCalled();
+        spy.mockRestore();
+    });
+
+    it('still seeds a pool where somebody is placed', () => {
+        const players = unplaced();
+        players[0] = { ...players[0], round: 1, tier: 1 };
+        expect(seedBoard(fresh, players)).not.toBe(false);
+        expect(repository.all(entriesPath(fresh)).length).toBeGreaterThan(0);
     });
 });
