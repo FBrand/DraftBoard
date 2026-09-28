@@ -47,3 +47,9 @@ ui-debug.log
 dist-prof/
 dist-a/
 dist-b/
+
+# Service-account keys. They bypass firestore.rules entirely — see
+# scripts/seed-firestore.mjs. Never committed, whatever they are called.
+*-firebase-adminsdk-*.json
+service-account*.json
+sa.json
