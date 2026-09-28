@@ -289,7 +289,24 @@ export const useDraftState = () => {
                         const { deserializeDraftState } = await import('../utils/sessionSerializer');
                         const importedState = deserializeDraftState(csvText);
                         if (importedState.draftedPlayers.length > 0 || importedState.ourPicksLeft.length > 0) {
-                            seedDrafted = importedState.draftedPlayers;
+                            // The playerIds in the file are STALE and must go.
+                            //
+                            // DraftBoard_Picks.csv is an EXPORT: it carries the
+                            // ids the registry held when it was written. A fresh
+                            // registry mints different ones, and nothing connects
+                            // the two. Left in place they are worse than absent —
+                            // writeDraft looks for a record to hang each pick on
+                            // with factsFor(id), finds nothing for an id that
+                            // belongs to no player, and skips that pick without a
+                            // word. All 257 of them. The result is a draft whose
+                            // counter says it finished with not one pick in it.
+                            //
+                            // Dropped rather than remapped, so reconcileDraft
+                            // resolves every pick by name against the registry
+                            // that actually exists now. The same fix the external
+                            // seeder needed; this is the path inside the app.
+                            seedDrafted = importedState.draftedPlayers
+                                .map((pick) => { const fresh = { ...pick }; delete fresh.playerId; return fresh; });
                             if (importedState.ourPicksLeft.length > 0) {
                                 seedKCLeft = importedState.ourPicksLeft;
                             }

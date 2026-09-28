@@ -790,6 +790,22 @@ export default function ScoutingView({ players }) {
                     viewer at all) can actually open out of the switcher. */}
                 <BoardSwitcher
                     boards={boardList.filter(b => {
+                        // Visibility only means something where there is an
+                        // audience to hide from. With no shared store there is
+                        // one person, every board is his, and nobody can be an
+                        // expert because there is nothing to sign in to — so
+                        // this filtered every personal board out of the
+                        // switcher and the only user of a single-user app
+                        // could not open his own analysts' boards. A mechanism
+                        // for the shared case, applied in the mode SPEC.md
+                        // calls first-class.
+                        //
+                        // isLive() is a proxy for "there is a shared store":
+                        // it asks whether the backend pushes changes, which is
+                        // true of exactly the backends that have an audience.
+                        // The contract in REBUILD-PLAN.md §3 should make this
+                        // a declared capability rather than an inference.
+                        if (!repository.isLive()) return true;
                         const vis = b.authorId ? (b.visibility ?? 'expert') : 'public';
                         if (vis === 'public') return true;
                         if (vis === 'expert') return isExpert();
