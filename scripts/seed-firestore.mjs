@@ -404,8 +404,27 @@ async function build() {
     if (existsSync(picksFile)) {
         const imported = deserializeDraftState(readFileSync(picksFile, "utf8"));
         if (imported.draftedPlayers.length || imported.ourPicksLeft.length) {
+            // The playerIds in the file are STALE and must be thrown away.
+            //
+            // DraftBoard_Picks.csv is an export, so it carries the ids the
+            // registry had when it was written. Seeding mints fresh ones, and
+            // nothing connects the two. Left in place they are worse than
+            // absent: writeDraft looks for records to hang the picks on with
+            // factsFor(id), gets nothing for an id that belongs to no player,
+            // and skips that pick without a word — all 257 of them. The draft
+            // then has a pick counter saying it finished and not one pick in
+            // it, which is exactly what the board showed.
+            //
+            // Dropped rather than remapped, so the join below resolves every
+            // pick by name against the registry that actually exists now.
+            const fromFile = imported.draftedPlayers.map(({ playerId, ...rest }) => rest);
             const poolForDraft = cast.map((p, i) => ({ ...p, id: ids[i] ?? null }));
-            const { draftedPlayers } = reconcileDraft(poolForDraft, imported.draftedPlayers);
+            const { draftedPlayers } = reconcileDraft(poolForDraft, fromFile);
+            // Anybody the pool could not account for keeps no id, and
+            // writeDraft mints him — a UDFA or a player from another class is
+            // a real pick and has to end up in the registry, not dropped.
+            const unresolved = draftedPlayers.filter(d => !d.playerId && !d.id).length;
+            if (unresolved) console.log(`  ${unresolved} picks had no pool match; writeDraft will register them.`);
             writeDraft(season.id, {
                 draftedPlayers,
                 ourPicksLeft: imported.ourPicksLeft,

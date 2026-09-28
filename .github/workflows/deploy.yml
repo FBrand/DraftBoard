@@ -85,7 +85,24 @@ jobs:
       # Data gets in through scripts/seed-firestore.mjs instead — once, from
       # outside, with credentials that may actually write it.
       #
-      # picks.txt goes with them. It looks like configuration and is not:
+      # The rankings files STAY, and the reason is worth writing down.
+      #
+      # useDraftState builds the Draft and UDFA pool straight from the
+      # rankings CSV and has no other source — useBoardRankings rebuilds a
+      # seeded board's pool from its entries, but the draft never got that
+      # treatment, so withholding the file left it with no players at all: no
+      # positions, no columns, a blank board. Two independent pool builders,
+      # one following "storage is the truth" and one not. Until the draft is
+      # moved onto the same derivation, its file has to be there.
+      #
+      # This does NOT reopen the seeding hole, because seeding is gated on
+      # the DATA and not on the file: every board in Firestore now carries
+      # seeded=true, so loadFiles skips the fetch for them, seedBoard returns
+      # early, and openBoards finds boards and does nothing. The danger was
+      # ever only an unseeded database next to a shipped file. Read by the
+      # draft, written from by nobody.
+      #
+      # picks.txt still goes. It looks like configuration and is not:
       # parsePicks feeds seedKCLeft, which lands in the draft state that gets
       # written, so it seeds records like the CSVs do. Its fetch is the one
       # that does not check res.ok, but parsePicks keeps only finite positive
@@ -99,7 +116,12 @@ jobs:
       - name: Withhold the seed CSVs from the shared-backend build
         if: github.ref == 'refs/heads/firebase'
         run: |
-          rm -f dist/*.csv dist/picks.txt
+          rm -f dist/player_facts_2026.csv \
+                dist/roster.csv dist/roster.old.csv \
+                dist/roster_2025_end.csv dist/roster_predraft.csv \
+                dist/DraftBoard_Picks.csv dist/DraftBoard_Picks.old.csv \
+                dist/evaluations_kc_2026.csv \
+                dist/picks.txt
           echo "Remaining in dist:"
           ls dist
 
