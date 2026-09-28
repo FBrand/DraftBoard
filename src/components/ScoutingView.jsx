@@ -657,7 +657,19 @@ export default function ScoutingView({ players }) {
         }
 
         const board = await createBoard({ label, authorName, ownerId, visibility: isPersonal ? visibility : undefined });
-        if (!board) return;
+        // Thrown rather than returned, same as the author-record check above:
+        // a bare return here made the button do nothing at all, with no
+        // console error either, which is how a database missing its season
+        // presented itself. createBoard returns null for two reasons and the
+        // modal already blocks the other one (an empty label), so naming the
+        // season is accurate rather than a guess.
+        if (!board) {
+            throw new Error(
+                'The board was not created, because this season could not be found. '
+                + 'The database has no current season — it has to be seeded before '
+                + 'boards can be made.',
+            );
+        }
 
         if (file) {
             const players = parseRankings(await file.text()).filter(p => p?.name);
