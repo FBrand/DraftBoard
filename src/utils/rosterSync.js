@@ -10,8 +10,13 @@
  *
  *   - it only ever FILLS. Nothing occupied is overwritten, nothing is removed,
  *     so a placement made by hand after an earlier run survives the next one.
- *   - a player it cannot place is skipped and counted, never guessed at. No
- *     inventing a position row, no overflowing into the practice squad.
+ *   - a player it cannot place is never guessed at: no inventing a position
+ *     row, no overflowing into the practice squad. Somebody the chart has no
+ *     row for goes to CUTS rather than being skipped — he arrived, so he
+ *     belongs somewhere on the roster, and a man who silently went nowhere is
+ *     a man you discover in September. Cuts is also where he can be dragged
+ *     back from, and isAlreadyOnRoster reads cuts, so a second run leaves him
+ *     there rather than trying again.
  *
  * It lived inside RosterView, where the only way to test it was to drive a
  * browser. It is a function of three values and a fourth out: it belongs here.
@@ -34,7 +39,8 @@ export function syncFromStages({ state, fa = null, draftedPlayers = [] }) {
 
     let placed = 0, noRow = 0, rowFull = 0, alreadyPresent = 0;
 
-    const next = { ...state, depthChart: { ...state.depthChart } };
+    // cuts is copied, because unplaced arrivals are appended to it below.
+    const next = { ...state, depthChart: { ...state.depthChart }, cuts: [...(state.cuts ?? [])] };
     const dc = next.depthChart;
     const allChips = [...state.positionConfig.offense, ...state.positionConfig.defense];
 
@@ -55,8 +61,19 @@ export function syncFromStages({ state, fa = null, draftedPlayers = [] }) {
         if (!name || !declaredPos) return;
         if (isAlreadyOnRoster(name)) { alreadyPresent++; return; }
 
+        // resolvePosition already tries the exact label, the major, and then
+        // every row a compatible position may fill (positionTaxonomy.rowsFor)
+        // — an OT reaching LT and RT is handled there. Reaching this branch
+        // means the chart genuinely has nowhere for what he plays.
         const rowId = resolvePosition(declaredPos, state.positionConfig, dc);
-        if (!rowId) { noRow++; return; } // leave for manual placement, don't guess a new row
+        if (!rowId) {
+            // To cuts, not skipped. Still no guessing at a row: cuts is not a
+            // position, it is the roster saying he arrived and has no place
+            // yet, which is exactly true and is visible.
+            next.cuts.push(makeSlot(name, 'cut', null, playerId));
+            noRow++;
+            return;
+        }
 
         const limit53 = allChips.find(p => p.id === rowId)?.slots53 ?? 2;
         const arr = dc[rowId] = [...(dc[rowId] ?? [])];
@@ -76,9 +93,13 @@ export function syncFromStages({ state, fa = null, draftedPlayers = [] }) {
     ourPicks.forEach(p => placeInFirstEmpty53(p.name, p.position, p.playerId ?? p.id ?? null));
     udfaSignings.forEach(p => placeInFirstEmpty53(p.name, p.position, p.playerId ?? p.id ?? null));
 
+    // Moving somebody to cuts is a change just as placing him is: the new
+    // state has to be returned or the arrival is lost, which is what the old
+    // behaviour did to him.
+    const moved = placed > 0 || noRow > 0;
     return {
-        next: placed > 0 ? next : state,
-        changed: placed > 0,
+        next: moved ? next : state,
+        changed: moved,
         placed, noRow, rowFull, alreadyPresent,
     };
 }
@@ -86,7 +107,10 @@ export function syncFromStages({ state, fa = null, draftedPlayers = [] }) {
 /** What to show after a run. Separate from the work so the wording is testable. */
 export function describeSync({ placed, noRow, rowFull, alreadyPresent }) {
     const skips = [
-        noRow && `${noRow} had no matching position row`,
+        // Says where they went. The old wording was wrong even before they
+        // went to cuts: BUGS.md #22 — it named the POSITION when the thing
+        // missing was a row for it.
+        noRow && `${noRow} had no position row and went to cuts`,
         rowFull && `${rowFull} had no free 53-man slot`,
         alreadyPresent && `${alreadyPresent} already on the roster`,
     ].filter(Boolean);

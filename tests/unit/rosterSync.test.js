@@ -149,7 +149,7 @@ describe('what the sync reports', () => {
 
     it('names every reason it skipped somebody', () => {
         const { message } = describeSync({ placed: 2, noRow: 1, rowFull: 3, alreadyPresent: 4 });
-        expect(message).toContain('1 had no matching position row');
+        expect(message).toContain('1 had no position row and went to cuts');
         expect(message).toContain('3 had no free 53-man slot');
         expect(message).toContain('4 already on the roster');
     });
@@ -158,6 +158,63 @@ describe('what the sync reports', () => {
         expect(describeSync({ placed: 0, noRow: 0, rowFull: 0, alreadyPresent: 0 }).message)
             .toContain('Nothing to sync');
         expect(describeSync({ placed: 0, noRow: 2, rowFull: 0, alreadyPresent: 0 }).message)
-            .toContain('Nothing placed — 2 had no matching position row');
+            .toContain('Nothing placed — 2 had no position row and went to cuts');
+    });
+});
+
+/**
+ * Somebody the chart has no row for goes to cuts.
+ *
+ * BUGS.md #22. He was counted and dropped — "had no matching position row" —
+ * which is how a player who arrived in free agency or was drafted could end up
+ * nowhere at all, discovered in September. resolvePosition already reaches
+ * compatible rows (an OT finds LT and RT through positionTaxonomy), so getting
+ * here means the chart genuinely has nowhere for what he plays. Cuts is the
+ * honest answer: he arrived, he has no place yet, and he can be dragged back.
+ */
+describe('an arrival the chart has no row for', () => {
+    const kicker = [{ name: 'Harrison Butker', position: 'K', draftedByUs: true, pickNumber: 200, playerId: 'p_butker' }];
+
+    it('goes to cuts rather than nowhere', () => {
+        const { next, changed, placed, noRow } = syncFromStages({ state: roster(), draftedPlayers: kicker });
+
+        expect(placed).toBe(0);
+        expect(noRow).toBe(1);
+        // The state has to come back, or the arrival is lost — which is what
+        // the old behaviour did to him.
+        expect(changed).toBe(true);
+        expect((next.cuts ?? []).map(c => c.name)).toEqual(['Harrison Butker']);
+        // A cut carries the id, so he is still the same man when dragged back.
+        expect(next.cuts[0].playerId).toBe('p_butker');
+        expect(next.cuts[0].zone).toBe('cut');
+    });
+
+    it('is left in cuts by a second run rather than cut twice', () => {
+        // isAlreadyOnRoster reads cuts, which is what makes this idempotent.
+        const first = syncFromStages({ state: roster(), draftedPlayers: kicker });
+        const second = syncFromStages({ state: first.next, draftedPlayers: kicker });
+
+        expect(second.next.cuts).toHaveLength(1);
+        expect(second.alreadyPresent).toBe(1);
+        expect(second.noRow).toBe(0);
+    });
+
+    it('does not mutate the state it was given', () => {
+        const state = roster();
+        syncFromStages({ state, draftedPlayers: kicker });
+        expect(state.cuts).toEqual([]);
+    });
+
+    it('still places anybody the chart CAN take, in the same run', () => {
+        const mixed = [
+            ...kicker,
+            { name: 'Fernando Mendoza', position: 'QB', draftedByUs: true, pickNumber: 1, playerId: 'p_mendoza' },
+        ];
+        const { next, placed, noRow } = syncFromStages({ state: roster(), draftedPlayers: mixed });
+
+        expect(placed).toBe(1);
+        expect(noRow).toBe(1);
+        expect(namesIn(next, 'qb')).toEqual(['Fernando Mendoza']);
+        expect(next.cuts.map(c => c.name)).toEqual(['Harrison Butker']);
     });
 });
