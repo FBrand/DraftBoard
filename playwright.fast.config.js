@@ -34,8 +34,27 @@ export default defineConfig({
     projects: [
         { name: 'desktop', use: { ...devices['Desktop Chrome'], viewport: { width: 1600, height: 1000 } } },
     ],
+    // Built HERMETICALLY. Never against whatever .env.local points at.
+    //
+    // `npm run build` reads .env.local, which on this branch names the live
+    // project — so this suite was driving production: every run spent real read
+    // quota, and any failure might have been the network rather than the code.
+    //
+    // VITE_BACKEND=local pins it to this browser own storage, which is the
+    // right backend for what this suite actually proves: rendering, drag and
+    // drop, modals, and work surviving a reload. None of that is about a shared
+    // store. `memory` would be the wrong choice — it keeps nothing, and half
+    // these tests assert persistence across a reload.
+    //
+    // Whether a write reaches a SHARED store is a different question with its
+    // own suite and its own external dependency: playwright.shared.config.js.
+    // Keeping that separate is what stops one missing emulator making every
+    // other result unreadable.
+    //
+    // Its own output directory, so a rebuild can never land in the directory a
+    // running preview is already serving from.
     webServer: process.env.NO_WEBSERVER ? undefined : {
-        command: `npm run build && npm run preview -- --port ${PORT}`,
+        command: `VITE_BACKEND=local VITE_FIREBASE_EMULATOR= VITE_FIREBASE_PROJECT_ID= VITE_FIREBASE_API_KEY= VITE_FIREBASE_AUTH_DOMAIN= VITE_FIREBASE_APP_ID= VITE_FIREBASE_STORAGE_BUCKET= VITE_FIREBASE_MESSAGING_SENDER_ID= npm run build -- --outDir dist-fast && npm run preview -- --outDir dist-fast --port ${PORT}`,
         url: BASE_URL,
         reuseExistingServer: true,
         timeout: 180_000,

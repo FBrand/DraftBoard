@@ -16,10 +16,12 @@ import { collection, doc, signInAsExpert, emulatorUp } from './emulator.mjs';
  * owner token, which sees what is stored rather than what the page believes.
  */
 test.describe('the shared backend', () => {
+    // Skipped, not thrown. A suite with an external dependency that FAILS when
+    // the dependency is absent makes every other suite's result unreadable —
+    // which is what this did to `npm test` for an afternoon. It is its own
+    // target now (playwright.shared.config.js); this is the second belt.
     test.beforeAll(async () => {
-        if (!await emulatorUp()) {
-            throw new Error('The Firestore emulator is not running. Start it with: npm run emulator');
-        }
+        test.skip(!await emulatorUp(), 'Firestore emulator not running — npm run emulator');
     });
 
     test('an expert claiming a board writes the ownership to Firestore', async ({ page }) => {

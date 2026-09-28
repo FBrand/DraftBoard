@@ -35,6 +35,7 @@ dist-test/
 .shots/
 .audit/
 dist-fb/
+dist-fast/
 dist-fb2/
 dist-fbbroken/
 
