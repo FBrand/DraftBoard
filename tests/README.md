@@ -22,13 +22,39 @@ local adapter collapses it by filling the cache on read. Because the documents
 then live in a Map inside the adapter rather than in `localStorage`, isolation
 is `resetMemoryAdapters()`, which `resetStorage()` calls.
 
-The browser suite still builds from `.env.local` and therefore still talks to
-the live project. Pointing it at the emulator was tried and backed out: the
-suite runs anonymously, so rules refuse its writes and the overlay adapter
-keeps them locally — which means against an empty emulator there is nothing to
-read, and 16 tests fail. Making it worthwhile needs an expert session (a
-google.com token with `email_verified`, plus an `email2author` row) and a story
-for resetting emulator state between runs. Deferred as not worth the work.
+**`tests/fast/sharedBackend.spec.js` — against the emulator, with a real
+expert.** The rest of the browser suite still builds from `.env.local` and runs
+anonymously, which means every write it makes is absorbed by the local overlay:
+it can watch a change appear on screen and learn nothing about whether the
+database took it. A rule refusing a write looked exactly like one accepting it,
+and that is how the shared project sat nearly empty for weeks while every
+browser showed a full app.
+
+This spec closes that. It reads back over REST with the emulator owner token,
+so it asserts what is STORED rather than what the page believes:
+
+```bash
+npm run emulator                  # Firestore + auth, project demo-draftboard
+npm run seed:firestore -- --project demo-draftboard --host 127.0.0.1:8080 --wipe
+npm run build:firebase            # dist-fb, pointed at the emulator
+npx vite preview --outDir dist-fb --port 4173
+NO_WEBSERVER=1 npx playwright test --config playwright.fast.config.js tests/fast/sharedBackend.spec.js
+```
+
+The expert session comes from `__testSignIn`, which `firebaseApp.js` exposes
+ONLY inside its emulator branch — a build-time flag, so it is absent from a
+production bundle (checked by grepping both). The auth emulator mints a
+google.com identity from an unsigned JSON id_token, and `inviteExpert()` writes
+the `email2author` row with the owner token, because creating one demands the
+caller name themselves as the inviter and the first expert on an empty project
+can only ever come from outside.
+
+It caught a real bug on its first run: the seeder serialised a depth chart
+row's empty slots as bare `null` instead of `{nullValue:null}`, because the
+slots array is SPARSE and `map` skips holes. The live service accepted it;
+the emulator refused the commit. That had shipped and nothing noticed.
+
+The remaining specs are NOT yet moved onto this — see The budget.
 
 **`tests/fast/` — Playwright, 37 tests, ~8 minutes.** What only a browser can
 prove: drag-and-drop, clipping and stacking, a modal opening off-screen, a link

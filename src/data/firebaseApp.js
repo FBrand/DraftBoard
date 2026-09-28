@@ -149,6 +149,32 @@ async function openConnection() {
             // — reads do not need a session.
             console.warn('Auth emulator not connected.', err?.message ?? err);
         }
+
+        // A way in for the test harness, and ONLY for it.
+        //
+        // The app signs in with signInWithPopup, which a browser test cannot
+        // drive. Without something here the suite can only ever run as an
+        // anonymous viewer — which is what it did, so every write it made
+        // fell into the local overlay and it was really testing the
+        // local-only app wearing a Firebase costume. Nothing it asserted
+        // could catch a rule refusing a write, because it never made one.
+        //
+        // The auth emulator mints a google.com identity from an UNSIGNED JSON
+        // id_token, so this needs no key and no real account. isExpert() also
+        // wants an email2author row; the harness writes that with the
+        // emulator's owner token before calling this.
+        //
+        // This exists only inside the emulator branch, and VITE_FIREBASE_EMULATOR
+        // is a build-time flag — see the note above on why it is build-time
+        // rather than runtime. A deployed build never reaches this line, so
+        // there is no switch for anybody to find.
+        globalThis.__testSignIn = async ({ email, sub }) => {
+            const credential = fbAuth.GoogleAuthProvider.credential(
+                JSON.stringify({ sub: sub ?? `uid-${email}`, email, email_verified: true }),
+            );
+            const { user } = await fbAuth.signInWithCredential(auth, credential);
+            return { uid: user.uid, email: user.email };
+        };
     }
 
     return { app, firestore, auth };
