@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { openStages } from '../data/stageStore';
-import { openBoardEntries, readEntries, entriesLoaded } from '../data/boardEntries';
+import { openBoardEntries, entriesLoaded } from '../data/boardEntries';
+// One derivation of "who is in this class", shared with the draft — which
+// used to parse the rankings CSV instead and rendered nothing the day the
+// CSVs stopped being deployed. See data/boardPool.js.
+import { castFromEntries as poolFromEntries } from '../data/boardPool';
 import { openDepthCharts } from '../data/depthChartStore';
 import { openSetup } from '../utils/seasonInit';
 import { parseRankings } from '../utils/dataParser';
@@ -162,33 +166,6 @@ function unionOfFiles(files, keyOf) {
     return [...seen.values()];
 }
 
-/**
- * The pool a seeded board contributes, rebuilt from what is already loaded.
- *
- * An entry's document key IS the player's registry id, and the registry holds
- * his name, position and school — so between them they say everything the
- * rankings file said about who exists, without the file. Shaped exactly like a
- * parsed file row so unionOfFiles and joinKeyFor cannot tell the difference.
- *
- * `group` is deliberately absent: a file row carries the tier it was read at,
- * but a seeded board's tier lives in the entry and is applied by rankBoard
- * later. Putting it here too would be two answers to one question.
- */
-function poolFromEntries(boardId) {
-    return readEntries(boardId)
-        .map((e) => {
-            const record = e.playerId ? byId(e.playerId) : null;
-            const name = record?.name ?? e.name;
-            if (!name) return null;
-            return {
-                name,
-                position: record?.position ?? e.position ?? '',
-                school: record?.school ?? '',
-                id: e.playerId ?? null,
-            };
-        })
-        .filter(Boolean);
-}
 
 /**
  * Which boards' entries to read at boot.
