@@ -182,7 +182,17 @@ A **relay** sits between them:
 - A viewer who loses the connection takes a fresh snapshot and resumes the
   stream.
 - It speaks its own simple interface, not an imitation of the store's.
-- **Experts do not use it.** They stay connected directly, because they write.
+- **Experts read through it too, but never write through it.** Writes go
+  straight to the store. Reads come from the relay for everything except the
+  collections that are live during a broadcast, where an expert must not be
+  silently stale, and except anything an anonymous reader may not see — which
+  the relay, reading anonymously, could not serve in any case.
+
+  *(Revised. This previously read "Experts do not use it. They stay connected
+  directly, because they write." The relay already holds the state for the
+  audience, and serving it to an expert costs nothing while removing most of
+  his metered reads. See REBUILD-PLAN.md §7 for the freshness and restart
+  obligations that come with it.)*
 
 It starts as one small instance. Splitting it, or putting a cache in front of
 it, happens only if measurement shows the connection count demands it.
