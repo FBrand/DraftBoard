@@ -8,6 +8,13 @@
 # than none, so the command lives in a file rather than in shell history.
 #
 # The values are dummies: the emulator does not check them.
+#
+# STORAGE_BUCKET and MESSAGING_SENDER_ID are blanked rather than left alone.
+# Vite loads .env.local for this build too, so anything this file does not set
+# comes from there — and that put the real project's bucket name into an
+# emulator build. Neither is used by the app, so nothing breaks either way;
+# the point is that a build aimed at a throwaway project should not carry the
+# live one's identifiers.
 #   sh scripts/build-firebase.sh <outDir> [extra vite args...]
 set -e
 OUT="${1:-dist-fb}"
@@ -19,4 +26,6 @@ VITE_FIREBASE_API_KEY=emulator-not-checked \
 VITE_FIREBASE_AUTH_DOMAIN=demo-draftboard.firebaseapp.com \
 VITE_FIREBASE_APP_ID=1:0:web:emulator \
 VITE_FIREBASE_EMULATOR=127.0.0.1:8080 \
+VITE_FIREBASE_STORAGE_BUCKET= \
+VITE_FIREBASE_MESSAGING_SENDER_ID= \
   npx vite build --outDir "$OUT" "$@"

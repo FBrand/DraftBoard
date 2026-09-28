@@ -63,6 +63,46 @@ jobs:
             VITE_ENABLE_SYNC=true npm run build
           fi
 
+      # The shared backend is the source of truth, so the seed CSVs must not
+      # reach it.
+      #
+      # Every one of them is a fixture of the 2026 season: the three rankings
+      # files, the facts, the three roster snapshots, the completed draft and
+      # the example evaluations. On a local-only build they are how the app
+      # bootstraps and they are correct. Against Firestore they are a SECOND
+      # authority, and every client that boots tries to write them up — which
+      # is refused for a viewer, kept locally anyway, and leaves each browser
+      # holding its own private copy of a board that the database never had.
+      # That is what produced a blank consensus board, boards whose placements
+      # only existed on one machine, and a draft reporting itself complete with
+      # nobody picked.
+      #
+      # Withholding the files is deliberately the whole mechanism: loadFiles
+      # catches a failed fetch and caches null, playerFacts treats an empty
+      # body as no rows, and seedBoard does nothing without a pool. No seeding
+      # code changes, nothing to keep in sync with a flag.
+      #
+      # Data gets in through scripts/seed-firestore.mjs instead — once, from
+      # outside, with credentials that may actually write it.
+      #
+      # picks.txt goes with them. It looks like configuration and is not:
+      # parsePicks feeds seedKCLeft, which lands in the draft state that gets
+      # written, so it seeds records like the CSVs do. Its fetch is the one
+      # that does not check res.ok, but parsePicks keeps only finite positive
+      # integers, so a 404 body parses to an empty list — no picks owned,
+      # which is the right answer for a backend that is populated from
+      # outside.
+      #
+      # columns.txt stays: it is read into setColumnOrder and never persisted,
+      # so it is render-time layout and writes nothing. USER_GUIDE.md stays
+      # because the Help button renders it, and the audio is the draft chime.
+      - name: Withhold the seed CSVs from the shared-backend build
+        if: github.ref == 'refs/heads/firebase'
+        run: |
+          rm -f dist/*.csv dist/picks.txt
+          echo "Remaining in dist:"
+          ls dist
+
       - name: Deploy master to root
         if: github.ref == 'refs/heads/master'
         uses: JamesIves/github-pages-deploy-action@v4

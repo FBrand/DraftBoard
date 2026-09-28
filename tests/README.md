@@ -2,11 +2,33 @@
 
 Two suites, split by what the test actually needs.
 
-**`tests/unit/` — Vitest, ~24 seconds.** Everything that is a function of
-values: ranking, identity and name matching, CSV in both directions, draft
+**`tests/unit/` — Vitest, ~33 seconds, 635 tests.** Everything that is a
+function of values: ranking, identity and name matching, CSV in both directions, draft
 phases, the session bundle, board and author records, evaluations, the roster
 sync. No DOM. `setup.js` supplies a twenty-line `localStorage` — not jsdom,
 because nothing here touches a document.
+
+It talks to **nothing over the network**, and that had to be made explicit.
+Vite loads `.env.local` for tests exactly as it does for a dev server, and on
+this branch that file names the live project — so this suite was reading it. 26
+tests failed on ten-second hook timeouts that were network waits dressed as
+logic failures, and tests changed verdict depending on which files ran beside
+them. `vitest.config.js` pins `VITE_BACKEND=memory`.
+
+`memory` rather than `local`, deliberately: `memoryAdapter` has no `loadSync`,
+so "this collection has not been read yet" stays distinguishable from "this
+collection is empty". Several real bugs have turned on that difference, and the
+local adapter collapses it by filling the cache on read. Because the documents
+then live in a Map inside the adapter rather than in `localStorage`, isolation
+is `resetMemoryAdapters()`, which `resetStorage()` calls.
+
+The browser suite still builds from `.env.local` and therefore still talks to
+the live project. Pointing it at the emulator was tried and backed out: the
+suite runs anonymously, so rules refuse its writes and the overlay adapter
+keeps them locally — which means against an empty emulator there is nothing to
+read, and 16 tests fail. Making it worthwhile needs an expert session (a
+google.com token with `email_verified`, plus an `email2author` row) and a story
+for resetting emulator state between runs. Deferred as not worth the work.
 
 **`tests/fast/` — Playwright, 37 tests, ~8 minutes.** What only a browser can
 prove: drag-and-drop, clipping and stacking, a modal opening off-screen, a link

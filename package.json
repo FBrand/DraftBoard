@@ -20,7 +20,8 @@
     "build:memory": "vite build --outDir dist-mem",
     "test:nosync": "echo \"VITE_BACKEND=memory npm run build:memory && npx vite preview --outDir dist-mem --port 4174, then .audit/noLoadSync.mjs\"",
     "emulator": "docker rm -f fsemu >/dev/null 2>&1; docker run -d --rm --name fsemu --network host -v \"$PWD\":/work -w /work node:20-alpine sh /work/scripts/firestore-emulator.sh",
-    "build:firebase": "sh scripts/build-firebase.sh dist-fb"
+    "build:firebase": "sh scripts/build-firebase.sh dist-fb",
+    "seed:firestore": "VITE_BACKEND=memory VITE_FIREBASE_EMULATOR= vite-node scripts/seed-firestore.mjs --"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
