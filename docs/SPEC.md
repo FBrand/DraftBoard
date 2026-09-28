@@ -1,233 +1,284 @@
-# DraftBoard — what it is meant to be
+# DraftBoard — the product
 
-What this app is for and how it is supposed to behave, reconstructed from the
-full decision history rather than from the code. Where the code disagrees with
-this document, the code is wrong until somebody decides otherwise.
-
-`CLAUDE.md` describes what exists. This describes what is intended.
+A description of the finished thing: what it is, who uses it, and what it does.
+Compiled from the instructions given over the course of the project. Not how it
+is built.
 
 ---
 
-## 1. Product and audience
+## 1. What it is for
 
-A **broadcast companion** for RGR Football — Ryan Tracy and Daniel Hamrs. They
-work a draft board live on stream; viewers watch and play along.
+A broadcast companion for RGR Football. Ryan and Daniel work their boards in
+the app, live on stream; their audience watches and plays along. The point is
+that they get better tooling and the broadcast gets a better presentation than
+a spreadsheet on screen.
 
-The app's owner is not the analyst. The product succeeds only when **they** run
-their real boards in it on air, because that is the pitch: better presentation
-for them, better tooling for them.
-
-Everything follows from that:
-
-- Stalling or blanking mid-broadcast is the worst failure available.
-- Expert-facing polish outranks general cleanliness.
-- The guiding question for any piece of work is whether it helps them put on a
-  better show.
+It covers a whole NFL offseason in five stages — Free Agency, Scouting, Draft,
+UDFA, Roster — with each stage feeding the next where that makes sense.
 
 ---
 
-## 2. The five stages
+## 2. The stages
 
-Free Agency → Scouting → Draft → UDFA → Roster, each feeding the next where
-possible.
+### Free Agency
 
-**Free Agency** is not a signings tracker or a budget tool. It is a
-needs-and-candidates snapshot: who might fill a hole. Seeded from last season's
-end-of-year roster, because free agency is what happens to that roster.
+Not a signings tracker and not a budget tool. It shows **needs and possible
+solutions, as snapshots**: which positions are thin, and who could fill them.
 
-**Scouting** *builds* the board from the ground up. It is deliberately not a
-compare-my-list-against-consensus view. Players are grouped by position, school
-or round, filterable — including "evaluated by someone else but not by me".
+It looks like the Roster — the same depth-chart shape — but the slots hold
+candidates under consideration rather than players on the team. It starts from
+last season's closing roster, because that roster is what free agency acts on.
+Candidates come from a free-agent list or are entered by hand, the same way a
+player is signed in the Roster view.
 
-**Draft** is the live board: position columns by round/tier rows. Normal view
-hides taken players and collapses a tier once it is empty — a tier, never a
-single player. Focus view shows everything.
+Zones are roster, reserve, IR and cuts. No practice squad.
 
-**UDFA** is the same board shape after the draft, gated until the draft is
-done. A player who went undrafted is still available here.
+### Scouting
 
-**Roster** is the 53 plus practice squad, IR and cuts. It seeds additively from
-free-agency candidates, your own draft picks and UDFA signings — filling empty
-slots, never overwriting a hand edit, safe to run repeatedly. An arrival the
-chart has no row for goes to cuts rather than nowhere.
+Where a board is **built from the ground up**. Not a view for comparing your
+list against a consensus.
+
+The centre is a collapsible list grouped by position, school or round. On a
+computer: the ranking on the left, the grouped list beside it, then players who
+could not be matched to a group, then the active player's details. On a phone:
+the grouped list alone, with unmatched players at the bottom.
+
+You can filter to players somebody else has evaluated but you have not. You can
+reorder the ranking by dragging, on the board and on the list. Typing a rank
+moves the player to that position and everybody between shifts by one — two
+players never hold the same rank.
+
+### Draft
+
+The live board: positions across, rounds and tiers down.
+
+Normal view hides players who are gone and collapses a tier once it is empty —
+a whole tier, never a single player out of one. Focus view shows everything.
+Clicking a player takes him. Undo is available everywhere and applies to the
+stage you are on.
+
+An expert sets how many picks each round holds; it is not calculated.
+
+### UDFA
+
+The same board as the Draft, after the draft is finished, with the labels
+changed. It stays shut until the draft is done. Players who went undrafted are
+still available here, and you can sign someone who was never ranked.
+
+### Roster
+
+The 53, the practice squad, injured reserve and cuts. Players move by dragging.
+
+Dropping a player on injured reserve marks him injured; taking him off makes
+him active again. There is no separate activate button. Specialists behave like
+every other player.
+
+It fills from the earlier stages on request: free-agency candidates, your draft
+picks and your UDFA signings. Filling only ever adds — it never overwrites
+something placed by hand, so it is safe to run again at any point. Anyone the
+depth chart has no place for goes to cuts rather than disappearing.
+
+Colours carry meaning: veterans white, this year's draft picks strong gold,
+UDFAs light gold, free-agent arrivals blue.
 
 ---
 
-## 3. Data model
+## 3. Players, boards and opinions
 
-Three kinds of thing. Conflating them has caused repeated bugs.
+Three different kinds of information, kept apart:
 
-**Facts** are true whoever is looking and live once, on the player record:
-name, position, school, athletic matrix scores, draft year, round and pick,
-team, previous team, whether he went undrafted. No measurements. No contracts.
+**What is true about a player** is the same for everybody: his name, position
+and school, his athletic matrix scores, and — once he has entered the league —
+his draft year, round and pick, his team and his previous team. Not
+measurements. Not contracts.
 
-**Opinions** are per board: tier, order within tier, tag (like, avoid, monitor,
-injury).
+**What a board says about him** belongs to that board: his tier, where he sits
+inside it, and his tag.
 
-**Evaluations** are per **person**, stamped with a season: strengths,
-weaknesses, notes. They belong to the author rather than the board, because
-they are a person's opinion. They accrue across years, and reaching back into
-past scouting is the point of keeping old boards at all.
+**What a person writes about him** belongs to that person: strengths,
+weaknesses and notes, each attached to the season it was written in. These
+follow the player from year to year, so a picture of him builds over time.
 
-Rules that hold throughout:
+Other rules about players:
 
-- A player is an **id**. Names resolve identity at ingestion and nowhere else;
-  ids are used for every normal operation.
-- Identity is name, position and school **together**. Any one differing makes a
-  different person — two players really do share a name in one class.
-- Only tier and order-within-tier are stored. Total and position rank are
-  **derived**, so they cannot contradict the board or each other.
-- A rank is a position in an ordering. Typing one **moves** a player; it never
-  assigns a duplicate.
-- An unranked player has **no rank**, not the worst one. `???`, not #328.
+- Two players may share a name as long as position or school differs.
+- A player nobody has placed is **unranked** — shown as `???`, not as the worst
+  player on the board.
 - Every board carries every player. Someone one analyst ranked and another did
-  not is *unranked* on the second board, not absent from it, or there is
-  nowhere to disagree.
-- Order within a tier is a float, so one move writes one number on one player.
-- Opaque ids, short. No composite keys. A document's key is never repeated
-  inside its body.
+  not appears as unranked on the second board, not missing from it.
+- Total rank and position rank are worked out from where a player actually sits,
+  so they can never disagree with the board.
+- Athletic matrix scores are global, not per board. Where scores are present,
+  the card links to where the matrix can be bought, and that address is
+  configurable.
+
+### Tags
+
+Four: **like** (★), **avoid** (❗), **monitor** (🔎) and **injury concern** (✚).
+A star in an imported ranking file is the same thing as the like tag — one
+mechanism, not two.
+
+### The player card
+
+Opens from anywhere outside Scouting with a secondary click or a long press,
+and works in Free Agency and on the Roster as well as on the boards.
+
+It shows the numbers — total rank, position rank, athletic matrix total and
+positional matrix — and bullet lists for strengths, weaknesses and notes.
+
+It shows **every** evaluation of that player, from every author, not just one.
+Remarks are grouped under the author's name as a common heading, with no
+separate heading per kind, and only where something has actually been written.
+Facts with no value stay hidden.
+
+Read-only by default outside Scouting; one pencil unlocks the card for editing.
 
 ---
 
-## 4. Boards, authors, seasons
+## 4. Adding players
 
-- A **board** belongs to one season and usually one author. Its label renames
-  freely; its slug is stable so existing links survive.
-- **Consensus has no author.** It is derived rather than written by a person,
-  and inventing somebody to own it would make "who said this" a lie.
-- An **author is a person** and persists across seasons. Experts and board
-  names change from year to year.
-- A season makes a board an **artifact**. An archived season freezes
-  placements; evaluations stay editable, because what you know about a player
-  keeps growing after the board that ranked him is finished.
-- Rolling over gives each author a fresh, empty board — a new draft class is
-  entirely new people, and carrying placements forward would assert judgements
-  nobody made.
-- Rolling back scraps the current season, after a warning.
-- How many picks each round holds is **stated by an expert**, never derived
-  from a pick number. Compensatory picks make the arithmetic wrong.
+Experts add players who are not in any ranking file.
 
----
+Entry is a bulk form: one player per row, Tab across the fields, Enter to start
+the next row, and Enter on an empty row — or the button — to submit. A CSV
+import in the same shape feeds the same form.
 
-## 5. Identity and access
+Both routes end at a **verification step**, and nothing is written until that
+step is submitted. It shows every player being added, three rows each: the base
+information, the numbers, and buttons for adding strengths, weaknesses and
+notes. Collisions with existing players are flagged and block submission, and
+always offer to open the existing player's card rather than dead-ending. This
+has to be quick enough to use while watching a player live.
 
-Two classes of user:
+Position is entered as free text alongside a dropdown of depth-chart positions.
+Only one is required and the empty one takes the other's value; if the free
+text does not match a depth-chart position, the form stays open and says so.
 
-- **Experts** sign in and write to the shared store.
-- **Everyone else** is anonymous, receives an identity, and may build their own
-  play-along version on top of what they can see — with no write access to
-  shared data whatsoever.
-
-Mechanics:
-
-- An `email2author` entry is the access mechanism. It means: you may sign in,
-  create your own author record, and read expert material. Deleting it is
-  deactivation. A `deactivated` flag exists but is informational only.
-- An author's key is the auth uid, so "is this me" is answered from the token
-  without a lookup.
-- Nobody may create an author in another person's name, or invite in another
-  person's name.
-- A board is **owned**, **orphaned** (has an author, unclaimed) or **shared**
-  (no author). Orphaned boards are readable by every expert and writable by
-  none — except the single act of claiming one. Shared boards are writable by
-  any expert. An owned board cannot be claimed away from its owner.
-- Deactivation orphans what that person held. Reactivation reclaims what is
-  still orphaned, but not what somebody else has since claimed.
-- Visibility per board: private, expert, public. A new personal board defaults
-  to expert.
-- **Access control is enforced by the server.** The client is a public static
-  bundle; nothing it decides is binding.
+A player added this way arrives **unranked** and is otherwise an ordinary
+player. There is an Unranked filter to find them.
 
 ---
 
-## 6. What syncs, and what deliberately does not
+## 5. Seasons
 
-- Everything an expert changes during a broadcast should reach other devices
-  without a reload. That is the entire premise of the shared version.
-- **Remarks do not live-sync.** They need an efficient way to be current when a
-  card is opened, without paying a read per open when nothing has changed.
-- Board loading shows an indicator rather than holding a subscription.
-- A player card shows **all** evaluations from all authors, not one board's.
+An offseason is a season, and seasons stack.
 
----
+Old seasons stay available and feed the next: players, draft picks, evaluations,
+and the closing roster that free agency starts from. A past season is
+read-only while a newer one is open.
 
-## 7. Storage and scale
+Rolling over starts a new season: each author gets a fresh, empty board,
+because a new draft class is new people. The roster carries forward; free
+agency starts from it.
 
-- Per-user browser storage is bounded and does run out — roughly one scouted
-  season per megabyte against a 5MB cap.
-- With a backend: keep about four seasons locally, load more as needed, and
-  when usage crosses the threshold drop the oldest — pruning players that no
-  surviving roster, free-agency board or draft class references.
-- Without a backend: offer an export before anything is scrapped.
-- Reads are **metered**, and the daily ceiling has been reached in practice.
-- The read/write ratio is extreme: potentially tens of thousands of viewers
-  against roughly ten writers. That asymmetry, not the feature set, is what
-  shapes the shared design.
+Rolling back scraps the current season and returns to the previous one, which
+becomes editable again. A scrapped season is gone, and you are warned before it
+happens.
+
+Boards are artifacts. Their placements freeze when their season closes, but
+strengths, weaknesses and notes stay editable, because what you know about a
+player keeps growing after the board is finished.
+
+Switching, rolling over and rolling back all live in one Seasons screen.
 
 ---
 
-## 8. Backends
+## 6. Multiple experts
 
-**One codebase over interchangeable storage backends** — browser-local, a
-hosted document store, and a self-hosted database in a container — selected by
-configuration.
+Several analysts keep their own boards. A board has one author; the consensus
+board has none, because it is derived rather than written by a person. Analysts
+and board names change from one season to the next without stranding anything.
 
-The app must remain fully functional with **no backend at all**. That is a
-supported target, not a legacy path.
+### Who can do what
 
-- Reads are synchronous from memory, because the board re-ranks hundreds of
-  players on a keystroke and cannot await anything.
-- Writes are asynchronous.
-- Against a remote store reads become fallible, and the absence of a
-  synchronous read is what forces callers to await properly rather than
-  silently reading nothing.
-- Unsaved work must never be lost — and must never be shown as saved when it
-  is not.
+**Experts** sign in and their work is shared. **Everyone else** is a viewer:
+they are not signed in, cannot change anything an expert has published, and can
+build and keep their own version locally — their own rankings, their own
+play-along draft.
 
----
+Access is by invitation, tied to an email address. Being invited is what lets
+somebody sign in and become an author. Withdrawing the invitation removes
+access; the person is still marked as deactivated for the record.
 
-## 9. Data in and out
+### Boards and ownership
 
-- Shipped files create **initial state only**. After that, storage is the
-  truth.
-- The shared store must be inspectable, repairable and seedable **from outside
-  the app**.
-- Everything round-trips as CSV that a non-technical person can build in a
-  spreadsheet.
-- An expert's import is a **proposal**: reviewed and confirmed before anything
-  is written.
-- A seed file is truth within itself — no merging inside a single file.
-- External feeds are proof-of-concept only and never for public use. The
-  adapter shape stays; name matching against them becomes a one-time
-  translation table rather than a live operation.
+A board is one of three things:
 
----
+- **Owned** — an author holds it. Only he writes it, and it cannot be taken
+  from him.
+- **Orphaned** — it has an author but nobody holds it. Every expert can see it;
+  nobody can write it. Any expert may claim it.
+- **Shared** — it has no author, like consensus. Any expert may write it.
 
-## 10. Position handling
+Deactivating an expert releases what he held. Reactivating him takes back
+whatever is still unclaimed, but not anything somebody else has claimed since.
 
-Placement is not identity.
+Each board is visible to its owner only, to experts, or to everybody — chosen
+per board, defaulting to experts for a new personal board.
 
-EDGE plays OLB in a 3-4. DL plays NT. LB covers its own variants. TE and FB
-interchange. LB cannot play DT.
+### Working together
 
-Compatibility governs where a player may **stand**, never who he **is**. A
-merge proposed on that basis is confirmed by an expert through an existing
-flow, never applied silently.
+What an expert changes reaches everybody else's screen without anyone
+reloading. Boards show that they are loading rather than filling in silently.
+
+Written remarks are the exception: they do not stream live, but opening a
+player's card shows what is current, without re-fetching what has not changed.
 
 ---
 
-## 11. Explicit non-goals
+## 7. Data in and out
 
-No contracts. No measurements. No mock-draft simulation. No production live
-feed. No consensus-versus-personal comparison view.
+Everything goes in and out as CSV that opens in Excel or Google Sheets, so a
+board can be built in a spreadsheet and dropped in.
+
+Remarks travel inside the player's row, introduced by `Remarks:` and marked
+with `+`, `−` and `•` for strengths, weaknesses and notes.
+
+Exports of the depth chart have no gaps inside a section. A whole session can
+be exported and restored as one file.
+
+An import by an expert is a **proposal**: it is reviewed and confirmed before
+anything is written. A file being imported is taken as correct within itself.
 
 ---
 
-## 12. Unresolved
+## 8. Positions
 
-- **Reconciliation.** When an expert changes a board a viewer has already
-  modified locally, what should happen. Parked deliberately; never answered.
-  The current local-wins behaviour is a placeholder, not a decision.
-- **Evaluations belonging to the author rather than the board.** Decided, not
-  built.
-- **The viewer proxy.** Evaluated, not built.
+What a player is and where he can stand are different questions.
+
+EDGE also plays outside linebacker in a 3-4; defensive line also plays nose
+tackle; linebacker covers its own inside, outside, left and right variants; tight
+end and fullback interchange. Linebacker and defensive tackle do not.
+
+This governs placement only. When it suggests that two entries are the same
+player, an expert confirms that through the normal flow — it never happens on
+its own.
+
+---
+
+## 9. Everywhere
+
+- Works on a phone as well as a computer, down to a narrow screen.
+- Any view can be linked to and comes back as it was.
+- Work survives closing the browser and restarting the machine.
+- A failed save is visible, never silent, and the work is not lost.
+- A Help button explains what the app can do.
+- Undo is global.
+
+---
+
+## 10. Not part of it
+
+No contracts. No measurements. No mock-draft simulation. No live feed from a
+third party in public use. No consensus-versus-personal comparison view.
+
+---
+
+## 11. Left open
+
+Two decisions were deferred rather than made:
+
+- What happens when an expert changes a board a viewer has already altered in
+  his own copy.
+- Whether written evaluations should attach to the author rather than the
+  board — stated as the intended direction, not yet settled as built.
