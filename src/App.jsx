@@ -121,7 +121,26 @@ function App() {
   // transient — one failure, a retry, three more waiting — is the sync
   // indicator's job, because a message per failed attempt while offline is a
   // machine gun.
-  React.useEffect(() => repository.onWriteError(({ permanent, advice, error }) => {
+  // A DEAD LISTENER is not a transient write, and was silently dropped here.
+  //
+  // When a subscription fails the repository reports it through this same
+  // channel with op: 'watch' and permanent: false — and the guard below, which
+  // exists to stop a message per retry while offline, threw it away. So a
+  // board that had stopped receiving another expert's changes said nothing at
+  // all, and what was on screen quietly became the last thing the store sent.
+  // On a broadcast that is the worst failure the app has: not wrong, not
+  // blank, just silently behind.
+  //
+  // It is shown whatever its permanence, because there is no retry coming to
+  // make it good — the watcher is gone until something re-subscribes.
+  React.useEffect(() => repository.onWriteError(({ permanent, advice, error, op }) => {
+    if (op === 'watch') {
+      setToast({
+        message: `${advice ?? 'Live updates stopped.'} Reload to catch up.`,
+        tone: 'error',
+      });
+      return;
+    }
     if (!permanent) return;
     setToast({
       message: `${advice ?? 'Could not save.'} Your work is still on screen. (${error?.message ?? 'write refused'})`,

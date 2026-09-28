@@ -1,0 +1,67 @@
+name: Tests
+
+# The security boundary was not verified on any commit.
+#
+# firestore.rules is the only thing standing between a public static bundle
+# and the shared data — the client's own checks are advisory by design. Its
+# suite existed, was thorough, and ran only when somebody remembered, because
+# it needs a JVM and the emulator and so was kept out of `npm test`.
+#
+# CI is where that dependency is cheap. Every push now runs it.
+on:
+  push:
+    branches: [ master, pastel-lantern, firebase ]
+  pull_request:
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+      - run: npm ci
+      - run: npx eslint src/
+      - run: npm run test:unit
+
+  rules:
+    # Only where the rules exist. They are the firebase layer's own boundary.
+    if: github.ref == 'refs/heads/firebase' || github.base_ref == 'firebase'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+      # firebase-tools 15 needs Java 21 for the emulator.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - run: npm ci
+      - name: Start the Firestore emulator
+        run: |
+          npx firebase emulators:start --only firestore,auth --project demo-draftboard &
+          for i in $(seq 1 60); do
+            curl -sf -o /dev/null http://127.0.0.1:8080/ && break
+            sleep 2
+          done
+          curl -sf -o /dev/null http://127.0.0.1:8080/ || { echo "emulator did not start"; exit 1; }
+      - run: npm run test:rules
+
+  browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      # The suite builds itself, hermetically — see playwright.fast.config.js.
+      # It must never reach a live project, so no secrets are provided here.
+      - run: npm run test:browser
