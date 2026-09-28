@@ -49,13 +49,15 @@ const ROOT = resolvePath(dirname(fileURLToPath(import.meta.url)), '..');
 // ---------------------------------------------------------------------------
 
 function args(argv) {
-    const out = { dryRun: false, project: null, key: null, boards: 'faithful', wipe: false };
+    const out = { dryRun: false, project: null, key: null, boards: 'faithful', wipe: false, host: null, chunk: 500 };
     for (let i = 0; i < argv.length; i += 1) {
         const a = argv[i];
         if (a === '--dry-run') out.dryRun = true;
         else if (a === '--wipe') out.wipe = true;
         else if (a === '--project') out.project = argv[++i];
         else if (a === '--key') out.key = argv[++i];
+        else if (a === '--host') out.host = argv[++i];
+        else if (a === '--chunk') out.chunk = Number(argv[++i]);
         else if (a === '--boards') out.boards = argv[++i];
         else if (a.startsWith('--')) throw new Error(`Unknown option ${a}`);
     }
@@ -63,8 +65,12 @@ function args(argv) {
     if (!['faithful', 'public'].includes(out.boards)) {
         throw new Error("--boards must be 'faithful' (consensus shared, the analysts' orphaned) or 'public' (all shared)");
     }
-    if (!out.dryRun && !out.key) {
-        throw new Error('--key <service-account.json> is required unless --dry-run. Rules forbid seeding from a user session: see the header.');
+    // Against the emulator there is no key and no need of one: it accepts the
+    // literal bearer token "owner" and applies no rules to it. That is the
+    // documented local-development door, and it is the whole reason the test
+    // harness can seed a project it has no credentials for.
+    if (!out.dryRun && !out.key && !out.host) {
+        throw new Error('--key <service-account.json> is required unless --dry-run or --host. Rules forbid seeding from a user session: see the header.');
     }
     return out;
 }
@@ -130,7 +136,14 @@ function toValue(v) {
         return Number.isInteger(v) ? { integerValue: String(v) } : { doubleValue: v };
     }
     if (typeof v === 'string') return { stringValue: v };
-    if (Array.isArray(v)) return { arrayValue: { values: v.map(toValue) } };
+    // Array.from, not map: a depth chart row keeps its empty slots as HOLES
+    // (rosterSync assigns arr[i] directly), and map skips a hole rather than
+    // calling the mapper on it. The hole then survives into JSON.stringify as
+    // a bare null, which is not a Firestore Value — the real service shrugs
+    // and takes it, the emulator refuses the whole commit with "Payload isn't
+    // valid for request" and names nothing. Array.from visits holes as
+    // undefined, so they become the nullValue an empty slot should be.
+    if (Array.isArray(v)) return { arrayValue: { values: Array.from(v, toValue) } };
     if (typeof v === 'object') {
         const fields = {};
         Object.entries(v).forEach(([k, x]) => { fields[k] = toValue(x); });
@@ -157,11 +170,18 @@ const toFields = (doc) => {
  * So this is a ONE-SHOT tool for an empty project, and --wipe is how you get
  * an empty project. 500 writes is the documented per-commit ceiling.
  */
-async function commitAll(project, token, writes, { dryRun }) {
-    const base = `https://firestore.googleapis.com/v1/projects/${project}/databases/(default)/documents`;
+/** Where Firestore lives: the real service, or an emulator on this machine. */
+function documentsBase(project, host) {
+    return host
+        ? `http://${host}/v1/projects/${project}/databases/(default)/documents`
+        : `https://firestore.googleapis.com/v1/projects/${project}/databases/(default)/documents`;
+}
+
+async function commitAll(project, token, writes, { dryRun, host, chunk: size = 500 }) {
+    const base = documentsBase(project, host);
     if (dryRun) return;
-    for (let i = 0; i < writes.length; i += 500) {
-        const chunk = writes.slice(i, i + 500);
+    for (let i = 0; i < writes.length; i += size) {
+        const chunk = writes.slice(i, i + size);
         const res = await fetch(`${base}:commit`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -175,9 +195,38 @@ async function commitAll(project, token, writes, { dryRun }) {
             }),
         });
         if (!res.ok) {
-            throw new Error(`Commit failed (HTTP ${res.status}): ${(await res.text()).slice(0, 300)}`);
+            const body = (await res.text()).slice(0, 200);
+            // Name what was in the batch. "Payload isn't valid" about 500
+            // anonymous documents is not a diagnosis, and bisecting by hand
+            // is how an afternoon goes.
+            const kinds = [...new Set(chunk.map(w => w.path.split('/').slice(0, -1).join('/')
+                .replace(/^boards\/[^/]+\/entries$/, 'boards/*/entries')
+                .replace(/^evaluations\/[^/]+\/remarks$/, 'evaluations/*/remarks')
+                .replace(/^seasons\/[^/]+\//, 'seasons/*/')))];
+            // Find the document the store actually objected to, by sending
+            // them one at a time. A batch rejection names nothing, and the
+            // alternative is bisecting 500 documents by hand.
+            let culprit = null;
+            for (const w of chunk) {
+                const one = await fetch(`${base}:commit`, {
+                    method: 'POST',
+                    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ writes: [{ update: {
+                        name: `projects/${project}/databases/(default)/documents/${w.path}`,
+                        fields: toFields(w.doc),
+                    } }] }),
+                });
+                if (!one.ok) { culprit = { w, detail: (await one.text()).slice(0, 200) }; break; }
+            }
+            throw new Error(
+                `Commit failed (HTTP ${res.status}) on documents ${i}-${i + chunk.length - 1}: ${body}\n`
+                + `  collections in this batch: ${kinds.join(', ')}\n`
+                + (culprit
+                    ? `  REFUSED: ${culprit.w.path}\n  doc: ${JSON.stringify(culprit.w.doc).slice(0, 400)}\n  SENT: ${JSON.stringify(toFields(culprit.w.doc)).slice(0, 700)}\n  said: ${culprit.detail}`
+                    : '  no single document reproduced it — the batch itself is the problem (size? 500 limit?)'),
+            );
         }
-        process.stdout.write(`  committed ${Math.min(i + 500, writes.length)}/${writes.length}\n`);
+        process.stdout.write(`  committed ${Math.min(i + size, writes.length)}/${writes.length}\n`);
     }
 }
 
@@ -192,8 +241,19 @@ async function commitAll(project, token, writes, { dryRun }) {
  * real experts' invites live there, and deleting one revokes a person's
  * access. The two mock invites this script writes are upserted over instead.
  */
-async function wipe(project, token, { dryRun }) {
-    const base = `https://firestore.googleapis.com/v1/projects/${project}/databases/(default)/documents`;
+async function wipe(project, token, { dryRun, host }) {
+    // The emulator can empty a whole database in one call, and does it
+    // properly — subcollections included, which the document-by-document
+    // path below does not reach without listing every parent. Against the
+    // real service there is no such endpoint, so that path stays.
+    if (host) {
+        console.log('Wipe: clearing the emulator database.');
+        if (dryRun) return;
+        const res = await fetch(`http://${host}/emulator/v1/projects/${project}/databases/(default)/documents`, { method: 'DELETE' });
+        if (!res.ok) throw new Error(`Emulator wipe failed (HTTP ${res.status})`);
+        return;
+    }
+    const base = documentsBase(project, null);
     const list = async (collection) => {
         const names = [];
         let pageToken = '';
@@ -514,8 +574,8 @@ if (opts.dryRun) {
     process.exit(0);
 }
 
-const token = await accessToken(opts.key);
-if (opts.wipe) await wipe(opts.project, token, { dryRun: false });
-console.log(`Writing to ${opts.project}...`);
-await commitAll(opts.project, token, writes, { dryRun: false });
+const token = opts.host ? 'owner' : await accessToken(opts.key);
+if (opts.wipe) await wipe(opts.project, token, { dryRun: false, host: opts.host });
+console.log(`Writing to ${opts.project}${opts.host ? ` (emulator at ${opts.host})` : ''}...`);
+await commitAll(opts.project, token, writes, { dryRun: false, host: opts.host, chunk: opts.chunk });
 console.log('Done.');
