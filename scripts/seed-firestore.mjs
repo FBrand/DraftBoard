@@ -234,11 +234,43 @@ async function wipe(project, token, { dryRun }) {
     }
 }
 
+/**
+ * Serves public/ over fetch, so the app's own seeding paths work unchanged.
+ *
+ * Every one of them reaches for its file with fetch(`${import.meta.env.BASE_URL}`
+ * + name) — loadFiles, playerFacts, the roster and free-agency snapshots, the
+ * example evaluations, the completed draft. In node there is no server and no
+ * base URL, so rather than reimplement six loaders, this answers them from
+ * disk.
+ *
+ * Anything not under public/ gets a 404 rather than a thrown error, because
+ * that is what those callers are written against: loadFiles caches null on a
+ * failed fetch, playerFacts treats a non-ok response as no rows. A throw would
+ * take paths down that are built to cope.
+ */
+function servePublicOverFetch() {
+    const real = globalThis.fetch;
+    globalThis.fetch = async (input, init) => {
+        const url = String(input?.url ?? input);
+        // Absolute URLs are the real thing (the OAuth token endpoint).
+        if (/^https?:\/\//.test(url)) return real(input, init);
+        const name = url.split("/").filter(Boolean).pop() ?? "";
+        const file = `${ROOT}/public/${name}`;
+        if (!name || !existsSync(file)) {
+            return new Response("not found", { status: 404, statusText: "Not Found" });
+        }
+        return new Response(readFileSync(file), { status: 200 });
+    };
+    return () => { globalThis.fetch = real; };
+}
+
 // ---------------------------------------------------------------------------
 // Build the season by running the app against an in-memory store
 // ---------------------------------------------------------------------------
 
 async function build() {
+    const restoreFetch = servePublicOverFetch();
+    try {
     const { repository } = await import(`${ROOT}/src/data/repository.js`);
 
     // The backend has to be memory, and it has to be set in the ENVIRONMENT
@@ -258,6 +290,14 @@ async function build() {
     const { resolveAll, openRegistry, PLAYERS } = await import(`${ROOT}/src/utils/playerRegistry.js`);
     const { seedBoard } = await import(`${ROOT}/src/utils/scoutingState.js`);
     const { entriesPath } = await import(`${ROOT}/src/data/boardEntries.js`);
+    const { applyPlayerFacts } = await import(`${ROOT}/src/utils/playerFacts.js`);
+    const { seedExampleEvaluations } = await import(`${ROOT}/src/utils/exampleEvaluations.js`);
+    const faState = await import(`${ROOT}/src/utils/faState.js`);
+    const rosterState = await import(`${ROOT}/src/utils/rosterState.js`);
+    const { writeDraft, DRAFT_STATE } = await import(`${ROOT}/src/data/draftStore.js`);
+    const { deserializeDraftState } = await import(`${ROOT}/src/utils/sessionSerializer.js`);
+    const { reconcileDraft } = await import(`${ROOT}/src/utils/draftReconcile.js`);
+    const { highestDraftPick } = await import(`${ROOT}/src/utils/draftPhase.js`);
 
     // openBoards() is the thing that knows what the shipped season IS: one
     // season, three boards, an author and a mock invite for each analyst, and
@@ -330,21 +370,66 @@ async function build() {
         seedBoard(b.id, pool);
     }
 
+    // ---- the other stages -------------------------------------------------
+    //
+    // The boards are not the season. Withholding the CSVs stopped the facts,
+    // the roster, free agency, the completed draft and the example
+    // evaluations from seeding too, so all five belong here or the project
+    // comes up with three boards and four empty stages.
+
+    // Facts first: school and draft outcome go onto the registry records the
+    // boards just created, and everything below reads players.
+    await applyPlayerFacts();
+
+    // Free agency is the pre-draft roster — what the offseason starts from.
+    // ensureSeeded does the fetch, the parse and the write, and knows which
+    // season it belongs to.
+    await faState.ensureSeeded();
+
+    // The roster is the day before cutdown. RosterView does this on its
+    // bootstrap screen; there is no view here, so the two calls it makes are
+    // made directly.
+    if (rosterState.loadState() === null) {
+        rosterState.saveState(await rosterState.fetchLocalRoster());
+    }
+
+    // The completed draft. This is the one piece of orchestration that is
+    // restated rather than imported, because in the app it lives inside
+    // useDraftState and a hook cannot be called here. It is the same three
+    // steps: deserialize the file, join it against the pool id-first, and
+    // set the next pick from the highest one recorded. UDFA rows carry the
+    // literal string rather than a number, which is why the pick counter
+    // comes from highestDraftPick and not from Math.max over the column.
+    const picksFile = `${ROOT}/public/DraftBoard_Picks.csv`;
+    if (existsSync(picksFile)) {
+        const imported = deserializeDraftState(readFileSync(picksFile, "utf8"));
+        if (imported.draftedPlayers.length || imported.ourPicksLeft.length) {
+            const poolForDraft = cast.map((p, i) => ({ ...p, id: ids[i] ?? null }));
+            const { draftedPlayers } = reconcileDraft(poolForDraft, imported.draftedPlayers);
+            writeDraft(season.id, {
+                draftedPlayers,
+                ourPicksLeft: imported.ourPicksLeft,
+                currentPick: (highestDraftPick(draftedPlayers) ?? 0) + 1,
+                remotePicks: [],
+            });
+        }
+    }
+
+    // Remarks on the consensus board, so a card is not blank on a fresh
+    // project. Needs the boards, which is why it is last.
+    await seedExampleEvaluations();
+
     // Whatever the app ended up holding, as paths.
     const writes = [];
-    const dump = (collection, path = collection) => {
+    // Every collection the run produced, rather than a list written out here:
+    // the list silently omitted whatever the app gained since it was written,
+    // which is how four stages got left out of the first version of this.
+    for (const collection of repository.collections()) {
         const docs = repository.docs(collection) ?? {};
         Object.entries(docs).forEach(([id, doc]) => {
-            if (doc) writes.push({ path: `${path}/${id}`, doc });
+            if (doc) writes.push({ path: `${collection}/${id}`, doc });
         });
-    };
-    dump('seasons');
-    dump('authors');
-    dump('email2author');
-    dump('boards');
-    dump(PLAYERS);
-    for (const b of boards) dump(entriesPath(b.id));
-
+    }
     // Optional flattening: make every board shared rather than leaving the
     // analysts' boards orphaned. Orphaned is the faithful shape — a personal
     // board nobody has claimed — and it is what lets Dan claim his own when he
@@ -361,14 +446,26 @@ async function build() {
     }
 
     return { writes, season, boards };
+    } finally {
+        restoreFetch();
+    }
 }
 
 // ---------------------------------------------------------------------------
 
 const { writes, season, boards } = await build();
 
+// Grouped by the COLLECTION a document sits in, not by its first path
+// segment. Counting by the first segment filed the roster chart, the free
+// agency chart and the setup markers all under "seasons", which read as 56
+// season documents and hid whether the stages had seeded at all.
 const counts = writes.reduce((acc, w) => {
-    const key = w.path.includes('/entries/') ? 'board entries' : w.path.split('/')[0];
+    const parts = w.path.split('/');
+    const key = parts.slice(0, -1).join('/')
+        // One line per KIND of thing rather than one per board or per player.
+        .replace(/^boards\/[^/]+\/entries$/, 'boards/*/entries')
+        .replace(/^evaluations\/[^/]+\/remarks$/, 'evaluations/*/remarks')
+        .replace(/^seasons\/[^/]+\//, 'seasons/*/');
     acc[key] = (acc[key] ?? 0) + 1;
     return acc;
 }, {});

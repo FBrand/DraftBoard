@@ -337,6 +337,19 @@ export function createRepository(adapter = localAdapter) {
      * registry was still arriving, and let somebody add a duplicate of a player
      * it simply had not seen yet.
      */
+    /**
+     * Every collection the cache is holding, by path.
+     *
+     * For a caller that has to walk what is there rather than ask about a
+     * name it already knows — the Firestore seeder, which runs the app
+     * against an in-memory store and then uploads whatever came out. Listing
+     * the paths by hand there meant a collection added to the app was
+     * silently left out of the upload.
+     */
+    function collections() {
+        return [...cache.keys()];
+    }
+
     function isLoaded(collection) {
         return cache.has(collection) || !!adapter.loadSync;
     }
@@ -881,7 +894,7 @@ export function createRepository(adapter = localAdapter) {
     restoreQueue();
 
     return {
-        ready, readyVia, ensureLoaded, docs, isLoaded, loadFailed, isLive, follow, get, all, query,
+        ready, readyVia, ensureLoaded, docs, isLoaded, collections, loadFailed, isLive, follow, get, all, query,
         set, update, remove, commit, commitMany, clear, subscribe, invalidate,
         onWriteError, onSyncChange, syncState, retryNow, discardPending, adapter,
         identity, newAuthorId, isExpert,
