@@ -494,8 +494,9 @@ async function build() {
         }
     }
 
-    // Remarks on the consensus board, so a card is not blank on a fresh
-    // project. Needs the boards, which is why it is last.
+    // The worked example, filed under Dan — see exampleEvaluations.js for why
+    // a named analyst and not a voice of its own. Needs the boards, which is
+    // why it is last.
     await seedExampleEvaluations();
 
     // Whatever the app ended up holding, as paths.
@@ -503,7 +504,22 @@ async function build() {
     // Every collection the run produced, rather than a list written out here:
     // the list silently omitted whatever the app gained since it was written,
     // which is how four stages got left out of the first version of this.
-    for (const collection of repository.collections()) {
+    //
+    // Both sources, because there are two. The repository caches what it
+    // loaded; the layered store writes through to the ADAPTER without the
+    // repository ever seeing the collection. Asking only the repository lost
+    // every example remark, on every run, silently — the seed reported 1768
+    // documents and contained no evaluations at all.
+    const held = new Set([
+        ...repository.collections(),
+        ...(repository.adapter.collections?.() ?? []),
+    ]);
+    for (const collection of held) {
+        // Loaded before it is read: docs() answers from the repository's cache,
+        // so a collection only the adapter knows about reads back as empty.
+        // Naming it in the set above was not enough — the first version of this
+        // fix still shipped 1768 documents and no remarks.
+        await repository.ready(collection);
         const docs = repository.docs(collection) ?? {};
         Object.entries(docs).forEach(([id, doc]) => {
             if (doc) writes.push({ path: `${collection}/${id}`, doc });

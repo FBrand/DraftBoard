@@ -59,6 +59,22 @@ export function createMemoryAdapter({ latency = 0, failWrites = false } = {}) {
 
         // No loadSync. See the note above — its absence is the feature.
 
+        /**
+         * Every collection this adapter holds.
+         *
+         * The seeder used to enumerate the REPOSITORY's collections, which are
+         * only the ones the repository itself loaded. Evaluations are written
+         * through the layered store (src/data/store.js) straight to the
+         * adapter, so the repository never had them in its cache and every
+         * example remark the seed produced was silently dropped on the way
+         * out — 1768 documents uploaded, not one of them a remark, on every
+         * run. The adapter is where everything actually lands, so it is what a
+         * "give me all of it" caller has to ask.
+         */
+        collections() {
+            return [...store.keys()];
+        },
+
         // Same answers localAdapter gives, and for the same reason: no auth,
         // nobody else here. See its note for why the adapter is what decides
         // an author's id at all.

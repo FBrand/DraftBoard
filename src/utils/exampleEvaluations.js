@@ -12,9 +12,14 @@
  * here is about not writing over somebody's work:
  *
  *   - clean-slate mode seeds nothing at all;
- *   - it writes to the CONSENSUS board, the one with no author, because these
- *     are published scouting reports rather than anybody here having watched
- *     the tape;
+ *   - it is attributed to ONE named analyst, Dan. These are published scouting
+ *     reports, so in truth they are nobody here's words — but a remark is a
+ *     person's opinion and there is no unattributed voice to file them under.
+ *     Consensus remarks were considered and dropped: making the consensus
+ *     voice writable through the app turns one document into a multi-writer
+ *     one, and the remark shape assumes a single writer (whole-document
+ *     replace, positional ids). So the example borrows a name rather than
+ *     inventing one, and it is seed data an analyst is free to delete;
  *   - a player who already carries remarks from this owner is skipped
  *     entirely, so re-running cannot duplicate anything;
  *   - and players are resolved WITHOUT creating, so it can only ever annotate
@@ -23,12 +28,15 @@
 import { parseRankings } from './dataParser';
 import { resolveAll } from './playerRegistry';
 import { listBoards } from './boardRegistry';
-import { myVoice, remarksFor, addRemark, openEvaluations } from './evaluations';
+import { remarksFor, addRemark, openEvaluations } from './evaluations';
 import { currentSeason } from './boardRegistry';
 import { shouldSeed } from './appInit';
 import { repository } from '../data/repository';
 
 const FILE = 'evaluations_kc_2026.csv';
+
+/** Whose voice the example is filed under. See the note above on why a name. */
+const EXAMPLE_ANALYST = 'dan';
 
 let done = false;
 
@@ -46,12 +54,12 @@ export async function seedExampleEvaluations() {
 
     done = true;
 
-    // Consensus is the board with no author — see boardRegistry.
-    const board = listBoards().find(b => !b.authorId);
-    // The local voice, which on a local-only build is this one person and
-    // nobody else's name. On a shared backend this function has already
-    // returned, for the reason above.
-    const ownerId = board ? myVoice() : null;
+    // Dan's voice, found by slug rather than by label — a label renames freely
+    // and nothing keys on it, while the slug is stable. If his board is absent
+    // (a renamed slug, a season that never set him up) the example is simply
+    // skipped: it is a nicety, and guessing a different analyst to attribute
+    // published reports to would be worse than showing nothing.
+    const ownerId = listBoards().find(b => b.slug === EXAMPLE_ANALYST)?.authorId ?? null;
     if (!ownerId) return 0;
 
     let rows;
