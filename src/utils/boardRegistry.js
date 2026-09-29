@@ -108,6 +108,25 @@ export async function openBoards() {
     ]);
     if (allOf(BOARDS_COLLECTION, 'board').length) return;
 
+    // A SHARED backend is never seeded from a browser. It is seeded from
+    // outside, once, before anybody signs in (scripts/seed-firestore.mjs).
+    //
+    // What this used to do on one could not work and could not be made to
+    // work: an author may only be created keyed by the caller's own uid, so
+    // the placeholder records for Dan and Ryan are refused by construction,
+    // and email2author refuses invitedBy: 'seed' outright — an invite names a
+    // real inviter. A viewer had every write refused and kept a private season
+    // in his overlay that looked exactly like the real thing; an expert got the
+    // season and the boards through and the authors and invites refused,
+    // leaving boards pointing at authors that do not exist.
+    //
+    // So on a shared store an empty project stays empty, and visibly so —
+    // a state somebody can fix, rather than one every client papers over
+    // differently and privately. Local and memory backends still seed here:
+    // that is how the local-only app comes up at all, and how the external
+    // seeder produces what it uploads.
+    if (repository.isLive()) return;
+
     // "No boards" has to actually mean no boards. A shared store that could not
     // be reached answers with an empty collection — deliberately, so a viewer
     // still sees his own work rather than a blank page — and seeding on that
