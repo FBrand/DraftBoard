@@ -18,7 +18,11 @@
  * player. The consensus board has no author, so it owns its own remarks — see
  * ownerIdFor.
  */
-import { repository } from '../data/repository';
+// Moved onto the layered store — the first collection to cross. Nothing
+// outside this module reads evaluations, which is what makes it safe to move
+// alone: a collection served by both stores would have two caches over one
+// backend, and they would drift. See data/appStore.js.
+import { store } from '../data/appStore';
 
 export const EVALUATIONS = 'evaluations';
 
@@ -107,10 +111,10 @@ function readHandle(handle) {
  */
 export async function openEvaluations(playerIds) {
     const ids = playerIds == null ? [] : [].concat(playerIds).filter(Boolean);
-    await Promise.all(ids.map(id => repository.ready(remarksPath(id))));
+    await Promise.all(ids.map(id => store.ready(remarksPath(id))));
 }
 
-const docFor = (playerId, ownerId) => repository.get(remarksPath(playerId), ownerId) ?? {};
+const docFor = (playerId, ownerId) => store.view(remarksPath(playerId))[ownerId] ?? {};
 
 function expand(ownerId, doc) {
     const out = [];
@@ -157,7 +161,7 @@ export function remarksFor(ownerId, playerId) {
  */
 export function allRemarksFor(playerId) {
     if (!playerId) return [];
-    const docs = repository.docs(remarksPath(playerId)) ?? {};
+    const docs = store.view(remarksPath(playerId));
     const out = [];
     Object.entries(docs).forEach(([ownerId, doc]) => out.push(...expand(ownerId, doc)));
     return out;
@@ -181,9 +185,10 @@ function write(playerId, ownerId, doc) {
         if (!Object.keys(doc[sKey]).length) delete doc[sKey];
     });
 
+    // One write, and its fate is reported per change. A refusal no longer
+    // becomes a document the next read hands back as though it were stored.
     const path = remarksPath(playerId);
-    if (!Object.keys(doc).length) repository.remove(path, ownerId);
-    else repository.set(path, ownerId, doc);
+    store.write([{ collection: path, id: ownerId, doc: Object.keys(doc).length ? doc : null }]);
 }
 
 /**

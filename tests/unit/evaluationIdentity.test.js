@@ -5,6 +5,8 @@ import {
 } from '../../src/utils/evaluations';
 import { openBoards, allBoards, renameBoard, renameAuthor, authorOf, currentSeason } from '../../src/utils/boardRegistry';
 import { repository } from '../../src/data/repository';
+// Evaluations moved to the layered store; this is where they live now.
+import { store } from '../../src/data/appStore';
 
 /**
  * Who wrote a remark, about whom, and in which season.
@@ -22,6 +24,7 @@ import { repository } from '../../src/data/repository';
 beforeEach(async () => {
     globalThis.resetStorage();
     repository.invalidate();
+    store.forget();
     await openBoards();
     // Remarks are filed under the season in their path, and a read visits the
     // seasons that exist — so 's1' has to be one. See remarkStorage.test.js,

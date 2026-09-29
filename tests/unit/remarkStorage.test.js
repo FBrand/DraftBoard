@@ -4,6 +4,8 @@ import {
     addRemark, removeRemark, updateRemarkText, openEvaluations,
 } from '../../src/utils/evaluations';
 import { repository } from '../../src/data/repository';
+// Evaluations moved to the layered store; this is where they live now.
+import { store } from '../../src/data/appStore';
 
 /**
  * Where a remark actually lives.
@@ -29,11 +31,12 @@ const S27 = 's_2027';
 beforeEach(async () => {
     globalThis.resetStorage();
     repository.invalidate();
+    store.forget();
     await openEvaluations();
 });
 
-const stored = (owner = OWNER) => repository.get(remarksPath(PLAYER), owner);
-const ownerIds = () => Object.keys(repository.docs(remarksPath(PLAYER)) ?? {});
+const stored = (owner = OWNER) => store.view(remarksPath(PLAYER))[owner];
+const ownerIds = () => Object.keys(store.view(remarksPath(PLAYER)));
 
 describe('the address', () => {
     it('is one collection per player, one document per owner', () => {
@@ -239,5 +242,46 @@ describe('everybody on one player', () => {
     it('is empty rather than throwing for a player nobody has written about', () => {
         expect(allRemarksFor('p_nobody')).toEqual([]);
         expect(allRemarksFor(null)).toEqual([]);
+    });
+});
+
+/**
+ * What moving to the layered store actually bought.
+ *
+ * The repository merged the write queue into its cache, so a remark the store
+ * had REFUSED came straight back out of the next read as though it had been
+ * saved — indefinitely, across reloads. That is the amplifier the audit found
+ * under every permission failure, and it is the reason this collection moved
+ * first.
+ */
+describe('a remark the store refuses', () => {
+    it('is not handed back as though it were stored', async () => {
+        const refusing = {
+            name: 'refusing',
+            capabilities: { push: false, sync: false, refuses: true, shared: true },
+            async read() { return { docs: {}, removed: [], watermark: '1', complete: true }; },
+            async write(changes) {
+                return changes.map(c => ({
+                    collection: c.collection, id: c.id, outcome: 'refused',
+                    error: new Error('permission-denied'),
+                }));
+            },
+        };
+        const { createStore } = await import('../../src/data/store');
+        const s = createStore(refusing);
+        const path = remarksPath(PLAYER);
+
+        await s.ready(path);
+        await s.write([{ collection: path, id: OWNER, doc: { '2026': { s: [{ t: 'Elite arm', a: 1 }] } } }]);
+
+        // Not in the store, and — the part that was wrong before — not in what
+        // a reader gets back either.
+        expect(s.shared(path)[OWNER]).toBeUndefined();
+        expect(s.view(path)[OWNER]).toBeUndefined();
+
+        // And not thrown away: it is held, as refused, to be retried or
+        // abandoned on purpose rather than vanishing off the screen.
+        expect(s.refused()).toHaveLength(1);
+        expect(s.refused()[0].doc['2026'].s[0].t).toBe('Elite arm');
     });
 });
