@@ -396,13 +396,60 @@ service cloud.firestore {
     match /seasons/{seasonId} {
       allow read: if true;
       allow write: if isExpert();
-      // Everything a season owns belongs to whoever may write the season:
-      //   seasons/{id}/charts/{stage}/rows|bands   the depth charts
-      //   seasons/{id}/stages/{base}               the prospect pool and its like
-      //   seasons/{id}/setup/{season|facts}        the "already seeded" markers
-      // All of them moved under the season precisely so this is one rule
-      // rather than one per collection.
-      match /{document=**} {
+      // Everything a season owns USED to be one recursive rule:
+      //
+      //     match /{document=**} { allow write: if isExpert(); }
+      //
+      // which was right while a season owned one roster and one free agency.
+      // Every stage is per person now, and a person's chart is only his to
+      // write — so the breadth has to go, and it cannot simply be overridden.
+      //
+      // RULES ARE A PERMISSIVE UNION. A narrower match below a broad one does
+      // not restrict it; both are evaluated and either one granting is enough.
+      // Leaving the wildcard in place and adding a scope check underneath
+      // would have read as a restriction and enforced nothing at all.
+      //
+      // So each thing a season owns is named, and the wildcard is gone.
+
+      //   seasons/{id}/stages/{base}          the prospect pool and its like
+      match /stages/{base} {
+        allow read: if true;
+        allow write: if isExpert();
+      }
+
+      //   seasons/{id}/setup/{season|facts}   the "already seeded" markers
+      match /setup/{marker} {
+        allow read: if true;
+        allow write: if isExpert();
+      }
+
+      //   seasons/{id}/charts/{stage}/scopes/{whose}/rows|bands
+      //
+      // A chart belongs to one person, or to the show. His own is his alone —
+      // not writable by another expert, which is what the old wildcard allowed
+      // and what made two analysts sharing one roster inevitable. The OFFICIAL
+      // one is any expert's to publish, deliberately: the app asks for a
+      // confirmation and records who set it, and neither of those is something
+      // this file can check.
+      match /charts/{stage}/scopes/{scopeId}/{document=**} {
+        allow read: if true;
+        allow write: if isExpert() && (scopeId == request.auth.uid || scopeId == 'official');
+      }
+
+      //   seasons/{id}/charts/{stage}/rows|bands   where builds before the
+      // scope existed wrote. Matched exactly rather than with a wildcard,
+      // because /charts/{stage}/{rest=**} would cover the scoped paths above
+      // and hand every expert write access to all of them again — the same
+      // union trap, one level down.
+      //
+      // Still writable, because the deployed build is one of those older
+      // builds and taking the write away would break the live site before it
+      // is redeployed. Nothing in this build writes here.
+      match /charts/{stage}/rows/{rowId} {
+        allow read: if true;
+        allow write: if isExpert();
+      }
+      match /charts/{stage}/bands/{bandId} {
         allow read: if true;
         allow write: if isExpert();
       }

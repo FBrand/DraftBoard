@@ -59,7 +59,7 @@ import { DRAFT_YEAR } from '../constants';
 import { boardStateKey } from './appStorage';
 import { removeSeasonStages } from '../data/stageStore';
 import { removeBoardEntries } from '../data/boardEntries';
-import { removeChart } from '../data/depthChartStore';
+import { removeChart, ALL_SCOPES } from '../data/depthChartStore';
 import { removeDraft } from '../data/draftStore';
 import { initialiseSeason, forgetSeason } from './seasonInit';
 
@@ -429,7 +429,9 @@ export async function scrapSeason() {
     }));
 
     await removeSeasonStages(outgoing.id);
-    await Promise.all(['rosterState', 'fa_state_v1'].map(stage => removeChart(stage, outgoing.id)));
+    // Every scope this build can name — see removeChart. A season being
+    // scrapped takes the official chart and this person's with it.
+    await Promise.all(['rosterState', 'fa_state_v1'].map(stage => removeChart(stage, outgoing.id, ALL_SCOPES)));
     await removeDraft(outgoing.id);
     forgetSeason(outgoing.id);
 

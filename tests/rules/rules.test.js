@@ -854,3 +854,66 @@ describe('author records are not public', () => {
         }));
     });
 });
+
+/**
+ * A chart belongs to one person, or to the show.
+ *
+ * Everything a season owned used to be one recursive rule — `match
+ * /{document=**} { allow write: if isExpert() }` — which was right while there
+ * was one roster and one free agency per season, and wrong the moment each
+ * analyst got his own. Two analysts could not keep separate rosters, because
+ * either could write the other's.
+ *
+ * The trap in fixing it is that RULES ARE A PERMISSIVE UNION: a narrow match
+ * under a broad one restricts nothing, since either granting is enough. The
+ * wildcard had to be REMOVED, not overridden, and these tests fail if it ever
+ * comes back — which is the only way anybody would notice.
+ */
+describe('depth charts, which belong to a person or to the show', () => {
+    const rows = (season, stage, scope) => `seasons/${season}/charts/${stage}/scopes/${scope}/rows`;
+
+    it('let an expert write his own', async () => {
+        await assertSucceeds(setDoc(doc(expert('dan-uid'), `${rows('s_1', 'rosterState', 'dan-uid')}/QB`), { l: 'QB' }));
+    });
+
+    it('refuse an expert writing ANOTHER expert’s', async () => {
+        // The whole point of the change. Under the old wildcard this was
+        // allowed, so a personal roster was personal by convention only.
+        await assertFails(setDoc(doc(expert('dan-uid'), `${rows('s_1', 'rosterState', 'ryan-uid')}/QB`), { l: 'QB' }));
+    });
+
+    it('let any expert publish the official one', async () => {
+        // Deliberate: the confirmation and the who-set-it stamp are the app's
+        // job, and neither is something this file can check.
+        await assertSucceeds(setDoc(doc(expert('dan-uid'), `${rows('s_1', 'rosterState', 'official')}/QB`), { l: 'QB' }));
+        await assertSucceeds(setDoc(doc(expert('ryan-uid'), `${rows('s_1', 'rosterState', 'official')}/RB`), { l: 'RB' }));
+    });
+
+    it('refuse a viewer everywhere, his own scope included', async () => {
+        await assertFails(setDoc(doc(viewer(), `${rows('s_1', 'rosterState', 'anon')}/QB`), { l: 'QB' }));
+        await assertFails(setDoc(doc(viewer(), `${rows('s_1', 'rosterState', 'official')}/QB`), { l: 'QB' }));
+    });
+
+    it('are readable by anybody, because a follower has to see them', async () => {
+        await assertSucceeds(getDoc(doc(viewer(), `${rows('s_1', 'rosterState', 'dan-uid')}/QB`)));
+        await assertSucceeds(getDoc(doc(stranger(), `${rows('s_1', 'rosterState', 'official')}/QB`)));
+    });
+
+    it('apply to free agency exactly as they do to the roster', async () => {
+        await assertSucceeds(setDoc(doc(expert('dan-uid'), `${rows('s_1', 'fa_state_v1', 'dan-uid')}/WR`), { l: 'WR' }));
+        await assertFails(setDoc(doc(expert('dan-uid'), `${rows('s_1', 'fa_state_v1', 'ryan-uid')}/WR`), { l: 'WR' }));
+    });
+
+    it('still let an expert write the old unscoped path, which the live build uses', async () => {
+        // Deliberate and temporary. The deployed build predates the scope and
+        // would start failing its roster writes the moment this is taken away.
+        await assertSucceeds(setDoc(doc(expert('dan-uid'), 'seasons/s_1/charts/rosterState/rows/QB'), { l: 'QB' }));
+    });
+
+    it('keep the season’s other collections writable by any expert', async () => {
+        // These lost their recursive rule too, so they are named now — and a
+        // name that was missed would be a silent denial rather than a leak.
+        await assertSucceeds(setDoc(doc(expert('dan-uid'), 'seasons/s_1/stages/prospects_v1'), { v: 1 }));
+        await assertSucceeds(setDoc(doc(expert('dan-uid'), 'seasons/s_1/setup/season'), { done: true }));
+    });
+});

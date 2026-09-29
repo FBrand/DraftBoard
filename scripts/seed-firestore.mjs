@@ -499,6 +499,20 @@ async function build() {
     // why it is last.
     await seedExampleEvaluations();
 
+    // A seeded roster or free agency board is the SHOW's, not this process's.
+    //
+    // The seed runs the app against a memory backend, where identity() is
+    // 'local' — so every chart it produces lands under scopes/local, which on
+    // the shared project would be a scope belonging to nobody: unreadable as
+    // official, unwritable by any expert, and invisible to every client, since
+    // a client reads its own scope and then falls back to official. Re-aimed
+    // here rather than by teaching the roster import a scope, because the
+    // seeder is the only caller that is not a person.
+    const officialise = (collection) => collection.replace(
+        /^seasons\/([^/]+)\/charts\/([^/]+)\/scopes\/local(\/|$)/,
+        'seasons/$1/charts/$2/scopes/official$3',
+    );
+
     // Whatever the app ended up holding, as paths.
     const writes = [];
     // Every collection the run produced, rather than a list written out here:
@@ -522,7 +536,7 @@ async function build() {
         await repository.ready(collection);
         const docs = repository.docs(collection) ?? {};
         Object.entries(docs).forEach(([id, doc]) => {
-            if (doc) writes.push({ path: `${collection}/${id}`, doc });
+            if (doc) writes.push({ path: `${officialise(collection)}/${id}`, doc });
         });
     }
     // Optional flattening: make every board shared rather than leaving the

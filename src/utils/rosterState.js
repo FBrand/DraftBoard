@@ -3,7 +3,10 @@
  * Stored in localStorage under key 'rosterState'.
  */
 import { parseCsvLine, csvField } from './csvUtils';
-import { readChart, writeChart, hasChart, chartVersion, rowsPath, bandsPath } from '../data/depthChartStore';
+import {
+    readChart, writeChart, hasChart, hasOwnChart, chartVersion, rowsPath, bandsPath,
+    readStamp, writeStamp, OFFICIAL,
+} from '../data/depthChartStore';
 import { repository } from '../data/repository';
 import { viewedSeason } from './boardRegistry';
 import { canEdit } from './permissions';
@@ -18,6 +21,7 @@ import { DRAFT_YEAR } from '../constants';
 import { resolve as resolvePlayer, resolveAll, setFactsMany, beginBatch, endBatch } from './playerRegistry';
 import { applyPlayerFacts } from './playerFacts';
 import { rowsFor } from './positionTaxonomy';
+import { slotIdentity } from './formatName';
 
 // Reasonable 53-man slot defaults by major position
 const DEFAULT_SLOTS53 = {
@@ -303,6 +307,137 @@ function migrate(parsed) {
     const from = typeof parsed.version === 'number' ? parsed.version : 1;
     if (from > STATE_VERSION) return null; // written by a newer app — don't guess
     return { ...parsed, version: STATE_VERSION };
+}
+
+/**
+ * The OFFICIAL chart — what the show says, as opposed to what I would do.
+ *
+ * Null when nobody has published one, which is not the same as an empty
+ * roster: the first tells a screen there is nothing to adopt, the second that
+ * the adopted thing is empty.
+ */
+export function loadOfficial() {
+    try {
+        const sid = seasonId();
+        if (!sid || !hasChart(STORAGE_KEY, sid, OFFICIAL)) return null;
+        return migrate({ version: STATE_VERSION, ...readChart(STORAGE_KEY, sid, OFFICIAL) });
+    } catch { return null; }
+}
+
+/** Whether what I am looking at is mine, or official shown for want of one. */
+export function isOwn() {
+    const sid = seasonId();
+    return !!sid && hasOwnChart(STORAGE_KEY, sid);
+}
+
+/** Who published the official chart, and when. Null when nobody has. */
+export function officialStamp() {
+    const sid = seasonId();
+    return sid ? readStamp(STORAGE_KEY, sid) : null;
+}
+
+/**
+ * Publishes my chart as the official one.
+ *
+ * Deliberate, and the caller is expected to have asked first — it overwrites
+ * whatever another expert published, and a roster that changed under somebody
+ * with no way to see who did it is the failure this project keeps repeating.
+ * So it records who and when, which is the whole reason this is a function
+ * rather than a second argument to saveState.
+ */
+export function publishOfficial(state = loadState()) {
+    if (!canEdit({ kind: 'stage' })) return false;
+    const sid = seasonId();
+    if (!sid || !state) return false;
+    writeChart(STORAGE_KEY, sid, { ...state, version: STATE_VERSION, depthChart: stampPlayerIds(state.depthChart) }, OFFICIAL);
+    writeStamp(STORAGE_KEY, sid);
+    return true;
+}
+
+/**
+ * Takes the official chart as mine, keeping everybody I would otherwise lose.
+ *
+ * Anybody placed in my chart who is not in official goes to the CUT PANEL
+ * rather than disappearing. That is the difference between adopting a state and
+ * losing an afternoon's work: a plain replacement is the one version of this
+ * that must not ship, because the players simply vanish and nothing says which.
+ */
+export function adoptOfficial() {
+    const official = loadOfficial();
+    if (!official) return null;
+
+    const mine = loadState();
+    const displaced = mine ? playersNotIn(mine, official) : [];
+    const next = { ...official, cuts: [...(official.cuts ?? []), ...displaced] };
+    saveState(next);
+    return { adopted: true, displaced: displaced.length };
+}
+
+/**
+ * Fills my empty slots from official, touching nothing I have placed.
+ *
+ * The additive half of the same pair, and the same rule `syncFromStages` has
+ * always followed: safe to run again whenever official moves.
+ */
+export function fillFromOfficial() {
+    const official = loadOfficial();
+    const mine = loadState();
+    if (!official || !mine) return null;
+
+    const next = { ...mine, depthChart: { ...mine.depthChart } };
+    let filled = 0;
+    Object.entries(official.depthChart ?? {}).forEach(([rowId, slots]) => {
+        const row = [...(next.depthChart[rowId] ?? [])];
+        (slots ?? []).forEach((slot, i) => {
+            if (!slot) return;
+            if (row[i]) return;          // never overwrite something I placed
+            row[i] = slot;
+            filled += 1;
+        });
+        next.depthChart[rowId] = row;
+    });
+
+    if (filled) saveState(next);
+    return { filled };
+}
+
+/**
+ * Everybody in `from` who is nowhere in `to`, as slots ready for the cuts.
+ *
+ * Keyed on the player id where a slot carries one and the display name
+ * otherwise — the same order of preference the rest of this file uses, and the
+ * reason it matters here is that two charts written at different times may have
+ * resolved the same man with and without an id.
+ *
+ * The first version of this read `slotIdentity(slot).name`, which does not
+ * exist: that function returns displayName/suffix/nameColor, so every
+ * comparison was undefined against undefined, nobody was ever found displaced,
+ * and adopting official would have dropped players exactly as a plain
+ * replacement does. The test caught it; nothing on screen would have.
+ */
+const slotKey = (slot) => {
+    if (!slot) return null;
+    if (slot.playerId) return `id:${slot.playerId}`;
+    const shown = slotIdentity(slot).displayName;
+    return shown ? `name:${shown.toLowerCase()}` : null;
+};
+
+function playersNotIn(from, to) {
+    const held = new Set();
+    const note = (sl) => { const k = slotKey(sl); if (k) held.add(k); };
+    Object.values(to.depthChart ?? {}).forEach(slots => (slots ?? []).forEach(note));
+    (to.cuts ?? []).forEach(note);
+    (to.reserve ?? []).forEach(note);
+
+    const out = [];
+    const seen = new Set();
+    Object.values(from.depthChart ?? {}).forEach(slots => (slots ?? []).forEach(sl => {
+        const k = slotKey(sl);
+        if (!k || held.has(k) || seen.has(k)) return;
+        seen.add(k);
+        out.push(sl);
+    }));
+    return out;
 }
 
 export function loadState() {
