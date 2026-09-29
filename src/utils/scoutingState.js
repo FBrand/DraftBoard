@@ -32,7 +32,7 @@ import { boardById, BOARDS_COLLECTION } from './boardRegistry';
 import { canEdit } from './permissions';
 import { repository } from '../data/repository';
 import { boardFields } from '../data/fieldNames';
-import { ownerIdFor, remarksFor, REMARK_KINDS } from './evaluations';
+import { voiceOf, remarksFor, REMARK_KINDS } from './evaluations';
 
 // Each analyst has their own rankings file, and they are genuinely different
 // boards — different players, different tiers, different order (Kevin
@@ -337,7 +337,7 @@ export function exportCSV(state, board) {
             'strengths', 'weaknesses', 'notes', 'updatedAt',
         ].map(csvField).join(','),
     ];
-    const ownerId = ownerIdFor(board);
+    const ownerId = voiceOf(board);
     state.entries.forEach(e => {
         rows.push([
             e.name, e.position, e.school ?? '', tierLabel(e.round, e.tier), e.tag ?? '', e.withinGroup ?? '',

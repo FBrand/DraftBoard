@@ -23,9 +23,10 @@
 import { parseRankings } from './dataParser';
 import { resolveAll } from './playerRegistry';
 import { listBoards } from './boardRegistry';
-import { ownerIdFor, remarksFor, addRemark, openEvaluations } from './evaluations';
+import { myVoice, remarksFor, addRemark, openEvaluations } from './evaluations';
 import { currentSeason } from './boardRegistry';
 import { shouldSeed } from './appInit';
+import { repository } from '../data/repository';
 
 const FILE = 'evaluations_kc_2026.csv';
 
@@ -33,11 +34,24 @@ let done = false;
 
 export async function seedExampleEvaluations() {
     if (done || !shouldSeed()) return 0;
+
+    // Not on a shared backend, ever. There the database is seeded from outside
+    // (scripts/seed-firestore.mjs) before anybody signs in, and a client that
+    // seeds as well writes these remarks in the voice of whoever happens to be
+    // signed in — which put Bleacher Report's scouting reports into Firestore
+    // under a named analyst's uid, as his own words. A remark is a person's
+    // opinion, so there is no correct person to attribute a published report
+    // to, and the answer is not to pick one.
+    if (repository.isLive()) return 0;
+
     done = true;
 
     // Consensus is the board with no author — see boardRegistry.
     const board = listBoards().find(b => !b.authorId);
-    const ownerId = board ? ownerIdFor(board) : null;
+    // The local voice, which on a local-only build is this one person and
+    // nobody else's name. On a shared backend this function has already
+    // returned, for the reason above.
+    const ownerId = board ? myVoice() : null;
     if (!ownerId) return 0;
 
     let rows;

@@ -179,13 +179,27 @@ describe('evaluations, which are keyed by author', () => {
         }));
     });
 
-    it('let an expert write the consensus voice, which nobody owns', async () => {
-        await assertSucceeds(setDoc(doc(expert('ryan-uid'), 'evaluations/p_1/remarks/b_consensus'), {
+    it('refuse a BOARD id as a voice, because a board has no opinions', async () => {
+        // This used to be allowed, and it is the defect that made every
+        // personal board un-annotatable. The app derived a remark's voice from
+        // the board; this file derives it from the token; they agreed only
+        // when a board's author equalled the writer's uid, which the shipped
+        // seed guaranteed never happened. A remark is a person's opinion, so
+        // the only voice anybody may write is their own.
+        await assertFails(setDoc(doc(expert('ryan-uid'), 'evaluations/p_1/remarks/b_consensus'), {
             s_1: { n: [{ t: 'Consensus has him CB1', a: 1 }] },
         }));
     });
 
-    it('refuse a voice belonging to no author and no board', async () => {
+    it('let an expert write in his OWN voice, whatever board he is looking at', async () => {
+        // Including while looking at consensus: what he writes there is his,
+        // not the board's, and the card groups it under his name.
+        await assertSucceeds(setDoc(doc(expert('ryan-uid'), 'evaluations/p_1/remarks/ryan-uid'), {
+            s_1: { n: [{ t: 'Has him CB1', a: 1 }] },
+        }));
+    });
+
+    it('refuse a voice belonging to no author', async () => {
         await assertFails(setDoc(doc(expert('dan-uid'), 'evaluations/p_1/remarks/a_invented'), {
             s_1: { n: [{ t: 'Nobody', a: 1 }] },
         }));

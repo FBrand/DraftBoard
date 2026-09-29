@@ -30,8 +30,31 @@ export const EVALUATIONS = 'evaluations';
  * Whose take this is. An author for a personal board; the board itself for
  * consensus, which has no person behind it and so is its own voice.
  */
-export function ownerIdFor(board) {
-    return board?.authorId ?? board?.id ?? null;
+export function voiceOf(board) {
+    return board?.authorId ?? null;
+}
+
+/**
+ * Whose voice a remark written now is in: mine, always.
+ *
+ * This replaces asking the BOARD whose opinion it is, which was wrong twice
+ * over. It was a key space holding two different kinds of thing with no
+ * discriminator — an author id, or a board id when the board had no author —
+ * and it derived authorship from the board while firestore.rules derives it
+ * from the token. The two agree only when the board's author happens to equal
+ * the writer's uid, which the shipped seed guaranteed would never happen: no
+ * expert could write a single strength, weakness or note on any personal
+ * board, and the refusal was shown on screen as though it had been saved.
+ *
+ * A remark is a person's opinion, not a board's. So the writer is the voice,
+ * the rules already know who that is from the token, and ownsVoice collapses
+ * to "is this me" — which also takes two document reads off the write path.
+ *
+ * With no backend there is no sign-in and the adapter answers with a stable
+ * local identity, so the single user has one voice and keeps it.
+ */
+export function myVoice() {
+    return store.backend.identity?.() ?? null;
 }
 
 /** The three kinds, in the order a card shows them. */

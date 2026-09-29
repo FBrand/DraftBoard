@@ -188,16 +188,22 @@ service cloud.firestore {
     // which is never a board id, made every expert the owner of every
     // evaluation.
     //
-    // The author half is free (see ownsAuthor) and is tried first, so the
-    // common case — a man writing in his own voice — costs no reads at all.
+    // A voice is a PERSON, so this is a comparison against the token and
+    // costs no reads at all.
     //
-    // A SEEDED author (Dan, Ryan) is keyed by an opaque id rather than a uid,
-    // because nobody ever signs in as them. ownsAuthor can therefore never
-    // match one, so their voices are read-only for everybody. That is
-    // deliberate: they are placeholders, not people with accounts.
+    // It used to also accept a BOARD id, because the app derived a remark's
+    // voice from the board it was written on. That was two mistakes: a key
+    // space holding two kinds of thing with no discriminator, and an app-side
+    // answer to "whose opinion is this" that this file answers from the token.
+    // They agreed only when a board's author equalled the writer's uid, which
+    // the shipped seed guaranteed never happened — so no expert could write a
+    // strength, weakness or note on any personal board, and the refusal was
+    // shown on his screen as though it had been saved.
+    //
+    // Dropping the board branch also takes an exists() and a get() off every
+    // remark write.
     function ownsVoice(voiceId) {
-      return ownsAuthor(voiceId)
-          || (boardExists(voiceId) && ownsBoard(voiceId));
+      return ownsAuthor(voiceId);
     }
 
     // Whether this board's ENTRIES (the rankings themselves) are visible to

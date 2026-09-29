@@ -6,7 +6,7 @@ import { rankBoard } from '../utils/boardRanking';
 import useBoardRankings from '../hooks/useBoardRankings';
 
 import { allBoards, boardById, currentSeason, listSeasons } from '../utils/boardRegistry';
-import { ownerIdFor, remarksFor, allRemarksFor, addRemark, removeRemark, openEvaluations } from '../utils/evaluations';
+import { myVoice, voiceOf, remarksFor, allRemarksFor, addRemark, removeRemark, openEvaluations } from '../utils/evaluations';
 import { resolve as resolvePlayer } from '../utils/playerRegistry';
 
 // The player card, opened by right-click / long-press on a player anywhere
@@ -211,7 +211,7 @@ export default function PlayerInfoModal({ player, players = [], onClose, editsOp
         // everything ever written about him is a single collection — this used
         // to call remarksFor once for every board that has ever existed, each
         // of which was its own scan.
-        const mine = allRemarksFor(playerId, boardList.map(ownerIdFor));
+        const mine = allRemarksFor(playerId, boardList.map(voiceOf));
         const byOwner = new Map();
         mine.forEach(r => {
             if (!byOwner.has(r.ownerId)) byOwner.set(r.ownerId, []);
@@ -220,7 +220,7 @@ export default function PlayerInfoModal({ player, players = [], onClose, editsOp
         return boardList.map(board => ({
             board: board.id,
             label: board.label,
-            remarks: byOwner.get(ownerIdFor(board)) ?? [],
+            remarks: byOwner.get(voiceOf(board)) ?? [],
         }));
         // remarkTick: the store changed under us.
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -265,27 +265,27 @@ export default function PlayerInfoModal({ player, players = [], onClose, editsOp
     }, [activeBoard, resolved]);
 
 
-    const ownerId = ownerIdFor(boardById(activeBoard));
+    const myId = myVoice();
     const remarks = useMemo(
-        () => (ownerId && playerId ? remarksFor(ownerId, playerId) : []),
+        () => (myId && playerId ? remarksFor(myId, playerId) : []),
         // remarkTick is the dependency that matters — the store changed.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        [ownerId, playerId, remarkTick],
+        [myId, playerId, remarkTick],
     );
 
     const handleAddRemark = useCallback((kind, text) => {
-        if (!ownerId || !playerId) return;
+        if (!myId || !playerId) return;
         // Stamped with the CURRENT season, not the season of the board being
         // looked at: a note written today is a note from today.
-        addRemark(ownerId, playerId, kind, text, currentSeason()?.id ?? null);
+        addRemark(myId, playerId, kind, text, currentSeason()?.id ?? null);
         setRemarkTick(t => t + 1);
-    }, [ownerId, playerId]);
+    }, [myId, playerId]);
 
     const handleRemoveRemark = useCallback((remarkId) => {
-        if (!ownerId || !playerId) return;
-        removeRemark(ownerId, playerId, remarkId);
+        if (!myId || !playerId) return;
+        removeRemark(myId, playerId, remarkId);
         setRemarkTick(t => t + 1);
-    }, [ownerId, playerId]);
+    }, [myId, playerId]);
 
     if (!player) return null;
 

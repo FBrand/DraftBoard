@@ -99,6 +99,13 @@ export async function inviteExpert(email) {
  */
 export async function signInAsExpert(page, email) {
     await inviteExpert(email);
+    // The hook is installed by connect(), which is lazy — so it exists only
+    // once something has actually read Firestore. A test that signs in right
+    // after the tab bar appears got "__testSignIn is not a function", while one
+    // that happened to open a board first did not. Waiting for it here means no
+    // caller has to know that, or to touch a collection it does not care about
+    // to make signing in work.
+    await page.waitForFunction(() => typeof globalThis.__testSignIn === 'function', null, { timeout: 30_000 });
     const who = await page.evaluate(
         (e) => globalThis.__testSignIn({ email: e }),
         email,
@@ -141,4 +148,59 @@ function unwrap(v) {
     if ('arrayValue' in v) return (v.arrayValue.values ?? []).map(unwrap);
     if ('mapValue' in v) return plain(v.mapValue.fields);
     return v;
+}
+
+/**
+ * Every document in a collection group, wherever it sits, as
+ * `{ path, id, fields }`.
+ *
+ * Remarks live at `evaluations/{playerId}/remarks/{voiceId}`, so asking "did
+ * this person's remark land" means looking under a player id the test does not
+ * know in advance. A collection-group query answers it without one, and the
+ * ids that come back are themselves the assertion: a remark keyed by a uid is
+ * a remark attributed to a person.
+ */
+export async function collectionGroup(collectionId) {
+    const res = await fetch(`${DOCS}:runQuery`, {
+        method: 'POST',
+        headers: { ...OWNER, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            structuredQuery: { from: [{ collectionId, allDescendants: true }] },
+        }),
+    });
+    if (!res.ok) throw new Error(`Querying group ${collectionId} failed (HTTP ${res.status})`);
+    return (await res.json())
+        .filter(r => r.document)
+        .map(r => ({
+            path: r.document.name.split('/documents/')[1],
+            id: r.document.name.split('/').pop(),
+            fields: plain(r.document.fields),
+        }));
+}
+
+/** Deletes a document, bypassing rules. For clearing a test's leftovers. */
+export async function remove(path) {
+    const res = await fetch(`${DOCS}:commit`, {
+        method: 'POST',
+        headers: OWNER,
+        body: JSON.stringify({
+            writes: [{ delete: `projects/${PROJECT}/databases/(default)/documents/${path}` }],
+        }),
+    });
+    if (!res.ok) throw new Error(`Deleting ${path} failed (HTTP ${res.status})`);
+}
+
+/**
+ * Puts a board back to orphaned — an author, and nobody holding it.
+ *
+ * This suite WRITES to the project it reads, so a claim made by one test is
+ * still there for the next run: the ownership test passed once, then failed
+ * against the state it had itself created, and the remark test failed behind
+ * it for a reason that had nothing to do with remarks. Tests that need a
+ * precondition arrange it, rather than inheriting whatever the last run left.
+ */
+export async function orphanBoard(id) {
+    const board = await doc(`boards/${id}`);
+    if (!board) throw new Error(`No board ${id} — seed the emulator`);
+    await put(`boards/${id}`, { ...board, o: null });
 }

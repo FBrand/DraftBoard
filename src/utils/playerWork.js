@@ -13,7 +13,7 @@
  */
 import { allBoards } from './boardRegistry';
 import * as scoutingState from './scoutingState';
-import { remarksFor, ownerIdFor } from './evaluations';
+import { remarksFor, voiceOf } from './evaluations';
 import { buildNameIndex, findMatchingIndex } from './nameMatcher';
 
 const placed = (entry) => !!entry && (entry.round != null || entry.tier != null || !!entry.tag);
@@ -40,7 +40,7 @@ export function workOn(player) {
 
     return allBoards().map(board => {
         const entry = entryOn(board, player);
-        const ownerId = ownerIdFor(board);
+        const ownerId = voiceOf(board);
         const remarks = ownerId && player.id ? remarksFor(ownerId, player.id) : [];
         return { board, entry, remarks, has: placed(entry) || remarks.length > 0 };
     }).filter(row => row.has);

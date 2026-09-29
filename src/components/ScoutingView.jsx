@@ -26,7 +26,7 @@ import { createBoard, listBoards, boardBySlug, boardById, renameBoard, listSeaso
 import { repository } from '../data/repository';
 import { entriesPath } from '../data/boardEntries';
 import { canEdit, isExpert, getCurrentUser } from '../utils/permissions';
-import { ownerIdFor, remarksFor, addRemark, removeRemark, openEvaluations } from '../utils/evaluations';
+import { myVoice, remarksFor, addRemark, removeRemark, openEvaluations } from '../utils/evaluations';
 
 const TAG_FILTERS = [
     { id: 'all', label: 'All' },
@@ -210,7 +210,10 @@ export default function ScoutingView({ players }) {
     // season he watches him. See utils/evaluations.js.
     const [remarkTick, setRemarkTick] = useState(0);
     const seasons = listSeasons();
-    const ownerId = ownerIdFor(boardById(activeBoard));
+    // Mine, not the board's. What is shown here while building a board is
+    // what THIS analyst has written; everybody else's is on the player card,
+    // grouped by author, which is what SPEC.md asks for.
+    const ownerId = myVoice();
     // A remark collection is per player and is not loaded until somebody asks
     // for that player. Against localStorage the synchronous read below answers
     // straight away; against a store that answers later it returns nothing, and
