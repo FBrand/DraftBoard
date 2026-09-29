@@ -5,8 +5,8 @@ import { buildNameIndex, findMatchingIndex } from '../utils/nameMatcher';
 import { rankBoard } from '../utils/boardRanking';
 import useBoardRankings from '../hooks/useBoardRankings';
 
-import { allBoards, boardById, currentSeason, listSeasons } from '../utils/boardRegistry';
-import { myVoice, voiceOf, remarksFor, allRemarksFor, addRemark, removeRemark, openEvaluations } from '../utils/evaluations';
+import { allBoards, authorById, boardById, currentSeason, listSeasons } from '../utils/boardRegistry';
+import { myVoice, remarksFor, voicesFor, addRemark, removeRemark, openEvaluations } from '../utils/evaluations';
 import { resolve as resolvePlayer } from '../utils/playerRegistry';
 
 // The player card, opened by right-click / long-press on a player anywhere
@@ -193,38 +193,42 @@ export default function PlayerInfoModal({ player, players = [], onClose, editsOp
     }, [pools, boardList]);
 
     /**
-     * What every board has said about him, stacked.
+     * What everybody has said about him, stacked, grouped by WHO SAID IT.
      *
-     * This read the remarks off each board's ENTRY, which is where they used
-     * to live — they moved to the evaluations store, keyed by author, some
-     * time ago (see utils/evaluations.js). So the entries came back without a
-     * `remarks` field, BoardNotes filtered every one of them out as empty, and
-     * a locked card showed nothing at all. It reads the store now.
+     * It used to be grouped by board, with each board's remarks fetched under
+     * that board's author. Two things were wrong with it and both were
+     * invisible from the screen. An analyst's own notes disappeared from the
+     * stack as soon as his voice was not the board's — written, stored,
+     * acknowledged by the database, and not displayed. And somebody who has
+     * written about a player without owning a board could not appear at all,
+     * because the list was built by walking boards.
+     *
+     * A remark is a person's opinion, so the grouping is people. No board is
+     * consulted to build this, which is also why a name has to be looked up
+     * rather than borrowed from a board label.
      *
      * Only the ranks and tags page with ‹/›. What somebody wrote about a
      * player is worth seeing all at once, whoever wrote it: on a read-only
      * card that stack IS the card's content.
      */
-    const allBoardNotes = useMemo(() => {
+    const allVoiceNotes = useMemo(() => {
         if (!player || !playerId) return [];
-        // One read, not one per board. Remarks are filed under the player, so
-        // everything ever written about him is a single collection — this used
-        // to call remarksFor once for every board that has ever existed, each
-        // of which was its own scan.
-        const mine = allRemarksFor(playerId, boardList.map(voiceOf));
-        const byOwner = new Map();
-        mine.forEach(r => {
-            if (!byOwner.has(r.ownerId)) byOwner.set(r.ownerId, []);
-            byOwner.get(r.ownerId).push(r);
-        });
-        return boardList.map(board => ({
-            board: board.id,
-            label: board.label,
-            remarks: byOwner.get(voiceOf(board)) ?? [],
-        }));
+        const me = myVoice();
+        return voicesFor(playerId)
+            .map(({ voiceId, remarks }) => ({
+                voiceId,
+                // An id with no author record is a real case — a placeholder
+                // from a project seeded before that person existed. Labelled,
+                // never shown as an id.
+                label: authorById(voiceId)?.name ?? 'Unattributed',
+                remarks,
+            }))
+            // Mine first, then by name: the one you are most likely to be
+            // looking for, and a stable order for the rest.
+            .sort((a, b) => (a.voiceId === me ? -1 : b.voiceId === me ? 1 : a.label.localeCompare(b.label)));
         // remarkTick: the store changed under us.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [boardList, player, playerId, remarkTick]);
+    }, [player, playerId, remarkTick]);
 
 
     /**
@@ -302,8 +306,7 @@ export default function PlayerInfoModal({ player, players = [], onClose, editsOp
             readOnly
             player={resolved}
             entry={entryFor(player.name, player)}
-            allBoardNotes={allBoardNotes}
-            activeBoardId={activeBoard}
+            allVoiceNotes={allVoiceNotes}
             onClose={onClose}
             boardLabel={boardById(activeBoard)?.label ?? ''}
             onPrevBoard={() => cycleBoard(-1)}

@@ -7,7 +7,7 @@ import * as athleticMatrix from '../utils/athleticMatrix';
 import { whoHasWorkedOn } from '../utils/playerWork';
 import { factsFor, setFacts, resolve as resolvePlayer, rename as renamePlayer, byId } from '../utils/playerRegistry';
 import { savePlayerEdit } from '../utils/prospects';
-import { REMARK_KINDS } from '../utils/evaluations';
+import { REMARK_KINDS, myVoice } from '../utils/evaluations';
 
 // Shared with the board markers so a tag looks the same wherever it appears.
 const TAGS = PLAYER_TAGS.map(t => ({ id: t.id, label: `${t.symbol} ${t.label}` }));
@@ -75,34 +75,42 @@ function bySeason(remarks, seasons) {
 // remark it is. Each carries the season it was written in, so a remark from
 // two years ago cannot be mistaken for a current read. Voices with nothing to
 // say are omitted entirely.
-function BoardNotes({ boards, seasons }) {
-    const withContent = (boards ?? []).filter(b => b.remarks?.length);
+/**
+ * What everybody has written, grouped by who wrote it.
+ *
+ * Named for boards once, and grouped by them: each board's remarks were
+ * fetched under that board's author, so an analyst whose voice was not the
+ * board's simply did not appear — his notes were stored and not shown. A
+ * remark is a person's opinion and has no board in it.
+ */
+function VoiceNotes({ voices, seasons }) {
+    const withContent = (voices ?? []).filter(b => b.remarks?.length);
     if (!withContent.length) return null;
 
     return (
         <div className="scouting-board-notes">
-            {/* Kind first, board underneath.
+            {/* Kind first, person underneath.
                 What you want off a read-only card is what people think of the
                 player, and the answer to that is "here is what everyone likes
-                about him, here is what everyone doubts". Board-first buried
+                about him, here is what everyone doubts". Person-first buried
                 that: it made you read three separate opinions end to end and
                 assemble the comparison yourself. This way the disagreement is
-                the thing on screen — every board's strengths together, then
-                every board's weaknesses.
+                the thing on screen — everyone's strengths together, then
+                everyone's weaknesses.
 
-                A kind nobody has written under is left out, and so is a board
+                A kind nobody has written under is left out, and so is a person
                 with nothing to say under that kind. */}
             {LIST_FIELDS.map(f => {
-                const perBoard = withContent
+                const perVoice = withContent
                     .map(b => ({ ...b, mine: b.remarks.filter(r => r.kind === f.kind) }))
                     .filter(b => b.mine.length);
-                if (!perBoard.length) return null;
+                if (!perVoice.length) return null;
 
                 return (
                     <div key={f.kind} className={`scouting-list-field ${f.cls}`}>
                         <div className="scouting-list-label">{f.label}</div>
-                        {perBoard.map(b => (
-                            <div key={b.board} className="scouting-board-notes-group">
+                        {perVoice.map(b => (
+                            <div key={b.voiceId} className="scouting-board-notes-group">
                                 <div className="scouting-board-notes-header">{b.label}</div>
                                 {bySeason(b.mine, seasons).map(group => (
                                     <div key={group.seasonId || 'undated'} className="scouting-season-group">
@@ -196,7 +204,7 @@ function RemarkList({ label, symbol, cls, kind, remarks, seasons, onAdd, onRemov
 // changes — the caller renders this with `key={player.name}` so React
 // remounts it on selection change rather than syncing state via an effect
 // (see https://react.dev/learn/you-might-not-need-an-effect).
-export default function ScoutingControls({ player, entry, onChange, onClose, boardLabel, onPrevBoard, onNextBoard, variant = 'panel', readOnly = false, allBoardNotes, activeBoardId = null, onPlayerSave, onPlayerDelete, onEntryChange, remarks = [], seasons = [], onAddRemark, onRemoveRemark }) {
+export default function ScoutingControls({ player, entry, onChange, onClose, boardLabel, onPrevBoard, onNextBoard, variant = 'panel', readOnly = false, allVoiceNotes, onPlayerSave, onPlayerDelete, onEntryChange, remarks = [], seasons = [], onAddRemark, onRemoveRemark }) {
     // Total Rank, Position Rank and Round.Group are the board's own
     // parameters, so they show the player's current values rather than blank
     // boxes — you're adjusting the real thing, not a field that merely sits
@@ -426,10 +434,10 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
     // them and they say nothing about whether anyone has looked at this player.
     // Read-only cards pull remarks from every board, so "nothing here yet"
     // has to account for all of them, not just the one being paged to.
-    const anyBoardHasNotes = (allBoardNotes ?? []).some(b => b.remarks?.length);
+    const anyVoiceHasNotes = (allVoiceNotes ?? []).some(b => b.remarks?.length);
 
     const hasAnyContent = !!(
-        anyBoardHasNotes || (entry && (
+        anyVoiceHasNotes || (entry && (
             entry.tag ||
             entry.athleticMatrixTotal != null ||
             entry.athleticMatrixPosition != null ||
@@ -691,7 +699,7 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
                     editable whenever there is a handler, whatever the opinion
                     lock is doing. Without a handler they stay a read-only
                     summary of what every board has said. */}
-                {!canWriteRemarks ? <BoardNotes boards={allBoardNotes} seasons={seasons} /> : LIST_FIELDS.map(f => (
+                {!canWriteRemarks ? <VoiceNotes voices={allVoiceNotes} seasons={seasons} /> : LIST_FIELDS.map(f => (
                     <RemarkList
                         key={f.kind}
                         kind={f.kind}
@@ -706,9 +714,16 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
                     />
                 ))}
 
-                {canWriteRemarks && allBoardNotes?.length ? (
-                    <BoardNotes
-                        boards={allBoardNotes.filter(b => b.board !== activeBoardId)}
+                {/* Everybody else. Your own remarks are the editable lists
+                    directly above, so showing your voice again here would
+                    print each of your notes twice. This filtered by the ACTIVE
+                    BOARD before, which is not the same question and got it
+                    wrong both ways: on somebody else's board your own notes
+                    were duplicated, and on your own board the board author's
+                    notes were hidden even when that was not you. */}
+                {canWriteRemarks && allVoiceNotes?.length ? (
+                    <VoiceNotes
+                        voices={allVoiceNotes.filter(v => v.voiceId !== myVoice())}
                         seasons={seasons}
                     />
                 ) : null}

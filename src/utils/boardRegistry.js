@@ -263,6 +263,18 @@ export function boardBySlug(slug) {
     return boards.find(b => b.slug === slug) ?? boards[0] ?? null;
 }
 
+/**
+ * A person, by id. The one lookup a caller needs to turn a remark's voice
+ * into a name, without going through a board to get there.
+ *
+ * Null for an id nobody has a record for — a placeholder author on a project
+ * seeded before that person existed, or an expert who has not signed in here.
+ * Callers must label that case rather than showing a raw id.
+ */
+export function authorById(id) {
+    return id ? oneOf(AUTHORS, 'author', id) : null;
+}
+
 export function authorOf(board) {
     return board?.authorId ? oneOf(AUTHORS, 'author', board.authorId) : null;
 }

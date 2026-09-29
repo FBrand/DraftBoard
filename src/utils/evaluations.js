@@ -15,8 +15,8 @@
  * Remarks therefore live per AUTHOR and player, not per board. One man's view
  * of a player runs across every season he watches him, and the boards he built
  * along the way are separate artifacts that happen to reference the same
- * player. The consensus board has no author, so it owns its own remarks — see
- * ownerIdFor.
+ * player. Nothing here takes a board, and nothing here can: a board is not a
+ * party to the question "who said this".
  */
 // Moved onto the layered store — the first collection to cross. Nothing
 // outside this module reads evaluations, which is what makes it safe to move
@@ -27,11 +27,25 @@ import { store } from '../data/appStore';
 export const EVALUATIONS = 'evaluations';
 
 /**
- * Whose take this is. An author for a personal board; the board itself for
- * consensus, which has no person behind it and so is its own voice.
+ * Everyone who has written about this player, grouped by who they are.
+ *
+ * Grouped by VOICE, never by board. The card used to lay these out per board
+ * and look each one up by the board's author, which meant an analyst's own
+ * notes vanished from the stack the moment his voice stopped being the board's
+ * — written, stored, acknowledged, and invisible. It also had no way to show
+ * somebody who has written about a player without owning a board.
+ *
+ * Returns ids only. Turning an id into a name needs the authors collection,
+ * and this module deliberately knows nothing about that — callers that display
+ * already have it.
  */
-export function voiceOf(board) {
-    return board?.authorId ?? null;
+export function voicesFor(playerId) {
+    if (!playerId) return [];
+    const docs = store.view(remarksPath(playerId));
+    return Object.keys(docs)
+        .sort()
+        .map(voiceId => ({ voiceId, remarks: expand(voiceId, docs[voiceId]) }))
+        .filter(v => v.remarks.length);
 }
 
 /**

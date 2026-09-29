@@ -747,8 +747,9 @@ export default function ScoutingView({ players }) {
     const handleExportSpreadsheet = () => {
         const csv = exportBoardCSV(effectivePlayers, {
             entryFor: (p) => entryFor(p.name, p),
-            // Remarks belong to the author rather than the board, so they are
-            // read from the owner — which for consensus is the board itself.
+            // Mine. Remarks belong to a person, so a board export carries the
+            // exporter's own — not "the board's", which was never a thing that
+            // could be read back consistently.
             remarksFor: (p) => (ownerId && p.id ? remarksFor(ownerId, p.id) : []),
             matrixFor: (p) => athleticMatrix.getScores(p.name, p),
         });

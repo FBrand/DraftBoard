@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
-    voiceOf, myVoice, openEvaluations, remarksFor, addRemark,
+    myVoice, voicesFor, openEvaluations, remarksFor, addRemark,
     updateRemarkText, removeRemark, REMARK_KINDS,
 } from '../../src/utils/evaluations';
 import { openBoards, allBoards, renameBoard, renameAuthor, authorOf, currentSeason } from '../../src/utils/boardRegistry';
@@ -38,23 +38,21 @@ const personal = () => allBoards().find(b => b.authorId);
 const consensus = () => allBoards().find(b => !b.authorId);
 
 describe('whose opinion it is', () => {
-    it('is the author, and follows him across his boards', () => {
-        const board = personal();
-        expect(voiceOf(board)).toBe(board.authorId);
+    // There is no longer a function that answers "whose opinion does this
+    // BOARD hold", because a board does not hold one. voiceOf used to, and
+    // every caller of it was a place asking a board a question about a person:
+    // the card's stack, the delete-safety check, the CSV export. The whole
+    // key space it produced was a union of author ids and board ids with
+    // nothing to tell them apart.
+    it('is not something a board can be asked', async () => {
+        const evaluations = await import('../../src/utils/evaluations');
+        expect(evaluations.voiceOf).toBeUndefined();
     });
 
     it('is nobody for consensus, because a board does not have opinions', () => {
-        // This used to answer with the BOARD's own id, which made the key
-        // space a union of two different kinds of thing with nothing to tell
-        // them apart — and made a board the author of remarks people wrote.
-        // A remark is a person's opinion. Consensus is derived and has no
-        // person behind it, so there is no voice to attribute to it; what
-        // anybody writes while looking at it is written in their own name.
-        expect(voiceOf(consensus())).toBeNull();
-    });
-
-    it('is nothing at all when there is no board', () => {
-        expect(voiceOf(null)).toBeNull();
+        // Consensus is derived and has no person behind it. What anybody
+        // writes while looking at it is written in their own name.
+        expect(consensus().authorId).toBeNull();
     });
 
     it('is me when I am the one writing', () => {
@@ -106,10 +104,34 @@ describe('writing a remark', () => {
     });
 });
 
+describe('everybody who has written about a player', () => {
+    it('is found without naming a single board', () => {
+        const a = personal().authorId;
+        addRemark(a, 'p_mendoza', 'note', 'His', currentSeason().id);
+        // Somebody with no board at all. Under the board-walked version he
+        // could not appear on the card however much he wrote.
+        addRemark('a_nobodys_board', 'p_mendoza', 'note', 'Also his', currentSeason().id);
+
+        const voices = voicesFor('p_mendoza').map(v => v.voiceId);
+        expect(voices).toContain(a);
+        expect(voices).toContain('a_nobodys_board');
+    });
+
+    it('leaves out a voice that has written nothing', () => {
+        addRemark(personal().authorId, 'p_mendoza', 'note', 'His', currentSeason().id);
+        expect(voicesFor('p_mendoza').map(v => v.voiceId)).not.toContain(consensus().id);
+    });
+
+    it('is nothing for a player nobody has written about', () => {
+        expect(voicesFor('p_untouched')).toEqual([]);
+        expect(voicesFor(null)).toEqual([]);
+    });
+});
+
 describe('a remark is not on the board entry', () => {
     it('survives renaming the board it was written from', () => {
         const board = personal();
-        const owner = voiceOf(board);
+        const owner = board.authorId;
         addRemark(owner, 'p_mendoza', 'note', 'Still here', currentSeason().id);
 
         renameBoard(board.id, 'A Totally New Name');
@@ -119,7 +141,7 @@ describe('a remark is not on the board entry', () => {
 
     it('survives renaming the analyst, because it is keyed by his id', () => {
         const board = personal();
-        const owner = voiceOf(board);
+        const owner = board.authorId;
         addRemark(owner, 'p_mendoza', 'note', 'Still here', currentSeason().id);
 
         renameAuthor(board.authorId, 'A Different Person Entirely');

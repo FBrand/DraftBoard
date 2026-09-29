@@ -24,15 +24,15 @@
  * rank the pool under the board it's displaying — see PlayerInfoModal, which
  * re-ranks when you page between analysts.
  */
-import { parseCsvLine, csvField } from './csvUtils';
+import { parseCsvLine } from './csvUtils';
 import { buildNameIndex, findMatchingIndex } from './nameMatcher';
-import { parseTier, tierLabel, spaceEvenly } from './boardRanking';
+import { parseTier, spaceEvenly } from './boardRanking';
 import { readEntries, writeEntries, hasEntries, openBoardEntries } from '../data/boardEntries';
 import { boardById, BOARDS_COLLECTION } from './boardRegistry';
 import { canEdit } from './permissions';
 import { repository } from '../data/repository';
 import { boardFields } from '../data/fieldNames';
-import { voiceOf, remarksFor, REMARK_KINDS } from './evaluations';
+import { REMARK_KINDS } from './evaluations';
 
 // Each analyst has their own rankings file, and they are genuinely different
 // boards — different players, different tiers, different order (Kevin
@@ -319,39 +319,6 @@ export function parseCSV(csvText) {
     }).filter(e => e.name);
 
     return { version: 1, seeded: true, entries };
-}
-
-/**
- * The overlay export keeps its three remark columns, because the file is an
- * interchange format and hand-editable. They are filled from the evaluations
- * store rather than from the entry — remarks moved off boards, and reading
- * them from the entry silently exported nothing.
- */
-export function exportCSV(state, board) {
-    const rows = [
-        '# Scouting Overlay Export',
-        `# Exported: ${new Date().toISOString()}`,
-        [
-            'name', 'position', 'school', 'group', 'tag', 'withinGroup',
-            'athleticMatrixTotal', 'athleticMatrixPosition',
-            'strengths', 'weaknesses', 'notes', 'updatedAt',
-        ].map(csvField).join(','),
-    ];
-    const ownerId = voiceOf(board);
-    state.entries.forEach(e => {
-        rows.push([
-            e.name, e.position, e.school ?? '', tierLabel(e.round, e.tier), e.tag ?? '', e.withinGroup ?? '',
-            e.athleticMatrixTotal ?? '', e.athleticMatrixPosition ?? '',
-            ...REMARK_KINDS.map(kind => JSON.stringify(
-                (ownerId && e.playerId ? remarksFor(ownerId, e.playerId) : [])
-                    .filter(r => r.kind === kind)
-                    .map(r => r.text),
-            )),
-            // Written out as a date, whatever it is stored as.
-            e.updatedAt ? new Date(e.updatedAt).toISOString() : '',
-        ].map(csvField).join(','));
-    });
-    return rows.join('\n');
 }
 
 // Board-ready export: just group,name,position — the exact shape

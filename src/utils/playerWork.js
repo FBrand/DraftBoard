@@ -11,9 +11,9 @@
  * YOUR OWN opinions of him, which is the thing somebody actually wants when
  * they reach for delete on a player who turns out to be someone else's.
  */
-import { allBoards } from './boardRegistry';
+import { allBoards, authorById } from './boardRegistry';
 import * as scoutingState from './scoutingState';
-import { remarksFor, voiceOf } from './evaluations';
+import { voicesFor } from './evaluations';
 import { buildNameIndex, findMatchingIndex } from './nameMatcher';
 
 const placed = (entry) => !!entry && (entry.round != null || entry.tier != null || !!entry.tag);
@@ -32,22 +32,49 @@ function entryOn(board, player) {
 }
 
 /**
- * Every board that has placed, tagged or written about this player, with what
- * it holds. Empty means nobody has done anything and he is safe to delete.
+ * Every board that has placed or tagged this player, with what it holds.
+ *
+ * Placements only. Remarks used to be counted here too, fetched under each
+ * board's author — which asked a board whose opinion it held, and so missed
+ * everything written by anybody who was not that board's author. A remark is a
+ * person's opinion; see voicesOn.
  */
 export function workOn(player) {
     if (!player) return [];
 
     return allBoards().map(board => {
         const entry = entryOn(board, player);
-        const ownerId = voiceOf(board);
-        const remarks = ownerId && player.id ? remarksFor(ownerId, player.id) : [];
-        return { board, entry, remarks, has: placed(entry) || remarks.length > 0 };
+        return { board, entry, has: placed(entry) };
     }).filter(row => row.has);
 }
 
-/** True when nobody has done anything with him. */
-export const isUntouched = (player) => workOn(player).length === 0;
+/**
+ * Everybody who has written about this player, by name.
+ *
+ * Independent of boards in both directions: somebody who has never owned a
+ * board still counts as having done work on him, and a board is never asked
+ * whose words these are.
+ */
+export function voicesOn(player) {
+    if (!player?.id) return [];
+    return voicesFor(player.id)
+        .map(({ voiceId, remarks }) => ({
+            voiceId,
+            label: authorById(voiceId)?.name ?? 'Unattributed',
+            remarks,
+        }));
+}
 
-/** A short list of who has, for telling somebody why they can't delete him. */
-export const whoHasWorkedOn = (player) => workOn(player).map(r => r.board.label);
+/** True when nobody has placed him and nobody has written about him. */
+export const isUntouched = (player) => workOn(player).length === 0 && voicesOn(player).length === 0;
+
+/**
+ * A short list of who has, for telling somebody why they can't delete him.
+ *
+ * Boards for placements, people for remarks — the two are different kinds of
+ * work and the sentence reads as a list of both.
+ */
+export const whoHasWorkedOn = (player) => [
+    ...workOn(player).map(r => r.board.label),
+    ...voicesOn(player).map(v => v.label),
+].filter((name, i, all) => all.indexOf(name) === i);
