@@ -595,9 +595,55 @@ service cloud.firestore {
     // record read only by exact id, where a path would buy a collection
     // holding one document. It still needs a rule of its own: without one it
     // falls to the deny-all below and the draft cannot be written at all.
+    // --- the live draft, which has exactly one writer ---------------------
+    //
+    // A broadcast has one draft board, and two experts picking into the same
+    // document would overwrite each other mid-round. So one expert holds the
+    // LEAD — `o`, the same field and the same shape a board's ownership has:
+    // null is unclaimed, claiming is null -> yourself, releasing is yourself
+    // -> null, and nobody hands it to a third party.
+    //
+    // It lives on the draft document rather than beside it so every clause
+    // here reads it from `resource.data`, which is free, rather than a get()
+    // on every one of roughly three hundred pick writes.
+    //
+    // While NOBODY holds it any expert may write, which is what the app did
+    // before a lead existed and is what a reset needs.
+    //
+    // NOTE, because it is a real limit rather than an oversight: a PICK is a
+    // fact on a player, and players are writable by any expert. So this file
+    // makes the draft DOCUMENT the lead's alone and does not make the pick
+    // facts his — that would mean a get() on this document for every player
+    // write. An expert who is not the lead is kept off the shared draft by the
+    // app, which keeps his picks in his local overlay (docs/SPEC.md §6).
     match /draft_state/{seasonId} {
       allow read: if true;
-      allow write: if isExpert();
+
+      // Creating it is also how the first lead claims one, so the incoming
+      // owner must be nobody or himself — never a third party.
+      allow create: if isExpert()
+                    && (request.resource.data.get('o', null) == null
+                        || request.resource.data.get('o', null) == request.auth.uid);
+
+      allow update: if isExpert() && (
+        // the holder running his draft, still holding it afterwards
+        (resource.data.get('o', null) == request.auth.uid
+          && request.resource.data.get('o', null) == request.auth.uid)
+        // claiming an unheld draft, for himself only
+        || (resource.data.get('o', null) == null
+            && request.resource.data.get('o', null) == request.auth.uid)
+        // giving up his own
+        || (resource.data.get('o', null) == request.auth.uid
+            && request.resource.data.get('o', null) == null)
+        // nobody holds it: any expert may write, as before the lead existed
+        || (resource.data.get('o', null) == null
+            && request.resource.data.get('o', null) == null)
+      );
+
+      // Scrapping a draft is the holder's, or anybody's while it is unheld.
+      allow delete: if isExpert()
+                    && (resource.data.get('o', null) == null
+                        || resource.data.get('o', null) == request.auth.uid);
     }
 
     // --- everything else --------------------------------------------------

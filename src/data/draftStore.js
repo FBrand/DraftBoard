@@ -111,6 +111,62 @@ function draftedIn(seasonId) {
  * The state document is the honest marker: it exists once this season's draft
  * has been written, and not before.
  */
+/**
+ * Who holds the live draft. Null when nobody has claimed it.
+ *
+ * A draft has exactly one writer, because a broadcast has one board and two
+ * experts picking into the same document would overwrite each other mid-round.
+ * Everybody else follows him — which is the default — or works on his own
+ * draft, which never leaves his machine.
+ *
+ * The same shape a board's ownership has: null means unclaimed, claiming is
+ * null -> yourself, releasing is yourself -> null, and nobody can hand it to a
+ * third party. Kept on the draft document rather than beside it so the rules
+ * can read it from `resource.data`, which costs nothing, instead of a get()
+ * on every pick.
+ */
+export function draftLead(seasonId) {
+    return repository.get(DRAFT_STATE, draftScope(seasonId))?.o ?? null;
+}
+
+/** Whether this person holds it. False for a viewer, who has no identity. */
+export function iAmLead(seasonId) {
+    const me = repository.identity();
+    return !!me && draftLead(seasonId) === me;
+}
+
+/**
+ * Takes the lead, if nobody has it.
+ *
+ * Refuses when somebody else holds it rather than taking it from him: the
+ * release is his to make, and a draft that changes hands under the man running
+ * it is the kind of thing that happens live on air.
+ */
+export function claimLead(seasonId) {
+    const me = repository.identity();
+    if (!me) return false;
+    const held = draftLead(seasonId);
+    if (held && held !== me) return false;
+
+    const scope = draftScope(seasonId);
+    const before = repository.get(DRAFT_STATE, scope);
+    // Merged, not replaced: the draft itself lives in the same document and
+    // claiming must not throw away the picks already in it.
+    repository.set(DRAFT_STATE, scope, { ...(before ?? {}), o: me });
+    return true;
+}
+
+/** Gives it up. Only the holder can, and the picks stay exactly where they are. */
+export function releaseLead(seasonId) {
+    const me = repository.identity();
+    if (!me || draftLead(seasonId) !== me) return false;
+
+    const scope = draftScope(seasonId);
+    const before = repository.get(DRAFT_STATE, scope);
+    repository.set(DRAFT_STATE, scope, { ...(before ?? {}), o: null });
+    return true;
+}
+
 export function hasDraft(seasonId) {
     return !!repository.get(DRAFT_STATE, draftScope(seasonId));
 }
@@ -201,7 +257,12 @@ export function writeDraft(seasonId, state) {
     if (!before || JSON.stringify(before.value ?? {}) !== JSON.stringify(rest)) {
         // The season is the key. It was in the body too — the last document in
         // the app still stating its own address.
-        repository.set(DRAFT_STATE, scope, { value: rest });
+        //
+        // `o` is carried across deliberately. The lead lives in this same
+        // document, and writing `{ value }` alone would release the lead on
+        // every pick — the holder losing it by using it.
+        const kept = before?.o === undefined ? {} : { o: before.o };
+        repository.set(DRAFT_STATE, scope, { ...kept, value: rest });
     }
 }
 

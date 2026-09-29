@@ -917,3 +917,73 @@ describe('depth charts, which belong to a person or to the show', () => {
         await assertSucceeds(setDoc(doc(expert('dan-uid'), 'seasons/s_1/setup/season'), { done: true }));
     });
 });
+
+/**
+ * The live draft has exactly one writer.
+ *
+ * Two experts picking into the same document would overwrite each other
+ * mid-round, on air. One holds the LEAD and the rest follow him — which is the
+ * default — or work on a draft that never leaves their machine.
+ *
+ * Same shape as a board's ownership, and the same traps: it must not be
+ * takeable from its holder, it must not be claimable ON BEHALF of somebody
+ * else, and using it must not release it.
+ */
+describe('the lead drafter', () => {
+    const path = 'draft_state/s_1';
+    const held = async (uid) => {
+        await env.withSecurityRulesDisabled(async (ctx) => {
+            await setDoc(doc(ctx.firestore(), path), { o: uid, value: { currentPick: 1 } });
+        });
+    };
+
+    it('can be claimed when nobody holds it', async () => {
+        await held(null);
+        await assertSucceeds(setDoc(doc(expert('dan-uid'), path), { o: 'dan-uid', value: { currentPick: 2 } }));
+    });
+
+    it('cannot be taken from the expert who holds it', async () => {
+        await held('dan-uid');
+        await assertFails(setDoc(doc(expert('ryan-uid'), path), { o: 'ryan-uid', value: { currentPick: 2 } }));
+    });
+
+    it('cannot be claimed on somebody else’s behalf', async () => {
+        await held(null);
+        await assertFails(setDoc(doc(expert('dan-uid'), path), { o: 'ryan-uid', value: { currentPick: 2 } }));
+    });
+
+    it('lets its holder write the draft without giving it up', async () => {
+        await held('dan-uid');
+        await assertSucceeds(setDoc(doc(expert('dan-uid'), path), { o: 'dan-uid', value: { currentPick: 9 } }));
+    });
+
+    it('refuses a non-holder writing the draft at all', async () => {
+        // The point of the role. Without this an independent expert's picks
+        // would land in the shared draft alongside the lead's.
+        await held('dan-uid');
+        await assertFails(setDoc(doc(expert('ryan-uid'), path), { o: 'dan-uid', value: { currentPick: 9 } }));
+    });
+
+    it('is released only by its holder', async () => {
+        await held('dan-uid');
+        await assertFails(setDoc(doc(expert('ryan-uid'), path), { o: null, value: { currentPick: 9 } }));
+        await assertSucceeds(setDoc(doc(expert('dan-uid'), path), { o: null, value: { currentPick: 9 } }));
+    });
+
+    it('leaves an unheld draft writable by any expert, as before it existed', async () => {
+        await held(null);
+        await assertSucceeds(setDoc(doc(expert('ryan-uid'), path), { o: null, value: { currentPick: 3 } }));
+    });
+
+    it('is refused to a viewer, held or not', async () => {
+        await held(null);
+        await assertFails(setDoc(doc(viewer(), path), { o: 'anon', value: { currentPick: 2 } }));
+        await assertFails(setDoc(doc(viewer(), path), { o: null, value: { currentPick: 2 } }));
+    });
+
+    it('is readable by everybody, because a follower has to see the picks', async () => {
+        await held('dan-uid');
+        await assertSucceeds(getDoc(doc(viewer(), path)));
+        await assertSucceeds(getDoc(doc(stranger(), path)));
+    });
+});
