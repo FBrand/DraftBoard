@@ -179,4 +179,28 @@ test.describe('the shared backend', () => {
         const underBoard = (await collectionGroup('remarks')).filter(r => r.id === danId);
         expect(underBoard, 'a board is not a voice and must own no remarks').toHaveLength(0);
     });
+
+    /**
+     * Signing in is enough. Nobody reloads a page mid-broadcast.
+     *
+     * Both tests above sign in and then reload, and the reload is doing real
+     * work: the app boots its React tree outside the auth chain, so the first
+     * reads happen before the session is known. If nothing re-reads when the
+     * session arrives, an expert who signs in is still looking at a viewer's
+     * app — his own board missing from the switcher — until he thinks to
+     * refresh.
+     */
+    test('an expert who signs in sees his board without reloading', async ({ page }) => {
+        await page.goto('/', { waitUntil: 'domcontentloaded' });
+        await page.waitForSelector('.view-tabbar', { timeout: 60_000 });
+        await page.getByRole('button', { name: /Scouting/i }).click();
+        await expect(page.locator('.switcher-btn', { hasText: 'Consensus' })).toBeVisible({ timeout: 30_000 });
+        await expect(page.locator('.switcher-btn', { hasText: 'Dan' })).toHaveCount(0);
+
+        await signInAsExpert(page, 'noreload@example.com');
+
+        // No reload. The app has to notice on its own.
+        await expect(page.locator('.switcher-btn', { hasText: 'Dan' }))
+            .toBeVisible({ timeout: 30_000 });
+    });
 });

@@ -22,24 +22,21 @@ requestPersistentStorage()
 // the app has to keep working with no backend at all, which is what every
 // viewer building a private mock is doing.
 if (backendName() === 'firebase') {
+  // There used to be a retry here: openBoards() again on sign-in, because a
+  // viewer arrives anonymous and the rules refuse an anonymous seed write, so
+  // the seed was meant to land the moment somebody became an expert. A shared
+  // database is not seeded from a browser at all now — openBoards() returns
+  // immediately on a live backend — which made the retry a no-op wearing a
+  // paragraph explaining what it used to do.
+  //
+  // Nothing replaces it. The tree renders without waiting for the session,
+  // and the board list converges on its own when the session arrives: App
+  // subscribes to onAuthChange, and the visibility filter asks about the
+  // CURRENT identity rather than one captured at boot. That convergence is
+  // asserted against the emulator — an expert signs in, does not reload, and
+  // his board appears (tests/shared).
   import('./utils/auth')
-    .then(async ({ startAuth, onAuthChange, isExpert }) => {
-      await startAuth()
-
-      // openBoards() runs once at boot, before sign-in has necessarily
-      // finished — a viewer arrives anonymous, and firestore.rules refuse an
-      // anonymous seed write. Retrying it here means signing in makes the
-      // seed land without needing a reload; openBoards() itself is the thing
-      // that decides "not yet initialized" (no boards found) and is a no-op
-      // once they exist, so calling it again on an already-seeded project
-      // costs nothing.
-      onAuthChange(() => {
-        if (!isExpert()) return
-        import('./utils/boardRegistry')
-          .then(({ openBoards }) => openBoards())
-          .catch(err => console.warn('Could not seed the shared board records.', err?.code ?? err))
-      })
-    })
+    .then(({ startAuth }) => startAuth())
     .catch(err => console.warn('Could not start a session; continuing as a reader.', err?.code ?? err))
 }
 
