@@ -251,6 +251,55 @@ analysts' hypothetical drafts, and a great deal of traffic in doing it.
 Releasing the lead leaves the picks where they are. The role owns the live
 draft, not the history: whoever claims it next continues from what is there.
 
+### Taking the official version, without losing your own
+
+Three things can be done with the official free agency or roster, and none of
+them happens on its own. Official changing does not touch anybody's version.
+
+- **Take the official version.** Its placements replace yours. Anybody you had
+  who is not in it goes to the **cut panel** — never simply gone. That is the
+  whole difference between adopting a state and losing an afternoon's work, and
+  it means you can see at a glance who you have just lost and put them back.
+- **Fill the gaps from it.** Anybody official has for a position you have left
+  empty comes in; nothing you have placed is touched. Safe to run again
+  whenever official moves.
+- **See that it has moved.** Official records who set it and when, so a version
+  that has fallen behind says so rather than looking current.
+
+Somebody with no version of their own sees the official one, read-only. The
+moment he changes anything, that becomes his own version, forked from what he
+was looking at — nobody has to decide where to start before starting.
+
+### Following a draft, or not
+
+An expert who is not the lead either follows or works on his own, and the
+difference is what reaches him rather than what he is allowed to do.
+
+**Working on his own**, his picks stay on his machine and he stops receiving
+player updates while he does it — so the lead's picks cannot appear on players
+he has not picked himself. It is the arrangement a viewer already has, and it
+costs him seeing other corrections to players until he stops.
+
+**Following**, he receives the lead's picks as they are made, and his own draft
+gives way to them.
+
+### Undoing a draft
+
+Only the lead undoes a pick on the live draft, and only the **most recent** one
+— again and again, to walk a draft backwards. A pick is never left vacant in
+the middle, and pick numbers are never renumbered: they are recorded facts, not
+a sequence to be rearranged.
+
+Correcting a pick made much earlier is a **swap**: the same pick, a different
+player. Nobody should have to undo twenty good picks to fix one.
+
+A whole draft can be reset, which clears the pick from every player it was
+recorded on. It says how many that is before doing it.
+
+A player already carried into somebody's roster stays there when his pick is
+undone. The roster is its own work, not a view of the draft, and putting him in
+the cut panel is a decision rather than a consequence.
+
 ### What carries forward
 
 A personal roster is built from **that person's own draft**, not from the

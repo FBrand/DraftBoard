@@ -249,6 +249,72 @@ precisely the population a read relay serves, and the lead role makes the seam
 clean: one subscriber, fanning out. It does not commit us to a relay; it makes
 the place one would go obvious. See Phase 6.
 
+### How the personal and the official meet, decided 2026-09-29
+
+**Nothing merges automatically.** Two depth charts cannot be reconciled by
+rule: one analyst having Worthy at WR2 where official has Rice is a
+disagreement, not a conflict, and any automatic resolution has the app
+asserting an opinion nobody holds.
+
+So three explicit actions, and the first is the one that needs care:
+
+- **Take official** replaces your placements — and everybody you had who is
+  not in official goes to the **cut panel**. `rosterState` already does exactly
+  this when a position row is deleted (it pushes the displaced occupants onto
+  `cuts`), and `DepthChartGrid` already renders that panel for Roster and Free
+  Agency both, so no new mechanism is needed. Plain replacement, with players
+  disappearing, is the one version of this that must not ship.
+- **Fill gaps** is the existing `syncFromStages`: additive, never overwrites an
+  occupied slot, never removes anything, safe to re-run. Re-pointed at official.
+- **Divergence is shown**, using the publication stamp.
+
+**Copy-on-write for a first version.** Somebody with no version sees official
+read-only; the first edit forks one from what he was looking at, recording which
+official stamp it forked from. That field costs nothing now and is the only
+thing that would make a real three-way merge possible later — not built, but
+not foreclosed.
+
+### Not following means not receiving, decided 2026-09-29
+
+A pick is a fact on the shared player record, so a non-follower receives the
+lead's picks **by construction** — same collection, same subscription. His
+player cards would read "KC, pick 12" for a mock he is not watching.
+
+The answer is not to move where a pick lives. It is the arrangement a viewer
+already has: an expert working independently keeps his picks in his **local
+overlay** and **stops receiving player updates** for the duration. Local wins
+on read, so a player he has picked shows his own pick regardless; unsubscribing
+is what stops the lead's picks leaking onto the players he has not. Following
+is the same thing reversed — subscribe again, and his own local pick facts give
+way.
+
+The cost, stated: while independent he does not see other corrections to
+players — a rename, a school, a matrix score. It is bounded by the session, and
+the alternative was restructuring where a pick is stored, which `SPEC.md` §3
+settles and the seed data depends on.
+
+### Undo and reset, decided 2026-09-29
+
+- Only the **lead** undoes a pick on the live draft.
+- Undo takes the **most recent** pick, repeatedly. No vacated middle picks, and
+  no renumbering — `pickNumber` is not arithmetic-safe (the literal `UDFA`, see
+  `draftPhase.js`) and renumbering would rewrite two hundred records to move
+  numbers that are recorded facts.
+- Correcting an older pick is a **swap** at the same pick number.
+- Reset already exists and is sound: `draftStore.removeDraft()` nulls the four
+  draft facts across every drafted player in one batched write and removes the
+  draft document. What it must gain is a count before it runs, and it must not
+  reload the page under a lead who is on air.
+- Undo does **not** retract downstream work. A player already synced into a
+  roster stays there; moving him to the cut panel is a decision. Documented
+  rather than automated, by explicit instruction.
+
+What is NOT being built: a persistent undo stack. A pick is facts on a player,
+so unpicking is fully defined without history — which is also what lets a new
+lead undo a pick he did not make, where a stack would have died with the
+previous lead's browser tab. `useDraftState.undoAction` is one step deep and
+lives in React state; repeated unpick replaces it rather than extending it.
+
 **The plumbing is small; the rules are not.** `draftStore.draftScope(seasonId)`
 and `depthChartStore.rowsPath(stage, seasonId)` are already the single seams
 every read and write passes through, so widening scope from *season* to
