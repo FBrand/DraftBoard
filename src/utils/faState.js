@@ -15,6 +15,7 @@ import { readChart, writeChart, hasChart, chartVersion, openDepthCharts, rowsPat
 import { repository } from '../data/repository';
 import { viewedSeason, seasonIsSeeded, openBoards } from './boardRegistry';
 import { canEdit } from './permissions';
+import { createOfficialVersion } from './officialVersion';
 
 // Which season's copy of this stage. Read at call time, never cached: the
 // answer changes when somebody switches season, and a stage holding the
@@ -123,6 +124,30 @@ function migrate(parsed) {
     // (no migration steps yet)
     return { ...parsed, version: STATE_VERSION };
 }
+
+/**
+ * Publishing and taking the official free agency board.
+ *
+ * Every analyst wants to bring different players in, so a personal version is
+ * the normal case here even more than on the roster — and the official one is
+ * what the show settled on. Identical to the roster's, from one implementation.
+ */
+const official = createOfficialVersion({
+    stage: STORAGE_KEY,
+    seasonId,
+    loadState,
+    saveState,
+    migrate,
+    version: STATE_VERSION,
+    stampIds: stampPlayerIds,
+});
+
+export const loadOfficial = () => official.loadOfficial();
+export const isOwn = () => official.isOwn();
+export const officialStamp = () => official.officialStamp();
+export const publishOfficial = (state) => (canEdit({ kind: 'stage' }) ? official.publishOfficial(state) : false);
+export const adoptOfficial = () => official.adoptOfficial();
+export const fillFromOfficial = () => official.fillFromOfficial();
 
 export function loadState() {
     try {
