@@ -45,6 +45,34 @@ export function createRepository(adapter = localAdapter) {
      * Whatever the store returned, with anything still queued laid on top.
      * A pending write is by definition newer than the store's answer.
      */
+    /**
+     * What the STORE said, kept apart from what this browser believes.
+     *
+     * The cache is not the store's answer and never was: ready(),
+     * startWatching() and ensureLoaded() all merge the queue into it before
+     * storing it, destructively, so afterwards there is no way back. Every
+     * failure this month is a caller that needed the difference — seeding asks
+     * "are there boards?" to decide whether a project still needs one, and its
+     * own refused writes answered yes, for weeks.
+     */
+    const fromStore = new Map();
+
+    /**
+     * Writes the store has JUDGED and rejected. Merged into nothing.
+     *
+     * The third outcome the old model had no room for. It had two states —
+     * saved, and not saved yet — for a world with three, and the missing one
+     * is the write that will never land. Left in `pending` it was laid over
+     * every read by withPending below, so a rejected change was shown as
+     * stored, indefinitely, across reloads.
+     *
+     * Not discarded either: dropping it makes the screen revert with no
+     * explanation, which this project removed on purpose once already. Held,
+     * never read, surfaced as refused — see refusedWrites() — so it can be
+     * retried or abandoned deliberately.
+     */
+    const refused = new Map();
+
     function withPending(collection, docs) {
         const merged = { ...(docs ?? {}) };
         const lay = (w) => {
@@ -127,6 +155,8 @@ export function createRepository(adapter = localAdapter) {
             if (!adapter.readFailed?.(collection)) loaded.add(collection);
             // Anything still queued is NEWER than anything the store can
             // return — that is what "not saved yet" means — so it goes on top.
+            // Refusals do not: see `refused`.
+            fromStore.set(collection, docs);
             cache.set(collection, withPending(collection, docs));
             loading.delete(collection);
             notify(collection);
@@ -257,6 +287,7 @@ export function createRepository(adapter = localAdapter) {
                     loadingByWatch.delete(collection);
                     if (!adapter.readFailed?.(collection)) loaded.add(collection);
                 }
+                fromStore.set(collection, docs);
                 cache.set(collection, withPending(collection, docs));
                 notify(collection);
             },
@@ -316,9 +347,49 @@ export function createRepository(adapter = localAdapter) {
         // asynchronous load every time — so leaving the merge out of it meant
         // a reload with unsaved work showed the OLD value while the queue
         // wrote the new one behind it.
-        const docsNow = withPending(collection, adapter.loadSync(collection) ?? {});
+        const answered = adapter.loadSync(collection) ?? {};
+        fromStore.set(collection, answered);
+        const docsNow = withPending(collection, answered);
         cache.set(collection, docsNow);
         return docsNow;
+    }
+
+    /**
+     * What the store returned, with nothing of this browser's over it.
+     *
+     * For callers that DECIDE rather than render. "Does the database have
+     * boards?" is not "does my screen show boards", and conflating them let
+     * one refused write convince the app it had seeded a project it had never
+     * written a document to. Null when the store has not answered — a third
+     * answer again, and callers that decide must treat it as one.
+     */
+    function storedDocs(collection) {
+        const shared = adapter.remoteDocs?.(collection);
+        if (shared !== undefined) return shared;
+        return fromStore.get(collection) ?? null;
+    }
+
+    /** Work the store rejected: kept, read by nothing, shown as refused. */
+    function refusedWrites() {
+        return [...refused.values()];
+    }
+
+    /** Abandons rejected work, deliberately. */
+    function discardRefused() {
+        const n = refused.size;
+        const touched = new Set([...refused.values()].map(w => w.collection));
+        refused.clear();
+        // Nothing rejected and nothing queued is "saved", and it has to say
+        // so — leaving the indicator on "could not save" after the only
+        // thing it was about has been discarded is the same lie in reverse.
+        if (!pending.size) { gaveUp = false; lastError = null; lastAdvice = null; }
+        // Off disk as well, or the next visit picks it straight back up —
+        // refusals are written down so a reload does not silently drop them,
+        // which means discarding has to take them out of both places.
+        persistQueue();
+        touched.forEach(notify);
+        announce();
+        return n;
     }
 
     /** Synchronous read. Null until the collection has loaded. */
@@ -509,6 +580,12 @@ export function createRepository(adapter = localAdapter) {
         const byKey = new Map();
         pending.forEach((w, k) => byKey.set(k, w));
         sending.forEach((w, k) => byKey.set(k, { ...w, attempts: 0 }));
+        // Refusals are written down too, flagged, so a reload does not quietly
+        // discard work the store rejected. Losing it on refresh is the same
+        // silent revert that dropping it from reads would have been.
+        refused.forEach((w, k) => byKey.set(k, {
+            collection: w.collection, id: w.id, doc: w.doc, op: w.op, attempts: 0, refused: true,
+        }));
         return [...byKey.values()];
     }
 
@@ -557,7 +634,9 @@ export function createRepository(adapter = localAdapter) {
         queueOnDisk = true;
         saved.forEach(w => {
             if (!w?.collection || !w?.id) return;
-            pending.set(keyOf(w.collection, w.id), { ...w, attempts: 0 });
+            const key = keyOf(w.collection, w.id);
+            if (w.refused) refused.set(key, { ...w });
+            else pending.set(key, { ...w, attempts: 0 });
         });
 
         // Deliberately NOT applied to the cache here. Putting them in would
@@ -581,10 +660,16 @@ export function createRepository(adapter = localAdapter) {
 
     /** What the UI shows: are we saved, saving, behind, or beaten. */
     function syncState() {
-        if (gaveUp) return { state: 'failed', pending: pending.size, error: lastError, advice: lastAdvice };
-        if (pending.size) return { state: 'retrying', pending: pending.size, error: lastError, advice: lastAdvice };
-        if (inFlight) return { state: 'saving', pending: 0, error: null, advice: null };
-        return { state: 'saved', pending: 0, error: null, advice: null };
+        if (refused.size) {
+            return {
+                state: 'failed', pending: pending.size, refused: refused.size,
+                error: lastError, advice: lastAdvice,
+            };
+        }
+        if (gaveUp) return { state: 'failed', pending: pending.size, refused: 0, error: lastError, advice: lastAdvice };
+        if (pending.size) return { state: 'retrying', pending: pending.size, refused: 0, error: lastError, advice: lastAdvice };
+        if (inFlight) return { state: 'saving', pending: 0, refused: 0, error: null, advice: null };
+        return { state: 'saved', pending: 0, refused: 0, error: null, advice: null };
     }
 
     function announce() {
@@ -657,7 +742,22 @@ export function createRepository(adapter = localAdapter) {
                 lastError = err?.message ?? String(err);
                 lastAdvice = verdict.advice;
 
-                const attempts = verdict.permanent ? BACKOFF_MS.length : write.attempts + 1;
+                if (verdict.permanent) {
+                    // Out of the queue, into `refused`. It can neither land
+                    // nor leave, and leaving it in `pending` is what made
+                    // withPending show it as stored for good.
+                    pending.delete(key);
+                    refused.set(key, { ...write, error: err, advice: verdict.advice });
+                    // The cache still holds the optimistic value; drop it so a
+                    // read falls back to what the store actually says.
+                    const held = fromStore.get(write.collection);
+                    if (held) cache.set(write.collection, withPending(write.collection, held));
+                    persistQueue();
+                    notify(write.collection);
+                    gaveUp = true;
+                    continue;
+                }
+                const attempts = write.attempts + 1;
                 pending.set(key, { ...write, attempts });
                 persistQueue();
 
@@ -665,7 +765,7 @@ export function createRepository(adapter = localAdapter) {
                 // it again. Spending four more attempts on that buries the
                 // reason under "retrying", which is the one word that tells
                 // somebody to sit and wait.
-                if (verdict.permanent || attempts >= BACKOFF_MS.length) gaveUp = true;
+                if (attempts >= BACKOFF_MS.length) gaveUp = true;
             }
         }
 
@@ -723,6 +823,12 @@ export function createRepository(adapter = localAdapter) {
     function retryNow() {
         gaveUp = false;
         lastAdvice = null;
+        // Refusals come back into the queue, because "the world may have
+        // changed" is the whole reason this exists — signing in is exactly
+        // what turns a permission-denied into a write that lands. They are
+        // kept out of READS, not out of retries.
+        refused.forEach((w, k) => pending.set(k, { collection: w.collection, id: w.id, doc: w.doc, op: w.op, attempts: 0 }));
+        refused.clear();
         pending.forEach((w, k) => pending.set(k, { ...w, attempts: 0 }));
         if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; }
         announce();
@@ -736,6 +842,7 @@ export function createRepository(adapter = localAdapter) {
      * keeps what you did, and the queue keeps trying to make it true.
      */
     function attempt(collection, id, doc, op, run) {
+        let rejected = false;
         inFlight += 1;
         const settled = startSending(collection, id, doc, op);
         const cancelPersist = persistIfStillSending();
@@ -746,15 +853,39 @@ export function createRepository(adapter = localAdapter) {
                 const verdict = classifyWriteError(err);
                 lastError = err?.message ?? String(err);
                 lastAdvice = verdict.advice;
-                enqueue({ collection, id, doc, op });
                 if (verdict.permanent) {
-                    pending.set(keyOf(collection, id), { collection, id, doc, op, attempts: BACKOFF_MS.length });
+                    // Straight to `refused`, never into the queue. The queue
+                    // exists so work is not lost to a store that is merely
+                    // unreachable; a store that has JUDGED this will judge it
+                    // the same way every time, and holding it there is what
+                    // made withPending show it as stored for good.
+                    refused.set(keyOf(collection, id), { collection, id, doc, op, error: err, advice: verdict.advice });
+                    // The optimistic value has to leave the cache so a read
+                    // falls back to what the store actually says. Deferred to
+                    // the finally below, because the write is still in
+                    // `sending` here and withPending would lay it straight
+                    // back on — the rejected version is held in `refused`, not
+                    // lost, and the interface shows it there.
+                    rejected = true;
                     persistQueue();
                     gaveUp = true;
+                } else {
+                    enqueue({ collection, id, doc, op });
                 }
                 reportWriteError({ collection, id, op, error: err, permanent: verdict.permanent, advice: verdict.advice });
             })
-            .finally(() => { cancelPersist(); settled(); persistQueue(); inFlight = Math.max(0, inFlight - 1); announce(); });
+            .finally(() => {
+                cancelPersist();
+                settled();
+                if (rejected) {
+                    const held = fromStore.get(collection);
+                    if (held) cache.set(collection, withPending(collection, held));
+                    notify(collection);
+                }
+                persistQueue();
+                inFlight = Math.max(0, inFlight - 1);
+                announce();
+            });
     }
 
     function set(collection, id, doc) {
@@ -885,8 +1016,8 @@ export function createRepository(adapter = localAdapter) {
     /** Drops the in-memory copy so the next `ready` re-reads. For a wipe. */
     function invalidate(collection) {
         stopWatching(collection);
-        if (collection == null) { cache.clear(); loaded.clear(); loading.clear(); }
-        else { cache.delete(collection); loaded.delete(collection); loading.delete(collection); }
+        if (collection == null) { cache.clear(); fromStore.clear(); loaded.clear(); loading.clear(); }
+        else { cache.delete(collection); fromStore.delete(collection); loaded.delete(collection); loading.delete(collection); }
     }
 
     // Anything left from a previous visit is picked up before anything else
@@ -894,7 +1025,8 @@ export function createRepository(adapter = localAdapter) {
     restoreQueue();
 
     return {
-        ready, readyVia, ensureLoaded, docs, isLoaded, collections, loadFailed, isLive, follow, get, all, query,
+        ready, readyVia, ensureLoaded, docs, storedDocs, isLoaded, collections, loadFailed, isLive, follow, get, all, query,
+        refusedWrites, discardRefused,
         set, update, remove, commit, commitMany, clear, subscribe, invalidate,
         onWriteError, onSyncChange, syncState, retryNow, discardPending, adapter,
         identity, newAuthorId, isExpert,

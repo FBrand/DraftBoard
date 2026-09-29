@@ -332,9 +332,12 @@ describe('discarding writes the store will never take', () => {
         const repo = createRepository(refusing());
         await repo.set('boards', 'b1', { id: 'b1' });
         await repo.set('boards', 'b2', { id: 'b2' });
-        expect(repo.syncState()).toMatchObject({ state: 'failed', pending: 2 });
+        // Refusals are counted apart from work still in flight: "2 unsaved,
+        // retrying" and "2 the store rejected" are different sentences and
+        // only one of them means sit and wait.
+        expect(repo.syncState()).toMatchObject({ state: 'failed', refused: 2, pending: 0 });
 
-        expect(repo.discardPending()).toBe(2);
+        expect(repo.discardRefused()).toBe(2);
         expect(repo.syncState()).toMatchObject({ state: 'saved', pending: 0 });
     });
 
@@ -343,7 +346,7 @@ describe('discarding writes the store will never take', () => {
         await repo.set('boards', 'b1', { id: 'b1' });
         expect(localStorage.getItem('pending_writes_v1')).toBeTruthy();
 
-        repo.discardPending();
+        repo.discardRefused();
 
         expect(localStorage.getItem('pending_writes_v1')).toBeNull();
         // The thing the whole feature is for: a fresh repository over the same
@@ -356,10 +359,14 @@ describe('discarding writes the store will never take', () => {
         const repo = createRepository(adapter);
         await repo.ready('boards');
         await repo.set('boards', 'b1', { id: 'b1', label: 'My rejected copy' });
-        // Refused, and still winning the read — this is the bug.
-        expect(repo.get('boards', 'b1').label).toBe('My rejected copy');
+        // It no longer wins the read at all — that was the bug, and a refusal
+        // is now kept out of reads rather than needing to be discarded before
+        // the store can be seen. Discarding is about whether the work is kept,
+        // not about whether it is believed.
+        expect(repo.get('boards', 'b1')).toBeNull();
+        expect(repo.refusedWrites()).toHaveLength(1);
 
-        repo.discardPending();
+        repo.discardRefused();
 
         // The cache still holds it, which is why the UI reloads after this;
         // what matters here is that the QUEUE no longer forces it back on top
@@ -381,5 +388,86 @@ describe('discarding writes the store will never take', () => {
         const repo = createRepository(adapterThat({ fail: true }));
         await repo.set('players', 'p1', { id: 'p1', name: 'Coming Back' });
         expect(repo.syncState().state).toBe('retrying');
+    });
+});
+
+/**
+ * Stored, not yet, never — three states, because the world has three.
+ *
+ * The model had two: saved, and not saved yet. A write the store had JUDGED
+ * and rejected had nowhere to be, so it stayed in the retry queue, and the
+ * queue was merged into every read. The rejected change came back out as
+ * though it had been saved, indefinitely, across reloads. That is the
+ * amplifier the audit found under every permission failure in the layer, and
+ * it is what hid an empty database behind a full-looking app for weeks.
+ */
+describe('a refused write is not a pending one', () => {
+    const refusing = () => ({
+        name: 'refusing',
+        async load() { return { b1: { id: 'b1', label: 'Theirs' } }; },
+        loadSync() { return { b1: { id: 'b1', label: 'Theirs' } }; },
+        async set() { throw Object.assign(new Error('permission-denied'), { code: 'permission-denied' }); },
+        async remove() { throw Object.assign(new Error('permission-denied'), { code: 'permission-denied' }); },
+    });
+
+    it('stops answering for the store the moment it is refused', async () => {
+        const repo = createRepository(refusing());
+        await repo.ready('boards');
+        await repo.set('boards', 'b1', { id: 'b1', label: 'Mine' });
+
+        // What a reader gets is what the store holds, not what was rejected.
+        expect(repo.get('boards', 'b1').label).toBe('Theirs');
+        expect(repo.storedDocs('boards').b1.label).toBe('Theirs');
+    });
+
+    it('is kept, so the screen does not simply revert with no explanation', async () => {
+        const repo = createRepository(refusing());
+        await repo.ready('boards');
+        await repo.set('boards', 'b1', { id: 'b1', label: 'Mine' });
+
+        // Discarding it is a decision somebody takes, not something that
+        // happens to them. This project removed a silent revert once already.
+        const held = repo.refusedWrites();
+        expect(held).toHaveLength(1);
+        expect(held[0].doc.label).toBe('Mine');
+    });
+
+    it('is counted apart from work that is merely unsent', async () => {
+        const repo = createRepository(refusing());
+        await repo.ready('boards');
+        await repo.set('boards', 'b1', { id: 'b1', label: 'Mine' });
+
+        // "2 unsaved, retrying" and "2 the store rejected" are different
+        // sentences, and only one of them means sit and wait.
+        expect(repo.syncState()).toMatchObject({ state: 'failed', refused: 1, pending: 0 });
+    });
+
+    it('comes back for a retry, because signing in changes the answer', async () => {
+        const adapter = refusing();
+        const repo = createRepository(adapter);
+        await repo.ready('boards');
+        await repo.set('boards', 'b1', { id: 'b1', label: 'Mine now' });
+        expect(repo.refusedWrites()).toHaveLength(1);
+
+        const written = [];
+        adapter.set = async (c, id, doc) => { written.push(doc.label); };
+        await repo.retryNow();
+
+        // Kept out of READS, never out of retries.
+        expect(written).toEqual(['Mine now']);
+        expect(repo.refusedWrites()).toHaveLength(0);
+        expect(repo.syncState().state).toBe('saved');
+    });
+
+    it('survives a reload, rather than being dropped on refresh', async () => {
+        const first = createRepository(refusing());
+        await first.ready('boards');
+        await first.set('boards', 'b1', { id: 'b1', label: 'Mine' });
+
+        // A refresh that silently discards rejected work is the same silent
+        // revert, just later.
+        const second = createRepository(refusing());
+        expect(second.refusedWrites()).toHaveLength(1);
+        expect(second.syncState()).toMatchObject({ state: 'failed', refused: 1 });
     });
 });

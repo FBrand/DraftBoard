@@ -28,10 +28,18 @@ export default function SyncStatus({ onExport }) {
 
     if (sync.state === 'saved') return null;
 
+    // Rejected and unsent are different sentences, and only one of them means
+    // sit and wait. A write the store has JUDGED will be judged the same way
+    // every time, so "retrying" is a lie about it — and the old model, which
+    // kept both in one queue and merged both into reads, could not tell you
+    // which you had.
+    const refusedCount = sync.refused ?? 0;
     const label = {
         saving: 'Saving…',
         retrying: `${sync.pending} unsaved — retrying`,
-        failed: `${sync.pending} unsaved — could not save`,
+        failed: refusedCount
+            ? `${refusedCount} change${refusedCount === 1 ? '' : 's'} the database refused`
+            : `${sync.pending} unsaved — could not save`,
     }[sync.state];
 
     return (
@@ -75,9 +83,9 @@ export default function SyncStatus({ onExport }) {
             {confirmingDiscard && (
                 <ConfirmDialog
                     title="Discard these changes?"
-                    message={`${sync.pending} change${sync.pending === 1 ? '' : 's'} the database refused to accept will be thrown away, and the page will reload showing what the database actually holds. This cannot be undone — if you want to keep them, cancel and use "Save to a file" first.`}
+                    message={`${refusedCount} change${refusedCount === 1 ? '' : 's'} the database refused to accept will be thrown away. The board already shows what the database holds — these are being kept only so you can retry them or take a copy. This cannot be undone; to keep them, cancel and use "Save to a file" first.`}
                     confirmLabel="Discard and reload"
-                    onConfirm={() => { repository.discardPending(); window.location.reload(); }}
+                    onConfirm={() => { repository.discardRefused(); window.location.reload(); }}
                     onCancel={() => setConfirmingDiscard(false)}
                 />
             )}
