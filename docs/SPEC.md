@@ -272,16 +272,23 @@ was looking at — nobody has to decide where to start before starting.
 
 ### Following a draft, or not
 
-An expert who is not the lead either follows or works on his own, and the
-difference is what reaches him rather than what he is allowed to do.
+**Everybody follows by default** — experts who are not the lead, and viewers
+alike. A draft in progress is the thing the show is about, so watching it happen
+is what the app does unless somebody says otherwise.
 
-**Working on his own**, his picks stay on his machine and he stops receiving
-player updates while he does it — so the lead's picks cannot appear on players
-he has not picked himself. It is the arrangement a viewer already has, and it
-costs him seeing other corrections to players until he stops.
+**Working on your own is a decision**, made deliberately. From then on your
+picks stay on your machine, and you stop receiving player updates while you do
+it — so the lead's picks cannot appear on players you have not picked yourself.
+It is the arrangement a viewer building a private mock already has, and it costs
+you seeing other corrections to players until you stop.
 
-**Following**, he receives the lead's picks as they are made, and his own draft
-gives way to them.
+Your own draft starts from wherever the one you were following had got to, so
+choosing to go your own way at pick 40 does not mean starting at pick 1.
+
+Switching between the two loses nothing either way. The lead's draft and your
+own are separate records — his is shared, yours never leaves your machine — so
+following again shows his, and going back to your own shows yours, exactly as
+you left it.
 
 ### Undoing a draft
 

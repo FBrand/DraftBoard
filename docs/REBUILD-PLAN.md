@@ -288,6 +288,18 @@ is what stops the lead's picks leaking onto the players he has not. Following
 is the same thing reversed — subscribe again, and his own local pick facts give
 way.
 
+**Following is the default**, for experts and viewers both; working
+independently is a deliberate choice. Which means the expensive path — an extra
+private copy of pick facts, and a client deaf to player updates — is the one
+somebody opts into, not the one everybody lands in by accident.
+
+**Switching is a view, not a migration.** The lead's draft is a shared document
+and a personal draft is local-only, so they are different records and neither
+write touches the other. Going independent forks from wherever the followed
+draft had reached; going back to following writes nothing at all. Nothing has to
+be merged or discarded in either direction, which is the one part of this whole
+model that costs nothing to build.
+
 The cost, stated: while independent he does not see other corrections to
 players — a rename, a school, a matrix score. It is bounded by the session, and
 the alternative was restructuring where a pick is stored, which `SPEC.md` §3
