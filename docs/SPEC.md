@@ -216,6 +216,51 @@ whatever is still unclaimed, but not anything somebody else has claimed since.
 Each board is visible to its owner only, to experts, or to everybody — chosen
 per board, defaulting to experts for a new personal board.
 
+### Every stage is personal, and one of them is official
+
+Boards were the only stage that belonged to a person. Every stage does.
+
+Each expert — and each viewer — has **their own version of every stage**: their
+own free agency shortlist, their own draft, their own undrafted signings, their
+own roster. Analysts disagree about who to bring in and what to do with a pick,
+and the app exists to show that, so "what I would do" is the normal case rather
+than a mode.
+
+Alongside them there is **one official version** of free agency and of the
+roster: what the show says, as opposed to what any one analyst would do. Any
+expert can set it, from his own version, with a button and a confirmation —
+it is a deliberate publication, never a side effect of editing. It records who
+set it and when, because it overwrites what somebody else may have published.
+
+Anybody can **replace their own version with the official one** at any time.
+That is an explicit act too, and it is the only thing that overwrites personal
+work.
+
+### The lead drafter
+
+A live draft has exactly one writer. One expert **claims the lead** when it is
+unclaimed, and **releases** it whenever he likes; while he holds it, his picks
+are the ones that reach the database. Everyone else either **follows** — the
+lead's picks arriving on their screen as they are made — or **works
+independently** on their own draft, and can switch between the two.
+
+Nobody else's draft or undrafted signings are shared at all. They stay on the
+machine they were made on. There is little to gain from publishing five
+analysts' hypothetical drafts, and a great deal of traffic in doing it.
+
+Releasing the lead leaves the picks where they are. The role owns the live
+draft, not the history: whoever claims it next continues from what is there.
+
+### What carries forward
+
+A personal roster is built from **that person's own draft**, not from the
+official one — his picks are what he would do, so they are what his roster
+starts from. Adopting the official version is how somebody chooses otherwise,
+at whichever stage he wants it.
+
+A personal roster is visible to its owner only, to experts, or to everybody,
+chosen the same way a board is and defaulting the same way.
+
 ### Working together
 
 What an expert changes reaches everybody else's screen without anyone

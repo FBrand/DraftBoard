@@ -207,6 +207,55 @@ database — verified by reading it back, not by the screen.
 **Fixes A10, A11, A12.** Bundled with the play-along because the first draft's
 step 5 broke `SPEC.md` for two steps until its step 7.
 
+### What scope actually is, decided 2026-09-29
+
+The original plan had scope as a two-valued thing — *shared* or *mine* — which
+was enough to stop silent shadowing and not enough to describe the app. Four
+of the five stages had no owner at all: one draft, one roster, one free agency
+per season, writable by any expert, last write wins, pushed live to everybody.
+Only boards were personal.
+
+The model, settled with the user and now written into `SPEC.md` §6:
+
+- **Every stage is per person.** Each expert and each viewer has his own free
+  agency, draft, UDFA and roster. "What I would do" is the normal case.
+- **Free agency and the roster also have ONE official version.** Any expert may
+  set it from his own, behind a button and a confirmation, and the write
+  records who set it and when — it overwrites somebody else's publication and
+  an unattributed overwrite is unanswerable afterwards.
+- **Anybody may replace his own version with the official one.** Explicit, and
+  the only thing that overwrites personal work.
+- **A personal roster is built from that person's own draft**, not the official
+  one. Adoption is how somebody chooses otherwise, per stage.
+- **Personal drafts and UDFA signings are never shared.** They stay local.
+- **Except the lead drafter's.** Exactly one expert holds the lead — claimed
+  when unclaimed, released at will — and while he holds it his picks are what
+  reaches the database. Everybody else follows him live or works independently
+  and may switch. Releasing leaves the picks; the role owns the live draft, not
+  the history.
+- **A personal roster carries a visibility** — owner, experts, everybody — the
+  same three states a board has, so there is one model rather than two.
+
+Two consequences worth naming before building.
+
+**The write budget stops being a problem.** Per-pick writes were the dangerous
+shape, and exactly one person now makes them: one document plus roughly three
+hundred pick writes for a whole draft, against a ceiling of twenty thousand a
+day. What was the riskiest part of the design is now the cheapest.
+
+**The read budget is where the pressure moves.** Every follower is a live
+subscription to the same document, against fifty thousand reads a day. That is
+precisely the population a read relay serves, and the lead role makes the seam
+clean: one subscriber, fanning out. It does not commit us to a relay; it makes
+the place one would go obvious. See Phase 6.
+
+**The plumbing is small; the rules are not.** `draftStore.draftScope(seasonId)`
+and `depthChartStore.rowsPath(stage, seasonId)` are already the single seams
+every read and write passes through, so widening scope from *season* to
+*season + whose* is those two functions and their paths. The lead claim is the
+one genuinely new rules shape, and it is the one the boards already use:
+`o: null -> self`, released back to null.
+
 A write names the **scope it is for**, chosen by the target, not by who is
 signed in: *shared* for a board you may write, *mine* for anything you may not.
 The store enforces what you may actually do.
@@ -237,7 +286,11 @@ keep parked whether there is a way back.
 
 *Gate:* a viewer runs a full play-along draft; the shared player records are
 untouched; his own copy survives a reload; and he can discard it and see the
-expert's version.
+expert's version. Two experts hold personal rosters that do not touch each
+other; one publishes his as official and the other's is unchanged until he
+adopts it; the official roster names who set it. One expert claims the lead,
+his picks reach the database, a second expert's picks do not, and a follower
+sees the lead's picks without reloading.
 
 ---
 
