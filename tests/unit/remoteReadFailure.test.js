@@ -32,7 +32,7 @@ const localStore = () => {
 
 const remoteThatFails = (fail) => ({
     name: 'remote',
-    async load(p) {
+    async load() {
         if (fail()) throw Object.assign(new Error('unavailable'), { code: 'unavailable' });
         return { b_dan: { l: 'Dan' } };
     },

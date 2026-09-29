@@ -13,7 +13,6 @@ import { canEdit } from './permissions';
 // previous answer would write one season's work into another's key.
 const seasonId = () => viewedSeason()?.id ?? null;
 import { parseAcquisition } from './draftPhase';
-import { basePosition } from './boardRanking';
 import { getSessionTeam } from './appSettings';
 import { DRAFT_YEAR } from '../constants';
 import { resolve as resolvePlayer, resolveAll, setFactsMany, beginBatch, endBatch } from './playerRegistry';
@@ -126,7 +125,7 @@ export function makeSlot(name, zone = '53', arrival = null, playerId = null) {
 // several loops and passing a collector down all of them is noise.
 let pendingFacts = null;
 
-function slotFromImport(raw, zone, position = '', dryRun = false) {
+function slotFromImport(raw, zone, _position = '', dryRun = false) {
     const { name, facts } = parseAcquisition(raw, DRAFT_YEAR);
     if (!name) return null;
     const arrival = String(raw ?? '').trim().slice(name.length + 1).trim() || null;

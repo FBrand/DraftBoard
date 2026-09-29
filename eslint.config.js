@@ -5,7 +5,11 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist', 'dist-test']),
+  // Every build output, not two of them by name. 'dist-fb', 'dist-fast',
+  // 'dist-fb2' and 'dist-fb3' were all being linted: `eslint .` walked the
+  // bundles and took longer than ten minutes, which is why the CI lint job
+  // never came back.
+  globalIgnores(['dist*', 'coverage', 'playwright-report', 'test-results']),
   {
     files: ['**/*.{js,jsx}'],
     extends: [
@@ -23,12 +27,17 @@ export default defineConfig([
       },
     },
     rules: {
-      'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
+      // A leading underscore marks a binding kept on purpose — a positional
+      // parameter a later one sits behind, a field destructured only to drop it.
+      'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]', argsIgnorePattern: '^_' }],
     },
   },
   // Playwright specs and config run in Node, not the browser.
   {
-    files: ['tests/**/*.js', 'playwright.config.js', 'playwright.fast.config.js', 'playwright.shared.config.js'],
+    // Every playwright config by shape, not three of them by name:
+    // playwright.phone.config.js was added later and never listed, so its
+    // `process` reads were the one no-undef error in the repo.
+    files: ['tests/**/*.js', 'playwright*.config.js'],
     languageOptions: {
       globals: { ...globals.node },
     },

@@ -30,7 +30,6 @@ import { getSessionTeam as sessionTeam } from '../utils/appSettings';
  * nine in the shipped season went elsewhere, so Spencer Fano, taken ninth by
  * Cleveland, painted as a Chief on the board.
  */
-const isOurs = (team) => !!team && String(team).toUpperCase() === sessionTeam();
 
 /**
  * Writes what a completed draft says about the players in it.

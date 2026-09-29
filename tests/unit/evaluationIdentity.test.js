@@ -78,7 +78,6 @@ describe('writing a remark', () => {
     });
 
     it('does not leak between analysts', () => {
-        const [a, b] = allBoards().filter(x => x.authorId).slice(0, 2);
         addRemark('author_a', 'p_mendoza', 'note', 'Mine', currentSeason().id);
 
         expect(remarksFor('author_a', 'p_mendoza')).toHaveLength(1);

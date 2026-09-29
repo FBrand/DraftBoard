@@ -20,7 +20,7 @@ const COLLECTION = 'test_docset';
 const set = createDocSet({
     collection: COLLECTION,
     idOf: (scope, item) => `${scope}__${item.rowId}`,
-    strip: (doc) => { const { order, ...rest } = doc; return rest; },
+    strip: (doc) => { const { order: _order, ...rest } = doc; return rest; },
 });
 
 beforeEach(async () => {
