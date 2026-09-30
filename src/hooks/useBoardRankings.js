@@ -1,15 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { openProspects } from '../data/prospectStore';
 import { openStages } from '../data/stageStore';
-import { openBoardEntries, entriesLoaded } from '../data/boardEntries';
+import { openBoardEntries } from '../data/boardEntries';
 // One derivation of "who is in this class", shared with the draft — which
 // used to parse the rankings CSV instead and rendered nothing the day the
 // CSVs stopped being deployed. See data/boardPool.js.
 import { castFromEntries as poolFromEntries } from '../data/boardPool';
 import { openDepthCharts } from '../data/depthChartStore';
 import { openSetup } from '../utils/seasonInit';
-import { parseRankings } from '../utils/dataParser';
-import * as scoutingState from '../utils/scoutingState';
 import { applyProspects } from '../utils/prospects';
 import { identityKey, nameKey } from '../utils/nameMatcher';
 import { resolveAll, openRegistry, byId } from '../utils/playerRegistry';
@@ -21,66 +19,17 @@ import { openEvaluations } from '../utils/evaluations';
 
 
 /**
- * Loads every analyst's rankings file once, so Scouting can show each board's
- * real player pool rather than laying all three overlays over whichever single
- * file the draft view happened to load.
+ * A board's pool comes from its ENTRIES. Nothing fetches a rankings file.
  *
- * They are different boards, not different opinions about one list — different
- * players, tiers and order — so the pool has to switch with the board.
+ * `loadFiles()` used to fetch and parse one per board. It already skipped a
+ * seeded board — the entries are a superset and carry the player id — so on a
+ * seeded project it fetched nothing and existed for the first run. There is no
+ * first run in the app any more: a local store is filled from the snapshot the
+ * seeder built, and a shared one is seeded from outside before anybody signs in.
  *
- * Returns `{ pools, loading }` where `pools` is `{ consensus: [...], ... }`.
- * A board whose file is missing or unreadable falls back to `fallback` (the
- * already-loaded draft pool) so the view still works instead of going blank.
+ * So the app reads what is there. A text file shipped alongside it is not a
+ * source of truth it gets to consult.
  */
-// The rankings files are static, so they're fetched and parsed once per page
-// load and shared by every caller. Without this, each mount of Scouting or of
-// an info card refetched and reparsed all three — which is both wasteful and
-// slow enough to have pushed a test over its timeout.
-// Only the FETCHED files are cached. Prospects are merged in on every call,
-// so adding one is a re-merge rather than three more network round-trips.
-let filesPromise = null;
-
-function loadFiles() {
-    if (filesPromise) return filesPromise;
-    const base = import.meta.env.BASE_URL;
-
-    filesPromise = Promise.all(listBoards().map(async (board) => {
-        try {
-            if (!board.rankingsFile) return [board.id, null];
-            // A SEEDED board does not need its file.
-            //
-            // The file answers one question — who is in the pool — and after
-            // seeding, that board's entries answer it too: seedBoard
-            // materialises a placement for every player in the union, so the
-            // entries are a superset of the file, and they are already being
-            // loaded a few lines below for the placements themselves.
-            // Re-fetching and re-parsing the file to learn something the app
-            // is about to read anyway is work nobody needs.
-            //
-            // Not a read-quota saving — these are static files off the CDN and
-            // cost Firestore nothing. What it removes is three fetches, a
-            // parse, and a SECOND source of truth for pool membership that
-            // could disagree with the first.
-            //
-            // `seeded` is the same flag that already decides whether a file
-            // may overwrite placements (scoutingState.seedBoard), so this does
-            // not invent a new notion of when a file stops mattering — it
-            // reuses the existing one. An unseeded board, or one whose entries
-            // have not loaded, still falls through to the fetch below.
-            if (board.seeded) return [board.id, null];
-            const res = await fetch(`${base}${board.rankingsFile}`);
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            const players = parseRankings(await res.text()) || [];
-            return [board.id, players.filter(p => p?.name)];
-        } catch {
-            // Cached as null so a missing file falls back per caller rather
-            // than being retried on every mount.
-            return [board.id, null];
-        }
-    })).then(Object.fromEntries);
-
-    return filesPromise;
-}
 
 /**
  * How a player is matched ACROSS analyst files, which is not the same question
@@ -202,15 +151,11 @@ function boardsToOpen(all) {
 
 function loadPools({ allBoards = false } = {}) {
     return openBoards()
-        .then(() => Promise.all([loadFiles(), openRegistry(), openEvaluations(), openStages(viewedSeason()?.id ?? null), openProspects(viewedSeason()?.id ?? null), openBoardEntries(boardsToOpen(allBoards)), openDepthCharts(viewedSeason()?.id ?? null), openSetup(viewedSeason()?.id ?? null)]))
-        .then(([fetched]) => {
-        // Files for the boards that still need one, entries for the rest.
-        // Done HERE rather than inside loadFiles because it needs the entries
-        // and the registry, which are loaded by the Promise.all above — and
-        // deriving it inside would have forced those to be awaited first,
-        // serialising two things that are currently parallel.
+        .then(() => Promise.all([openRegistry(), openEvaluations(), openStages(viewedSeason()?.id ?? null), openProspects(viewedSeason()?.id ?? null), openBoardEntries(boardsToOpen(allBoards)), openDepthCharts(viewedSeason()?.id ?? null), openSetup(viewedSeason()?.id ?? null)]))
+        .then(() => {
+        // Each board's pool, from its own entries. Every entry carries the
+        // player id, so nothing here matches a name.
         const files = Object.fromEntries(listBoards().map((b) => {
-            if (fetched[b.id]) return [b.id, fetched[b.id]];
             const fromEntries = poolFromEntries(b.id);
             return [b.id, fromEntries.length ? fromEntries : null];
         }));
@@ -332,38 +277,17 @@ function loadPools({ allBoards = false } = {}) {
             })];
         }));
 
-        // A `*` in a rankings file becomes a real `like` tag on that board, so
-        // the star and the tag are one mechanic rather than two that can
-        // disagree. Only adds entries for players that don't have one, so it
-        // can never overwrite an analyst's own tag.
-        Object.keys(pools).forEach(board => {
-            if (!pools[board]?.length) return;
-            // Never seed a board whose entries were not read.
-            //
-            // Entries load per board now, so an unread board looks EMPTY
-            // rather than absent — and every board is handed the full union
-            // as its pool regardless of whether its own file or entries
-            // arrived, so the length check above does not catch it. Seeding
-            // on that reading rewrites all 328 placements from the file. On
-            // a board somebody else owns every one of those writes is
-            // refused, and the queue fills with them: 328 entries and the
-            // board's own stamp, 329 failures for opening a board.
-            //
-            // Asking the repository whether the collection actually loaded is
-            // the honest question. An unread board is not this pass's
-            // business — whoever opens it reads it first, and seeds it then
-            // if it genuinely needs it.
-            if (!entriesLoaded(board)) return;
-            // The file creates the initial state and then steps out of the
-            // way: after this the board lives in storage and is read from
-            // there. Favourites are seeded as part of it.
-            scoutingState.seedBoard(board, pools[board]);
-            // A seeded entry is joined to its player here rather than by name
-            // on every read.
-            scoutingState.attachPlayerIds(board, pools[board]);
-            scoutingState.seedFavourites(board, pools[board]);
-        });
-
+        // A board's placements used to be SEEDED here, from its rankings file:
+        // seedBoard materialised an entry per player, attachPlayerIds joined
+        // them, seedFavourites turned a `*` into a tag. All three are the
+        // seeder's now, and the entries arrive in the snapshot already joined.
+        //
+        // What this cost while it lived here: every board was handed the full
+        // union as its pool whether its own entries had loaded or not, so an
+        // unread board looked empty and got all 328 placements rewritten from
+        // the file. On a board somebody else owned every one of those writes was
+        // refused — 328 entries and the board's own stamp, 329 failures for the
+        // act of opening a board.
         // The worked example was seeded here. It is in the snapshot now, filed
         // under Dan by the seeder, so there is nothing for the app to write.
         return pools;
@@ -390,12 +314,11 @@ export function invalidatePools() {
  * `pools?.[activeBoard] ?? players`. A new empty board therefore opened showing
  * the consensus board's placements until the page was reloaded.
  *
- * Separate from `invalidatePools` on purpose: that one runs whenever a player
- * is added or corrected, and re-reading every rankings file for that would be
- * work nobody asked for.
+ * Kept distinct from `invalidatePools` because callers distinguish them, though
+ * there is no longer a file cache to drop: a pool is rebuilt from the board
+ * entries, which is what both of these now mean.
  */
 export function invalidateBoards() {
-    filesPromise = null;
     invalidatePools();
 }
 

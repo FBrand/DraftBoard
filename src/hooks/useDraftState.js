@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { openProspects } from '../data/prospectStore';
-import { hasEntries, openBoardEntries, poolFromEntries } from '../data/boardEntries';
+import { hasEntries, openBoardEntries } from '../data/boardEntries';
+// The one derivation of "who is in this class", shared with the scouting pool.
+// I wrote a second copy of this in boardEntries before noticing it existed.
+import { castFromEntries as poolFromEntries } from '../data/boardPool';
 import { readStage, removeStage, openStages } from '../data/stageStore';
 import { joinIndex, findJoin } from '../utils/pickJoin';
 import { openDepthCharts } from '../data/depthChartStore';
@@ -18,7 +21,6 @@ const seasonId = () => viewedSeason()?.id ?? null;
 
 import { parseRankings, parsePicks } from '../utils/dataParser';
 import { openBoards, boardBySlug } from '../utils/boardRegistry';
-import { shouldSeed } from '../utils/appInit';
 import { highestDraftPick, isUndraftedSigning, roundForPick, lastDraftPick } from '../utils/draftPhase';
 import { TEAM_CONFIG, DRAFT_YEAR } from '../constants';
 import { resolve as resolvePlayer, resolveAll, setFacts, setFactsMany, rename as renamePlayer } from '../utils/playerRegistry';
@@ -239,7 +241,11 @@ export const useDraftState = () => {
                 const season = viewedSeason()?.id ?? null;
                 await Promise.all([openStages(season), openProspects(season), openDepthCharts(season), openSetup(season)]);
                 const slug = params.get('board');
-                const board = slug ? boardBySlug(slug) : null;
+                // Falls back to the first board of the season rather than to
+                // null. With null, `seeded` below was false and the shipped
+                // rankings file was fetched and re-matched on every load that
+                // carried no ?board= — which is most of them.
+                const board = boardBySlug(slug);
 
                 // The board's own entries, BEFORE asking whether it has any.
                 // hasEntries is synchronous, so against a shared store an
@@ -283,12 +289,15 @@ export const useDraftState = () => {
                     } catch { /* try the next one */ }
                 }
 
-                const [picksRes, columnsRes, preloadRes] = await Promise.all([
+                // picks.txt and columns.txt are configuration — which picks this
+                // team holds, and the column order. DraftBoard_Picks.csv is not:
+                // it is a completed draft, and loading it was seeding. The draft
+                // comes from the store now (draft_state plus the facts on each
+                // player), which the seeder wrote.
+                const [picksRes, columnsRes] = await Promise.all([
                     fetch(`${base}picks.txt`),
                     fetch(`${base}columns.txt`),
-                    fetch(`${base}DraftBoard_Picks.csv`).catch(() => null)
                 ]);
-
                 const rankingsText = rankingsRes ? await rankingsRes.text() : '';
                 const picksText = await picksRes.text();
                 const columnsText = await columnsRes.text().catch(() => "");
@@ -348,48 +357,22 @@ export const useDraftState = () => {
                     }
                 }
 
-                let seedDrafted = [];
-                let seedKCLeft = parsedOurPicks;
+                // A completed draft used to be SEEDED here, from
+                // DraftBoard_Picks.csv, when the store held none. That is the
+                // seeder's now: it reads the same file, mints the ids, and writes
+                // the draft into the snapshot — which is why the stale-playerId
+                // trap that cost a whole draft (every pick skipped in silence,
+                // the counter reporting it finished) has one place to be got
+                // right instead of two.
+                const seedKCLeft = parsedOurPicks;
 
-                // If no saved localStorage state but CSV exists, use CSV as seed.
-                // Skipped in "clean" mode — see utils/appInit.js.
-                if (!savedState && shouldSeed() && seasonIsSeeded() && preloadRes && preloadRes.ok) {
-                    const csvText = await preloadRes.text();
-                    try {
-                        const { deserializeDraftState } = await import('../utils/sessionSerializer');
-                        const importedState = deserializeDraftState(csvText);
-                        if (importedState.draftedPlayers.length > 0 || importedState.ourPicksLeft.length > 0) {
-                            // The playerIds in the file are STALE and must go.
-                            //
-                            // DraftBoard_Picks.csv is an EXPORT: it carries the
-                            // ids the registry held when it was written. A fresh
-                            // registry mints different ones, and nothing connects
-                            // the two. Left in place they are worse than absent —
-                            // writeDraft looks for a record to hang each pick on
-                            // with factsFor(id), finds nothing for an id that
-                            // belongs to no player, and skips that pick without a
-                            // word. All 257 of them. The result is a draft whose
-                            // counter says it finished with not one pick in it.
-                            //
-                            // Dropped rather than remapped, so reconcileDraft
-                            // resolves every pick by name against the registry
-                            // that actually exists now. The same fix the external
-                            // seeder needed; this is the path inside the app.
-                            seedDrafted = importedState.draftedPlayers
-                                .map((pick) => { const fresh = { ...pick }; delete fresh.playerId; return fresh; });
-                            if (importedState.ourPicksLeft.length > 0) {
-                                seedKCLeft = importedState.ourPicksLeft;
-                            }
-                        }
-                    } catch (e) { console.warn("Failed to parse preloaded CSV:", e); }
-                }
-
-                if (savedState || seedDrafted.length > 0 || seedKCLeft !== parsedOurPicks) {
+                if (savedState || seedKCLeft !== parsedOurPicks) {
                     try {
                         // Already a document — the stage store parses on the
                         // way out, so there is nothing left to parse here.
                         const parsedState = savedState ?? {};
-                        const savedDrafted = Array.isArray(parsedState.draftedPlayers) ? parsedState.draftedPlayers : seedDrafted;
+                        // No file to fall back to: a draft comes from the store or it is empty.
+                        const savedDrafted = Array.isArray(parsedState.draftedPlayers) ? parsedState.draftedPlayers : [];
                         const savedKCLeft = Array.isArray(parsedState.ourPicksLeft) ? parsedState.ourPicksLeft : seedKCLeft;
 
                         // Both joins, now id-first for anyone the registry
