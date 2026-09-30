@@ -1,5 +1,13 @@
 # DraftBoard — architecture and the shared backend
 
+> **Status, 2026-09-30.** Parts of this are now built and parts are struck.
+> `docs/REBUILD-STATUS-2026-09-30.md` is authoritative on which. Two changes to
+> note here: §6 said experts stay connected directly and do not use the relay —
+> the plan reverses that deliberately, and the relay is still unbuilt. And
+> "read the registry by reference" is struck: measured, it saves nothing, because
+> a completed draft puts a fact on 626 of 720 player records.
+
+
 How the app is meant to be put together, and how it is meant to behave once
 several people share one set of data. Compiled from the decisions taken over
 the course of the project.

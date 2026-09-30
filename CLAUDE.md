@@ -34,6 +34,12 @@ sequential-but-revisitable stages.
 
 ### Actual build status (verify against code before trusting any doc, including this one)
 
+> **The `firebase` branch has moved a long way past the rest of this file.**
+> Every stage is now per person with an official version, the live draft has one
+> writer, remarks are keyed by author, and the app neither seeds nor ships data
+> files. Read `docs/REBUILD-STATUS-2026-09-30.md` first — it states what is done,
+> what is open, and which claims below are stale.
+
 **All five stages now exist as their own tab** in `App.jsx`
 (`fa | scouting | draft | udfa | roster`). Two shared primitives do the heavy
 lifting rather than five bespoke UIs:
@@ -259,9 +265,19 @@ the athletic-matrix scores (`athletic_matrix_v1` is retired —
 Every fact is null when unrecorded, `isUdfa` included: null is "unknown",
 false is "drafted".
 
-An **opinion** is per board: `round`, `tier`, `withinGroup`, `tag`,
-`strengths`/`weaknesses`/`notes`. Three analysts may disagree about all of
-them; none can disagree about who drafted a player.
+An **opinion** is per board: `round`, `tier`, `withinGroup`, `tag`. Three
+analysts may disagree about all of them; none can disagree about who drafted a
+player.
+
+A **remark** — a strength, a weakness, a note — is neither, and it is the
+sentence above that used to say otherwise: "an opinion is per board: …
+strengths/weaknesses/notes". Implementing that sentence is what made every
+personal board un-annotatable: the app derived a remark's author from the BOARD
+while firestore.rules derived it from the TOKEN, and the two agreed only where a
+board's author equalled the writer's uid — which the shipped seed guaranteed
+never happened. A remark is a PERSON'S, lives at
+`evaluations/{playerId}/remarks/{authorId}`, and nothing about it consults a
+board. See `utils/evaluations.js`.
 
 Facts are read-only on the scouting card — a prospect has not entered the
 league, so a draft year means nothing while a board is being built. They are
@@ -295,14 +311,35 @@ already parsed into zones.
 The registry therefore holds more players than any one board's pool — roster
 veterans are registered too. A board is a subset of the registry.
 
-### CSVs seed; storage is the truth
+### The app does not seed, and does not ship data files
 
-A rankings file creates a board's **initial state and nothing more**.
-`scoutingState.seedBoard()` materialises every player's placement on first
-load, marks the board `seeded`, and the file is never consulted again — editing
-it later changes nothing until it is explicitly imported. Anything that writes
-a board must preserve the `seeded` flag; dropping it makes the next load
-re-seed from the file and throw the edit away.
+**No file in `src/` contains seeding logic**, and `public/` carries no CSV. Both
+are load-bearing rather than tidiness: every silent-overwrite bug on this project
+came from a client deciding the store was empty and writing its own defaults into
+it, and gating each site (`if (shouldSeed())`, `if (repository.isLive())`) only
+multiplies the sites — the gate is what gets forgotten.
+
+    seed-data/                    the CSVs. Repo only; never deployed
+    scripts/seed-firestore.mjs    uploads to Firestore, or --snapshot to a file
+    public/seed-snapshot.json     a build artifact (npm run seed:snapshot)
+    src/data/hydrate.js           copies it into an EMPTY local store, once
+
+Seeding may live in exactly two kinds of place: **a seeder** or **a dedicated
+storage adapter**. An adapter may copy documents in; it may not parse a CSV,
+decide what a default board is, or match a name. Anything else holding seeding
+logic is a defect to report, not a thing to thread another condition through.
+
+`scoutingState.seedBoard()` survives because "create board from CSV" is an
+IMPORT — a file somebody chooses — not seeding.
+
+A board's pool therefore comes from its **entries**, never from a file: one
+document per player, each carrying the player id, so nothing matches a name at
+boot. `data/boardPool.castFromEntries` is the one derivation, shared by Scouting
+and the draft.
+
+Verify a change here by booting, not by inspection: a cold load should fetch only
+`picks.txt` and `columns.txt`, and write only what hydration writes. See
+`docs/REBUILD-STATUS-2026-09-30.md`.
 
 ### `withinGroup` is a float
 

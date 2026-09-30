@@ -1699,9 +1699,12 @@ LT **is** an OT, and the lookup finds him. A guard row still does not.
 
 1. Season rollover — done
 2. Deep audit, desktop and 390px — done for the local app; redone above against Firebase
-3. Firebase migration — in progress on branch `firebase`; the app reads a
-   season out of Firestore, a viewer follows an expert's board, and an expert's
-   writes reach the shared store. Remaining: a sign-in control, and deploy config.
+3. Firebase migration — the rebuild is on `firebase0.2`. 52 commits: failure is
+   observable, remarks are keyed by author, every stage is per person with an
+   official version, the live draft has one writer, and the app neither seeds nor
+   ships data files. Status, and everything still open, in
+   `docs/REBUILD-STATUS-2026-09-30.md`. The next thing to look at is the one
+   unexplained failure above: a scouting reorder not surviving a reload.
 
 ## Open after the snapshot-hydration change (2026-09-30)
 
