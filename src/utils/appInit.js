@@ -38,10 +38,6 @@ export function getInitMode() {
     }
 }
 
-/** True when a store with nothing saved should load its shipped file. */
-export function shouldSeed() {
-    return getInitMode() === INIT_SEEDED;
-}
 
 export function setInitMode(mode) {
     try {

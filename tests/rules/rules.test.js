@@ -894,9 +894,25 @@ describe('depth charts, which belong to a person or to the show', () => {
         await assertFails(setDoc(doc(viewer(), `${rows('s_1', 'rosterState', 'official')}/QB`), { l: 'QB' }));
     });
 
-    it('are readable by anybody, because a follower has to see them', async () => {
-        await assertSucceeds(getDoc(doc(viewer(), `${rows('s_1', 'rosterState', 'dan-uid')}/QB`)));
+    it('let anybody read the OFFICIAL one, because a follower has to see it', async () => {
+        await assertSucceeds(getDoc(doc(viewer(), `${rows('s_1', 'rosterState', 'official')}/QB`)));
         await assertSucceeds(getDoc(doc(stranger(), `${rows('s_1', 'rosterState', 'official')}/QB`)));
+    });
+
+    it('refuse a viewer another expert’s personal chart', async () => {
+        // Measured as readable before this rule existed. SPEC.md §6 gives a
+        // personal roster a board's visibility, defaulting to experts, and the
+        // stage added to make the model uniform shipped with none.
+        await assertFails(getDoc(doc(viewer(), `${rows('s_1', 'rosterState', 'dan-uid')}/QB`)));
+        await assertFails(getDoc(doc(stranger(), `${rows('s_1', 'rosterState', 'dan-uid')}/QB`)));
+    });
+
+    it('let an expert read a colleague’s, which is the default a board has', async () => {
+        await assertSucceeds(getDoc(doc(expert('ryan-uid'), `${rows('s_1', 'rosterState', 'dan-uid')}/QB`)));
+    });
+
+    it('let the owner read his own', async () => {
+        await assertSucceeds(getDoc(doc(expert('dan-uid'), `${rows('s_1', 'rosterState', 'dan-uid')}/QB`)));
     });
 
     it('apply to free agency exactly as they do to the roster', async () => {

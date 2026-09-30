@@ -487,7 +487,29 @@ service cloud.firestore {
       // confirmation and records who set it, and neither of those is something
       // this file can check.
       match /charts/{stage}/scopes/{scopeId}/{document=**} {
-        allow read: if true;
+        // A personal chart is not world-readable, and it was: measured, an
+        // anonymous viewer and an unauthenticated stranger both read another
+        // expert's roster. SPEC.md §6 says a personal roster is visible to its
+        // owner, to experts, or to everybody, "chosen the same way a board is
+        // and defaulting the same way so there is one model rather than two" —
+        // and the stage added to make the model uniform shipped with no
+        // visibility at all.
+        //
+        // OFFICIAL is public: it is what the show says, and a follower has to
+        // see it. A personal chart is its owner's and the other experts', which
+        // is a board's default (`expert`) applied here.
+        //
+        // Ordered by cost. Both token comparisons are free, so isExpert() — an
+        // exists() on email2author — is only evaluated for somebody who is
+        // neither the owner nor reading official.
+        //
+        // What is still missing, and is Phase 7's: a chart cannot yet be made
+        // PUBLIC or PRIVATE per chart, because that needs a stored visibility
+        // and a get() to read it on every row. The default is the safe end of
+        // that choice rather than a substitute for it.
+        allow read: if scopeId == 'official'
+                    || (request.auth != null && scopeId == request.auth.uid)
+                    || isExpert();
         allow write: if isExpert() && (scopeId == request.auth.uid || scopeId == 'official');
       }
 

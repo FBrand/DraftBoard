@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { seedApp } from './seedForTests';
 import {
-    getInitMode, shouldSeed, setInitMode, resetTo, INIT_SEEDED, INIT_CLEAN,
+    getInitMode, setInitMode, resetTo, INIT_SEEDED, INIT_CLEAN,
 } from '../../src/utils/appInit';
 import { loadState, saveState, makeEntry } from '../../src/utils/scoutingState';
 import { allBoards } from '../../src/utils/boardRegistry';
@@ -20,15 +20,17 @@ beforeEach(async () => {
 });
 
 describe('which way the app comes back up', () => {
-    it('seeds from the shipped files by default', () => {
+    // `shouldSeed()` is gone with the seeding it gated. The app does not seed
+    // at all now — a local store is filled from the snapshot the seeder built —
+    // so what survives here is the MODE, which still decides whether a wipe
+    // comes back up with the shipped data or empty.
+    it('comes up in seeded mode by default', () => {
         expect(getInitMode()).toBe(INIT_SEEDED);
-        expect(shouldSeed()).toBe(true);
     });
 
-    it('comes up empty after a clean slate, and stays that way', () => {
+    it('remembers a clean slate', () => {
         setInitMode(INIT_CLEAN);
         expect(getInitMode()).toBe(INIT_CLEAN);
-        expect(shouldSeed()).toBe(false);
     });
 
     it('treats anything it does not recognise as seeded rather than empty', () => {

@@ -30,7 +30,6 @@ import { resolveAll } from '../../src/utils/playerRegistry';
 import { listBoards } from '../../src/utils/boardRegistry';
 import { remarksFor, addRemark, openEvaluations } from '../../src/utils/evaluations';
 import { currentSeason } from '../../src/utils/boardRegistry';
-import { shouldSeed } from '../../src/utils/appInit';
 import { repository } from '../../src/data/repository';
 
 const FILE = 'evaluations_kc_2026.csv';
@@ -41,7 +40,10 @@ const EXAMPLE_ANALYST = 'dan';
 let done = false;
 
 export async function seedExampleEvaluations() {
-    if (done || !shouldSeed()) return 0;
+    // No shouldSeed() check: the seeder is the thing that seeds, and its answer
+    // is always yes. That gate belonged to an app deciding whether to seed
+    // itself, which nothing does now.
+    if (done) return 0;
 
     // Not on a shared backend, ever. There the database is seeded from outside
     // (scripts/seed-firestore.mjs) before anybody signs in, and a client that

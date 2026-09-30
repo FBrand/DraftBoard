@@ -209,42 +209,6 @@ export function seedBoard(board, players) {
     return true;
 }
 
-/**
- * Turns the rankings file's `*` favourites into real `like` tags on that
- * board, once, for players that have no entry yet.
- *
- * The star and the like tag were two mechanics for one idea: the star was
- * read straight off the CSV at render time while the tag lived in the board,
- * so un-liking a starred player did nothing and the two could disagree. Now
- * the star is only a *seed* — after this runs, the board's tag is the single
- * source of truth, and clearing it actually clears it.
- */
-export function seedFavourites(board, players) {
-    if (!players?.length) return false;
-    const state = loadState(board);
-    const entries = [...state.entries];
-    const index = buildNameIndex(entries);
-    const byId = new Map();
-    entries.forEach((e, i) => { if (e.playerId) byId.set(e.playerId, i); });
-    let changed = false;
-
-    players.forEach(p => {
-        if (!p?.isFavorite) return;
-        // Id-first, then qualified — same pattern as seedBoard above. Unqualified
-        // bare-name matching here found the wrong same-named player's entry and
-        // concluded "already seeded" for a DIFFERENT man, silently dropping his
-        // favourite-tag seed.
-        const at = p.id != null && byId.has(p.id) ? byId.get(p.id) : findMatchingIndex(p.name, index, p);
-        if (at !== -1) return; // already has an entry
-        const seeded = { ...makeEntry(p.name, p.position, p.school, p.id ?? null), tag: 'like' };
-        entries.push(seeded);
-        index.push(...buildNameIndex([seeded]).map(e => ({ ...e, index: entries.length - 1 })));
-        changed = true;
-    });
-
-    if (changed) saveState(board, { version: 1, entries });
-    return changed;
-}
 
 /**
  * Stamps the registry id onto entries written before ids existed. Runs once
