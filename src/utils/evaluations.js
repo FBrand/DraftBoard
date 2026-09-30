@@ -124,12 +124,80 @@ const seasonOf = (key) => (key === NO_SEASON ? null : key);
  * written down twice. The owner is not in it: every caller that can remove a
  * remark already passes the owner separately.
  */
-const handleFor = (seasonId, kind, index) => `${seasonKey(seasonId)}:${KIND_CHAR[kind]}:${index}`;
+/**
+ * A remark's identity, which used to be WHERE IT SAT.
+ *
+ * `season:kind:index` named a position in an array, so every remark's id
+ * changed the moment anything before it was removed: delete the first strength
+ * and the second one's handle now points at the third. A card holding an id
+ * from before the delete edits or removes the wrong remark, and the failure is
+ * silent — the right number of remarks remain, with the wrong words in them.
+ *
+ * A remark is now written with an id of its own, stored as `n`.
+ *
+ * An INTEGER, and counted per document rather than drawn at random, because
+ * this file is also where the local budget is spent: remarks are per player per
+ * author and dominate it — a ten-expert season measures 3.12 MB against a 5 MB
+ * ceiling. `"n":7` costs six characters where `"i":"r_3m1stz"` costs fifteen,
+ * which across 17,500 remarks is the difference between 105 KB and 260 KB a
+ * season. A remark document has exactly one writer — it is keyed by its
+ * author — so a per-document counter needs no coordination to stay unique.
+ *
+ * The header of tests/unit/remarkStorage.test.js records the opposite decision,
+ * taken earlier: the id "existed only to find it inside its own array, and
+ * position does that". Position does FIND a remark. It does not survive its
+ * neighbours being removed — delete the first strength and every later handle
+ * points one place too early, so a card holding an id from before the delete
+ * edits or removes the wrong remark, leaving the right NUMBER of remarks with
+ * the wrong words in them. That is what the id buys, for six characters.
+ *
+ * Positional handles are still READ, because remarks written before this exist
+ * and there is no migration pass; they gain an id whenever the document they
+ * live in is next rewritten.
+ */
+const nextRemarkId = (doc) => {
+    let top = 0;
+    Object.values(doc ?? {}).forEach(kinds => Object.values(kinds ?? {}).forEach(line => {
+        (line ?? []).forEach(r => { if (Number.isInteger(r?.n) && r.n > top) top = r.n; });
+    }));
+    return top + 1;
+};
 
-function readHandle(handle) {
-    const [season, char, index] = String(handle ?? '').split(':');
-    return { seasonId: seasonOf(season), kind: CHAR_KIND[char], index: Number(index) };
+/** A positional handle, for remarks written before ids existed. */
+const legacyHandle = (seasonId, kind, index) => `${seasonKey(seasonId)}:${KIND_CHAR[kind]}:${index}`;
+
+
+/**
+ * Finds a remark by handle: by its own id, or by position for an old one.
+ *
+ * Returns the line it lives in and its place in that line, because both
+ * removing and rewording need the array itself.
+ */
+function locate(doc, handle) {
+    const raw = String(handle ?? '');
+
+    // An id of its own. Searched for rather than computed from, which is the
+    // entire point: where it sits is no longer part of what it is.
+    if (!raw.includes(':')) {
+        for (const [sKey, kinds] of Object.entries(doc ?? {})) {
+            for (const [char, line] of Object.entries(kinds ?? {})) {
+                const at = (line ?? []).findIndex(r => String(r?.n ?? '') === raw);
+                if (at !== -1) return { line, at, seasonId: seasonOf(sKey), kind: CHAR_KIND[char] };
+            }
+        }
+        return null;
+    }
+
+    const [season, char, index] = raw.split(':');
+    const kind = CHAR_KIND[char];
+    const at = Number(index);
+    if (!kind || !Number.isInteger(at)) return null;
+    const line = doc?.[season]?.[char];
+    if (!line?.[at]) return null;
+    return { line, at, seasonId: seasonOf(season), kind };
 }
+
+
 
 /**
  * Loads the remarks for the players named, so a synchronous read can answer.
@@ -160,7 +228,8 @@ function expand(ownerId, doc) {
             (kinds?.[KIND_CHAR[kind]] ?? []).forEach((r, index) => {
                 if (!r || typeof r !== 'object') return;
                 out.push({
-                    id: handleFor(seasonOf(sKey), kind, index),
+                    // Its own id, or where it sits for one written before ids.
+                    id: r.n != null ? String(r.n) : legacyHandle(seasonOf(sKey), kind, index),
                     ownerId,
                     kind,
                     text: r.t,
@@ -240,13 +309,11 @@ export function addRemark(ownerId, playerId, kind, text, seasonId) {
     const doc = structuredClone(docFor(playerId, ownerId));
     const line = lineFor(doc, seasonId ?? null, kind);
     const at = Date.now();
-    line.push({ t: body, a: at });
+    const n = nextRemarkId(doc);
+    line.push({ n, t: body, a: at });
     write(playerId, ownerId, doc);
 
-    return {
-        id: handleFor(seasonId ?? null, kind, line.length - 1),
-        ownerId, kind, text: body, seasonId: seasonId ?? null, createdAt: at,
-    };
+    return { id: String(n), ownerId, kind, text: body, seasonId: seasonId ?? null, createdAt: at };
 }
 
 /**
@@ -257,27 +324,25 @@ export function updateRemarkText(ownerId, playerId, handle, text) {
     const body = String(text ?? '').trim();
     if (!body) return removeRemark(ownerId, playerId, handle);
 
-    const { seasonId, kind, index } = readHandle(handle);
-    if (!kind || !Number.isInteger(index)) return false;
-
     const doc = structuredClone(docFor(playerId, ownerId));
-    const line = doc[seasonKey(seasonId)]?.[KIND_CHAR[kind]];
-    if (!line?.[index]) return false;
+    const found = locate(doc, handle);
+    if (!found) return false;
 
-    line[index] = { t: body, a: line[index].a };
+    // The id and the timestamp survive a reworded remark: it is the same
+    // remark, said better. An old one gains an id here, which is how a
+    // document converts without a migration pass.
+    const before = found.line[found.at];
+    found.line[found.at] = { n: before.n ?? nextRemarkId(doc), t: body, a: before.a };
     write(playerId, ownerId, doc);
     return true;
 }
 
 export function removeRemark(ownerId, playerId, handle) {
-    const { seasonId, kind, index } = readHandle(handle);
-    if (!kind || !Number.isInteger(index)) return false;
-
     const doc = structuredClone(docFor(playerId, ownerId));
-    const line = doc[seasonKey(seasonId)]?.[KIND_CHAR[kind]];
-    if (!line?.[index]) return false;
+    const found = locate(doc, handle);
+    if (!found) return false;
 
-    line.splice(index, 1);
+    found.line.splice(found.at, 1);
     write(playerId, ownerId, doc);
     return true;
 }

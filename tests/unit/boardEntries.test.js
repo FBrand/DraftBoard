@@ -152,9 +152,20 @@ describe('saving a board writes only what moved', () => {
         expect(stamped).toHaveLength(1);
         expect(stamped[0].id).toBe(id);
         expect(stamped[0].doc.u).toEqual(expect.any(Number));
-        // And the board it stamped keeps its identity: a whole-document write
-        // built from a stale cache is how authorship would get lost.
-        expect(stamped[0].doc.a).toBe(repository.get('boards', id).a);
+
+        // ONE FIELD, and a merge. This used to assert that the stamp carried
+        // the board's author through unchanged, because the write reassembled
+        // the whole document from cache and losing authorship was the risk. It
+        // does not reassemble anything now: the item names the stamp and
+        // nothing else, so there is no field it could get wrong.
+        //
+        // That matters for more than authorship. OWNERSHIP was in that
+        // document too, and it is the field the rules read to decide whether
+        // the write is allowed — so a cache that predated a claim, a release
+        // or a revocation wrote a stale owner back, the rules refused it, and
+        // the refusal took all 328 entries batched alongside.
+        expect(Object.keys(stamped[0].doc)).toEqual(['u']);
+        expect(stamped[0].merge).toBe(true);
         spy.mockRestore();
     });
 

@@ -192,3 +192,79 @@ describe('editing and deleting', () => {
         expect(updateRemarkText(owner, 'p1', 'r_nope', 'x')).toBe(false);
     });
 });
+
+/**
+ * A remark's id is its own, not where it sits.
+ *
+ * The handle used to be `season:kind:index` — a position in an array. So every
+ * remark's id changed the moment anything before it was removed: delete the
+ * first strength and the second one's handle points at what used to be the
+ * third. A card holding an id from before the delete then edits or removes the
+ * wrong remark, and nothing looks wrong afterwards — the right NUMBER of
+ * remarks remain, with the wrong words in them.
+ */
+describe('a remark keeps its identity while its neighbours change', () => {
+    const owner = () => personal().authorId;
+    const season = () => currentSeason().id;
+
+    it('removes the one asked for, not the one in that position', () => {
+        const a = addRemark(owner(), 'p_mendoza', 'strength', 'First', season());
+        const b = addRemark(owner(), 'p_mendoza', 'strength', 'Second', season());
+        const c = addRemark(owner(), 'p_mendoza', 'strength', 'Third', season());
+
+        // Ids captured BEFORE the delete, which is the whole point: a component
+        // holds them across a render.
+        expect(removeRemark(owner(), 'p_mendoza', a.id)).toBe(true);
+        expect(removeRemark(owner(), 'p_mendoza', c.id)).toBe(true);
+
+        const left = remarksFor(owner(), 'p_mendoza').map(r => r.text);
+        expect(left).toEqual(['Second']);
+        expect(b.id).toBeTruthy();
+    });
+
+    it('rewords the one asked for after its neighbours have gone', () => {
+        addRemark(owner(), 'p_mendoza', 'note', 'Doomed', season());
+        const keep = addRemark(owner(), 'p_mendoza', 'note', 'Keep me', season());
+
+        removeRemark(owner(), 'p_mendoza', remarksFor(owner(), 'p_mendoza')[0].id);
+        expect(updateRemarkText(owner(), 'p_mendoza', keep.id, 'Reworded')).toBe(true);
+
+        expect(remarksFor(owner(), 'p_mendoza').map(r => r.text)).toEqual(['Reworded']);
+    });
+
+    it('keeps the same id through a rewording, because it is the same remark', () => {
+        const r = addRemark(owner(), 'p_mendoza', 'weakness', 'Thin', season());
+        updateRemarkText(owner(), 'p_mendoza', r.id, 'Thin for the position');
+
+        const [only] = remarksFor(owner(), 'p_mendoza');
+        expect(only.id).toBe(r.id);
+        expect(only.text).toBe('Thin for the position');
+    });
+
+    it('gives every remark a different id', () => {
+        const ids = ['One', 'Two', 'Three', 'Four']
+            .map(t => addRemark(owner(), 'p_mendoza', 'note', t, season()).id);
+        expect(new Set(ids).size).toBe(4);
+    });
+
+    it('still finds a remark written before ids existed', () => {
+        // Written straight into the store in the old shape — no `i` — because
+        // that is what is sitting in every browser that has used this app.
+        const path = `evaluations/p_mendoza/remarks`;
+        store.write([{
+            collection: path,
+            id: owner(),
+            doc: { [`s_${season()}`]: { s: [{ t: 'Old shape', a: 1 }] } },
+        }]);
+
+        const [old] = remarksFor(owner(), 'p_mendoza');
+        expect(old.text).toBe('Old shape');
+        // A positional handle, and it still works — then the rewrite gives it
+        // an id, which is how a document converts with no migration pass.
+        expect(updateRemarkText(owner(), 'p_mendoza', old.id, 'Converted')).toBe(true);
+
+        const [now] = remarksFor(owner(), 'p_mendoza');
+        expect(now.text).toBe('Converted');
+        expect(now.id).not.toContain(':');
+    });
+});

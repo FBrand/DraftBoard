@@ -19,8 +19,19 @@ import { store } from '../../src/data/appStore';
  * characters of collection key at a full season's scale and bought nothing,
  * because nothing reads one kind of one season without wanting its neighbours.
  *
- * A remark is `[text, writtenAt]`. The six-character id it used to carry
- * existed only to find it inside its own array, and position does that.
+ * A remark is `{ n, text, writtenAt }`. It carried a six-character id once,
+ * which was removed on the reasoning that it "existed only to find it inside
+ * its own array, and position does that" — and position does find a remark. It
+ * does not survive a neighbour being removed: delete the first strength and
+ * every later handle points one place too early, so a caller holding an id from
+ * before the delete edits or removes the wrong remark. The right NUMBER of
+ * remarks remain, with the wrong words in them, which is why nobody would
+ * notice. See tests/unit/evaluationIdentity.test.js.
+ *
+ * So identity is back, in the cheapest form that works: `n`, an integer counted
+ * per document. Six characters against fifteen for a random id — 105 KB rather
+ * than 260 KB across a season's 17,500 remarks, which matters because this file
+ * is where the local budget is spent.
  */
 const OWNER = 'a_dan';
 const RYAN = 'a_ryan';
@@ -58,11 +69,11 @@ describe('the address', () => {
 });
 
 describe('the stored document', () => {
-    it('is seasons, then kinds, then text and when it was written', () => {
+    it('is seasons, then kinds, then an identified remark', () => {
         addRemark(OWNER, PLAYER, 'strength', 'Sticky in man coverage', S26);
 
         expect(stored()).toEqual({
-            [S26]: { s: [{ t: 'Sticky in man coverage', a: expect.any(Number) }] },
+            [S26]: { s: [{ n: 1, t: 'Sticky in man coverage', a: expect.any(Number) }] },
         });
     });
 
@@ -84,10 +95,26 @@ describe('the stored document', () => {
         expect(remarksFor(OWNER, PLAYER)[0].seasonId).toBeNull();
     });
 
-    it('spends no characters on a remark id', () => {
+    it('spends six characters on identity, and not one more', () => {
+        // The id is what lets a remark be found after its neighbours move. It
+        // is an integer rather than a random string precisely so the line
+        // below stays this short: at 17,500 remarks a season the difference is
+        // 105 KB against 260 KB.
         addRemark(OWNER, PLAYER, 'strength', 'One', S26);
         const at = stored()[S26].s[0].a;
-        expect(JSON.stringify(stored())).toBe(`{"${S26}":{"s":[{"t":"One","a":${at}}]}}`);
+        expect(JSON.stringify(stored())).toBe(`{"${S26}":{"s":[{"n":1,"t":"One","a":${at}}]}}`);
+    });
+
+    it('counts the id up per document, and never reuses one', () => {
+        // Reuse is the failure an index has: remove the first and the next
+        // remark inherits its handle. Counting from the highest ever used
+        // cannot do that.
+        ['One', 'Two', 'Three'].forEach(t => addRemark(OWNER, PLAYER, 'strength', t, S26));
+        expect(stored()[S26].s.map(r => r.n)).toEqual([1, 2, 3]);
+
+        removeRemark(OWNER, PLAYER, '2');
+        addRemark(OWNER, PLAYER, 'strength', 'Four', S26);
+        expect(stored()[S26].s.map(r => r.n)).toEqual([1, 3, 4]);
     });
 
     it('is a map inside an array, because Firestore refuses a nested array', () => {
@@ -97,7 +124,7 @@ describe('the stored document', () => {
         addRemark(OWNER, PLAYER, 'strength', 'One', S26);
         const [first] = stored()[S26].s;
         expect(Array.isArray(first)).toBe(false);
-        expect(Object.keys(first).sort()).toEqual(['a', 't']);
+        expect(Object.keys(first).sort()).toEqual(['a', 'n', 't']);
     });
 
     it('keeps several remarks of one kind in order', () => {

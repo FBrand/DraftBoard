@@ -220,13 +220,27 @@ export function writeEntries(boardId, entries) {
     //
     // Only when something really changed — the early return above means an
     // idle save does not stamp, so it does not wake anybody up.
-    const board = repository.get(BOARDS, boardId);
     const items = changes.map(c => ({ collection: path, id: c.id, doc: c.doc }));
-    if (board) {
+
+    // ONE FIELD, not the whole document.
+    //
+    // This used to reassemble the board from cache — `{ ...board, u: now }` —
+    // and write it back. Every field the cache was holding went with it,
+    // including OWNERSHIP, which is the one field the rules read to decide
+    // whether this write is allowed at all. So an expert whose cached copy
+    // predated a claim, a release or a revocation wrote a stale owner back,
+    // the rules refused it, and the refusal took all 328 entries batched
+    // alongside — a whole board's worth of work lost to a marker.
+    //
+    // Only stamped when a board record exists to stamp, and only when
+    // something really changed: the early return above means an idle save does
+    // not stamp, so it does not wake anybody up.
+    if (repository.get(BOARDS, boardId)) {
         items.push({
             collection: BOARDS,
             id: boardId,
-            doc: { ...board, [ENTRIES_STAMP]: Date.now() },
+            doc: { [ENTRIES_STAMP]: Date.now() },
+            merge: true,
         });
     }
     return repository.commitMany(items);

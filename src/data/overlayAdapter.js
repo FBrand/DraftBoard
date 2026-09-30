@@ -239,17 +239,25 @@ export function createOverlayAdapter({ remote, local, writesRemote, onRemoteErro
             }
             if (canWriteRemote({ mine: opts?.mine })) {
                 return remote.commitMany
-                    ? remote.commitMany(items)
+                    ? remote.commitMany(items)   // merge flag included
                     : Promise.all(items.map(c => (c.doc === null
                         ? remote.remove(c.path, c.id)
                         : remote.set(c.path, c.id, c.doc))));
             }
-            const localised = items.map(c => (
-                c.doc === null ? { ...c, doc: tombstone() } : c
-            ));
+            // A MERGE item names the fields to change and leaves the rest of
+            // the document alone. Firestore does that itself; the local half
+            // has no such notion, so the merge happens here — against what is
+            // stored, never against a caller's cache, which is the whole point
+            // of the item existing.
+            const merged = await Promise.all(items.map(async (c) => {
+                if (c.doc === null) return { ...c, doc: tombstone() };
+                if (!c.merge) return c;
+                const stored = (await local.load(c.path))?.[c.id];
+                return { ...c, doc: { ...(stored ?? {}), ...c.doc } };
+            }));
             return local.commitMany
-                ? local.commitMany(localised)
-                : Promise.all(localised.map(c => local.set(c.path, c.id, c.doc)));
+                ? local.commitMany(merged)
+                : Promise.all(merged.map(c => local.set(c.path, c.id, c.doc)));
         },
 
         /**

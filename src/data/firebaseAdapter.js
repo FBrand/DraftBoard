@@ -246,9 +246,18 @@ export function createFirebaseAdapter({ identity = null, isExpert = null } = {})
 
             for (const group of chunk(items)) {
                 const batch = writeBatch(db);
-                group.forEach(({ path, id, doc }) => {
+                group.forEach(({ path, id, doc, merge }) => {
                     const ref = docRef(db, path, id);
                     if (doc === null) batch.delete(ref);
+                    // A PATCH changes the fields named and leaves the rest of
+                    // the document alone. A set replaces it — and the caller
+                    // that wants one field changed has to reassemble the whole
+                    // record from its cache to do that, which writes every
+                    // stale field it is holding back over whatever the store
+                    // has. For the board document that stale field is
+                    // OWNERSHIP, the rules refuse the write, and the refusal
+                    // takes the 328 entries batched with it.
+                    else if (merge) batch.set(ref, doc, { merge: true });
                     else batch.set(ref, doc);
                 });
                 await batch.commit();

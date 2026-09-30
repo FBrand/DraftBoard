@@ -964,16 +964,20 @@ export function createRepository(adapter = localAdapter) {
      */
     function commitMany(items, opts) {
         const byCollection = new Map();
-        items.forEach(({ collection, id, doc }) => {
+        items.forEach(({ collection, id, doc, merge }) => {
             if (!byCollection.has(collection)) byCollection.set(collection, { ...(cache.get(collection) ?? {}) });
             const next = byCollection.get(collection);
             if (doc === null) delete next[id];
+            // A merge changes the fields named. Applied to the cache the same
+            // way it will be applied to the store, so the two do not diverge
+            // over a field this caller never mentioned.
+            else if (merge) next[id] = { ...(next[id] ?? {}), ...doc };
             else next[id] = doc;
         });
         byCollection.forEach((next, collection) => { cache.set(collection, next); notify(collection); });
 
         const write = adapter.commitMany
-            ? adapter.commitMany(items.map(({ collection, id, doc }) => ({ path: collection, id, doc })), opts)
+            ? adapter.commitMany(items.map(({ collection, id, doc, merge }) => ({ path: collection, id, doc, merge })), opts)
             : Promise.all(items.map(c => (c.doc === null
                 ? adapter.remove(c.collection, c.id)
                 : adapter.set(c.collection, c.id, c.doc))));
