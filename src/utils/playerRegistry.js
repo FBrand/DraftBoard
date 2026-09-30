@@ -93,8 +93,8 @@ function lean(record) {
     return playerFields.lean(out);
 }
 
-function writeOne(record) {
-    repository.set(PLAYERS, record.id, lean(record));
+function writeOne(record, opts) {
+    repository.set(PLAYERS, record.id, lean(record), opts);
 }
 
 function writeMany(records) {
@@ -376,7 +376,21 @@ export function factsFor(id) {
  * a draft pick doesn't blank a matrix score somebody else entered. Passing
  * null or '' for a field clears it.
  */
-export function setFacts(id, patch) {
+/**
+ * @param {string} id
+ * @param {object} patch
+ * @param {object} [opts]
+ * @param {boolean} [opts.mine]  keep this write out of the shared store.
+ *
+ * The draft is why this takes options. A pick is a fact on a player, and only
+ * the lead drafter's picks reach the database — so the pick path has to be able
+ * to say that a fact is this person's alone. setFactsMany grew the same
+ * parameter first and this one did not, which left the on-air path — one player
+ * at a time, as each pick is made — writing every expert's picks to the shared
+ * registry. Measured against the emulator: with one expert holding the lead,
+ * another expert's pick landed.
+ */
+export function setFacts(id, patch, opts) {
     const record = byId(id);
     if (!record) return false;
 
@@ -392,7 +406,7 @@ export function setFacts(id, patch) {
     if (!changed) return false;
 
     next.updatedAt = new Date().toISOString();
-    writeOne(next);
+    writeOne(next, opts);
     return true;
 }
 

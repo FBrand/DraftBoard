@@ -42,22 +42,43 @@ const slotKey = (slot) => {
     return shown ? `name:${shown.toLowerCase()}` : null;
 };
 
-/** Everybody in `from` who is nowhere in `to`, as slots ready for the cuts. */
+/** Every slot in a chart, wherever it sits: on the depth chart, IR, or cut. */
+function everySlot(chart) {
+    return [
+        ...Object.values(chart?.depthChart ?? {}).flatMap(slots => slots ?? []),
+        ...(chart?.reserve ?? []),
+        ...(chart?.cuts ?? []),
+    ];
+}
+
+/**
+ * Everybody in `from` who is nowhere in `to`, as slots ready for the cuts.
+ *
+ * BOTH sides are scanned whole — depth chart, injured reserve and cut panel.
+ *
+ * The first version of this compared `slotIdentity(slot).name`, a field that
+ * does not exist, so nobody was ever found displaced. The second scanned only
+ * `from.depthChart`, which is worse in a quieter way: adopting official replaces
+ * the whole state, so a player on the adopter's INJURED RESERVE whom official
+ * does not carry was neither kept nor cut. He was gone, and countDisplaced
+ * undercounted by exactly that set — so the confirmation said a number lower
+ * than the real loss. SPEC.md §6 calls players disappearing with nothing saying
+ * which the one version of this that must not ship, and it shipped for the
+ * reserve zone. The suite that caught the first bug compared depth-chart slots
+ * and never built a reserve.
+ */
 function playersNotIn(from, to) {
     const held = new Set();
-    const note = (sl) => { const k = slotKey(sl); if (k) held.add(k); };
-    Object.values(to.depthChart ?? {}).forEach(slots => (slots ?? []).forEach(note));
-    (to.cuts ?? []).forEach(note);
-    (to.reserve ?? []).forEach(note);
+    everySlot(to).forEach(sl => { const k = slotKey(sl); if (k) held.add(k); });
 
     const out = [];
     const seen = new Set();
-    Object.values(from.depthChart ?? {}).forEach(slots => (slots ?? []).forEach(sl => {
+    everySlot(from).forEach(sl => {
         const k = slotKey(sl);
         if (!k || held.has(k) || seen.has(k)) return;
         seen.add(k);
         out.push(sl);
-    }));
+    });
     return out;
 }
 
@@ -131,7 +152,13 @@ export function createOfficialVersion({ stage, seasonId, loadState, saveState, m
 
         const mine = loadState();
         const displaced = mine ? playersNotIn(mine, official) : [];
-        saveState({ ...official, cuts: [...(official.cuts ?? []), ...displaced] });
+        // Official's placements, official's reserve, and a cut panel holding
+        // both lists — because replacing the whole state means my own cut panel
+        // would go too, and a player I had already cut is still a player I had.
+        saveState({
+            ...official,
+            cuts: [...(official.cuts ?? []), ...displaced],
+        });
         return { adopted: true, displaced: displaced.length };
     }
 

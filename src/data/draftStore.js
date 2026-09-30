@@ -148,11 +148,12 @@ export function claimLead(seasonId) {
     const held = draftLead(seasonId);
     if (held && held !== me) return false;
 
-    const scope = draftScope(seasonId);
-    const before = repository.get(DRAFT_STATE, scope);
-    // Merged, not replaced: the draft itself lives in the same document and
-    // claiming must not throw away the picks already in it.
-    repository.set(DRAFT_STATE, scope, { ...(before ?? {}), o: me });
+    // Naming `o` and nothing else. Reassembling the document from cache would
+    // carry a stale `value` back over picks made since it was read — and claiming
+    // the lead is exactly the moment somebody's cache is oldest.
+    repository.commitMany([{
+        collection: DRAFT_STATE, id: draftScope(seasonId), doc: { o: me }, merge: true,
+    }]);
     return true;
 }
 
@@ -161,9 +162,9 @@ export function releaseLead(seasonId) {
     const me = repository.identity();
     if (!me || draftLead(seasonId) !== me) return false;
 
-    const scope = draftScope(seasonId);
-    const before = repository.get(DRAFT_STATE, scope);
-    repository.set(DRAFT_STATE, scope, { ...(before ?? {}), o: null });
+    repository.commitMany([{
+        collection: DRAFT_STATE, id: draftScope(seasonId), doc: { o: null }, merge: true,
+    }]);
     return true;
 }
 
@@ -272,11 +273,20 @@ export function writeDraft(seasonId, state) {
         // The season is the key. It was in the body too — the last document in
         // the app still stating its own address.
         //
-        // `o` is carried across deliberately. The lead lives in this same
-        // document, and writing `{ value }` alone would release the lead on
-        // every pick — the holder losing it by using it.
-        const kept = before?.o === undefined ? {} : { o: before.o };
-        repository.set(DRAFT_STATE, scope, { ...kept, value: rest }, privateDraft(seasonId));
+        // A MERGE naming `value`, not a replacement carrying `o` across.
+        //
+        // Carrying it across was the whole-record-from-cache pattern that
+        // commit 6b3c2b5 removed from boardEntries — reintroduced here one
+        // commit later, in a document whose other field is the one the rules
+        // read to decide whether the write is allowed. Two tabs of the same
+        // expert are both the lead, and each wrote the document whole from a
+        // cache that never saw the other; a stale `o` is also written back and
+        // refused outright. Naming `value` leaves the lead alone without
+        // needing to know what it is.
+        repository.commitMany(
+            [{ collection: DRAFT_STATE, id: scope, doc: { value: rest }, merge: true }],
+            privateDraft(seasonId),
+        );
     }
 }
 

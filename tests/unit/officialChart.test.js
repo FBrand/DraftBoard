@@ -4,7 +4,7 @@ import { openBoards, currentSeason } from '../../src/utils/boardRegistry';
 import { openDepthCharts } from '../../src/data/depthChartStore';
 import {
     saveState, loadState, loadOfficial, publishOfficial, adoptOfficial,
-    fillFromOfficial, officialStamp, isOwn, makeSlot,
+    fillFromOfficial, officialStamp, isOwn, makeSlot, countDisplaced,
 } from '../../src/utils/rosterState';
 
 /**
@@ -113,5 +113,72 @@ describe('filling the gaps from official', () => {
         const once = namesIn(loadState(), 'QB');
         expect(fillFromOfficial().filled).toBe(0);
         expect(namesIn(loadState(), 'QB')).toEqual(once);
+    });
+});
+
+/**
+ * The zones the first two versions of this did not look at.
+ *
+ * `playersNotIn` compared a field that does not exist (caught), then scanned only
+ * the depth chart (not caught). Adopting official replaces the whole state, so a
+ * player on the adopter's INJURED RESERVE whom official does not carry was
+ * neither kept nor cut — gone, with the confirmation dialog stating a number
+ * lower than the real loss.
+ *
+ * The suite that caught the first bug compared depth-chart slots and never built
+ * a reserve, which is why the second survived it. These build one.
+ */
+describe('adopting official, with players outside the depth chart', () => {
+    const withReserve = (qbs, reserve, cuts = []) => ({
+        positionConfig: { offense: [{ id: 'QB', label: 'QB', slots53: Math.max(1, qbs.length) }], defense: [] },
+        depthChart: { QB: qbs.map(n => makeSlot(n)) },
+        reserve: reserve.map(n => makeSlot(n)),
+        cuts: cuts.map(n => makeSlot(n)),
+    });
+    const allNames = (state) => [
+        ...(state.depthChart.QB ?? []).map(s => s?.name),
+        ...(state.reserve ?? []).map(s => s?.name),
+        ...(state.cuts ?? []).map(s => s?.name),
+    ].filter(Boolean);
+
+    it('keeps a player who was on my injured reserve', () => {
+        saveState(withReserve(['Mahomes'], []));
+        publishOfficial();
+        saveState(withReserve(['Mahomes'], ['Hurt Guy']));
+
+        const result = adoptOfficial();
+        // He is displaced, and he is still somewhere.
+        expect(result.displaced).toBe(1);
+        expect(allNames(loadState())).toContain('Hurt Guy');
+    });
+
+    it('keeps a player I had already cut', () => {
+        saveState(withReserve(['Mahomes'], []));
+        publishOfficial();
+        saveState(withReserve(['Mahomes'], [], ['Already Cut']));
+
+        adoptOfficial();
+        expect(allNames(loadState())).toContain('Already Cut');
+    });
+
+    it('counts him before it moves him, so the dialog does not understate', () => {
+        saveState(withReserve(['Mahomes'], []));
+        publishOfficial();
+        saveState(withReserve(['Mahomes'], ['Hurt Guy'], ['Already Cut']));
+
+        // The number the confirmation shows has to be the number that moves.
+        const predicted = countDisplaced();
+        const actual = adoptOfficial().displaced;
+        expect(predicted).toBe(actual);
+        expect(predicted).toBe(2);
+    });
+
+    it('does not cut somebody official has on ITS reserve', () => {
+        // He is not displaced: official carries him, just not on the 53.
+        saveState(withReserve(['Mahomes'], ['Shared Injury']));
+        publishOfficial();
+        saveState(withReserve(['Mahomes'], ['Shared Injury']));
+
+        expect(adoptOfficial().displaced).toBe(0);
     });
 });

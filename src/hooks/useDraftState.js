@@ -3,7 +3,7 @@ import { openProspects } from '../data/prospectStore';
 import { readStage, removeStage, openStages } from '../data/stageStore';
 import { joinIndex, findJoin } from '../utils/pickJoin';
 import { openDepthCharts } from '../data/depthChartStore';
-import { readDraft, writeDraft, hasDraft, openDraft, DRAFT_STATE } from '../data/draftStore';
+import { readDraft, writeDraft, hasDraft, openDraft, iAmLead, DRAFT_STATE } from '../data/draftStore';
 import { repository } from '../data/repository';
 import { PLAYERS } from '../utils/playerRegistry';
 import { reconcileDraft } from '../utils/draftReconcile';
@@ -484,18 +484,24 @@ export const useDraftState = () => {
         // from dividing the pick number, which compensatory picks break.
         const id = resolvePlayer({ name: player.name, position: player.position, school: player.school });
         if (id) {
+            // Marked when this is not the live draft — see draftStore.iAmLead.
+            // A pick is a fact on a PLAYER and the players collection is shared,
+            // so without this every expert running a what-if writes his picks
+            // onto everybody's player cards. The rules cannot tell the two
+            // apart: the same collection carries names and schools that an
+            // expert should publish, and only the caller knows which this is.
             setFacts(id, {
                 isUdfa: false,
                 draftYear: DRAFT_YEAR,
                 draftPick: pickNumber,
                 draftRound: roundForPick(pickNumber),
                 team,
-            });
+            }, privatePick());
         }
 
         triggerChime();
         setCurrentPick(prev => prev + 1);
-    }, [currentPick, ourPicksLeft, remotePicks, players, saveHistory, triggerChime]);
+    }, [currentPick, ourPicksLeft, remotePicks, players, saveHistory, triggerChime, privatePick]);
 
     /**
      * Signs an undrafted free agent. Deliberately NOT draftPlayer: that stamps
@@ -532,8 +538,23 @@ export const useDraftState = () => {
 
         // Going undrafted is just as much a league-entry fact as being picked.
         const id = resolvePlayer({ name: player.name, position: player.position, school: player.school });
-        if (id) setFacts(id, { isUdfa: true, draftYear: DRAFT_YEAR, draftPick: null, draftRound: null, team: club });
-    }, [draftedPlayers, players, saveHistory]);
+        // Same reason as a drafted pick: an undrafted signing is a fact on a
+        // player, and only the live draft's signings belong to everybody.
+        if (id) {
+            setFacts(id, {
+                isUdfa: true, draftYear: DRAFT_YEAR, draftPick: null, draftRound: null, team: club,
+            }, privatePick());
+        }
+    }, [draftedPlayers, players, saveHistory, privatePick]);
+
+    /**
+     * Whether a pick belongs to the live draft or only to this machine.
+     *
+     * Asked at the moment of the write rather than captured, because the lead
+     * can be claimed or released while the app is running — and a captured
+     * answer is what kept an expert writing to the wrong place for a session.
+     */
+    const privatePick = useCallback(() => ({ mine: !iAmLead(seasonId()) }), []);
 
     const undoAction = useCallback(() => {
         if (!history) return;

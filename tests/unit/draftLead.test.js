@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { repository } from '../../src/data/repository';
 import {
     DRAFT_STATE, draftScope, draftLead, iAmLead, claimLead, releaseLead,
@@ -85,5 +85,54 @@ describe('holding the live draft', () => {
         claimLead(SEASON);
         expect(claimLead(SEASON)).toBe(true);
         expect(draftLead(SEASON)).toBe(me());
+    });
+});
+
+/**
+ * Two tabs, one expert, and neither of them writing the other's work away.
+ *
+ * The lead is one uid, not one session, so both tabs answer `iAmLead` true and
+ * both write the draft. That is fine — they are the same person — as long as
+ * neither writes the DOCUMENT whole from its own cache: the loser's copy never
+ * saw the winner's picks, and a stale `o` written back is refused outright by the
+ * rules, taking the write with it.
+ *
+ * The same whole-record-from-cache pattern was removed from boardEntries one
+ * commit before it was reintroduced here.
+ */
+describe('two writers of one draft', () => {
+    it('names the field it changes, so a stale cache cannot carry the lead back', () => {
+        claimLead(SEASON);
+
+        const calls = [];
+        const spy = vi.spyOn(repository, 'commitMany').mockImplementation((items) => {
+            calls.push(...items);
+            return Promise.resolve([]);
+        });
+
+        writeDraft(SEASON, { currentPick: 30, ourPicksLeft: [] });
+
+        const draftWrite = calls.find(c => c.collection === DRAFT_STATE);
+        expect(draftWrite).toBeTruthy();
+        expect(Object.keys(draftWrite.doc)).toEqual(['value']);
+        expect(draftWrite.merge).toBe(true);
+        spy.mockRestore();
+    });
+
+    it('claims by naming the lead, not by rewriting the picks', () => {
+        writeDraft(SEASON, { currentPick: 55, ourPicksLeft: [] });
+
+        const calls = [];
+        const spy = vi.spyOn(repository, 'commitMany').mockImplementation((items) => {
+            calls.push(...items);
+            return Promise.resolve([]);
+        });
+
+        claimLead(SEASON);
+
+        const [claim] = calls.filter(c => c.collection === DRAFT_STATE);
+        expect(Object.keys(claim.doc)).toEqual(['o']);
+        expect(claim.merge).toBe(true);
+        spy.mockRestore();
     });
 });

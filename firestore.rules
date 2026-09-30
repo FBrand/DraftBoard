@@ -663,12 +663,33 @@ service cloud.firestore {
         // nobody holds it: any expert may write, as before the lead existed
         || (resource.data.get('o', null) == null
             && request.resource.data.get('o', null) == null)
+        // THE HOLDER HAS BEEN REVOKED, so somebody else may take it.
+        //
+        // Without this the live draft freezes permanently, and it was measured
+        // doing so: with the holder's email2author entry deleted, every route
+        // out was refused — another expert claiming it, another expert writing
+        // it while leaving `o` alone, another expert deleting it to start again,
+        // and the holder himself releasing it, because he is no longer an
+        // expert and isExpert() gates all four.
+        //
+        // The identical board state recovers, because /boards carries exactly
+        // this carve-out and explains at length the lockout it prevents. The
+        // draft was given the same field, the same shape and the same
+        // claim/release grammar, and not this clause.
+        //
+        // It costs the reads ownerRevoked() costs, and only on this branch:
+        // every clause above it answers from the token and the stored document.
+        || (ownerRevoked(resource.data.get('o', null))
+            && request.resource.data.get('o', null) == request.auth.uid)
       );
 
-      // Scrapping a draft is the holder's, or anybody's while it is unheld.
+      // Scrapping a draft is the holder's, anybody's while it is unheld, and
+      // anybody's once the holder has been revoked — the same three cases the
+      // update rule admits, for the same reason.
       allow delete: if isExpert()
                     && (resource.data.get('o', null) == null
-                        || resource.data.get('o', null) == request.auth.uid);
+                        || resource.data.get('o', null) == request.auth.uid
+                        || ownerRevoked(resource.data.get('o', null)));
     }
 
     // --- everything else --------------------------------------------------

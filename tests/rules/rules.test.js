@@ -987,3 +987,61 @@ describe('the lead drafter', () => {
         await assertSucceeds(getDoc(doc(stranger(), path)));
     });
 });
+
+/**
+ * A revoked lead does not freeze the draft.
+ *
+ * Measured before this existed: with the holder's email2author entry deleted —
+ * which is what revocation IS in this design — every route out was refused.
+ * Another expert claiming it, another expert writing it while leaving `o` alone,
+ * another expert deleting it to start again, and the holder himself releasing
+ * it, because he is no longer an expert and isExpert() gates all four. On air
+ * that is one withdrawn invitation between the show and an unwritable draft.
+ *
+ * The identical board state always recovered, because /boards carries exactly
+ * this carve-out and explains at length the lockout it prevents. The draft was
+ * given the same field, the same shape and the same claim/release grammar, and
+ * not the clause.
+ */
+describe('a revoked lead drafter', () => {
+    const path = 'draft_state/s_1';
+    /** Holds the draft, and is then no longer an expert. */
+    const revokedHolder = async (uid, email) => {
+        await env.withSecurityRulesDisabled(async (ctx) => {
+            const db = ctx.firestore();
+            await setDoc(doc(db, path), { o: uid, value: { currentPick: 12 } });
+            await setDoc(doc(db, `authors/${uid}`), { n: 'Gone', e: email });
+            await deleteDoc(doc(db, `email2author/${email}`));
+        });
+    };
+
+    it('can be taken over by another expert', async () => {
+        await revokedHolder('dan-uid', 'dan-uid@example.com');
+        await assertSucceeds(setDoc(doc(expert('ryan-uid'), path), {
+            o: 'ryan-uid', value: { currentPick: 12 },
+        }));
+    });
+
+    it('can be scrapped by another expert', async () => {
+        await revokedHolder('dan-uid', 'dan-uid@example.com');
+        await assertSucceeds(deleteDoc(doc(expert('ryan-uid'), path)));
+    });
+
+    it('is still not claimable on a third party’s behalf', async () => {
+        // The recovery must not become a way to hand the draft to somebody who
+        // was not asking for it.
+        await revokedHolder('dan-uid', 'dan-uid@example.com');
+        await assertFails(setDoc(doc(expert('ryan-uid'), path), {
+            o: 'someone-else', value: { currentPick: 12 },
+        }));
+    });
+
+    it('is still protected while the holder IS an expert', async () => {
+        // The carve-out keys on revocation, not on wanting it: an invited
+        // holder keeps his draft.
+        await env.withSecurityRulesDisabled(async (ctx) => {
+            await setDoc(doc(ctx.firestore(), path), { o: 'dan-uid', value: {} });
+        });
+        await assertFails(setDoc(doc(expert('ryan-uid'), path), { o: 'ryan-uid', value: {} }));
+    });
+});
