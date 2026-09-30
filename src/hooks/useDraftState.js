@@ -138,6 +138,21 @@ export const useDraftState = () => {
     const [canLiveSync, setCanLiveSync] = useState(false);
     const [columnOrder, setColumnOrder] = useState([]);
 
+    /**
+     * Whether a pick belongs to the live draft or only to this machine.
+     *
+     * Asked at the moment of the write rather than captured, because the lead
+     * can be claimed or released while the app is running — and a captured
+     * answer is what kept an expert writing to the wrong place for a session.
+     *
+     * Declared HERE, above every callback that lists it as a dependency. It was
+     * below them, and a `const` named in a dependency array that evaluates
+     * earlier in the component body is a temporal dead zone: the hook threw on
+     * its first render and the app displayed nothing at all. 750 unit tests
+     * passed throughout, because none of them render a component.
+     */
+    const privatePick = useCallback(() => ({ mine: !iAmLead(seasonId()) }), []);
+
     const triggerChime = useCallback(() => {
         const params = new URLSearchParams(window.location.search);
         if (params.has('chime') && params.get('chime') !== 'false') {
@@ -601,15 +616,6 @@ export const useDraftState = () => {
             }, privatePick());
         }
     }, [draftedPlayers, players, saveHistory, privatePick]);
-
-    /**
-     * Whether a pick belongs to the live draft or only to this machine.
-     *
-     * Asked at the moment of the write rather than captured, because the lead
-     * can be claimed or released while the app is running — and a captured
-     * answer is what kept an expert writing to the wrong place for a session.
-     */
-    const privatePick = useCallback(() => ({ mine: !iAmLead(seasonId()) }), []);
 
     const undoAction = useCallback(() => {
         if (!history) return;

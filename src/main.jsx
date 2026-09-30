@@ -4,6 +4,13 @@ import './index.css'
 import App from './App.jsx'
 import { requestPersistentStorage } from './utils/appStorage'
 import { backendName } from './data/backend'
+// Statically, not with import() inside boot(). Importing these dynamically made
+// them initialise AFTER App's own static graph had begun, which changed module
+// evaluation order enough to surface a cycle: the page died with "Cannot access
+// 'N' before initialization" and rendered nothing. The app imports both of these
+// from everywhere already, so importing them here adds no edge to the graph.
+import { hydrateIfEmpty } from './data/hydrate'
+import { repository } from './data/repository'
 
 // Ask before the app writes anything: every board and every evaluation lives
 // in localStorage, which a browser is otherwise free to evict under disk
@@ -40,8 +47,40 @@ if (backendName() === 'firebase') {
     .catch(err => console.warn('Could not start a session; continuing as a reader.', err?.code ?? err))
 }
 
-createRoot(document.getElementById('root')).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-)
+/**
+ * A local store is filled from a pre-built snapshot BEFORE anything renders.
+ *
+ * This is the one thing worth holding the first paint for, and the reason is the
+ * opposite of the reason auth is not: hydration decides what is in the store, and
+ * every read after it is wrong if it has not finished. A view that mounts first
+ * sees an empty store, and an empty store is what this app has historically
+ * responded to by writing its own defaults. Auth only decides who you are, which
+ * the app can converge on afterwards.
+ *
+ * It is a local file fetch into an empty store, so it is fast, and it does
+ * nothing at all on a shared backend — that project is seeded from outside
+ * before anybody signs in, and hydrate.js refuses a store it can watch.
+ *
+ * Never allowed to stop the app coming up: a build that ships no snapshot is a
+ * legitimate build, and so is one whose snapshot cannot be read.
+ */
+async function boot() {
+  try {
+    const result = await hydrateIfEmpty(repository.adapter)
+    if (result.hydrated) {
+      console.info(`Loaded the shipped ${result.season?.year ?? ''} data: ${result.documents} documents.`)
+      // The repository caches per collection, and hydration wrote underneath it.
+      repository.invalidate()
+    }
+  } catch (err) {
+    console.warn('Could not load the shipped data; starting empty.', err?.message ?? err)
+  }
+
+  createRoot(document.getElementById('root')).render(
+    <StrictMode>
+      <App />
+    </StrictMode>,
+  )
+}
+
+boot()

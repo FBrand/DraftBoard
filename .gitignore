@@ -38,6 +38,9 @@ dist-fb/
 dist-fast/
 dist-fb2/
 dist-*/
+# A build artifact: run npm run seed:snapshot. Never committed — it would be a
+# second copy of the shipped data, stale the moment the seeder changes.
+public/seed-snapshot.json
 dist-fbbroken/
 
 # The emulator's debug log. It reached 2.4GB in one session of audit runs and
