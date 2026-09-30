@@ -1702,3 +1702,37 @@ LT **is** an OT, and the lookup finds him. A guard row still does not.
 3. Firebase migration — in progress on branch `firebase`; the app reads a
    season out of Firestore, a viewer follows an expert's board, and an expert's
    writes reach the shared store. Remaining: a sign-in control, and deploy config.
+
+## Open after the snapshot-hydration change (2026-09-30)
+
+The local build now boots from a pre-built snapshot (`npm run seed:snapshot`,
+hydrated by `data/hydrate.js`) rather than seeding itself from the shipped CSVs.
+Four browser tests fail against it. Three are accounted for; one is not. To be
+verified and fixed **after** the seeding extraction finishes, because three of
+the four are about code that is being deleted.
+
+1. **`core.spec.js` — "scouting: reordering the ranking survives a reload".
+   UNEXPLAINED, and the one to take seriously.** A drag lands correctly and the
+   order after a reload differs: two players leave the top five. The stored data
+   is right — the snapshot carries `withinGroup` 1..N in the analyst's file
+   order, verified against `rankings_consensus.csv` — so this is about how ranks
+   are recomputed from those values after a midpoint insertion, not about what
+   was seeded. Possibly a latent bug that in-browser seeding masked by producing
+   different spacing. Touches `boardRanking`, which `CLAUDE.md` flags as the
+   part most easily broken by a well-meaning change.
+
+2. **`officialRoster.spec.js` — both tests.** Mine, and they encode a
+   pre-hydration assumption: a fresh browser now shows the OFFICIAL roster,
+   because the snapshot seeds one, so "your own roster" and the Take-official
+   control are not what a first load presents. The app is right and the tests
+   are stale. They also expose a real gap: after publishing, you still have no
+   chart of your own, so the controls that need one stay hidden.
+
+3. **`fileIssues.spec.js` — "a file that rates a player twice says so".** The
+   warning came from re-reading a seeded board's rankings file. Nothing re-reads
+   it now. The check belongs to the seeder, which is where the file is read.
+
+Also open, from the same change: the app writes 7 documents of its own after
+hydration (1784 in storage against 1777 in the snapshot). Harmless but
+unexplained, and it should be zero once the seeding paths are gone — worth using
+as the check that they are.
