@@ -457,6 +457,13 @@ async function build() {
         seedBoard(b.id, pool);
     }
 
+    // Who is in this season's pool, marked on the players themselves, so a
+    // listener can be scoped to one season instead of watching all 720 records.
+    // See seed/stampPools.js for why that is the shape and not "read by id".
+    const { stampPools } = await import(`${ROOT}/scripts/seed/stampPools.js`);
+    const marked = stampPools(season.id, boards.map(b => b.id));
+    console.log(`Pool: ${marked} players marked as in season ${season.id}.`);
+
     // ---- the other stages -------------------------------------------------
     //
     // The boards are not the season. Withholding the CSVs stopped the facts,

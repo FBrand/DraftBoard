@@ -84,6 +84,27 @@ export const playerFields = renamer({
     athleticMatrixPosition: 'o',
     createdAt: 'c',
     updatedAt: 'e',
+    /**
+     * Which seasons' pools this player is in.
+     *
+     * Denormalised onto the player so a LISTENER can be scoped to one season:
+     * `where('i', 'array-contains', seasonId)`. Firestore bills a listener's
+     * initial snapshot per document returned, so an unscoped one on this
+     * collection costs 720 reads on every boot — measured — for a board that
+     * names 328 of them.
+     *
+     * Phase 6 called this "read the registry by reference", which cannot work
+     * as written: the registry is WATCHED, not read, because a pick is a fact on
+     * a player and the live draft follows the collection. Fetching 328 by id
+     * would not remove the listener, and the listener is what costs. Scoping the
+     * listener is the version of that idea which survives contact with how picks
+     * are stored.
+     *
+     * Written by the seeder, which knows the pool because it built the entries.
+     * An array rather than a single id because a player runs across seasons and
+     * the registry outlives any one of them.
+     */
+    inPools: 'i',
 }, 'player');
 
 /**

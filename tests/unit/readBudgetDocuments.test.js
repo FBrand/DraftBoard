@@ -99,3 +99,46 @@ describe('a cold load, in documents', () => {
         expect(total).toBeLessThan(3000);
     }, 60_000);
 });
+
+/**
+ * The pool is marked on the players, which is what makes a scoped listener
+ * possible.
+ *
+ * Phase 6 called this "read the registry by reference", and that cannot work as
+ * written: the registry is WATCHED, not read — a pick is a fact on a player and
+ * the live draft follows the collection — so fetching 328 documents by id would
+ * not remove the listener, and the listener is what Firestore bills. Scoping the
+ * listener to one season is the version of the idea that survives how picks are
+ * stored, and it needs a field on the player to filter on.
+ */
+describe('the pool marker', () => {
+    it('names the players a season’s boards have entries for, and no others', () => {
+        const players = snapshot.collections.players;
+        const marked = Object.keys(players).filter(id => Array.isArray(players[id].i) && players[id].i.length);
+
+        // Every entry's document id IS a player id, so the two sets must agree.
+        const inEntries = new Set();
+        Object.entries(snapshot.collections).forEach(([path, docs]) => {
+            if (/^boards\/[^/]+\/entries$/.test(path)) Object.keys(docs).forEach(id => inEntries.add(id));
+        });
+
+        expect(marked.length).toBe(inEntries.size);
+        expect(marked.every(id => inEntries.has(id))).toBe(true);
+    });
+
+    it('is a strict subset, which is the whole point', () => {
+        const players = snapshot.collections.players;
+        const marked = Object.keys(players).filter(id => Array.isArray(players[id].i) && players[id].i.length);
+
+        // 328 of 720. The rest are roster veterans and past draft classes: real
+        // records the registry keeps and this season's boards never name.
+        expect(marked.length).toBeLessThan(Object.keys(players).length);
+        expect(marked.length).toBeGreaterThan(300);
+    });
+
+    it('carries the season, so five seasons do not each cost the last one', () => {
+        const players = snapshot.collections.players;
+        const [id] = Object.keys(players).filter(k => Array.isArray(players[k].i) && players[k].i.length);
+        expect(players[id].i[0]).toMatch(/^s_/);
+    });
+});
