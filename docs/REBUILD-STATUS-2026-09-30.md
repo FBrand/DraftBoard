@@ -216,3 +216,36 @@ waste, they are the data.
 - Placeholder authors for Dan and Ryan stay by explicit decision while in PoC.
   They are inert — nobody can ever hold that voice — so they can only hold seed
   data.
+
+---
+
+## 5. Overlay removal — where it actually starts
+
+**Step 1 is done** (`ae3723a`): the layered store can express a private write.
+That was the blocker behind audit R8 — the overlay honours `{ mine: true }` and
+the newer seam could not ask for one, so moving any collection across would have
+started publishing every expert's what-if picks the day `players` moved.
+
+**Step 2 hits a real obstacle, which is worth stating before somebody starts it.**
+`appStore.MIGRATED` is a static list of collection names — `['evaluations']` —
+and `isMigrated` matches a path against it by prefix. Every remaining candidate
+embeds a season or board id in its path:
+
+    seasons/{seasonId}/prospects
+    seasons/{seasonId}/charts/{stage}/scopes/{whose}/rows
+    boards/{boardId}/entries
+
+A static list cannot express those, and prefixing on `seasons` would capture
+every stage at once — which is the opposite of a collection-at-a-time migration.
+So the first piece of step 2 is turning `MIGRATED` into a **predicate** over
+paths, not adding a name to a list.
+
+Two other things to know before starting:
+
+- **`isMigrated` has no callers.** Nothing enforces the split; it is a comment
+  with a function signature. Whatever replaces it should be asked by the thing
+  that routes a read, or it will drift the same way.
+- **Order matters.** `players` and `draft_state` are watched, and the live draft
+  depends on following them, so they move last. Something owned by one module and
+  watched by nothing goes first — `seasons/{id}/prospects` and its two siblings
+  are the cleanest candidate, being three collections with a single owner.
