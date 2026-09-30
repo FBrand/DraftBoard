@@ -26,6 +26,7 @@ import { seasonFields } from './fieldNames';
 import {
     PLAYERS, byId, loadRegistry, setFactsMany, factsFor, resolveAll,
 } from '../utils/playerRegistry';
+import { roundForPick } from '../utils/draftPhase';
 
 export const DRAFT_STATE = 'draft_state';
 
@@ -193,7 +194,14 @@ export function readDraft(seasonId) {
 const KEPT = ['currentPick', 'ourPicksLeft', 'remotePicks'];
 
 /** The fields a selection sets on a player. Everything else is his own. */
-const DRAFT_FACTS = ['draftYear', 'draftPick', 'team', 'isUdfa'];
+// draftRound is in here, and it is the fix for a write on every boot.
+//
+// This list left it out while useDraftState.recordDraftFacts wrote it — so
+// whoever stored a draft stored no round, and the next boot noticed the
+// difference and wrote it. Measured on a hydrated store: 30 player documents
+// rewritten 2.4 seconds after load, on the shared players collection, because
+// merely opening the app reconciled a field the seeder had not recorded.
+const DRAFT_FACTS = ['draftYear', 'draftPick', 'draftRound', 'team', 'isUdfa'];
 
 function pickFacts(p, year) {
     const n = Number(p?.pickNumber);
@@ -206,6 +214,11 @@ function pickFacts(p, year) {
         isUdfa: !numbered,
         // An explicitly empty club is "signed, no club yet" and must survive.
         team: p?.team ?? null,
+        // From the round SIZES an expert stated, never by dividing the pick:
+        // compensatory picks make ceil(pick / 32) wrong from round three on, and
+        // a confidently wrong round is worse than a blank one. Anything past the
+        // last stated boundary gets no round rather than a guessed one.
+        draftRound: numbered ? roundForPick(n) : null,
     };
 }
 
