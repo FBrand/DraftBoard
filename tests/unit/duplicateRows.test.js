@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { duplicatesIn } from '../../src/hooks/useBoardRankings';
+import { duplicatesInParsed } from '../../scripts/seed/checkRankings.mjs';
 
 /**
  * A file that rates one man twice.
@@ -17,7 +17,7 @@ const row = (name, position, round, tier) => ({ name, position, round, tier });
 
 describe('spotting a file that contradicts itself', () => {
     it('finds the same man rated twice', () => {
-        const out = duplicatesIn({
+        const out = duplicatesInParsed({
             dan: [row('Jakobe Thomas', 'S', 3, 4), row('Jakobe Thomas', 'S', 5, 3)],
         });
 
@@ -26,7 +26,7 @@ describe('spotting a file that contradicts itself', () => {
     });
 
     it('says what the rows disagree about, not merely that they do', () => {
-        const [issue] = duplicatesIn({
+        const [issue] = duplicatesInParsed({
             dan: [row('Jakobe Thomas', 'S', 3, 4), row('Jakobe Thomas', 'S', 5, 3)],
         });
         expect(issue.placements).toEqual(['3.4', '5.3']);
@@ -35,27 +35,27 @@ describe('spotting a file that contradicts itself', () => {
     it('leaves two different men sharing a name alone', () => {
         // The legitimate case. Mike Green the edge rusher and Mike Green the
         // receiver are two people, and the app already keys them apart.
-        expect(duplicatesIn({
+        expect(duplicatesInParsed({
             dan: [row('Mike Green', 'EDGE', 2, 1), row('Mike Green', 'WR', 4, 2)],
         })).toEqual([]);
     });
 
     it('reports an unranked row as unranked rather than as a placement', () => {
-        const [issue] = duplicatesIn({
+        const [issue] = duplicatesInParsed({
             dan: [row('Somebody', 'QB', null, null), row('Somebody', 'QB', 1, 1)],
         });
         expect(issue.placements).toEqual(['unranked', '1.1']);
     });
 
     it('counts three rows as three', () => {
-        const [issue] = duplicatesIn({
+        const [issue] = duplicatesInParsed({
             dan: [row('Somebody', 'QB', 1, 1), row('Somebody', 'QB', 2, 1), row('Somebody', 'QB', 3, 1)],
         });
         expect(issue.count).toBe(3);
     });
 
     it('keeps each board’s problems to that board', () => {
-        const out = duplicatesIn({
+        const out = duplicatesInParsed({
             dan: [row('A Man', 'QB', 1, 1), row('A Man', 'QB', 2, 1)],
             ryan: [row('A Man', 'QB', 1, 1)],
         });
@@ -63,11 +63,11 @@ describe('spotting a file that contradicts itself', () => {
     });
 
     it('says nothing about a clean set of files', () => {
-        expect(duplicatesIn({
+        expect(duplicatesInParsed({
             dan: [row('One', 'QB', 1, 1), row('Two', 'RB', 1, 2)],
             ryan: [row('One', 'QB', 2, 1)],
         })).toEqual([]);
-        expect(duplicatesIn({})).toEqual([]);
-        expect(duplicatesIn(null)).toEqual([]);
+        expect(duplicatesInParsed({})).toEqual([]);
+        expect(duplicatesInParsed(null)).toEqual([]);
     });
 });

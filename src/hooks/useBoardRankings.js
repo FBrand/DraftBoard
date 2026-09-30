@@ -58,47 +58,10 @@ function joinKeyFor(files) {
     return (p) => (ambiguous.has(nameKey(p.name)) ? identityKey(p.name, p.position) : nameKey(p.name));
 }
 
-/**
- * Players a file rates twice — the same man, at the same position, on two
- * rows.
- *
- * Not the same thing as the ambiguity above. A name appearing twice at two
- * POSITIONS is an analyst deliberately listing two people, and the app handles
- * it by making position part of the key. A name appearing twice at ONE
- * position is a file contradicting itself: rankings_dan.csv had Jakobe Thomas
- * at 3.4 and again at 5.3.
- *
- * That was resolved silently, by line order, and the two rules involved
- * disagreed — the shared pool kept the first row, the board's own placement
- * kept the last. Nobody was told either way, and the board rendered as though
- * the file said one thing.
- */
-export function duplicatesIn(files) {
-    const out = [];
-    Object.entries(files ?? {}).forEach(([boardId, file]) => {
-        const counts = new Map();
-        (file ?? []).forEach(p => {
-            const key = identityKey(p.name, p.position);
-            const seen = counts.get(key);
-            if (seen) seen.rows.push(p);
-            else counts.set(key, { name: p.name, position: p.position, rows: [p] });
-        });
-        counts.forEach(v => {
-            if (v.rows.length > 1) {
-                out.push({
-                    boardId,
-                    name: v.name,
-                    position: v.position,
-                    count: v.rows.length,
-                    // What the rows actually disagree about, which is the part
-                    // worth showing: "3.4 and 5.3" says more than "twice".
-                    placements: v.rows.map(r => (r.round == null ? 'unranked' : `${r.round}.${r.tier ?? 1}`)),
-                });
-            }
-        });
-    });
-    return out;
-}
+// duplicatesIn() was here. It found a rankings file rating one player twice.
+// Nothing reads those files now, and a pool built from board entries is one
+// document per player — so it is the seeder's check: scripts/seed/checkRankings.mjs.
+
 
 /**
  * Every player any board knows about, in consensus order first so the biggest
@@ -165,7 +128,6 @@ function loadPools({ allBoards = false } = {}) {
         // "app-added" player: they are all just players.
         // Recorded here because this is the only place the raw files are
         // seen. Handed out with the pools so somebody can be told.
-        fileDuplicates = duplicatesIn(files);
 
         const keyOf = joinKeyFor(files);
         const union = applyProspects(unionOfFiles(files, keyOf));
@@ -322,8 +284,6 @@ export function invalidateBoards() {
     invalidatePools();
 }
 
-/** What the last load found wrong with the files. See duplicatesIn. */
-let fileDuplicates = [];
 
 export default function useBoardRankings(fallback, { allBoards = false } = {}) {
     const [pools, setPools] = useState(null);
@@ -345,7 +305,6 @@ export default function useBoardRankings(fallback, { allBoards = false } = {}) {
     // it as an effect dependency — "the pools have arrived" is the signal that
     // the boards have been seeded and are worth re-reading — and a fresh
     // object every render would make that fire forever.
-    const duplicates = useMemo(() => (pools ? fileDuplicates : []), [pools]);
 
     const resolved = useMemo(
         () => (pools ? Object.fromEntries(Object.keys(pools).map(b => [b, pools[b]?.length ? pools[b] : fallback])) : null),
@@ -353,5 +312,5 @@ export default function useBoardRankings(fallback, { allBoards = false } = {}) {
     );
 
     if (!resolved) return { pools: null, loading: true, duplicates: [] };
-    return { pools: resolved, loading: false, duplicates };
+    return { pools: resolved, loading: false, };
 }

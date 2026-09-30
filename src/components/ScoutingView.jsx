@@ -71,7 +71,7 @@ export default function ScoutingView({ players }) {
     // the info card pages between analysts' takes on the same player, and
     // switching boards must not wait on a fetch. Everywhere else pays for
     // the active board alone — see boardsToOpen.
-    const { pools, duplicates } = useBoardRankings(players, { allBoards: true });
+    const { pools } = useBoardRankings(players, { allBoards: true });
     const boardPlayers = pools?.[activeBoard] ?? players;
     const [selectedNameParam, setSelectedNameParam] = useUrlParam('player', '');
     const selectedName = selectedNameParam || null;
@@ -927,21 +927,12 @@ export default function ScoutingView({ players }) {
                 </div>
             </div>
 
-            {/* A file that contradicts itself. It used to be resolved by line
-                order and never mentioned, so the board rendered as though the
-                file had said one thing. Say it instead. */}
-            {duplicates.length > 0 && (
-                <div className="sg-file-issues">
-                    <span className="sg-file-issues-label">In the rankings file</span>
-                    {duplicates.map(d => (
-                        <span key={`${d.boardId}-${d.name}`} className="sg-file-issue">
-                            <strong>{boardById(d.boardId)?.label ?? 'A board'}</strong> rates{' '}
-                            <strong>{d.name}</strong> {d.count} times — {d.placements.join(' and ')}.
-                            The first is used.
-                        </span>
-                    ))}
-                </div>
-            )}
+            {/* A rankings file that contradicts itself was reported here. The
+                app does not read those files any more — a pool comes from the
+                board's entries, one document per player, so a duplicate is
+                impossible by construction and this could never fire again. The
+                check is the seeder's (scripts/seed/checkRankings.mjs), which
+                reports it while somebody can still fix the CSV. */}
 
             <div className="scouting-layout">
                 {showRanking && (

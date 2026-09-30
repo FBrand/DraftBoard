@@ -389,6 +389,13 @@ async function build() {
     const season = currentSeason();
     if (!season) throw new Error('seedInitialBoards() produced no season — read it before trusting this script.');
 
+    // Contradictory rows, reported while somebody can still fix the CSV —
+    // before 1777 documents are built out of it. The app used to check this on
+    // every load and show a banner; it does not read the files any more, and a
+    // pool built from board entries cannot contain a duplicate.
+    const { reportRankingDuplicates } = await import(`${ROOT}/scripts/seed/checkRankings.mjs`);
+    reportRankingDuplicates(["rankings_consensus.csv", "rankings_dan.csv", "rankings_ryan.csv"].map(f => `${ROOT}/seed-data/${f}`));
+
     const boards = listBoards();
     if (!boards.length) throw new Error('seedInitialBoards() produced no boards.');
 
