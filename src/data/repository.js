@@ -898,9 +898,9 @@ export function createRepository(adapter = localAdapter) {
         return set(collection, id, merged);
     }
 
-    function remove(collection, id) {
+    function remove(collection, id, opts) {
         applyLocal(collection, id, null);
-        return attempt(collection, id, null, 'remove', () => adapter.remove(collection, id));
+        return attempt(collection, id, null, 'remove', () => adapter.remove(collection, id, opts));
     }
 
     /** Several documents in one go — one adapter round trip, one notify. */

@@ -1736,3 +1736,32 @@ Also open, from the same change: the app writes 7 documents of its own after
 hydration (1784 in storage against 1777 in the snapshot). Harmless but
 unexplained, and it should be zero once the seeding paths are gone — worth using
 as the check that they are.
+
+## R13: a scrapped season cannot be fully scrapped from a client (structural)
+
+`SPEC.md` §5 says a scrapped season is gone. It is not, and with the scope model
+it cannot be made so from a browser — this is a property of the design, not an
+omission, so it is recorded rather than patched.
+
+A chart lives at `seasons/{s}/charts/{stage}/scopes/{whose}/rows`, and **a
+Firestore client cannot list subcollections.** So nothing in the app can discover
+which scopes exist: `removeChart(…, ALL_SCOPES)` clears the three it can name —
+this person's, `official`, and the legacy unscoped path — and every other
+expert's roster and free agency for that season stay in the database under a
+season that no longer exists. Unreachable rather than wrong, and still there.
+
+Two ways out, both Phase 7:
+
+1. **An index document per stage** listing the scopes that exist, written with
+   `arrayUnion` when a chart is first created under one. That is a shared
+   multi-writer document, which is exactly why it needs `arrayUnion` rather than
+   the read-modify-write this codebase does everywhere else — and the adapter has
+   no arrayUnion today.
+2. **Server-side deletion.** A Cloud Function can list subcollections; a client
+   cannot. This also fixes the rest of what the audit says about `scrapSeason` —
+   a dozen unsequenced optimistic writes with no atomicity and no verification.
+
+Fixed in the meantime: `removeDraft` marks its writes as private when the caller
+does not hold the lead. Clearing a draft nulls four fields on every player it
+took, which is a write to the shared registry — so somebody who was not the lead
+scrapping his own season took the picks off everybody's player cards.

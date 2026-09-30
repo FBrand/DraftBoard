@@ -314,12 +314,17 @@ export function writeDraft(seasonId, state) {
 export function removeDraft(seasonId) {
     const doomed = draftedIn(seasonId);
     if (doomed.length) {
+        // Marked like a pick, and for the same reason. Clearing a draft nulls
+        // four fields on every player it took, which is a write to the SHARED
+        // registry — so somebody who is not the lead scrapping his own season
+        // would have taken the picks off everybody's player cards. The audit
+        // named this as the same hole as the pick path, one function over.
         setFactsMany(doomed.map(({ playerId }) => ({
             id: playerId,
             patch: Object.fromEntries(DRAFT_FACTS.map(f => [f, null])),
-        })));
+        })), { mine: !iAmLead(seasonId) });
     }
-    return repository.remove(DRAFT_STATE, draftScope(seasonId));
+    return repository.remove(DRAFT_STATE, draftScope(seasonId), { mine: !iAmLead(seasonId) });
 }
 
 /** Kept so a caller can ask about one player without reading the whole draft. */
