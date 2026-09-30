@@ -207,7 +207,7 @@ export function fromLegacyAdapter(adapter) {
                 const opts = privacy === 'mine' ? { mine: true } : undefined;
                 try {
                     if (adapter.commit) {
-                        await adapter.commit(collection, group.map(({ id, doc }) => ({ id, doc })), opts);
+                        await adapter.commit(collection, group.map(({ id, doc, merge }) => ({ id, doc, merge })), opts);
                     } else {
                         for (const { id, doc } of group) {
                             if (doc === null) await adapter.remove(collection, id, opts);
