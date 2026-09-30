@@ -95,6 +95,6 @@ describe('a cold load', () => {
         //
         // Documents are what Firestore bills, not collections; see
         // readBudgetDocuments.test.js for that number. This counts the seam.
-        expect(opened).toHaveLength(16);
+        expect(opened).toHaveLength(15);
     });
 });

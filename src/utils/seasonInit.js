@@ -31,7 +31,7 @@
 import { hasChart, readChart, writeChart } from '../data/depthChartStore';
 import { writeDraft } from '../data/draftStore';
 import { STATE_VERSION as ROSTER_VERSION } from './rosterState';
-import { repository } from '../data/repository';
+import { store } from '../data/appStore';
 
 /**
  * The marker lives in the TARGET store, not in this browser.
@@ -63,13 +63,13 @@ const MARKER = 'season';
 
 /** Whether this season's stages have been set up — by anyone, anywhere. */
 export function isInitialised(seasonId) {
-    return !!seasonId && !!repository.get(setupPath(seasonId), MARKER);
+    return !!seasonId && !!store.view(setupPath(seasonId))[MARKER];
 }
 
 export function markInitialised(seasonId) {
     if (!seasonId || isInitialised(seasonId)) return;
     // The body is when. The season and what this marks are the address.
-    repository.set(setupPath(seasonId), MARKER, { at: Date.now() });
+    store.write([{ collection: setupPath(seasonId), id: MARKER, doc: { at: Date.now() } }]);
 }
 
 /**
@@ -88,15 +88,15 @@ export function markInitialised(seasonId) {
  * for the same stated reason and cost an expert's board its audience.
  */
 export function openSetup(seasonId) {
-    return seasonId ? repository.ready(setupPath(seasonId)) : Promise.resolve();
+    return seasonId ? store.ready(setupPath(seasonId)) : Promise.resolve();
 }
 
 /** Forgets one season, so scrapping it does not leave its id behind forever. */
 export function forgetSeason(seasonId) {
-    repository.remove(setupPath(seasonId), MARKER);
+    store.write([{ collection: setupPath(seasonId), id: MARKER, doc: null }]);
     // The shipped facts were laid over this season once; a season that no
     // longer exists has not been seeded. See playerFacts.factsSeeded.
-    repository.remove(setupPath(seasonId), 'facts');
+    store.write([{ collection: setupPath(seasonId), id: 'facts', doc: null }]);
 }
 
 /**

@@ -1,4 +1,5 @@
 import { resetMemoryAdapters } from '../../src/data/memoryAdapter';
+import { resetStores } from '../../src/data/storeRegistry';
 
 /**
  * A localStorage good enough for the modules under test.
@@ -34,4 +35,10 @@ globalThis.localStorage = new MemoryStorage();
 globalThis.resetStorage = () => {
     globalThis.localStorage = new MemoryStorage();
     resetMemoryAdapters();
+    // AND the layered store, which is a third place. It is a module singleton
+    // holding shared/mine/unsent in memory, so without this a marker written by
+    // one test decided the next one had already run — measured, and it looked
+    // like a migration breaking initialiseSeason rather than a leak between
+    // tests. Three stores to reset is itself the argument for having one.
+    resetStores();
 };

@@ -21,6 +21,7 @@
 import { repository } from './repository';
 import { createStore } from './store';
 import { fromLegacyAdapter } from './contract';
+import { onReset } from './storeRegistry';
 
 /**
  * Collections served by the layered store. Everything else is the repository's.
@@ -43,6 +44,9 @@ export const MIGRATED = [
     /^seasons\/[^/]+\/prospects(\/|$)/,
     /^seasons\/[^/]+\/prospect_edits(\/|$)/,
     /^seasons\/[^/]+\/prospect_hidden(\/|$)/,
+    // Single owner, nothing watches them.
+    /^seasons\/[^/]+\/stages(\/|$)/,
+    /^seasons\/[^/]+\/setup(\/|$)/,
 ];
 
 /**
@@ -85,3 +89,6 @@ export const store = new Proxy({}, {
 
 /** Drops the instance, so a test can point it at a fresh adapter. */
 export function resetStore() { instance = null; }
+
+// Registered rather than imported by the suite: see storeRegistry for why.
+onReset(resetStore);

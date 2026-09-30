@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { store } from '../../src/data/appStore';
 import { initialiseSeason, isInitialised, forgetSeason, setupPath } from '../../src/utils/seasonInit';
 import { readStage, writeStage } from '../../src/data/stageStore';
 import { readChart, writeChart, openDepthCharts } from '../../src/data/depthChartStore';
@@ -152,17 +153,17 @@ describe('where "already set up" is recorded', () => {
     it('is a document beside the data, not a key in this browser', () => {
         initialiseSeason('s1');
 
-        expect(repository.get(setupPath('s1'), 'season')).toBeTruthy();
+        expect(store.view(setupPath('s1')).season).toBeTruthy();
         expect(localStorage.getItem('season_init_v1')).toBeNull();
     });
 
     it('is seen by a client that has never run the import', () => {
         // The same store, a different browser: it must not seed again.
         initialiseSeason('s1');
-        const marker = repository.get(setupPath('s1'), 'season');
+        const marker = store.view(setupPath('s1')).season;
 
         repository.invalidate();
-        repository.set(setupPath('s1'), 'season', marker);
+        store.write([{ collection: setupPath('s1'), id: 'season', doc: marker }]);
 
         expect(isInitialised('s1')).toBe(true);
         expect(initialiseSeason('s1')).toBe(false);
@@ -172,6 +173,6 @@ describe('where "already set up" is recorded', () => {
         initialiseSeason('s1');
         // Epoch milliseconds, not an ISO string: 24 characters to carry 13 was the
         // same trade every other timestamp in the store stopped making.
-        expect(typeof repository.get(setupPath('s1'), 'season').at).toBe('number');
+        expect(typeof store.view(setupPath('s1')).season.at).toBe('number');
     });
 });

@@ -18,7 +18,7 @@
  * different players at once, and it is a separate change to a different
  * collection. This one is about making the backend swappable at all.
  */
-import { repository } from './repository';
+import { store } from './appStore';
 
 /**
  * A season's stages are a collection of its own.
@@ -55,7 +55,7 @@ export const STAGE_KEYS = ['rosterState', 'fa_state_v1', 'nfl_draft_board_state'
  * from another client's board.
  */
 export function openStages(seasonId) {
-    return seasonId ? repository.ready(stagesPath(seasonId)) : Promise.resolve();
+    return seasonId ? store.ready(stagesPath(seasonId)) : Promise.resolve();
 }
 
 /**
@@ -66,17 +66,17 @@ export function openStages(seasonId) {
  * resolved. See `ensureLoaded` in repository.js.
  */
 export function readStage(base, seasonId) {
-    return repository.get(stagesPath(seasonId), base)?.value ?? null;
+    return store.view(stagesPath(seasonId))[base]?.value ?? null;
 }
 
 export function writeStage(base, seasonId, value) {
     // The body is the value. It used to also carry `id`, `stage` and
     // `seasonId` — the whole key and both of its halves.
-    return repository.set(stagesPath(seasonId), base, { value });
+    return store.write([{ collection: stagesPath(seasonId), id: base, doc: { value } }]);
 }
 
 export function removeStage(base, seasonId) {
-    return repository.remove(stagesPath(seasonId), base);
+    return store.write([{ collection: stagesPath(seasonId), id: base, doc: null }]);
 }
 
 /** Everything belonging to one season — what a rollback has to take with it. */
