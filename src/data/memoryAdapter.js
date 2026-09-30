@@ -32,15 +32,30 @@ import { prefixedId } from '../utils/ids';
 // broke six tests that had nothing to do with any of this. This module's only
 // import is ids, which is why the registry lives here.
 const built = new Set();
+const dumps = new Set();
 
 /** Empties every memory adapter. Tests only. */
 export function resetMemoryAdapters() {
     built.forEach(reset => reset());
 }
 
+/**
+ * Everything every memory adapter holds, merged. Tests only.
+ *
+ * For weighing SHAPES rather than a particular browser: the suite runs on this
+ * adapter, so localStorage is empty and a budget measured against it reports
+ * nothing at all. See utils/storageBudget.measureDump.
+ */
+export function dumpMemoryAdapters() {
+    const out = {};
+    dumps.forEach(dump => Object.assign(out, dump()));
+    return out;
+}
+
 export function createMemoryAdapter({ latency = 0, failWrites = false } = {}) {
     const store = new Map();
     built.add(() => store.clear());
+    dumps.add(() => Object.fromEntries([...store.entries()].map(([k, v]) => [k, { ...v }])));
 
     const wait = () => (latency > 0
         ? new Promise(resolve => setTimeout(resolve, latency))
