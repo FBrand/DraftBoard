@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { openProspects } from '../data/prospectStore';
 import { readStage, removeStage, openStages } from '../data/stageStore';
 import { joinIndex, findJoin } from '../utils/pickJoin';
 import { openDepthCharts } from '../data/depthChartStore';
@@ -220,7 +221,7 @@ export const useDraftState = () => {
                 // be addressed, and openBoards is what loads the seasons.
                 await Promise.all([openBoards(), openDraft()]);
                 const season = viewedSeason()?.id ?? null;
-                await Promise.all([openStages(season), openDepthCharts(season), openSetup(season)]);
+                await Promise.all([openStages(season), openProspects(season), openDepthCharts(season), openSetup(season)]);
                 const slug = params.get('board');
                 const board = slug ? boardBySlug(slug) : null;
                 const fromBoard = board?.rankingsFile ? `${base}${board.rankingsFile}` : null;

@@ -6,6 +6,7 @@ import { entriesPath } from '../../src/data/boardEntries';
 import { rowsPath, bandsPath } from '../../src/data/depthChartStore';
 import { stagesPath } from '../../src/data/stageStore';
 import { setupPath } from '../../src/utils/seasonInit';
+import { prospectsPath, editsPath, hiddenPath } from '../../src/data/prospectStore';
 
 /**
  * Every address the app writes has a rule that reaches it.
@@ -102,6 +103,9 @@ const WRITES = {
     'depth-chart bands': doc(bandsPath('fa_state_v1', 's_1')),
     'stage blobs': doc(stagesPath('s_1')),
     'the setup markers': doc(setupPath('s_1')),
+    'players added in the app': doc(prospectsPath('s_1')),
+    'overrides on file players': doc(editsPath('s_1')),
+    'hidden file players': doc(hiddenPath('s_1')),
     'a remark': doc(remarksPath('p_1')),
     'the draft state': doc('draft_state'),
 };

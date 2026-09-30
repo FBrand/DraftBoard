@@ -423,6 +423,31 @@ service cloud.firestore {
         allow write: if isExpert();
       }
 
+      //   seasons/{id}/prospects/{key}         a player added in the app
+      //   seasons/{id}/prospect_edits/{key}    an override on a file player
+      //   seasons/{id}/prospect_hidden/{key}   a file player taken off
+      //
+      // One document each, where all three used to be arrays inside one stage
+      // blob. Two experts adding a player both rewrote that blob and one of
+      // them lost his — silently, with the player on his screen until a reload.
+      //
+      // Named individually because the recursive rule that used to cover
+      // everything a season owns is gone (see the note above), which means a
+      // collection added later is refused until somebody writes a rule for it.
+      // That is the right way round, and this is what it looks like in use.
+      match /prospects/{key} {
+        allow read: if true;
+        allow write: if isExpert();
+      }
+      match /prospect_edits/{key} {
+        allow read: if true;
+        allow write: if isExpert();
+      }
+      match /prospect_hidden/{key} {
+        allow read: if true;
+        allow write: if isExpert();
+      }
+
       //   seasons/{id}/charts/{stage}/scopes/{whose}/rows|bands
       //
       // A chart belongs to one person, or to the show. His own is his alone —

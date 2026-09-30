@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { openProspects } from '../data/prospectStore';
 import { openStages } from '../data/stageStore';
 import { openBoardEntries, entriesLoaded } from '../data/boardEntries';
 // One derivation of "who is in this class", shared with the draft — which
@@ -202,7 +203,7 @@ function boardsToOpen(all) {
 
 function loadPools({ allBoards = false } = {}) {
     return openBoards()
-        .then(() => Promise.all([loadFiles(), openRegistry(), openEvaluations(), openStages(viewedSeason()?.id ?? null), openBoardEntries(boardsToOpen(allBoards)), openDepthCharts(viewedSeason()?.id ?? null), openSetup(viewedSeason()?.id ?? null)]))
+        .then(() => Promise.all([loadFiles(), openRegistry(), openEvaluations(), openStages(viewedSeason()?.id ?? null), openProspects(viewedSeason()?.id ?? null), openBoardEntries(boardsToOpen(allBoards)), openDepthCharts(viewedSeason()?.id ?? null), openSetup(viewedSeason()?.id ?? null)]))
         .then(([fetched]) => {
         // Files for the boards that still need one, entries for the rest.
         // Done HERE rather than inside loadFiles because it needs the entries

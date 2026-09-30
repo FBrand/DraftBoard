@@ -12,7 +12,12 @@
  * that he exists is a fact, where he belongs is an opinion.
  */
 import { buildNameIndex, findMatchingIndex, findCompatibleIndex } from './nameMatcher';
-import { readStage, writeStage } from '../data/stageStore';
+import { readStage } from '../data/stageStore';
+import { repository } from '../data/repository';
+import {
+    aboutKey, hiddenPath, readEdits, readHidden, readProspects,
+    removeHidden, removeProspect, writeEdit, writeHidden, writeProspect,
+} from '../data/prospectStore';
 import { viewedSeason } from './boardRegistry';
 
 // Which season's copy of this stage. Read at call time, never cached: the
@@ -28,18 +33,52 @@ export const STATE_VERSION = 1;
 
 const EMPTY = () => ({ version: STATE_VERSION, players: [], edits: [], hidden: [] });
 
+/**
+ * Everything this season holds, assembled from the documents holding it.
+ *
+ * The three lists used to be one stage blob, and every mutation rewrote all of
+ * it — so two experts adding a player lost one of them, silently, with the
+ * player on both their screens until a reload. They are documents now
+ * (data/prospectStore.js) and this reads them back into the shape the rest of
+ * this file already expects.
+ *
+ * The legacy blob is still READ, and per-record documents win over it. Nothing
+ * rewrites it: whatever it holds is somebody's work, and converting it in place
+ * would mean a migration write on a load — the one place this app has already
+ * crashed a renderer doing bulk writes at boot. It converts a record at a time,
+ * as each is touched.
+ */
 function read() {
     try {
-        const parsed = readStage(STORAGE_KEY, seasonId());
-        if (!parsed) return EMPTY();
-        if (typeof parsed?.version === 'number' && parsed.version > STATE_VERSION) {
-            return EMPTY(); // written by a newer build
-        }
+        const sid = seasonId();
+        const legacy = readStage(STORAGE_KEY, sid);
+        const stale = typeof legacy?.version === 'number' && legacy.version > STATE_VERSION;
+        const old = (!legacy || stale) ? EMPTY() : {
+            players: Array.isArray(legacy?.players) ? legacy.players : [],
+            edits: Array.isArray(legacy?.edits) ? legacy.edits : [],
+            hidden: Array.isArray(legacy?.hidden) ? legacy.hidden : [],
+        };
+
+        // Per-record first, so a converted record shadows its old copy rather
+        // than appearing twice.
+        const rows = readProspects(sid);
+        const edits = readEdits(sid);
+        const hidden = readHidden(sid);
+
+        // A record knows which blob entry it replaced, where it replaced one.
+        // Without that, correcting a blob player writes a document under his
+        // NEW identity — a different key — and the blob copy no longer matches
+        // anything, so he appears twice. The blob is never rewritten, so the
+        // record has to carry the exclusion itself.
+        const known = new Set(rows.flatMap(r => [aboutKey(identityOf(r)), r.from].filter(Boolean)));
+        const editedAbout = new Set(edits.map(e => aboutKey(e.match)));
+        const hiddenAbout = new Set(hidden.map(h => aboutKey(h)));
+
         return {
             version: STATE_VERSION,
-            players: Array.isArray(parsed?.players) ? parsed.players : [],
-            edits: Array.isArray(parsed?.edits) ? parsed.edits : [],
-            hidden: Array.isArray(parsed?.hidden) ? parsed.hidden : [],
+            players: [...rows, ...old.players.filter(pl => !known.has(aboutKey(identityOf(pl))))],
+            edits: [...edits, ...old.edits.filter(e => !editedAbout.has(aboutKey(e.match)))],
+            hidden: [...hidden, ...old.hidden.filter(h => !hiddenAbout.has(aboutKey(h)))],
         };
     } catch {
         return EMPTY();
@@ -55,15 +94,9 @@ const identityOf = (p) => ({ name: p.name, position: p.position ?? '', school: p
  */
 const originOf = (p) => p?.sourceIdentity ?? identityOf(p);
 
-function write(state) {
-    try {
-        // A stage belongs to a season. Without one, stagesPath falls back to
-        // `seasons/_/stages` — a season that exists nowhere, so the work is
-        // filed where nothing will look for it. Same guard as the charts.
-        if (!seasonId()) return;
-        writeStage(STORAGE_KEY, seasonId(), { ...state, version: STATE_VERSION });
-    } catch { /* ignore */ }
-}
+// Nothing writes the blob any more. Each mutator writes the one record it
+// changes — see data/prospectStore.js for why, and read() above for how the old
+// blob is still honoured on the way in.
 
 export function loadProspects() {
     return read().players;
@@ -141,15 +174,18 @@ export function classify(name, existingPlayers, position = null) {
 
 /** Adds one prospect. Callers resolve collisions first; this does not check. */
 export function addProspect({ name, position, school, addedBy = null }) {
-    const state = read();
-    state.players.push({
+    if (!seasonId()) return;
+    const player = {
         name: String(name).trim(),
         position: String(position ?? '').trim().toUpperCase(),
         school: String(school ?? '').trim(),
         addedBy,
         createdAt: new Date().toISOString(),
-    });
-    write(state);
+    };
+    // Keyed by who he is, so adding the same player twice is one document
+    // rather than two — and so two experts adding two DIFFERENT players write
+    // two documents instead of overwriting each other's list.
+    writeProspect(seasonId(), aboutKey(identityOf(player)), player);
 }
 
 /**
@@ -171,16 +207,29 @@ export function savePlayerEdit(previous, patch) {
 
     const own = findMatchingIndex(previous.name, buildNameIndex(state.players), previous);
     if (own !== -1) {
-        state.players[own] = { ...state.players[own], ...clean, updatedAt: new Date().toISOString() };
-        write(state);
+        const before = state.players[own];
+        const next = { ...before, ...clean, updatedAt: new Date().toISOString() };
+        // A rename changes who he is, so it changes the document he belongs in:
+        // written under the new identity and the old document dropped, rather
+        // than left behind as a second copy of the same man.
+        const wasAt = before.__id ?? aboutKey(identityOf(before));
+        const nowAt = aboutKey(identityOf(next));
+        delete next.__id;
+        // Where he came from, kept only when it differs: a corrected player is
+        // filed under who he is NOW, and read() needs to know which blob entry
+        // — or which earlier document — this one supersedes. `from` follows the
+        // chain rather than resetting, so a second correction still excludes
+        // the original.
+        if (wasAt !== nowAt) next.from = before.from ?? wasAt;
+        writeProspect(seasonId(), nowAt, next);
+        if (wasAt !== nowAt && before.__id) removeProspect(seasonId(), wasAt);
         return true;
     }
 
     const origin = originOf(previous);
     const at = findMatchingIndex(origin.name, buildNameIndex(state.edits.map(e => e.match)), origin);
-    if (at !== -1) state.edits[at] = { ...state.edits[at], patch: { ...state.edits[at].patch, ...clean } };
-    else state.edits.push({ match: origin, patch: clean });
-    write(state);
+    const merged = at !== -1 ? { ...state.edits[at].patch, ...clean } : clean;
+    writeEdit(seasonId(), origin, merged);
     return true;
 }
 
@@ -193,16 +242,15 @@ export function deletePlayer(player) {
     const state = read();
     const own = findMatchingIndex(player.name, buildNameIndex(state.players), player);
     if (own !== -1) {
-        state.players.splice(own, 1);
-        write(state);
+        const found = state.players[own];
+        removeProspect(seasonId(), found.__id ?? aboutKey(identityOf(found)));
         return true;
     }
 
-    const origin = originOf(player);
-    if (findMatchingIndex(origin.name, buildNameIndex(state.hidden), origin) === -1) {
-        state.hidden.push(origin);
-    }
-    write(state);
+    // Keyed by the identity it is about, so hiding him twice is the same
+    // document. The array version searched first, and a search that missed left
+    // a duplicate marker nobody could remove.
+    writeHidden(seasonId(), originOf(player));
     return true;
 }
 
@@ -211,8 +259,12 @@ export function restorePlayer(identity) {
     const state = read();
     const at = findMatchingIndex(identity.name, buildNameIndex(state.hidden), identity);
     if (at === -1) return false;
-    state.hidden.splice(at, 1);
-    write(state);
+    const found = state.hidden[at];
+    // By the document it is in where it has one, by the identity it is about
+    // otherwise — a marker still living in the old blob has no document id, and
+    // hiding is idempotent, so the key derived from the identity finds it.
+    if (found.__id) repository.remove(hiddenPath(seasonId()), found.__id);
+    else removeHidden(seasonId(), found);
     return true;
 }
 
