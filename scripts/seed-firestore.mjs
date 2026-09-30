@@ -354,6 +354,7 @@ async function build() {
     const { resolveAll, openRegistry, PLAYERS } = await import(`${ROOT}/src/utils/playerRegistry.js`);
     const { seedBoard } = await import(`${ROOT}/src/utils/scoutingState.js`);
     const { entriesPath } = await import(`${ROOT}/src/data/boardEntries.js`);
+    const { seedInitialBoards } = await import(`${ROOT}/scripts/seed/initialBoards.js`);
     const { applyPlayerFacts } = await import(`${ROOT}/scripts/seed/playerFacts.js`);
     const { seedExampleEvaluations } = await import(`${ROOT}/scripts/seed/exampleEvaluations.js`);
     const faState = await import(`${ROOT}/src/utils/faState.js`);
@@ -363,18 +364,27 @@ async function build() {
     const { reconcileDraft } = await import(`${ROOT}/src/utils/draftReconcile.js`);
     const { highestDraftPick } = await import(`${ROOT}/src/utils/draftPhase.js`);
 
-    // openBoards() is the thing that knows what the shipped season IS: one
-    // season, three boards, an author and a mock invite for each analyst, and
-    // consensus deliberately author-less. Running it rather than restating it
-    // is the whole point of this script.
+    // seedInitialBoards() is the thing that knows what the shipped season IS:
+    // one season, three boards, an author and a mock invite for each analyst,
+    // and consensus deliberately author-less.
+    //
+    // It used to be openBoards(), in the app, which loaded the board records and
+    // created them if it found none. Running the app's own seeding was the whole
+    // point of this script — and it was also the defect: the same function that
+    // decided the store was empty wrote the defaults into it, so every client
+    // that could not reach the shared store seeded a private season over it. The
+    // logic is here now (seed/initialBoards.js) and the app only loads.
     await openRegistry();
+    await openBoards();        // loads; writes nothing
+    await seedInitialBoards();
+    repository.invalidate();   // written underneath the caches openBoards filled
     await openBoards();
 
     const season = currentSeason();
-    if (!season) throw new Error('openBoards() produced no season — the app changed shape; read it before trusting this script.');
+    if (!season) throw new Error('seedInitialBoards() produced no season — read it before trusting this script.');
 
     const boards = listBoards();
-    if (!boards.length) throw new Error('openBoards() produced no boards.');
+    if (!boards.length) throw new Error('seedInitialBoards() produced no boards.');
 
     // Each file, parsed. The union across them is what every board carries:
     // a player one analyst ranked and another did not is UNRANKED on the

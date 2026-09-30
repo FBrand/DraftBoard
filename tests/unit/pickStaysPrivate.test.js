@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { seedApp } from './seedForTests';
 import { repository } from '../../src/data/repository';
-import { openBoards, currentSeason } from '../../src/utils/boardRegistry';
+import { currentSeason } from '../../src/utils/boardRegistry';
 import { claimLead, releaseLead, openDraft } from '../../src/data/draftStore';
 import { setFacts, resolve as resolvePlayer, openRegistry } from '../../src/utils/playerRegistry';
 
@@ -22,7 +23,7 @@ const SEASON = () => currentSeason()?.id;
 beforeEach(async () => {
     globalThis.resetStorage();
     repository.invalidate();
-    await openBoards();
+    await seedApp();
     await openDraft();
     await openRegistry();
 });

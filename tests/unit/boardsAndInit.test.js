@@ -1,9 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { seedApp } from './seedForTests';
 import {
     getInitMode, shouldSeed, setInitMode, resetTo, INIT_SEEDED, INIT_CLEAN,
 } from '../../src/utils/appInit';
 import { loadState, saveState, makeEntry } from '../../src/utils/scoutingState';
-import { openBoards, allBoards } from '../../src/utils/boardRegistry';
+import { allBoards } from '../../src/utils/boardRegistry';
 import { isDraftComplete, isUndraftedSigning, isDraftPick } from '../../src/utils/draftPhase';
 import { repository } from '../../src/data/repository';
 
@@ -15,7 +16,7 @@ import { repository } from '../../src/data/repository';
 beforeEach(async () => {
     globalThis.resetStorage();
     repository.invalidate();
-    await openBoards();
+    await seedApp();
 });
 
 describe('which way the app comes back up', () => {

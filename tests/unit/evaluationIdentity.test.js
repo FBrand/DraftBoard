@@ -1,9 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { seedApp } from './seedForTests';
 import {
     myVoice, voicesFor, openEvaluations, remarksFor, addRemark,
     updateRemarkText, removeRemark, REMARK_KINDS,
 } from '../../src/utils/evaluations';
-import { openBoards, allBoards, renameBoard, renameAuthor, authorOf, currentSeason } from '../../src/utils/boardRegistry';
+import { allBoards, renameBoard, renameAuthor, authorOf, currentSeason } from '../../src/utils/boardRegistry';
 import { repository } from '../../src/data/repository';
 // Evaluations moved to the layered store; this is where they live now.
 import { store } from '../../src/data/appStore';
@@ -25,7 +26,7 @@ beforeEach(async () => {
     globalThis.resetStorage();
     repository.invalidate();
     store.forget();
-    await openBoards();
+    await seedApp();
     // Remarks are filed under the season in their path, and a read visits the
     // seasons that exist — so 's1' has to be one. See remarkStorage.test.js,
     // which has this as its own case.

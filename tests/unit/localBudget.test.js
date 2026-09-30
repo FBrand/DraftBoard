@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { seedApp } from './seedForTests';
 import { repository } from '../../src/data/repository';
-import { openBoards, currentSeason } from '../../src/utils/boardRegistry';
+import { currentSeason } from '../../src/utils/boardRegistry';
 import { addRemark, openEvaluations, remarksPath } from '../../src/utils/evaluations';
 import { store } from '../../src/data/appStore';
 import { measureDump, familiesOf, human, BUDGET } from '../../src/utils/storageBudget';
@@ -26,7 +27,7 @@ const SEEN = 0.5;         // and he writes about half the class
 beforeEach(async () => {
     globalThis.resetStorage();
     repository.invalidate();
-    await openBoards();
+    await seedApp();
 });
 
 describe('a ten-expert season', () => {

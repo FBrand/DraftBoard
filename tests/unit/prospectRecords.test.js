@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { seedApp } from './seedForTests';
 import { repository } from '../../src/data/repository';
-import { openBoards, currentSeason } from '../../src/utils/boardRegistry';
+import { currentSeason } from '../../src/utils/boardRegistry';
 import { openProspects, prospectsPath, hiddenPath, editsPath } from '../../src/data/prospectStore';
 import { writeStage } from '../../src/data/stageStore';
 import { addProspect, loadProspects, deletePlayer, restorePlayer, hiddenPlayers, savePlayerEdit, applyProspects } from '../../src/utils/prospects';
@@ -24,7 +25,7 @@ const docsIn = (path) => Object.keys(repository.docs(path) ?? {});
 beforeEach(async () => {
     globalThis.resetStorage();
     repository.invalidate();
-    await openBoards();
+    await seedApp();
     await openProspects(sid());
 });
 

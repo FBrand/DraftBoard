@@ -1,10 +1,11 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { seedApp } from './seedForTests';
 import {
     classify, addProspect, savePlayerEdit, deletePlayer,
     restorePlayer, hiddenPlayers, applyProspects, loadProspects,
 } from '../../src/utils/prospects';
 import { repository } from '../../src/data/repository';
-import { openBoards } from '../../src/utils/boardRegistry';
+
 
 /**
  * Adding, correcting and removing players.
@@ -33,7 +34,7 @@ beforeEach(async () => {
     // A prospect belongs to a season, and the store now refuses to file one
     // without it rather than writing to `seasons/_/stages` where nothing will
     // look. These tests used to rely on that fallback; the app never does.
-    await openBoards();
+    await seedApp();
 });
 
 describe('deciding whether a typed name is new', () => {

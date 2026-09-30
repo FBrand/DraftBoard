@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { seedApp } from './seedForTests';
 import { repository } from '../../src/data/repository';
-import { openBoards } from '../../src/utils/boardRegistry';
+
 import { resolveAll, loadRegistry } from '../../src/utils/playerRegistry';
 import { parseCSV } from '../../src/utils/rosterState';
 import { buildNameIndex, findMatchingIndex } from '../../src/utils/nameMatcher';
@@ -26,7 +27,7 @@ beforeEach(async () => {
     const existing = repository.docs(PLAYERS) ?? {};
     const drop = Object.keys(existing).map(id => ({ id, doc: null }));
     if (drop.length) await repository.commit(PLAYERS, drop);
-    await openBoards();
+    await seedApp();
 });
 
 const roster = (rows) => ['Phase,pos,slots53,slot1', ...rows].join('\n') + '\n';

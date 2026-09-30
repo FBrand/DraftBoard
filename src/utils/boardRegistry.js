@@ -97,16 +97,23 @@ const newId = (prefix) => prefixedId(
 );
 
 /**
- * The boards the app shipped with, and the shape the migration gives them.
- * `slug` is what old links and old storage keys called them, so both keep
- * working; everything else about a board can change afterwards.
+ * Loads the records every board question is answered from.
+ *
+ * A LOADER, and nothing else.
+ *
+ * It used to seed as well: finding no boards, it created a season, two
+ * placeholder authors, three boards and two invites. That put the decision "is
+ * this store empty" and the act "write my defaults into it" in one function,
+ * and every silent-overwrite bug on this project came out of that pairing — a
+ * client reading an unreachable store as an empty one and filling it in. The
+ * shared project was found in exactly that state: boards pointing at authors
+ * that did not exist, because half the writes were refused.
+ *
+ * Gating the seeding on the backend was the first attempt and it was the wrong
+ * shape — the logic stayed here and gained a condition. Seeding is the seeder's
+ * (scripts/seed/), and a local store is filled from what the seeder built
+ * (data/hydrate.js) before anything renders.
  */
-const INITIAL_BOARDS = [
-    { slug: 'consensus', label: 'Consensus', author: null, rankingsFile: 'rankings_consensus.csv' },
-    { slug: 'dan', label: 'Dan', author: 'Dan', rankingsFile: 'rankings_dan.csv' },
-    { slug: 'ryan', label: 'Ryan', author: 'Ryan', rankingsFile: 'rankings_ryan.csv' },
-];
-
 export async function openBoards() {
     await Promise.all([
         repository.ready(SEASONS),
@@ -116,98 +123,6 @@ export async function openBoards() {
         // every player card reads "Unattributed" to anybody who is not an
         // expert — which is the audience.
         repository.ready(AUTHOR_NAMES),
-    ]);
-    if (allOf(BOARDS_COLLECTION, 'board').length) return;
-
-    // A SHARED backend is never seeded from a browser. It is seeded from
-    // outside, once, before anybody signs in (scripts/seed-firestore.mjs).
-    //
-    // What this used to do on one could not work and could not be made to
-    // work: an author may only be created keyed by the caller's own uid, so
-    // the placeholder records for Dan and Ryan are refused by construction,
-    // and email2author refuses invitedBy: 'seed' outright — an invite names a
-    // real inviter. A viewer had every write refused and kept a private season
-    // in his overlay that looked exactly like the real thing; an expert got the
-    // season and the boards through and the authors and invites refused,
-    // leaving boards pointing at authors that do not exist.
-    //
-    // So on a shared store an empty project stays empty, and visibly so —
-    // a state somebody can fix, rather than one every client papers over
-    // differently and privately. Local and memory backends still seed here:
-    // that is how the local-only app comes up at all, and how the external
-    // seeder produces what it uploads.
-    if (repository.isLive()) return;
-
-    // "No boards" has to actually mean no boards. A shared store that could not
-    // be reached answers with an empty collection — deliberately, so a viewer
-    // still sees his own work rather than a blank page — and seeding on that
-    // answer would lay a private season over boards that are simply
-    // unreachable, then keep it, because the local overlay wins. Better to come
-    // up with nothing and let the next load find them.
-    if (repository.loadFailed(SEASONS) || repository.loadFailed(BOARDS_COLLECTION)) return;
-
-    // "seeded" marks the one season the files in public/ are ABOUT. They hold
-    // the 2026 class, the 2026 picks and the roster that produced — a later
-    // season must not re-read them, or rolling over hands you last year's
-    // draft board again and the new season is the old one wearing a different
-    // number.
-    const season = { id: newId('s'), year: DRAFT_YEAR, status: 'current', seeded: true, createdAt: new Date().toISOString() };
-    const authors = [];
-    const boards = [];
-
-    const invites = [];
-    const names = [];
-
-    INITIAL_BOARDS.forEach((b, order) => {
-        let authorId = null;
-        if (b.author) {
-            // A PLACEHOLDER author, and deliberately not keyed by a uid: no
-            // Google account exists for Dan or Ryan, so there is no uid to
-            // key one by. They keep the opaque id the collection has always
-            // given them, which means `authorId == request.auth.uid` is
-            // never true for one — so nobody can write in their voice, which
-            // is the correct outcome for a placeholder.
-            //
-            // The mock invite alongside is what makes them show up as real
-            // experts in the list, so they can be revoked like anybody else
-            // and their boards taken over by whoever actually does the work.
-            // The address is on a `.local` domain: RFC 6762 reserves it, so
-            // no Google account can ever exist there and the mock can never
-            // become a real way in.
-            const email = `${b.author.toLowerCase()}@draftboard.local`;
-            const author = { id: newId('a'), name: b.author, email, createdAt: season.createdAt };
-            authors.push(author);
-            // And his name where anybody can read it. Without this the shipped
-            // example evaluations — filed under Dan — render as "Unattributed"
-            // for every viewer, which is the whole audience.
-            names.push({ id: author.id, doc: { n: author.name } });
-            invites.push({ id: email, doc: { invitedBy: 'seed', invitedAt: season.createdAt } });
-            authorId = author.id;
-        }
-        boards.push({
-            id: newId('b'),
-            slug: b.slug,
-            label: b.label,
-            authorId,
-            // Who may WRITE it, as opposed to whose opinion it is. Null means
-            // nobody has claimed it, which is every board until somebody signs
-            // in — and the shipped boards were made before there was anyone to
-            // own them. It is here now because adding a field to live data is a
-            // migration and adding it to a default is a line.
-            ownerId: null,
-            seasonId: season.id,
-            rankingsFile: b.rankingsFile,
-            order,
-            createdAt: season.createdAt,
-        });
-    });
-
-    await Promise.all([
-        write(SEASONS, seasonFields, season),
-        repository.commit(AUTHORS, authors.map(({ id, ...rest }) => ({ id, doc: authorFields.lean(rest) }))),
-        repository.commit(BOARDS_COLLECTION, boards.map(({ id, ...rest }) => ({ id, doc: boardFields.lean(rest) }))),
-        repository.commit(EMAIL2AUTHOR, invites),
-        repository.commit(AUTHOR_NAMES, names),
     ]);
 }
 

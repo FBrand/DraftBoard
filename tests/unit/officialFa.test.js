@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { seedApp } from './seedForTests';
 import { repository } from '../../src/data/repository';
-import { openBoards, currentSeason } from '../../src/utils/boardRegistry';
+import { currentSeason } from '../../src/utils/boardRegistry';
 import { openDepthCharts } from '../../src/data/depthChartStore';
 import { makeSlot } from '../../src/utils/rosterState';
 import * as faState from '../../src/utils/faState';
@@ -29,7 +30,7 @@ const cutNames = (state) => (state.cuts ?? []).map(s => s?.name ?? s);
 beforeEach(async () => {
     globalThis.resetStorage();
     repository.invalidate();
-    await openBoards();
+    await seedApp();
     await openDepthCharts(currentSeason()?.id);
 });
 

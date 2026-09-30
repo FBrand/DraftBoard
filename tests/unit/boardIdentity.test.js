@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { seedApp } from './seedForTests';
 import {
     openBoards, listBoards, allBoards, boardById, boardBySlug,
     authorOf, renameBoard, renameAuthor, createBoard, currentSeason, listSeasons,
@@ -20,7 +21,7 @@ import { repository } from '../../src/data/repository';
 beforeEach(async () => {
     globalThis.resetStorage();
     repository.invalidate();
-    await openBoards();
+    await seedApp();
 });
 
 describe('the boards a fresh app comes up with', () => {

@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { seedApp } from './seedForTests';
 import { entryDocId, entriesPath, BOARD_ENTRIES } from '../../src/data/boardEntries';
 import { makeEntry, loadState, saveState, seedBoard } from '../../src/utils/scoutingState';
-import { openBoards, allBoards, boardById } from '../../src/utils/boardRegistry';
+import { allBoards, boardById } from '../../src/utils/boardRegistry';
 import { repository } from '../../src/data/repository';
 import { entryFields, boardFields } from '../../src/data/fieldNames';
 import { loadRegistry, PLAYERS } from '../../src/utils/playerRegistry';
@@ -38,7 +39,7 @@ const CAST = [
 beforeEach(async () => {
     globalThis.resetStorage();
     repository.invalidate();
-    await openBoards();
+    await seedApp();
     await repository.ready(PLAYERS);
     CAST.forEach(p => repository.set(PLAYERS, p.id, { ...p, aliases: [], hidden: false }));
     loadRegistry();

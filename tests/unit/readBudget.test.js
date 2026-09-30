@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { seedApp } from './seedForTests';
 import { repository } from '../../src/data/repository';
-import { openBoards, allBoards, currentSeason } from '../../src/utils/boardRegistry';
+import { allBoards, currentSeason } from '../../src/utils/boardRegistry';
 import { openBoardEntries } from '../../src/data/boardEntries';
 import { openDepthCharts } from '../../src/data/depthChartStore';
 import { openProspects } from '../../src/data/prospectStore';
@@ -27,7 +28,7 @@ beforeEach(async () => {
     globalThis.resetStorage();
     repository.invalidate();
     opened = [];
-    await openBoards();
+    await seedApp();
 });
 
 describe('a cold load', () => {

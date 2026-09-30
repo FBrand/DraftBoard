@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { seedApp } from './seedForTests';
 import { repository } from '../../src/data/repository';
 import { readChart, writeChart, bandsPath, rowsPath } from '../../src/data/depthChartStore';
 
@@ -76,7 +77,9 @@ describe('a chart from a newer build', () => {
     it('is refused rather than rendered, and is not overwritten', async () => {
         const roster = await import('../../src/utils/rosterState');
         const registry = await import('../../src/utils/boardRegistry');
-        await registry.openBoards();
+        // A season, which openBoards no longer creates: it loads, and seeding is
+        // the seeder's. See seedForTests.
+        await seedApp();
 
         const season = registry.viewedSeason()?.id ?? null;
         const stage = 'rosterState';

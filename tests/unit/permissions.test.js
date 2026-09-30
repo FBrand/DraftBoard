@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { seedApp } from './seedForTests';
 import { canEdit, editRefusal, setCurrentUser, isSignedIn } from '../../src/utils/permissions';
-import { openBoards, currentSeason, startSeason, setViewedSeason, allBoards } from '../../src/utils/boardRegistry';
+import { currentSeason, startSeason, setViewedSeason, allBoards } from '../../src/utils/boardRegistry';
 import { repository } from '../../src/data/repository';
 
 /**
@@ -19,7 +20,7 @@ beforeEach(async () => {
     globalThis.resetStorage();
     repository.invalidate();
     setCurrentUser(null);
-    await openBoards();
+    await seedApp();
 });
 
 describe('the current season', () => {
