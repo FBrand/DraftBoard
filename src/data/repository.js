@@ -302,7 +302,7 @@ export function createRepository(adapter = localAdapter) {
                 // when the honest answer is "not for you". Stop quietly and
                 // drop the stale cache instead of leaving the last thing he
                 // was allowed to see on screen forever.
-                if (classifyWriteError(err).reason === 'permission-denied') {
+                if (classifyWriteError(err, { canRefetch: !!adapter.watch }).reason === 'permission-denied') {
                     invalidate(collection);
                     notify(collection);
                     return;
@@ -738,7 +738,7 @@ export function createRepository(adapter = localAdapter) {
                 persistQueue();
                 lastError = null;
             } catch (err) {
-                const verdict = classifyWriteError(err);
+                const verdict = classifyWriteError(err, { canRefetch: !!adapter.watch });
                 lastError = err?.message ?? String(err);
                 lastAdvice = verdict.advice;
 
@@ -850,7 +850,7 @@ export function createRepository(adapter = localAdapter) {
         return Promise.resolve(run())
             .then(() => { lastError = null; })
             .catch(err => {
-                const verdict = classifyWriteError(err);
+                const verdict = classifyWriteError(err, { canRefetch: !!adapter.watch });
                 lastError = err?.message ?? String(err);
                 lastAdvice = verdict.advice;
                 if (verdict.permanent) {
@@ -935,7 +935,7 @@ export function createRepository(adapter = localAdapter) {
         return Promise.resolve(write)
             .then(() => { lastError = null; })
             .catch(err => {
-                const verdict = classifyWriteError(err);
+                const verdict = classifyWriteError(err, { canRefetch: !!adapter.watch });
                 lastError = err?.message ?? String(err);
                 lastAdvice = verdict.advice;
                 // A batch that failed becomes individual pending writes: the
@@ -991,7 +991,7 @@ export function createRepository(adapter = localAdapter) {
         return Promise.resolve(write)
             .then(() => { lastError = null; })
             .catch(err => {
-                const verdict = classifyWriteError(err);
+                const verdict = classifyWriteError(err, { canRefetch: !!adapter.watch });
                 lastError = err?.message ?? String(err);
                 lastAdvice = verdict.advice;
                 items.forEach(c => enqueue({

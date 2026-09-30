@@ -158,9 +158,15 @@ export const EVICTABLE = ['evaluations', 'boards', 'players'];
  * that has to tell somebody why his roster is about to stop saving, and "cannot
  * evict" with no explanation is the kind of message people learn to ignore.
  */
-export function evictionPlan({ canRefetch, exportedAt = null, storage = globalThis.localStorage } = {}) {
+export function evictionPlan({ canRefetch, exportedAt = null, assumeFull = false, storage = globalThis.localStorage } = {}) {
     const { total, budget, pressure } = measure(storage);
-    const tight = pressure > 0.8;
+    // `assumeFull` is for a caller holding a quota error, and it overrides the
+    // measurement because it is better evidence. measure() sees only this app's
+    // keys, the quota is shared with everything else on the origin, and the
+    // limit itself varies by browser — so a store the browser has just refused
+    // to write can measure comfortably under budget. It did: wired to a real
+    // quota failure, this answered "There is room."
+    const tight = assumeFull || pressure > 0.8;
 
     if (!tight) {
         return { needed: false, safe: true, reason: 'There is room.', total, budget };
@@ -188,8 +194,8 @@ export function evictionPlan({ canRefetch, exportedAt = null, storage = globalTh
         needed: true,
         safe: false,
         reason: exportedAt
-            ? `Everything here is the only copy. The last export was ${exportedAt} — remove a season deliberately to make room.`
-            : 'Everything here is the only copy, and nothing has been exported. Export a season before anything is removed.',
+            ? `Everything here is the only copy. Save your work to a file — the last export was ${exportedAt} — then remove a season deliberately.`
+            : 'Everything here is the only copy, and nothing has been exported. Save your work to a file, then clear old seasons.',
         exportedAt,
         total,
         budget,

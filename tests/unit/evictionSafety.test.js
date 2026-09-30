@@ -76,3 +76,31 @@ describe('making room', () => {
         expect(total).toBeGreaterThan(0);
     });
 });
+
+/**
+ * A quota error is better evidence than a measurement.
+ *
+ * `measure()` sees only this app's keys. The quota is shared with everything
+ * else on the origin and the limit varies by browser, so a store the browser has
+ * just refused to write can measure comfortably under budget. Wired to a real
+ * quota failure, this answered **"There is room."** — to somebody whose roster
+ * had stopped saving.
+ */
+describe('a caller holding a quota error', () => {
+    it('is not told there is room', () => {
+        // Nothing stored at all: the measurement could not look better.
+        const plan = evictionPlan({ canRefetch: false, assumeFull: true });
+
+        expect(plan.needed).toBe(true);
+        expect(plan.reason).not.toMatch(/there is room/i);
+        expect(plan.reason).toMatch(/only copy/i);
+    });
+
+    it('is still told what can go, when something can', () => {
+        globalThis.localStorage.setItem('db_evaluations/p_1/remarks', 'x'.repeat(2048));
+        const plan = evictionPlan({ canRefetch: true, assumeFull: true });
+
+        expect(plan.safe).toBe(true);
+        expect(plan.drop[0].family).toBe('evaluations');
+    });
+});
