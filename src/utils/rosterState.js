@@ -849,28 +849,6 @@ export async function fetchAdapterRoster() {
     return parseHTMLToRoster(html);
 }
 
-/**
- * Last season's position structure with every slot emptied — the depth chart
- * you start an offseason with before anyone is signed or drafted into it.
- *
- * defaultState() has no position rows at all, so a roster built from it has
- * nowhere to put anybody: "Sync from FA/Draft/UDFA" resolves each player to a
- * row, finds none, and silently places nothing. Starting from the real shape
- * means the pipeline (free agency + draft picks + UDFA signings -> the 53)
- * actually has somewhere to land.
- */
-export async function fetchSeasonStartStructure() {
-    const res = await fetch(`${import.meta.env.BASE_URL}roster_2025_end.csv`);
-    if (!res.ok) throw new Error(`Could not load last season's roster (HTTP ${res.status})`);
-    const parsed = parseCSV(await res.text());
-    const depthChart = {};
-    Object.keys(parsed.depthChart).forEach(id => { depthChart[id] = []; });
-    return { ...parsed, depthChart, reserve: [], cuts: [] };
-}
-
-export async function fetchLocalRoster() {
-    const res = await fetch(`${import.meta.env.BASE_URL}roster.csv`);
-    if (!res.ok) throw new Error("Could not find local roster.csv");
-    const text = await res.text();
-    return parseCSV(text);
-}
+// fetchSeasonStartStructure() and fetchLocalRoster() were here. Both fetched a
+// shipped CSV, which the build no longer carries: a roster comes from the
+// snapshot the seeder built, or from a file somebody imports.

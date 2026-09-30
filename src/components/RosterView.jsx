@@ -6,7 +6,7 @@ import {
     loadOfficial, isOwn, officialStamp, publishOfficial, adoptOfficial, fillFromOfficial, countDisplaced,
     canPublish,
     parseCSV, exportCSV, makeSlot, resolvePosition, deletePositionRow, clearInjuryArrival,
-    SPECIALIST_IDS, hasRosterSourceAdapter, fetchAdapterRoster, fetchLocalRoster, fetchSeasonStartStructure, parseHTMLToRoster
+    SPECIALIST_IDS, hasRosterSourceAdapter, fetchAdapterRoster, parseHTMLToRoster
 } from '../utils/rosterState';
 import * as faState from '../utils/faState';
 import UnrankedModal from './UnrankedModal';
@@ -15,7 +15,6 @@ import { TextPromptDialog, ConfirmDialog } from './Dialogs';
 import Toast from './Toast';
 import Menu from './Menu';
 import OfficialBar from './OfficialBar';
-import { shouldSeed } from '../utils/appInit';
 import { openDepthCharts } from '../data/depthChartStore';
 import { whenIdentityKnown } from '../data/identityReady';
 import { repository } from '../data/repository';
@@ -173,11 +172,11 @@ export default function RosterView({ masterPlayers, draftedPlayers, onInfoOpen }
                 const already = loadState();
                 if (already) { history.reset(already); setSeeding(false); return; }
 
-                const loaded = shouldSeed()
-                    ? await fetchLocalRoster()
-                    : await fetchSeasonStartStructure();
-                if (cancelled) return;
-                history.reset(loaded);
+                // Nothing to fall back to, and nothing to seed. The roster is in
+                // the snapshot the seeder built; a store that holds none holds
+                // none, and the empty grid plus the import options in the menu is
+                // a usable view. This used to fetch the shipped roster.csv, which
+                // the build no longer carries.
             } catch (err) {
                 if (cancelled) return;
                 // An empty grid plus the menu's import options is still a
@@ -420,13 +419,7 @@ export default function RosterView({ masterPlayers, draftedPlayers, onInfoOpen }
         }
     };
 
-    const handleFetchLocal = async () => {
-        try {
-            history.reset(await fetchLocalRoster());
-        } catch (err) {
-            setToast({ message: 'Failed to load default roster: ' + err.message, tone: 'error' });
-        }
-    };
+
     const downloadTemplate = () => {
         const url = URL.createObjectURL(new Blob([CSV_TEMPLATE], { type: 'text/csv' }));
         const a = document.createElement('a');
@@ -624,7 +617,6 @@ export default function RosterView({ masterPlayers, draftedPlayers, onInfoOpen }
                         // The load/import options that used to be a blocking
                         // "initialize roster" screen.
                         hasRosterSourceAdapter() && { label: 'Auto-Fetch Depth Chart', onClick: handleFetchAdapter },
-                        { label: 'Load Default Roster', onClick: handleFetchLocal, title: 'The shipped post-offseason roster' },
                         { label: 'Paste Depth Chart Source…', onClick: () => setIsPasting(true) },
                         { label: 'Import Roster CSV…', file: { accept: '.csv', onFile: handleBootstrap } },
                         { label: 'Download CSV Template…', onClick: downloadTemplate, title: 'The columns, with worked rows showing the slot prefixes and arrival suffixes' },

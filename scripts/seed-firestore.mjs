@@ -359,6 +359,8 @@ async function build() {
     const { seedBoard } = await import(`${ROOT}/src/utils/scoutingState.js`);
     const { entriesPath } = await import(`${ROOT}/src/data/boardEntries.js`);
     const { seedInitialBoards } = await import(`${ROOT}/scripts/seed/initialBoards.js`);
+    const { seedFreeAgency } = await import(`${ROOT}/scripts/seed/freeAgency.js`);
+    const { readShippedRoster } = await import(`${ROOT}/scripts/seed/roster.js`);
     const { applyPlayerFacts } = await import(`${ROOT}/scripts/seed/playerFacts.js`);
     const { seedExampleEvaluations } = await import(`${ROOT}/scripts/seed/exampleEvaluations.js`);
     const faState = await import(`${ROOT}/src/utils/faState.js`);
@@ -462,13 +464,13 @@ async function build() {
     // Free agency is the pre-draft roster — what the offseason starts from.
     // ensureSeeded does the fetch, the parse and the write, and knows which
     // season it belongs to.
-    await faState.ensureSeeded();
+    await seedFreeAgency();
 
     // The roster is the day before cutdown. RosterView does this on its
     // bootstrap screen; there is no view here, so the two calls it makes are
     // made directly.
     if (rosterState.loadState() === null) {
-        rosterState.saveState(await rosterState.fetchLocalRoster());
+        rosterState.saveState(await readShippedRoster());
     }
 
     // The completed draft. This is the one piece of orchestration that is

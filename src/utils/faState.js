@@ -11,9 +11,9 @@
  * /home/dev/.claude/plans/structured-growing-cat.md section 3 for why.
  */
 import { defaultState, parseCSV, exportCSV, stampPlayerIds } from './rosterState';
-import { readChart, writeChart, hasChart, chartVersion, openDepthCharts, rowsPath, bandsPath } from '../data/depthChartStore';
+import { readChart, writeChart, hasChart, chartVersion, rowsPath, bandsPath } from '../data/depthChartStore';
 import { repository } from '../data/repository';
-import { viewedSeason, seasonIsSeeded, openBoards } from './boardRegistry';
+import { viewedSeason } from './boardRegistry';
 import { canEdit } from './permissions';
 import { createOfficialVersion } from './officialVersion';
 
@@ -65,54 +65,10 @@ export async function fetchSeasonStartRoster() {
     return parseCSV(await res.text());
 }
 
-/**
- * Writes the pre-draft roster into free agency if nothing is saved yet, and
- * resolves with whatever FA should now hold.
- *
- * Called at app start rather than only when the Free Agency tab is opened:
- * "Roster: sync from FA/Draft/UDFA" reads free agency out of storage, so a
- * seed that waited for a visit meant the pipeline silently had nothing to pull
- * from until you happened to click the tab. Idempotent, and shared by both
- * callers so there is one implementation of what seeding means.
- */
-// Per season, not per module: memoising one promise meant switching season
-// handed back the season you left.
-const seedPromises = new Map();
+// ensureSeeded() was here: it fetched the shipped pre-draft roster and built a
+// candidate board from it. The seeder does that now, and the result is in the
+// snapshot.
 
-export async function ensureSeeded() {
-    // Which season this is has to be known BEFORE anything is read or written,
-    // and against a remote store it is not known at mount: seasons arrive
-    // asynchronously, `seasonId()` is null until they do, and every key here
-    // falls back to `_`. That is how a viewer's free agency ended up filed
-    // under `seasons/_/charts` — a season that exists nowhere, invisible to
-    // the tab and to Roster's sync, and memoised so the real season never got
-    // its turn. Locally it never showed, because localStorage answers before
-    // the first render.
-    await openBoards();
-
-    // And the chart itself has to have been ASKED FOR before "nothing is
-    // saved here" means anything. hasSavedState() is a synchronous read;
-    // against a store that answers later it says no for a chart that exists,
-    // and free agency then seeds itself over the shared one.
-    await openDepthCharts(seasonId());
-
-    const sid = seasonId() ?? '_';
-    if (seedPromises.has(sid)) return seedPromises.get(sid);
-    const promise = (async () => {
-        if (hasSavedState()) return loadState();
-        // A later season's free agency is a new market, not last year's again.
-        if (!seasonIsSeeded()) return loadState();
-        try {
-            const seeded = await fetchSeasonStartRoster();
-            saveState(seeded);
-            return seeded;
-        } catch {
-            return loadState(); // leave FA empty rather than blocking
-        }
-    })();
-    seedPromises.set(sid, promise);
-    return promise;
-}
 
 // Same versioning contract as rosterState — see the note there. Unversioned
 // data is treated as version 1, which is what it is.
