@@ -504,6 +504,45 @@ inside the budget; the local build refuses to lose data without an export.
 
 ### Reads
 
+> **Measured 2026-09-30, and it removes an item from this phase.**
+> 
+> *"The registry is read by reference — the players a board names — not
+> wholesale"* does not work, in two stages.
+> 
+> First, the registry is not READ. `openRegistry` WATCHES it (`readyVia`),
+> because a pick is a fact on a player and the live draft follows the
+> collection. Firestore bills a listener's initial snapshot per document, so
+> fetching 328 records by id removes nothing — the listener is the cost. The
+> version of the idea that survives is a listener scoped by a query, which
+> needs a field on the player to filter on. That field is built (`inPools`,
+> stamped by `seed/stampPools.js`): 328 of 720 players marked.
+> 
+> Then the measurement, against the shipped season: **the saving is zero.**
+> 
+> | who the season needs | documents |
+> |---|---|
+> | players on a board (the pool) | 328 |
+> | roster slots naming somebody the boards do not | +81 |
+> | players the draft recorded a pick on | 626 |
+> | **union** | **720 — the whole registry** |
+> 
+> A completed draft puts a fact on 626 player records, and the roster names 91
+> more. The season genuinely touches every record, so there is nothing to scope
+> away. The 720 reads are not waste; they are the data.
+> 
+> What this leaves for the read budget, in order of what is actually available:
+> 
+> - **The relay.** Unchanged and now the main lever: one subscriber for the
+>   whole audience, against 720 per client today.
+> - **A durable delta**, with the documents kept alongside the point (see the
+>   note on the watermark in Phase 4's commit history). A warm reload then
+>   costs what changed, not 720.
+> - **Not** reading the registry by reference. Struck.
+> 
+> The `inPools` marker stays: it costs 6 KB, it is correct about what it says,
+> and a scoped listener is still the right shape for a season that does NOT
+> hold a completed draft — which is every season before its draft happens.
+
 - Deltas are the normal path (§3), with a durable watermark.
 - The registry is read **by reference** — the players a board names — not
   wholesale.
