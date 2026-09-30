@@ -9,6 +9,72 @@ Measured against `SPEC.md` (requirements, fixed) and `ARCHITECTURE.md`
 
 ---
 
+## Where this stands — 2026-09-30
+
+48 commits, `35a7d89..HEAD` on `firebase`. Nothing pushed. An independent audit
+of the work is in `AUDIT-2026-09-30.md`; the findings it raised that are closed
+are named below, and the ones that are not are named too.
+
+| Phase | State |
+|---|---|
+| 1 — make failure observable | **Done.** Three write outcomes (`stored / not yet / never`), refused work held and surfaced, never merged into a read. The audit calls this the best work in the batch. |
+| 2 — the seam and the precedence model | **Done for one collection.** `contract.js` and the layered store exist and evaluations run on them. The old adapter seam still runs the rest of the app — audit R8, open. |
+| 3 — identity, voice, and the seeder | **Done.** A remark is a person's opinion; `ownsVoice` is a token comparison; seeding has left the app entirely (see below). |
+| 4 — scope, routing, and the play-along | **Done.** Every stage is per person, free agency and the roster have an official version, the live draft has one writer. |
+| 5 — stored shape and the local budget | **Mostly done.** Stable remark ids, the board marker as a field update, prospects as records, no blobs, the budget measured. Eviction is specified and not enforced. |
+| 6 — read and write budgets | **Started.** Reads counted and reported; the write budget is no longer the risk (one writer). Deltas and the relay: not built. |
+| 7 — permission topology | **Not started.** |
+
+### Seeding has left the app
+
+The item that took three attempts, because the first two were gates rather than
+departures. It is structural now: **no file in `src/` contains seeding logic.**
+
+The seeder runs at build time and is not shipped. It uploads to Firestore for the
+shared project and, with `--snapshot`, writes the same 1777 documents to a file
+for a local build; `data/hydrate.js` copies that into an empty store before
+anything renders, and refuses a store that is shared or holds anything at all.
+`public/` carries no data file — they live in `seed-data/`, which is not
+deployed, so an app that decides who a player is from a text file it ships is
+impossible rather than merely unused.
+
+Measured on a cold boot: 22 writes, all hydration; only `picks.txt` and
+`columns.txt` fetched, both configuration; all five stages rendering from the
+store.
+
+`scripts/snapshot-fingerprint.mjs` compares two snapshots by what must not change
+when logic moves — it caught a two-document regression in a 161 KB artifact, in a
+field nothing renders, that no test or screen would have shown.
+
+### What the audit raised and is still open
+
+- **R2, R8 — the overlay and the two seams.** The overlay now carries pick facts
+  by design, with no divergence marker and no expert-safe way to discard; and the
+  newer seam cannot express a private write, so both exist at once. This is the
+  seam migration, not a fix.
+- **R13 in part — a scrapped season.** A Firestore client cannot list
+  subcollections, so with scope as a path level nothing in the app can discover
+  which scopes exist. Needs an index document or server-side deletion.
+- **Phase 5's eviction**, Phase 6's **deltas and relay**, all of **Phase 7**.
+- **One unexplained test failure**, recorded in `BUGS.md`: a scouting reorder does
+  not survive a reload. The stored data is correct, so it is rank recomputation
+  after a midpoint insertion — `boardRanking`, which `CLAUDE.md` flags as the
+  part most easily broken by a well-meaning change.
+
+### Two things worth carrying forward about verification
+
+Both were found by instrumenting rather than reasoning, and neither was visible
+to 751 passing unit tests:
+
+- A `const` named in its own callback's dependency array — a temporal dead zone —
+  threw on first render and the app displayed **nothing at all**. No unit test
+  renders a component.
+- The app rewrote 30 player documents on every boot, reconciling a field the
+  seeder had not recorded. The document *count* was identical, which is what I
+  had been checking. Writes, not totals.
+
+---
+
 ## 0. Scope
 
 **Rebuilt:** the storage seam, the read and precedence model, identity and
