@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { openProspects } from '../data/prospectStore';
+import { hasEntries, openBoardEntries, poolFromEntries } from '../data/boardEntries';
 import { readStage, removeStage, openStages } from '../data/stageStore';
 import { joinIndex, findJoin } from '../utils/pickJoin';
 import { openDepthCharts } from '../data/depthChartStore';
@@ -224,12 +225,37 @@ export const useDraftState = () => {
                 await Promise.all([openStages(season), openProspects(season), openDepthCharts(season), openSetup(season)]);
                 const slug = params.get('board');
                 const board = slug ? boardBySlug(slug) : null;
+
+                // The board's own entries, BEFORE asking whether it has any.
+                // hasEntries is synchronous, so against a shared store an
+                // unloaded collection answers "no entries" in the same words an
+                // empty one uses — and the difference here decides whether this
+                // boot re-parses a CSV and matches 328 names against the shared
+                // registry or reads ids it already has.
+                await openBoardEntries(board?.id ? [board.id] : []);
                 const fromBoard = board?.rankingsFile ? `${base}${board.rankingsFile}` : null;
                 // The fallback is the shipped file, which describes the shipped
                 // season and no other. A season started in the app has no class
                 // until one is imported, and falling back handed it last year's
                 // — 885 players who have already been drafted.
-                const candidates = [fromBoard, seasonIsSeeded() ? fallback : null].filter(Boolean);
+                // A SEEDED BOARD DOES NOT NEED ITS FILE, and on a shared store
+                // it must not have it.
+                //
+                // useBoardRankings.loadFiles already skips the fetch for a
+                // seeded board: its entries are a superset of the file and are
+                // being read anyway. This path never learned that, and it does
+                // more than fetch — it calls resolveAll with `create: true`, so
+                // every boot fuzzy-matched ~328 names against the registry and
+                // minted a document for each miss. For an expert those land in
+                // the SHARED players collection, unmarked: the duplicate-player
+                // bug with a live trigger still attached, on everybody's data.
+                //
+                // The board's own entries carry a playerId, so a seeded board
+                // has an answer already. The file is for a board that has none.
+                const seeded = !!board?.seeded && hasEntries(board.id);
+                const candidates = seeded
+                    ? []
+                    : [fromBoard, seasonIsSeeded() ? fallback : null].filter(Boolean);
 
                 // First candidate that actually answers. Falling back to the
                 // shipped board beats showing nothing: a wrong board is
@@ -253,15 +279,44 @@ export const useDraftState = () => {
                 const columnsText = await columnsRes.text().catch(() => "");
                 const parsedPositions = columnsText.split(',').map(p => p.trim()).filter(p => p);
                 setColumnOrder(parsedPositions);
-                const rawPlayers = parseRankings(rankingsText) || [];
+                const fromFile = !!rankingsText;
+                const rawPlayers = fromFile
+                    ? (parseRankings(rankingsText) || [])
+                    // From the board, which knows who is in the pool and knows
+                    // it BY ID — so nothing below has to match a name.
+                    : poolFromEntries(board?.id);
                 // Resolved ONCE, here, against the registry — a rankings CSV
                 // never carries an id of its own. Without this, every join
                 // below (and every one a live update runs later) falls
                 // through to a full fuzzy scan regardless of which side
                 // iterates, because there is no id on either side to match
                 // by. See reconcileDraft()'s own comment for the rest of why.
-                const poolIds = resolveAll(rawPlayers.map(p => ({ name: p.name, position: p.position, school: p.school })));
-                const parsedPlayers = rawPlayers.map((p, i) => (poolIds[i] ? { ...p, id: poolIds[i] } : p));
+                // Matched only when the pool came from a FILE, which carries
+                // names and no ids. Entries already carry the id.
+                //
+                // And it CREATES NOTHING. A boot is not an import: a name that
+                // matches no record is a player this app has not been told
+                // about, and minting one for it is how twelve duplicates
+                // appeared — on a shared backend those documents are
+                // everybody's, written unmarked by whoever happened to load a
+                // page.
+                //
+                // Gating the creation on `shouldSeed()` was the first attempt
+                // and it is the wrong shape: it adds a seeding decision to a
+                // file that has no business making one. The pool is registered
+                // by whatever populates it — an import, or the seeder — and
+                // this reads what is there. A player who resolves to nothing
+                // renders without an id, which is what the line below already
+                // allows for.
+                const parsedPlayers = fromFile
+                    ? (() => {
+                        const poolIds = resolveAll(
+                            rawPlayers.map(x => ({ name: x.name, position: x.position, school: x.school })),
+                            { create: false },
+                        );
+                        return rawPlayers.map((x, i) => (poolIds[i] ? { ...x, id: poolIds[i] } : x));
+                    })()
+                    : rawPlayers;
                 poolRef.current = parsedPlayers;
                 const parsedOurPicks = parsePicks(picksText) || [];
 

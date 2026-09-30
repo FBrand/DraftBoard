@@ -17,6 +17,8 @@ import Menu from './Menu';
 import OfficialBar from './OfficialBar';
 import { shouldSeed } from '../utils/appInit';
 import { openDepthCharts } from '../data/depthChartStore';
+import { whenIdentityKnown } from '../data/identityReady';
+import { repository } from '../data/repository';
 import { viewedSeason, openBoards } from '../utils/boardRegistry';
 import { syncFromStages, describeSync } from '../utils/rosterSync';
 import { resolve as resolvePlayer, setFacts, byId } from '../utils/playerRegistry';
@@ -143,6 +145,31 @@ export default function RosterView({ masterPlayers, draftedPlayers, onInfoOpen }
                 await openBoards();
                 await openDepthCharts(viewedSeason()?.id ?? null);
                 if (cancelled) return;
+
+                // And WHO, which arrives later still. A chart is filed under the
+                // person whose it is, and Firebase restores a session a moment
+                // after the page loads — so on a shared build this ran with
+                // nobody named, found nothing of "his", seeded from the shipped
+                // file, and then wrote that over his real roster the moment the
+                // session arrived. Every step looked ordinary.
+                const named = await whenIdentityKnown();
+                if (cancelled) return;
+                if (!named && repository.isLive()) {
+                    // Still nobody, so still nothing that can be decided. Better
+                    // an empty grid and a reason than a roster invented for a
+                    // person the app cannot identify.
+                    setToast({
+                        message: 'Waiting for your session — sign in, or reload if this persists. Nothing has been changed.',
+                        tone: 'error',
+                    });
+                    setSeeding(false);
+                    return;
+                }
+                // Re-opened for the scope that is now known: the first open
+                // could only have loaded official.
+                await openDepthCharts(viewedSeason()?.id ?? null);
+                if (cancelled) return;
+
                 const already = loadState();
                 if (already) { history.reset(already); setSeeding(false); return; }
 

@@ -336,3 +336,31 @@ export function removeBoardEntries(boardId) {
     if (!ids.length) return Promise.resolve();
     return repository.commit(entriesPath(boardId), ids.map(id => ({ id, doc: null })));
 }
+
+/**
+ * A board's pool, shaped like a parsed rankings file.
+ *
+ * So a seeded board can answer "who is in the pool" from its own entries instead
+ * of re-fetching and re-parsing the CSV it was seeded from. The entries are a
+ * superset of the file — seedBoard materialises a placement for every player in
+ * the union — and they are already loaded for the placements themselves.
+ *
+ * The difference that matters is not the fetch. A file carries names, so using
+ * one means matching those names against the registry on every boot, with
+ * `create: true`, which mints a document for every miss — into the SHARED
+ * registry for an expert. Entries carry `playerId`, so this path has an identity
+ * already and never matches anything.
+ */
+export function poolFromEntries(boardId) {
+    if (!boardId) return [];
+    return readEntries(boardId).map(e => ({
+        id: e.playerId ?? null,
+        name: e.name,
+        position: e.position ?? '',
+        school: e.school ?? '',
+        // The board's own tier, in the notation a rankings row uses, so
+        // everything downstream groups exactly as it did from the file.
+        group: e.round != null ? `${e.round}${e.tier != null ? `.${e.tier}` : ''}` : null,
+        favorite: e.favorite ?? false,
+    })).filter(p => p.name);
+}

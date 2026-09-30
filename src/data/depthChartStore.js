@@ -67,8 +67,35 @@ export const OFFICIAL = 'official';
 /** Every scope this build can name, for scrapping a season. See removeChart. */
 export const ALL_SCOPES = Symbol('all scopes');
 
-/** Whose chart, when the caller does not say: this person's own. */
-export const myScope = () => repository.identity() ?? 'local';
+/**
+ * Whose chart, when the caller does not say: this person's own, or NOTHING.
+ *
+ * Null is an answer and callers must treat it as one. It used to fall back to
+ * the string 'local', which on a local build is the CORRECT answer —
+ * localAdapter.identity() genuinely returns it — and on a shared build is a
+ * wrong one, because Firebase restores a session from IndexedDB a moment after
+ * the page loads and identity() is null until it does. One value, two meanings,
+ * nothing to tell them apart: the same mistake as a board that was its own name
+ * and a remark whose id was its position.
+ *
+ * What it cost, in order: Roster mounts before the session is restored and
+ * looks for a chart at scopes/local; nothing is there, because the real one is
+ * under the uid; the bootstrap does what it is built to do and seeds a fresh
+ * chart from the shipped file; the session finishes restoring; and the next save
+ * writes that fresh chart over the real one. Nothing looks wrong at any step.
+ * Meanwhile every write goes to scopes/local, which the rules refuse because
+ * 'local' is nobody's uid.
+ */
+export const myScope = () => repository.identity();
+
+/**
+ * Whether anybody can be named yet.
+ *
+ * The distinction a stage needs before it decides it has no chart: "there is
+ * nothing of yours" and "I do not yet know who you are" are the same absence
+ * and must not be the same decision, because one of them seeds.
+ */
+export const scopeKnown = () => myScope() != null;
 
 const chartAt = (stage, seasonId, scopeId) => `seasons/${seasonId ?? '_'}/charts/${stage}/scopes/${scopeId}`;
 export const rowsPath = (stage, seasonId, scopeId = myScope()) => `${chartAt(stage, seasonId, scopeId)}/rows`;
@@ -150,13 +177,19 @@ const ownPaths = (stage, seasonId, scopeId) => ({
  * edit lands in everybody's chart.
  */
 function readFrom(stage, seasonId, scopeId) {
+    const official = ownPaths(stage, seasonId, OFFICIAL);
+    // Nobody named yet: official, or the legacy path, and never a scope built
+    // out of a placeholder.
+    if (scopeId == null) {
+        if (setAt(official.rows).has(SCOPE)) return official;
+        const legacyOnly = { rows: legacyRowsPath(stage, seasonId), bands: legacyBandsPath(stage, seasonId) };
+        return setAt(legacyOnly.rows).has(SCOPE) ? legacyOnly : official;
+    }
+
     const own = ownPaths(stage, seasonId, scopeId);
     if (setAt(own.rows).has(SCOPE)) return own;
 
-    if (scopeId !== OFFICIAL) {
-        const official = ownPaths(stage, seasonId, OFFICIAL);
-        if (setAt(official.rows).has(SCOPE)) return official;
-    }
+    if (scopeId !== OFFICIAL && setAt(official.rows).has(SCOPE)) return official;
 
     const legacy = { rows: legacyRowsPath(stage, seasonId), bands: legacyBandsPath(stage, seasonId) };
     if (setAt(legacy.rows).has(SCOPE)) return legacy;
@@ -182,8 +215,9 @@ function readFrom(stage, seasonId, scopeId) {
 export function openDepthCharts(seasonId, scopeId = myScope()) {
     if (!seasonId) return Promise.resolve();
     // Mine and official both, because a read falls back from the first to the
-    // second and cannot fall back to a collection nobody has loaded.
-    const scopes = scopeId === OFFICIAL ? [OFFICIAL] : [scopeId, OFFICIAL];
+    // second and cannot fall back to a collection nobody has loaded. With no
+    // scope yet, official alone — there is no "mine" to open.
+    const scopes = (scopeId === OFFICIAL || scopeId == null) ? [OFFICIAL] : [scopeId, OFFICIAL];
     const paths = CHART_STAGES.flatMap(stage => scopes.flatMap(sc => [
         rowsPath(stage, seasonId, sc),
         bandsPath(stage, seasonId, sc),
@@ -207,6 +241,9 @@ export function hasChart(stage, seasonId, scopeId = myScope()) {
 
 /** Whether he has one OF HIS OWN, as opposed to looking at somebody else's. */
 export function hasOwnChart(stage, seasonId, scopeId = myScope()) {
+    // Nobody named yet is nobody's chart. Answering otherwise would have a
+    // stage treat official as its own and save over it.
+    if (scopeId == null) return false;
     return setAt(rowsPath(stage, seasonId, scopeId)).has(SCOPE);
 }
 
@@ -252,6 +289,12 @@ export function chartVersion(stage, seasonId, scopeId = myScope()) {
 }
 
 export function writeChart(stage, seasonId, state, scopeId = myScope()) {
+    // Refused while nobody is named, exactly as a chart with no season is
+    // refused: the identity arrives a moment later and the next save has
+    // somewhere to go. Filing under a placeholder instead is what let a
+    // freshly-seeded chart be written over a real one.
+    if (scopeId == null) return;
+
     // His own scope, always. See readFrom for why a write must not fall back.
     const rows = rowsPath(stage, seasonId, scopeId);
     const bands = bandsPath(stage, seasonId, scopeId);
@@ -357,6 +400,7 @@ export function readStamp(stage, seasonId) {
 }
 
 export function removeChart(stage, seasonId, scopeId = myScope()) {
+    if (scopeId == null) return Promise.resolve([]);
     const targets = scopeId === ALL_SCOPES
         ? [ownPaths(stage, seasonId, myScope()), ownPaths(stage, seasonId, OFFICIAL),
             { rows: legacyRowsPath(stage, seasonId), bands: legacyBandsPath(stage, seasonId) }]
