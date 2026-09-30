@@ -70,6 +70,25 @@ export const localAdapter = {
     name: 'local',
 
     /**
+     * Every collection this store holds.
+     *
+     * So a caller can ask whether the store is EMPTY without guessing at a
+     * collection name — which is the one question hydration turns on, and the
+     * question every seeding bug on this project answered wrongly by asking
+     * about boards instead.
+     */
+    collections() {
+        const out = [];
+        try {
+            for (let i = 0; i < localStorage.length; i += 1) {
+                const key = localStorage.key(i);
+                if (key?.startsWith(PREFIX)) out.push(key.slice(PREFIX.length));
+            }
+        } catch { /* an unreadable store holds nothing we can name */ }
+        return out;
+    },
+
+    /**
      * WHO is acting, and WHAT a new author's id should be — both answered by
      * the adapter, because both are things only the backend knows.
      *

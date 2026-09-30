@@ -37,7 +37,7 @@
  * point and also why it must never be committed — add it to .gitignore or keep
  * it outside the repo.
  */
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, writeFileSync } from 'node:fs';
 import { createSign } from 'node:crypto';
 import { resolve as resolvePath, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -49,7 +49,7 @@ const ROOT = resolvePath(dirname(fileURLToPath(import.meta.url)), '..');
 // ---------------------------------------------------------------------------
 
 function args(argv) {
-    const out = { dryRun: false, project: null, key: null, boards: 'faithful', wipe: false, host: null, chunk: 500 };
+    const out = { dryRun: false, project: null, key: null, boards: 'faithful', wipe: false, host: null, chunk: 500, snapshot: null };
     for (let i = 0; i < argv.length; i += 1) {
         const a = argv[i];
         if (a === '--dry-run') out.dryRun = true;
@@ -58,6 +58,8 @@ function args(argv) {
         else if (a === '--key') out.key = argv[++i];
         else if (a === '--host') out.host = argv[++i];
         else if (a === '--chunk') out.chunk = Number(argv[++i]);
+        // Where to write a LOCAL snapshot instead of uploading. See below.
+        else if (a === '--snapshot') out.snapshot = argv[++i];
         else if (a === '--boards') out.boards = argv[++i];
         else if (a.startsWith('--')) throw new Error(`Unknown option ${a}`);
     }
@@ -69,8 +71,10 @@ function args(argv) {
     // literal bearer token "owner" and applies no rules to it. That is the
     // documented local-development door, and it is the whole reason the test
     // harness can seed a project it has no credentials for.
-    if (!out.dryRun && !out.key && !out.host) {
-        throw new Error('--key <service-account.json> is required unless --dry-run or --host. Rules forbid seeding from a user session: see the header.');
+    // A snapshot writes a file and uploads nothing, so it needs no credentials
+    // either — the same reason --dry-run does not.
+    if (!out.dryRun && !out.snapshot && !out.key && !out.host) {
+        throw new Error('--key <service-account.json> is required unless --dry-run, --snapshot or --host. Rules forbid seeding from a user session: see the header.');
     }
     return out;
 }
@@ -584,6 +588,42 @@ boards.forEach(b => console.log(`  ${b.slug.padEnd(10)} author=${b.authorId ?? '
 console.log('\nDocuments:');
 Object.entries(counts).forEach(([k, n]) => console.log(`  ${String(n).padStart(5)}  ${k}`));
 console.log(`  ${String(writes.length).padStart(5)}  TOTAL\n`);
+
+/**
+ * A snapshot for the local build, instead of an upload.
+ *
+ * The seeder is not part of the app, and a local-only build still has to come up
+ * with a draft class. Those two facts meet here: this process already produces
+ * every document the app would have produced for itself, so it writes them to a
+ * file and the local adapter hydrates from it on a first run. The app keeps no
+ * seeding logic — no CSV parsing, no "if nothing is here, create the defaults",
+ * no example evaluations, and no name matching, because the snapshot carries ids.
+ *
+ * Grouped by collection, which is the shape localAdapter stores: one key per
+ * collection, documents inside it. So hydrating is a copy rather than a
+ * transformation, and nothing in the app has to know what a seed looks like.
+ */
+if (opts.snapshot) {
+    const byCollection = {};
+    writes.forEach(({ path, doc }) => {
+        const at = path.lastIndexOf('/');
+        const collection = path.slice(0, at);
+        const id = path.slice(at + 1);
+        (byCollection[collection] ??= {})[id] = doc;
+    });
+
+    const body = JSON.stringify({
+        // Stamped so a build can tell which season and which shape it shipped,
+        // and so a stale snapshot is obvious rather than silently old.
+        seededAt: new Date().toISOString(),
+        season: { id: season.id, year: season.year },
+        documents: writes.length,
+        collections: byCollection,
+    });
+    writeFileSync(opts.snapshot, body);
+    console.log(`Snapshot: ${writes.length} documents in ${Object.keys(byCollection).length} collections -> ${opts.snapshot} (${(body.length / 1024).toFixed(0)} KB)`);
+    process.exit(0);
+}
 
 if (opts.dryRun) {
     // One per collection rather than the first three, which were all seasons
