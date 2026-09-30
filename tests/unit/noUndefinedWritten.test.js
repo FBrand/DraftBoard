@@ -41,7 +41,7 @@ beforeEach(async () => {
 
 describe('what writeChart produces', () => {
     it('has no undefined anywhere, for the shipped pre-draft roster', async () => {
-        const state = parseCSV(readFileSync('public/roster_predraft.csv', 'utf8'));
+        const state = parseCSV(readFileSync('seed-data/roster_predraft.csv', 'utf8'));
         writeChart(STAGE, SEASON, state);
 
         const docs = repository.docs(rowsPath(STAGE, SEASON)) ?? {};
@@ -53,7 +53,7 @@ describe('what writeChart produces', () => {
     });
 
     it('has no undefined for the full 91-man roster either', async () => {
-        const state = parseCSV(readFileSync('public/roster.csv', 'utf8'));
+        const state = parseCSV(readFileSync('seed-data/roster.csv', 'utf8'));
         writeChart(STAGE, SEASON, state);
 
         const docs = repository.docs(rowsPath(STAGE, SEASON)) ?? {};
@@ -65,7 +65,7 @@ describe('what writeChart produces', () => {
     it('has no undefined for a chart whose rows are not in positionConfig', async () => {
         // Specialists live in depthChart with no chip of their own, and take
         // the other branch of writeChart.
-        const state = parseCSV(readFileSync('public/roster.csv', 'utf8'));
+        const state = parseCSV(readFileSync('seed-data/roster.csv', 'utf8'));
         const stray = { ...state, positionConfig: { offense: [], defense: [] } };
         writeChart(STAGE, SEASON, stray);
 

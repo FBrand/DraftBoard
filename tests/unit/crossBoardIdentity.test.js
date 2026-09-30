@@ -17,7 +17,7 @@ import { buildNameIndex, findMatchingIndex } from '../../src/utils/nameMatcher';
  * player — who carries no derived ranks. So a player every board had ranked
  * showed "???" for position rank.
  */
-const load = (f) => parseRankings(readFileSync(`public/${f}`, 'utf8')).filter(p => p?.name);
+const load = (f) => parseRankings(readFileSync(`seed-data/${f}`, 'utf8')).filter(p => p?.name);
 const BAIN = /^Rueben Bain/;
 
 describe('a player labelled differently on different boards', () => {

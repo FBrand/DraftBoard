@@ -319,7 +319,11 @@ function servePublicOverFetch() {
         // Absolute URLs are the real thing (the OAuth token endpoint).
         if (/^https?:\/\//.test(url)) return real(input, init);
         const name = url.split("/").filter(Boolean).pop() ?? "";
-        const file = `${ROOT}/public/${name}`;
+        // seed-data/, not public/. These files are the seeder INPUT and are not
+        // shipped: an app that can fetch them is an app that can decide who a
+        // player is from a text file it happens to carry. Moving them out of
+        // public/ makes that impossible rather than merely unused.
+        const file = `${ROOT}/seed-data/${name}`;
         if (!name || !existsSync(file)) {
             return new Response("not found", { status: 404, statusText: "Not Found" });
         }
@@ -392,7 +396,7 @@ async function build() {
     const parsed = new Map();
     for (const b of boards) {
         if (!b.rankingsFile) continue;
-        const file = `${ROOT}/public/${b.rankingsFile}`;
+        const file = `${ROOT}/seed-data/${b.rankingsFile}`;
         if (!existsSync(file)) throw new Error(`Missing ${file}. The CSVs stay in the repo even though the build withholds them.`);
         parsed.set(b.id, (parseRankings(readFileSync(file, 'utf8')) || []).filter(p => p?.name));
     }
@@ -474,7 +478,7 @@ async function build() {
     // set the next pick from the highest one recorded. UDFA rows carry the
     // literal string rather than a number, which is why the pick counter
     // comes from highestDraftPick and not from Math.max over the column.
-    const picksFile = `${ROOT}/public/DraftBoard_Picks.csv`;
+    const picksFile = `${ROOT}/seed-data/DraftBoard_Picks.csv`;
     if (existsSync(picksFile)) {
         const imported = deserializeDraftState(readFileSync(picksFile, "utf8"));
         if (imported.draftedPlayers.length || imported.ourPicksLeft.length) {

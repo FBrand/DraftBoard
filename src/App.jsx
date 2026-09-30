@@ -22,7 +22,6 @@ import Toast from './components/Toast';
 import { ConfirmDialog } from './components/Dialogs';
 import { exportSession, importSession, sessionFilename } from './utils/appSession';
 import { resetTo, INIT_SEEDED, INIT_CLEAN } from './utils/appInit';
-import * as faState from './utils/faState';
 import useUrlParam from './hooks/useUrlParam';
 
 const TABS = [
@@ -102,7 +101,8 @@ function App() {
   // inside its own view because Roster's "Sync from FA/Draft/UDFA" reads free
   // agency out of storage — waiting for someone to open the tab meant the
   // pipeline had nothing to pull from until they did.
-  React.useEffect(() => { faState.ensureSeeded(); }, []);
+  // Free agency used to seed itself here, from the shipped pre-draft roster.
+  // It is in the snapshot now — the seeder builds it from the same file.
 
   // A write that did not land.
   //

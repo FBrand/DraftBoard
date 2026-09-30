@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { parseProspectCSV } from '../../src/utils/prospects';
 import { parseRankings } from '../../src/utils/dataParser';
 
-const text = readFileSync('public/evaluations_kc_2026.csv', 'utf8');
+const text = readFileSync('seed-data/evaluations_kc_2026.csv', 'utf8');
 
 describe('the Chiefs 2026 example evaluations', () => {
     it('reads back through Add Players with every remark on the right pile', () => {

@@ -61,7 +61,7 @@ export default function FreeAgencyView({ masterPlayers, draftedPlayers, onInfoOp
         if (!seeding) return;
         let cancelled = false;
         (async () => {
-            const seeded = await faState.ensureSeeded();
+            const seeded = faState.hasSavedState();
             if (!cancelled) {
                 if (seeded) history.reset(seeded);
                 setSeeding(false);
