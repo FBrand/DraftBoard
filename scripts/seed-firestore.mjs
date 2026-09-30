@@ -354,8 +354,8 @@ async function build() {
     const { resolveAll, openRegistry, PLAYERS } = await import(`${ROOT}/src/utils/playerRegistry.js`);
     const { seedBoard } = await import(`${ROOT}/src/utils/scoutingState.js`);
     const { entriesPath } = await import(`${ROOT}/src/data/boardEntries.js`);
-    const { applyPlayerFacts } = await import(`${ROOT}/src/utils/playerFacts.js`);
-    const { seedExampleEvaluations } = await import(`${ROOT}/src/utils/exampleEvaluations.js`);
+    const { applyPlayerFacts } = await import(`${ROOT}/scripts/seed/playerFacts.js`);
+    const { seedExampleEvaluations } = await import(`${ROOT}/scripts/seed/exampleEvaluations.js`);
     const faState = await import(`${ROOT}/src/utils/faState.js`);
     const rosterState = await import(`${ROOT}/src/utils/rosterState.js`);
     const { writeDraft, DRAFT_STATE } = await import(`${ROOT}/src/data/draftStore.js`);

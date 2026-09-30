@@ -11,11 +11,11 @@
  * load. It is seed data, not truth: anything an analyst has since corrected in
  * the app wins, so this only ever FILLS BLANKS and never overwrites.
  */
-import { parseCsvLine } from './csvUtils';
-import { loadRegistry, fillMany } from './playerRegistry';
-import { repository } from '../data/repository';
-import { viewedSeason, seasonIsSeeded } from './boardRegistry';
-import { setupPath } from './seasonInit';
+import { parseCsvLine } from '../../src/utils/csvUtils';
+import { loadRegistry, fillMany } from '../../src/utils/playerRegistry';
+import { repository } from '../../src/data/repository';
+import { viewedSeason, seasonIsSeeded } from '../../src/utils/boardRegistry';
+import { setupPath } from '../../src/utils/seasonInit';
 
 const FILE = 'player_facts_2026.csv';
 

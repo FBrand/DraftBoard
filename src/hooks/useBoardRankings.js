@@ -18,8 +18,7 @@ import { storedIdentities, storedIdFor } from '../utils/storedIdentity';
 
 import { openBoards, listBoards, viewedSeason } from '../utils/boardRegistry';
 import { openEvaluations } from '../utils/evaluations';
-import { applyPlayerFacts } from '../utils/playerFacts';
-import { seedExampleEvaluations } from '../utils/exampleEvaluations';
+
 
 /**
  * Loads every analyst's rankings file once, so Scouting can show each board's
@@ -266,7 +265,12 @@ function loadPools({ allBoards = false } = {}) {
         // the fact meant the first load produced a pool with no schools at
         // all — which is what made "group by school" put every player in
         // unmatched. It is one fetch of a file the browser then caches.
-        return applyPlayerFacts().then(() => ({ files, keyOf, union, ids }));
+        // The shipped facts file used to be applied here. It is the seeder's
+        // now — a player arrives with his school and his draft outcome already
+        // on him, because the snapshot was built from the same file. An app that
+        // re-applies it is an app deciding what a player is from a text file it
+        // happens to ship, which is the whole class of thing being removed.
+        return Promise.resolve({ files, keyOf, union, ids });
     })
         .then(({ files, keyOf, union, ids }) => {
         // Facts come off the record, not out of the rankings file, which
@@ -360,10 +364,8 @@ function loadPools({ allBoards = false } = {}) {
             scoutingState.seedFavourites(board, pools[board]);
         });
 
-        // The shipped worked example — see exampleEvaluations.js. After the
-        // boards exist and their players have ids to hang remarks on, and
-        // never over anything already written.
-        seedExampleEvaluations();
+        // The worked example was seeded here. It is in the snapshot now, filed
+        // under Dan by the seeder, so there is nothing for the app to write.
         return pools;
     });
 }

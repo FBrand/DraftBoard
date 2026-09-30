@@ -25,13 +25,13 @@
  *   - and players are resolved WITHOUT creating, so it can only ever annotate
  *     somebody already on the board.
  */
-import { parseRankings } from './dataParser';
-import { resolveAll } from './playerRegistry';
-import { listBoards } from './boardRegistry';
-import { remarksFor, addRemark, openEvaluations } from './evaluations';
-import { currentSeason } from './boardRegistry';
-import { shouldSeed } from './appInit';
-import { repository } from '../data/repository';
+import { parseRankings } from '../../src/utils/dataParser';
+import { resolveAll } from '../../src/utils/playerRegistry';
+import { listBoards } from '../../src/utils/boardRegistry';
+import { remarksFor, addRemark, openEvaluations } from '../../src/utils/evaluations';
+import { currentSeason } from '../../src/utils/boardRegistry';
+import { shouldSeed } from '../../src/utils/appInit';
+import { repository } from '../../src/data/repository';
 
 const FILE = 'evaluations_kc_2026.csv';
 

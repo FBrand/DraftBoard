@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { openBoards, allBoards } from '../../src/utils/boardRegistry';
-import { seedExampleEvaluations } from '../../src/utils/exampleEvaluations';
+import { seedExampleEvaluations } from '../../scripts/seed/exampleEvaluations';
 import { repository } from '../../src/data/repository';
 import { readFileSync } from 'node:fs';
 

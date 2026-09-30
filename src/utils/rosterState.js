@@ -16,7 +16,6 @@ import { parseAcquisition } from './draftPhase';
 import { getSessionTeam } from './appSettings';
 import { DRAFT_YEAR } from '../constants';
 import { resolve as resolvePlayer, resolveAll, setFactsMany, beginBatch, endBatch } from './playerRegistry';
-import { applyPlayerFacts } from './playerFacts';
 import { rowsFor } from './positionTaxonomy';
 import { createOfficialVersion } from './officialVersion';
 
@@ -519,10 +518,10 @@ export function parseCSV(csvText, { dryRun = false } = {}) {
     pendingFacts = null;
 
     // The roster registers players the boards never saw — veterans, and the
-    // fringe of the depth chart. Seed data is applied again so they get their
-    // school too; it fills blanks only and writes nothing when there is
-    // nothing to fill. Not awaited: a school is a nicety, the roster is not.
-    applyPlayerFacts();
+    // Seed data used to be re-applied here so an imported veteran picked up a
+    // school. It is the seeder's file now, and a player who arrives through an
+    // import brings whatever the import carries — this app does not consult a
+    // shipped text file to decide who somebody is.
 
     return { positionConfig: { offense, defense }, depthChart, reserve, cuts };
 }
