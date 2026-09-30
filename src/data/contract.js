@@ -65,6 +65,14 @@ export const DOC_VERSION = 1;
  * @property {string} collection
  * @property {string} id
  * @property {object|null} doc
+ * @property {boolean} [mine]  this change is deliberately this person's alone
+ *   and must not reach a shared store, however much authority he has. It is a
+ *   statement of INTENT, not a permission question, and only a caller can make
+ *   it: a pick is a fact on a PLAYER, and that collection also carries names and
+ *   schools an expert should publish. Same path, two kinds of write.
+ *
+ *   This is the capability the older seam had and this one did not, which is why
+ *   both seams still exist. See docs/AUDIT-2026-09-30.md, R8.
  */
 
 /**
@@ -183,23 +191,27 @@ export function fromLegacyAdapter(adapter) {
         },
 
         async write(changes) {
-            // Grouped by collection, because the old interface has no
-            // cross-collection write and commit() is per collection.
+            // Grouped by collection AND by privacy, because a batch may hold
+            // both: the adapter takes one flag for the whole call, so a private
+            // change and a publishable one cannot travel together.
             const byCollection = new Map();
             changes.forEach((c) => {
-                if (!byCollection.has(c.collection)) byCollection.set(c.collection, []);
-                byCollection.get(c.collection).push(c);
+                const key = `${c.mine ? 'mine' : 'shared'}\u0000${c.collection}`;
+                if (!byCollection.has(key)) byCollection.set(key, []);
+                byCollection.get(key).push(c);
             });
 
             const results = [];
-            for (const [collection, group] of byCollection) {
+            for (const [key, group] of byCollection) {
+                const [privacy, collection] = key.split('\u0000');
+                const opts = privacy === 'mine' ? { mine: true } : undefined;
                 try {
                     if (adapter.commit) {
-                        await adapter.commit(collection, group.map(({ id, doc }) => ({ id, doc })));
+                        await adapter.commit(collection, group.map(({ id, doc }) => ({ id, doc })), opts);
                     } else {
                         for (const { id, doc } of group) {
-                            if (doc === null) await adapter.remove(collection, id);
-                            else await adapter.set(collection, id, doc);
+                            if (doc === null) await adapter.remove(collection, id, opts);
+                            else await adapter.set(collection, id, doc, opts);
                         }
                     }
                     group.forEach(c => results.push({ collection, id: c.id, outcome: 'stored' }));
