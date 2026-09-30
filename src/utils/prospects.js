@@ -13,10 +13,9 @@
  */
 import { buildNameIndex, findMatchingIndex, findCompatibleIndex } from './nameMatcher';
 import { readStage } from '../data/stageStore';
-import { repository } from '../data/repository';
 import {
-    aboutKey, hiddenPath, readEdits, readHidden, readProspects,
-    removeHidden, removeProspect, writeEdit, writeHidden, writeProspect,
+    aboutKey, readEdits, readHidden, readProspects,
+    removeHiddenById, removeProspect, writeEdit, writeHidden, writeProspect,
 } from '../data/prospectStore';
 import { viewedSeason } from './boardRegistry';
 
@@ -263,8 +262,12 @@ export function restorePlayer(identity) {
     // By the document it is in where it has one, by the identity it is about
     // otherwise — a marker still living in the old blob has no document id, and
     // hiding is idempotent, so the key derived from the identity finds it.
-    if (found.__id) repository.remove(hiddenPath(seasonId()), found.__id);
-    else removeHidden(seasonId(), found);
+    // Both through the same store. This used to reach for the repository on one
+    // branch and the prospect store on the other, and the two now serve these
+    // collections from different caches — so the marker was removed in one and
+    // still present in the other, and the player came back on one read and not
+    // the next. Exactly the divergence the seam split exists to prevent.
+    removeHiddenById(seasonId(), found.__id ?? aboutKey(found));
     return true;
 }
 

@@ -27,7 +27,17 @@
  * the array version had to search for one first, and a search that misses leaves
  * a duplicate nobody can remove.
  */
-import { repository } from './repository';
+// The LAYERED store, not the repository. These three collections are the first
+// to move across (see appStore.MIGRATED) and were chosen for it: one owner, no
+// watch, and small enough that a mistake is visible immediately.
+//
+// What the move buys is the distinction the repository cannot make. `docs()`
+// answers "nothing here" the same way for an empty collection and one the store
+// has never been asked about, and a caller that treats the second as the first
+// writes its own defaults over data it simply had not read yet — which is every
+// silent-overwrite bug on this project. `store.shared()` returns null until the
+// backend has actually answered.
+import { store } from './appStore';
 import { identityKey } from '../utils/nameMatcher';
 
 export const prospectsPath = (seasonId) => `seasons/${seasonId ?? '_'}/prospects`;
@@ -51,13 +61,22 @@ export const aboutKey = (identity) => {
 export function openProspects(seasonId) {
     if (!seasonId) return Promise.resolve();
     return Promise.all([
-        repository.ready(prospectsPath(seasonId)),
-        repository.ready(editsPath(seasonId)),
-        repository.ready(hiddenPath(seasonId)),
+        store.ready(prospectsPath(seasonId)),
+        store.ready(editsPath(seasonId)),
+        store.ready(hiddenPath(seasonId)),
     ]);
 }
 
-const listOf = (path) => Object.entries(repository.docs(path) ?? {});
+/**
+ * Whether the store has actually answered about a season's prospects.
+ *
+ * The question the repository could not be asked. A caller deciding whether to
+ * write defaults needs "has anybody told me" and not "is this empty".
+ */
+export const prospectsAnswered = (seasonId) =>
+    store.readiness(prospectsPath(seasonId)).answered;
+
+const listOf = (path) => Object.entries(store.view(path) ?? {});
 
 /** Players added here, each with the id of the document holding him. */
 export const readProspects = (seasonId) =>
@@ -72,27 +91,34 @@ export const readHidden = (seasonId) =>
     listOf(hiddenPath(seasonId)).map(([id, doc]) => ({ ...doc, __id: id }));
 
 export const writeProspect = (seasonId, id, player) =>
-    repository.set(prospectsPath(seasonId), id, player);
+    store.write([{ collection: prospectsPath(seasonId), id, doc: player }]);
 
 export const removeProspect = (seasonId, id) =>
-    repository.remove(prospectsPath(seasonId), id);
+    store.write([{ collection: prospectsPath(seasonId), id, doc: null }]);
 
 export const writeEdit = (seasonId, match, patch) =>
-    repository.set(editsPath(seasonId), aboutKey(match), { match, patch });
+    store.write([{ collection: editsPath(seasonId), id: aboutKey(match), doc: { match, patch } }]);
 
 export const writeHidden = (seasonId, identity) =>
-    repository.set(hiddenPath(seasonId), aboutKey(identity), identity);
+    store.write([{ collection: hiddenPath(seasonId), id: aboutKey(identity), doc: identity }]);
+
+/** By document id, for a marker that came from the legacy blob and has one. */
+export const removeHiddenById = (seasonId, id) =>
+    store.write([{ collection: hiddenPath(seasonId), id, doc: null }]);
 
 export const removeHidden = (seasonId, identity) =>
-    repository.remove(hiddenPath(seasonId), aboutKey(identity));
+    store.write([{ collection: hiddenPath(seasonId), id: aboutKey(identity), doc: null }]);
 
 /** Everything this season holds, for scrapping it. */
 export function removeAllProspects(seasonId) {
-    const drop = (path) => Object.keys(repository.docs(path) ?? {})
-        .map(id => repository.remove(path, id));
-    return Promise.all([
+    // One write for all three, because the layered store takes a batch across
+    // collections — where the repository needed one call per document.
+    const drop = (path) => Object.keys(store.view(path) ?? {})
+        .map(id => ({ collection: path, id, doc: null }));
+    const changes = [
         ...drop(prospectsPath(seasonId)),
         ...drop(editsPath(seasonId)),
         ...drop(hiddenPath(seasonId)),
-    ]);
+    ];
+    return changes.length ? store.write(changes) : Promise.resolve([]);
 }

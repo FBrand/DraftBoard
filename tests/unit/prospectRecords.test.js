@@ -1,6 +1,7 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { seedApp } from './seedForTests';
 import { repository } from '../../src/data/repository';
+import { store } from '../../src/data/appStore';
 import { currentSeason } from '../../src/utils/boardRegistry';
 import { openProspects, prospectsPath, hiddenPath, editsPath } from '../../src/data/prospectStore';
 import { writeStage } from '../../src/data/stageStore';
@@ -20,7 +21,9 @@ import { addProspect, loadProspects, deletePlayer, restorePlayer, hiddenPlayers,
  * unnoticed. What distinguishes them is how much each write touches.
  */
 const sid = () => currentSeason()?.id;
-const docsIn = (path) => Object.keys(repository.docs(path) ?? {});
+// From the LAYERED store: these three collections moved across, and asking the
+// repository would read a cache that no longer serves them.
+const docsIn = (path) => Object.keys(store.view(path) ?? {});
 
 beforeEach(async () => {
     globalThis.resetStorage();
@@ -31,12 +34,18 @@ beforeEach(async () => {
 
 describe('adding a player', () => {
     it('writes one document for him, and nothing else', () => {
-        const spy = vi.spyOn(repository, 'set');
+        // Through the LAYERED store now, not the repository — these three
+        // collections were the first to move across. The assertion is the same
+        // one it always was: one change, in the right collection.
+        // Asserted on the store rather than on a spy: appStore.store is a Proxy
+        // that defers building the real store until first use, so a property on
+        // it cannot be replaced. What the test is about anyway is that ONE
+        // document appears, in the right collection, and nothing else moves.
         addProspect({ name: 'Late Riser', position: 'WR', school: 'Toledo' });
 
-        expect(spy).toHaveBeenCalledTimes(1);
-        expect(spy.mock.calls[0][0]).toBe(prospectsPath(sid()));
-        spy.mockRestore();
+        expect(docsIn(prospectsPath(sid()))).toHaveLength(1);
+        expect(docsIn(editsPath(sid()))).toHaveLength(0);
+        expect(docsIn(hiddenPath(sid()))).toHaveLength(0);
     });
 
     it('does not disturb a player somebody else added', () => {

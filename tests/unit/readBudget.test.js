@@ -79,21 +79,22 @@ describe('a cold load', () => {
         const charts = opened.filter(p => p.includes('/charts/'));
         expect(charts.length).toBeGreaterThanOrEqual(8);
 
-        // Prospects cost THREE where the blob cost one: the players added here,
-        // the overrides, and the hidden. Deliberate — one document per record
-        // is what stops two experts' additions overwriting each other — and
-        // worth seeing written down rather than discovered on a bill.
-        expect(opened.filter(p => p.includes('prospect')).length).toBe(3);
+        // NONE, and that is the migration showing up. The three prospect
+        // collections moved onto the layered store, so they open through
+        // `store.ready` and never touch the repository — which is what this spy
+        // counts. A collection appearing on both sides would mean two caches
+        // over one backend.
+        expect(opened.filter(p => p.includes('prospect')).length).toBe(0);
 
-        // The whole boot, as measured: 19 collections for three boards and one
-        // season. Before the scope and the prospect split it was 8. Four of the
-        // eleven added are the LEGACY unscoped chart paths, which are read only
-        // on a local store — the seeder writes official, so a shared project
-        // cannot have them — so a Firestore boot opens 15.
+        // The whole boot through the REPOSITORY: 16 collections for three boards
+        // and one season. It was 19 before the prospect collections moved to the
+        // layered store, and 8 before the chart scope and the prospect split.
+        // Four of those are the LEGACY unscoped chart paths, read only on a local
+        // store — the seeder writes official, so a shared project cannot have
+        // them — leaving 12 on Firestore.
         //
-        // Against the audit's ~1,484-document cold load this is small, and it is
-        // the direction that matters: this phase is supposed to be reducing
-        // reads, and two of its predecessors quietly added some.
-        expect(opened).toHaveLength(19);
+        // Documents are what Firestore bills, not collections; see
+        // readBudgetDocuments.test.js for that number. This counts the seam.
+        expect(opened).toHaveLength(16);
     });
 });
