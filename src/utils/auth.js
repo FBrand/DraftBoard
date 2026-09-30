@@ -163,11 +163,28 @@ export async function isEmailInvited(email) {
  */
 async function ensureAuthorRecord(user) {
     const { db, doc, getDoc, setDoc } = await store();
+    const name = user.displayName || user.email || 'Expert';
+
+    // The NAME, where anybody can read it. The author record itself is not
+    // world-readable and must not be — it carries this person's real email —
+    // but a player card groups remarks by author and is viewer-facing, so
+    // without this every remark reads "Unattributed" to the whole audience.
+    // Written every time rather than once: a display name changes, and this is
+    // the only occasion the app has to notice.
+    //
+    // Deliberately not conditional on the author record being new. It was, and
+    // an expert whose record predates this line would never publish a name.
+    try {
+        await setDoc(doc(db, 'author_names', user.uid), { n: name });
+    } catch (err) {
+        console.warn('Could not publish the author name.', err?.code ?? err);
+    }
+
     const ref = doc(db, 'authors', user.uid);
     const snap = await getDoc(ref);
     if (snap.exists()) return;
     await setDoc(ref, {
-        n: user.displayName || user.email || 'Expert',
+        n: name,
         e: lower(user.email),
         c: new Date().toISOString(),
     });

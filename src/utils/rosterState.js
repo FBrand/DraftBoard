@@ -371,6 +371,8 @@ export const publishOfficial = (state) => (canEdit({ kind: 'stage' }) ? official
 export const adoptOfficial = () => official.adoptOfficial();
 export const fillFromOfficial = () => official.fillFromOfficial();
 export const countDisplaced = () => official.countDisplaced();
+// Re-exported so a view asks the stage it is showing, not two modules.
+export { canPublish } from './officialVersion';
 
 // ---------------------------------------------------------------------------
 // CSV Import

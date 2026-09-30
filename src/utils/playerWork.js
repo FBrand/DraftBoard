@@ -11,7 +11,7 @@
  * YOUR OWN opinions of him, which is the thing somebody actually wants when
  * they reach for delete on a player who turns out to be someone else's.
  */
-import { allBoards, authorById } from './boardRegistry';
+import { allBoards, voiceName } from './boardRegistry';
 import * as scoutingState from './scoutingState';
 import { voicesFor } from './evaluations';
 import { buildNameIndex, findMatchingIndex } from './nameMatcher';
@@ -60,7 +60,7 @@ export function voicesOn(player) {
     return voicesFor(player.id)
         .map(({ voiceId, remarks }) => ({
             voiceId,
-            label: authorById(voiceId)?.name ?? 'Unattributed',
+            label: voiceName(voiceId) ?? 'Unattributed',
             remarks,
         }));
 }

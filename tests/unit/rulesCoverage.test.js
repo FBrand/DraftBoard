@@ -96,6 +96,7 @@ const doc = (collectionPath) => `${collectionPath}/anId`;
 const WRITES = {
     'the player registry': doc('players'),
     'authors': doc('authors'),
+    'published author names': doc('author_names'),
     'the season stack': doc('seasons'),
     'board records': doc('boards'),
     'a board’s placements': doc(entriesPath('b_1')),

@@ -11,6 +11,7 @@ import Menu from './Menu';
 import OfficialBar from './OfficialBar';
 import { authorById } from '../utils/boardRegistry';
 import { canEdit } from '../utils/permissions';
+import { canPublish } from '../utils/officialVersion';
 import useUndoableState from '../hooks/useUndoableState';
 import UnrankedModal from './UnrankedModal';
 import { resolve as resolvePlayer, setFacts } from '../utils/playerRegistry';
@@ -369,7 +370,7 @@ export default function FreeAgencyView({ masterPlayers, draftedPlayers, onInfoOp
                 official={!!faState.loadOfficial()}
                 stamp={faState.officialStamp()}
                 stampName={authorById(faState.officialStamp()?.by)?.name ?? null}
-                canPublish={canEdit({ kind: 'stage' })}
+                canPublish={canEdit({ kind: 'stage' }) && canPublish()}
                 onPublish={() => {
                     const ok = faState.publishOfficial(state);
                     setOfficialTick(t => t + 1);

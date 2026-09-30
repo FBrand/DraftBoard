@@ -66,6 +66,12 @@ import { initialiseSeason, forgetSeason } from './seasonInit';
 
 export const SEASONS = 'seasons';
 export const AUTHORS = 'authors';
+
+/**
+ * Display names, readable by ANYBODY — unlike `authors`, which carries the
+ * person's real email and must stay expert-only. See voiceName below.
+ */
+export const AUTHOR_NAMES = 'author_names';
 export const BOARDS_COLLECTION = 'boards';
 
 /**
@@ -106,6 +112,10 @@ export async function openBoards() {
         repository.ready(SEASONS),
         repository.ready(AUTHORS),
         repository.ready(BOARDS_COLLECTION),
+        // Published names. One collection read, and without it every remark on
+        // every player card reads "Unattributed" to anybody who is not an
+        // expert — which is the audience.
+        repository.ready(AUTHOR_NAMES),
     ]);
     if (allOf(BOARDS_COLLECTION, 'board').length) return;
 
@@ -146,6 +156,7 @@ export async function openBoards() {
     const boards = [];
 
     const invites = [];
+    const names = [];
 
     INITIAL_BOARDS.forEach((b, order) => {
         let authorId = null;
@@ -166,6 +177,10 @@ export async function openBoards() {
             const email = `${b.author.toLowerCase()}@draftboard.local`;
             const author = { id: newId('a'), name: b.author, email, createdAt: season.createdAt };
             authors.push(author);
+            // And his name where anybody can read it. Without this the shipped
+            // example evaluations — filed under Dan — render as "Unattributed"
+            // for every viewer, which is the whole audience.
+            names.push({ id: author.id, doc: { n: author.name } });
             invites.push({ id: email, doc: { invitedBy: 'seed', invitedAt: season.createdAt } });
             authorId = author.id;
         }
@@ -192,6 +207,7 @@ export async function openBoards() {
         repository.commit(AUTHORS, authors.map(({ id, ...rest }) => ({ id, doc: authorFields.lean(rest) }))),
         repository.commit(BOARDS_COLLECTION, boards.map(({ id, ...rest }) => ({ id, doc: boardFields.lean(rest) }))),
         repository.commit(EMAIL2AUTHOR, invites),
+        repository.commit(AUTHOR_NAMES, names),
     ]);
 }
 
@@ -275,6 +291,35 @@ export function boardBySlug(slug) {
 export function authorById(id) {
     return id ? oneOf(AUTHORS, 'author', id) : null;
 }
+
+/**
+ * A voice's display name, readable by ANYBODY.
+ *
+ * `authors` is not world-readable and must not become so: the record carries
+ * the person's real email, and this app is deployed to a public URL for named
+ * people whose colleagues are also named people. A rules comment justified that
+ * restriction with "nothing viewer-facing needs an author" — which was true
+ * when it was written and stopped being true the moment the player card started
+ * grouping remarks by author. Measured: every remark by every analyst rendered
+ * as "Unattributed" to the entire audience, which is most of what the card is
+ * for.
+ *
+ * So the NAME is published separately and the email never leaves `authors`.
+ * Nothing sensitive is in here, no existing document changes visibility, and
+ * there is nothing to migrate — an author record already written keeps its
+ * email private, and its owner's next sign-in publishes his name.
+ */
+export function voiceName(id) {
+    if (!id) return null;
+    const published = repository.get(AUTHOR_NAMES, id)?.n;
+    if (published) return published;
+    // An expert reading his colleagues can see the author record itself, so he
+    // gets a name even before they have published one.
+    return authorById(id)?.name ?? null;
+}
+
+/** Loads the published names, so a synchronous read can answer for them. */
+export const openAuthorNames = () => repository.ready(AUTHOR_NAMES);
 
 export function authorOf(board) {
     return board?.authorId ? oneOf(AUTHORS, 'author', board.authorId) : null;

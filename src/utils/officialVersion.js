@@ -19,7 +19,26 @@
  * no season has nowhere to go — and none of that should be restated here.
  */
 import { readChart, writeChart, hasChart, hasOwnChart, readStamp, writeStamp, OFFICIAL } from '../data/depthChartStore';
+import { repository } from '../data/repository';
 import { slotIdentity } from './formatName';
+
+/**
+ * Who may publish the official version.
+ *
+ * NOT the same question as who may edit a chart. A viewer edits his own chart
+ * all day — that is the play-along, and `canEdit({ kind: 'stage' })` says yes to
+ * him for exactly that reason. Publishing is a different act: it writes the one
+ * version everybody else can adopt.
+ *
+ * The views were gating the publish button on `canEdit`, so a viewer was offered
+ * it. The rules refuse him (measured), which means the only thing on offer was a
+ * refusal — and a control that exists to fail is worse than no control, because
+ * the person clicking it has been told he may.
+ *
+ * On a local build there is nobody else and no rules to answer to, so the one
+ * person here may publish to his own store.
+ */
+export const canPublish = () => !repository.isLive() || !!repository.isExpert?.();
 
 /**
  * How two charts are compared, player by player.
@@ -131,7 +150,9 @@ export function createOfficialVersion({ stage, seasonId, loadState, saveState, m
      */
     function publishOfficial(state = loadState()) {
         const sid = seasonId();
-        if (!sid || !state) return false;
+        // Checked here as well as at the call site: this is the door, and a
+        // second caller would otherwise inherit only the rules' refusal.
+        if (!sid || !state || !canPublish()) return false;
         writeChart(stage, sid, { ...state, version, depthChart: stampIds(state.depthChart) }, OFFICIAL);
         writeStamp(stage, sid);
         return true;

@@ -1045,3 +1045,60 @@ describe('a revoked lead drafter', () => {
         await assertFails(setDoc(doc(expert('ryan-uid'), path), { o: 'ryan-uid', value: {} }));
     });
 });
+
+/**
+ * The audience can put a name to a remark.
+ *
+ * Measured before this existed: an anonymous viewer and an unauthenticated
+ * reader were both refused `authors/dan-uid` while both could read
+ * `evaluations/p_1/remarks/dan-uid` — so every remark by every analyst rendered
+ * as "Unattributed" on a card whose whole purpose is showing who said what.
+ *
+ * The fix separates a name from an email rather than relaxing the restriction on
+ * the record that holds both, so these tests care as much about what CANNOT go
+ * in here as about who can read it.
+ */
+describe('published author names', () => {
+    it('are readable by anybody, which is the point', async () => {
+        await env.withSecurityRulesDisabled(async (ctx) => {
+            await setDoc(doc(ctx.firestore(), 'author_names/dan-uid'), { n: 'Dan' });
+        });
+        await assertSucceeds(getDoc(doc(viewer(), 'author_names/dan-uid')));
+        await assertSucceeds(getDoc(doc(stranger(), 'author_names/dan-uid')));
+    });
+
+    it('are written only by the person they name', async () => {
+        await assertSucceeds(setDoc(doc(expert('dan-uid'), 'author_names/dan-uid'), { n: 'Dan' }));
+        await assertFails(setDoc(doc(expert('dan-uid'), 'author_names/ryan-uid'), { n: 'Not Ryan' }));
+    });
+
+    it('refuse anything but a name, so this cannot become the author record again', async () => {
+        // The whole reason `authors` is restricted is the email on it. A
+        // world-readable collection that accepted one would put it back a
+        // request away.
+        await assertFails(setDoc(doc(expert('dan-uid'), 'author_names/dan-uid'), {
+            n: 'Dan', e: 'dan@example.com',
+        }));
+        await assertFails(setDoc(doc(expert('dan-uid'), 'author_names/dan-uid'), { e: 'dan@example.com' }));
+    });
+
+    it('refuse a viewer', async () => {
+        await assertFails(setDoc(doc(viewer(), 'author_names/anon'), { n: 'Anon' }));
+    });
+
+    it('outlive access, because a revoked expert’s remarks are still his', async () => {
+        await env.withSecurityRulesDisabled(async (ctx) => {
+            await setDoc(doc(ctx.firestore(), 'author_names/dan-uid'), { n: 'Dan' });
+        });
+        await assertFails(deleteDoc(doc(expert('dan-uid'), 'author_names/dan-uid')));
+    });
+
+    it('still do not open the author record itself', async () => {
+        // The restriction that was correct stays correct.
+        await env.withSecurityRulesDisabled(async (ctx) => {
+            await setDoc(doc(ctx.firestore(), 'authors/dan-uid'), { n: 'Dan', e: 'dan@example.com' });
+        });
+        await assertFails(getDoc(doc(viewer(), 'authors/dan-uid')));
+        await assertFails(getDoc(doc(stranger(), 'authors/dan-uid')));
+    });
+});

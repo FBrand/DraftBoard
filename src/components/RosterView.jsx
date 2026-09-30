@@ -4,6 +4,7 @@ import { CSV_TEMPLATE } from '../utils/rosterState';
 import {
     loadState, saveState, defaultState, followState,
     loadOfficial, isOwn, officialStamp, publishOfficial, adoptOfficial, fillFromOfficial, countDisplaced,
+    canPublish,
     parseCSV, exportCSV, makeSlot, resolvePosition, deletePositionRow, clearInjuryArrival,
     SPECIALIST_IDS, hasRosterSourceAdapter, fetchAdapterRoster, fetchLocalRoster, fetchSeasonStartStructure, parseHTMLToRoster
 } from '../utils/rosterState';
@@ -628,7 +629,7 @@ export default function RosterView({ masterPlayers, draftedPlayers, onInfoOpen }
                 official={!!loadOfficial()}
                 stamp={officialStamp()}
                 stampName={authorById(officialStamp()?.by)?.name ?? null}
-                canPublish={canEdit({ kind: 'stage' })}
+                canPublish={canEdit({ kind: 'stage' }) && canPublish()}
                 onPublish={handlePublish}
                 onAdopt={handleAdopt}
                 onFill={handleFill}

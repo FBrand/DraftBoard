@@ -337,6 +337,36 @@ service cloud.firestore {
     // seeded with, because nobody signs in as them — so `authorId ==
     // request.auth.uid` is simply never true for one, which is the correct
     // outcome and needs no special case.
+    // --- a display name, and nothing else ---------------------------------
+    //
+    // `authors` is not world-readable, for a good reason stated below it: the
+    // record carries the person's real email. That restriction was justified
+    // with "nothing viewer-facing needs an author", which was true when it was
+    // written and stopped being true the moment the player card grouped remarks
+    // by author — measured, every remark by every analyst rendered as
+    // "Unattributed" to the whole audience, which is most of what the card is
+    // for.
+    //
+    // A name is not sensitive and an email is, so they are separated rather
+    // than the restriction being relaxed. Nothing already stored changes
+    // visibility, and there is nothing to migrate.
+    //
+    // ONLY `n` may be written. Without that constraint this becomes a second
+    // copy of the author record, world-readable, and the careful gating next
+    // door is worth nothing again — which is exactly how the email ended up
+    // one request away the first time.
+    match /author_names/{authorId} {
+      allow read: if true;
+      allow write: if isExpert()
+                   && authorId == request.auth.uid
+                   && request.resource.data.keys().hasOnly(['n'])
+                   && request.resource.data.n is string
+                   && request.resource.data.n.size() <= 120;
+      // A name outlives access, like the author record it names: a revoked
+      // expert's remarks are still his and still have to say so.
+      allow delete: if false;
+    }
+
     match /authors/{authorId} {
       // NOT world-readable, unlike every other shared record here — an
       // author carries `e`, the person's real email address, and this app is

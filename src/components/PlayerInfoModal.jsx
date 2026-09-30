@@ -5,7 +5,7 @@ import { buildNameIndex, findMatchingIndex } from '../utils/nameMatcher';
 import { rankBoard } from '../utils/boardRanking';
 import useBoardRankings from '../hooks/useBoardRankings';
 
-import { allBoards, authorById, boardById, currentSeason, listSeasons } from '../utils/boardRegistry';
+import { allBoards, voiceName, boardById, currentSeason, listSeasons } from '../utils/boardRegistry';
 import { myVoice, remarksFor, voicesFor, addRemark, removeRemark, openEvaluations } from '../utils/evaluations';
 import { resolve as resolvePlayer } from '../utils/playerRegistry';
 
@@ -217,10 +217,12 @@ export default function PlayerInfoModal({ player, players = [], onClose, editsOp
         return voicesFor(playerId)
             .map(({ voiceId, remarks }) => ({
                 voiceId,
-                // An id with no author record is a real case — a placeholder
+                // An id with no name published is a real case — a placeholder
                 // from a project seeded before that person existed. Labelled,
-                // never shown as an id.
-                label: authorById(voiceId)?.name ?? 'Unattributed',
+                // never shown as an id. `voiceName` is readable by anybody,
+                // unlike the author record: the card is viewer-facing and this
+                // said "Unattributed" to the entire audience.
+                label: voiceName(voiceId) ?? 'Unattributed',
                 remarks,
             }))
             // Mine first, then by name: the one you are most likely to be
