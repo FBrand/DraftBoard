@@ -55,11 +55,23 @@ export function tombstone() {
  * @param {object}   config
  * @param {object}   config.remote          the shared store — Firestore
  * @param {object}   config.local           this browser — localAdapter
- * @param {Function} config.writesRemote    () => boolean, asked on every write
+ * @param {Function} config.writesRemote    (ctx) => boolean, asked on every write
+ *
+ * `writesRemote` is given `{ path, id, mine }`. `mine` marks a write that is
+ * deliberately this person's alone — a draft nobody else should receive — and
+ * it is the caller's statement of intent rather than a permission question, so
+ * it short-circuits before the callback is asked at all.
+ *
+ * The alternative was a rule keyed on the path, and it cannot work: a pick is a
+ * fact on a player, and the `players` collection also carries names, schools
+ * and matrix scores that an expert absolutely should publish. The two are the
+ * same path and only the caller can tell them apart.
  * @param {Function} [config.onRemoteError] (path, err) => void
  */
 export function createOverlayAdapter({ remote, local, writesRemote, onRemoteError }) {
-    const canWriteRemote = writesRemote ?? (() => false);
+    const asked = writesRemote ?? (() => false);
+    // A write marked `mine` stays here whatever the answer would have been.
+    const canWriteRemote = (ctx) => !ctx?.mine && asked(ctx);
 
     /**
      * The local half is where a viewer's work lives, so losing it is losing
@@ -134,7 +146,7 @@ export function createOverlayAdapter({ remote, local, writesRemote, onRemoteErro
         },
 
         isExpert() {
-            return canWriteRemote();
+            return asked({});
         },
 
         /**
@@ -175,29 +187,29 @@ export function createOverlayAdapter({ remote, local, writesRemote, onRemoteErro
             )
             : undefined,
 
-        async set(path, id, doc) {
+        async set(path, id, doc, opts) {
             // Which half a write goes to is the difference between an expert
             // broadcasting and a viewer playing along, and it is invisible from
             // outside. A whole finding about lost writes rested on assuming
             // this said "remote" when nothing had checked.
             if (globalThis.__DB_TRACE) {
-                console.log(`[trace] overlay.set ${path}/${id} -> ${canWriteRemote() ? 'REMOTE' : 'local'}`);
+                console.log(`[trace] overlay.set ${path}/${id} -> ${canWriteRemote({ path, id, mine: opts?.mine }) ? 'REMOTE' : 'local'}`);
             }
-            if (canWriteRemote()) return remote.set(path, id, doc);
+            if (canWriteRemote({ path, id, mine: opts?.mine })) return remote.set(path, id, doc);
             return local.set(path, id, doc);
         },
 
-        async remove(path, id) {
-            if (canWriteRemote()) return remote.remove(path, id);
+        async remove(path, id, opts) {
+            if (canWriteRemote({ path, id, mine: opts?.mine })) return remote.remove(path, id);
             // Locally only: a blank would be a document, and dropping the
             // local copy would let the remote one come back.
             return local.set(path, id, tombstone());
         },
-        async commit(path, changes) {
+        async commit(path, changes, opts) {
             if (globalThis.__DB_TRACE) {
-                console.log(`[trace] overlay.commit ${path} x${changes?.length ?? 0} -> ${canWriteRemote() ? 'REMOTE' : 'local'}`);
+                console.log(`[trace] overlay.commit ${path} x${changes?.length ?? 0} -> ${canWriteRemote({ path, mine: opts?.mine }) ? 'REMOTE' : 'local'}`);
             }
-            if (canWriteRemote()) {
+            if (canWriteRemote({ path, mine: opts?.mine })) {
                 return remote.commit
                     ? remote.commit(path, changes)
                     : Promise.all(changes.map(c => (c.doc === null
@@ -221,11 +233,11 @@ export function createOverlayAdapter({ remote, local, writesRemote, onRemoteErro
          * published or all local, never split across the boundary this
          * adapter exists to draw.
          */
-        async commitMany(items) {
+        async commitMany(items, opts) {
             if (globalThis.__DB_TRACE) {
-                console.log(`[trace] overlay.commitMany x${items?.length ?? 0} -> ${canWriteRemote() ? 'REMOTE' : 'local'}`);
+                console.log(`[trace] overlay.commitMany x${items?.length ?? 0} -> ${canWriteRemote({ mine: opts?.mine }) ? 'REMOTE' : 'local'}`);
             }
-            if (canWriteRemote()) {
+            if (canWriteRemote({ mine: opts?.mine })) {
                 return remote.commitMany
                     ? remote.commitMany(items)
                     : Promise.all(items.map(c => (c.doc === null
@@ -250,7 +262,7 @@ export function createOverlayAdapter({ remote, local, writesRemote, onRemoteErro
          * deleted.
          */
         async clear(path) {
-            if (canWriteRemote() && remote.clear) return remote.clear(path);
+            if (asked({ path }) && remote.clear) return remote.clear(path);
             return local.clear ? local.clear(path) : undefined;
         },
     };

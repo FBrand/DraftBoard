@@ -162,5 +162,22 @@ export function createOfficialVersion({ stage, seasonId, loadState, saveState, m
         return { filled };
     }
 
-    return { loadOfficial, isOwn, officialStamp, publishOfficial, adoptOfficial, fillFromOfficial };
+    /**
+     * How many players taking official would move to the cut panel.
+     *
+     * For the confirmation to be able to say so. A dialog that warns about
+     * losing work without saying how much is the kind of warning people learn
+     * to click through.
+     */
+    function countDisplaced() {
+        const official = loadOfficial();
+        const mine = loadState();
+        if (!official || !mine) return 0;
+        return playersNotIn(mine, official).length;
+    }
+
+    return {
+        loadOfficial, isOwn, officialStamp, publishOfficial, adoptOfficial,
+        fillFromOfficial, countDisplaced,
+    };
 }

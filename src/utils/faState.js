@@ -148,6 +148,7 @@ export const officialStamp = () => official.officialStamp();
 export const publishOfficial = (state) => (canEdit({ kind: 'stage' }) ? official.publishOfficial(state) : false);
 export const adoptOfficial = () => official.adoptOfficial();
 export const fillFromOfficial = () => official.fillFromOfficial();
+export const countDisplaced = () => official.countDisplaced();
 
 export function loadState() {
     try {

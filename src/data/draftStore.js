@@ -208,6 +208,20 @@ function pickFacts(p, year) {
     };
 }
 
+/**
+ * Whether this draft is the live one or somebody's own.
+ *
+ * The lead's picks reach the database; nobody else's do. Not a permission
+ * check — the rules make the draft document his alone — but a statement of
+ * INTENT, and it has to be made here because a pick is a fact on a player and
+ * the players collection also carries names and schools that an expert should
+ * publish. Only the caller knows which kind of write this is.
+ *
+ * Following is the default and a follower makes no picks at all, so in practice
+ * this marks the draft of somebody who has chosen to work on his own.
+ */
+const privateDraft = (seasonId) => ({ mine: !iAmLead(seasonId) });
+
 export function writeDraft(seasonId, state) {
     const scope = draftScope(seasonId);
     const year = yearOf(seasonId);
@@ -247,7 +261,7 @@ export function writeDraft(seasonId, state) {
             if (DRAFT_FACTS.every(f => (before[f] ?? null) === (facts[f] ?? null))) return;
             updates.push({ id, patch: facts });
         });
-        if (updates.length) setFactsMany(updates);
+        if (updates.length) setFactsMany(updates, privateDraft(seasonId));
     }
 
     // --- whose turn it is ---
@@ -262,7 +276,7 @@ export function writeDraft(seasonId, state) {
         // document, and writing `{ value }` alone would release the lead on
         // every pick — the holder losing it by using it.
         const kept = before?.o === undefined ? {} : { o: before.o };
-        repository.set(DRAFT_STATE, scope, { ...kept, value: rest });
+        repository.set(DRAFT_STATE, scope, { ...kept, value: rest }, privateDraft(seasonId));
     }
 }
 

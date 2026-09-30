@@ -406,7 +406,17 @@ export function setFacts(id, patch) {
  * the main thread for fourteen seconds on a cold start. Nothing rendered, and
  * every browser-test wait timed out against elements that were plainly there.
  */
-export function setFactsMany(updates) {
+/**
+ * @param {Array} updates
+ * @param {object} [opts]
+ * @param {boolean} [opts.mine]  keep these out of the shared store.
+ *
+ * A pick is a fact on a player, and a draft that is not the live one is nobody
+ * else's business — so the draft passes this through when the writer is not the
+ * lead. It cannot be decided here or in the adapter: the same collection also
+ * carries names, schools and matrix scores, which an expert should publish.
+ */
+export function setFactsMany(updates, opts) {
     const changes = [];
 
     (updates ?? []).forEach(({ id, patch }) => {
@@ -429,7 +439,7 @@ export function setFactsMany(updates) {
         }
     });
 
-    if (changes.length) repository.commit(PLAYERS, changes.map(c => ({ ...c, doc: c.doc ? lean(c.doc) : c.doc })));
+    if (changes.length) repository.commit(PLAYERS, changes.map(c => ({ ...c, doc: c.doc ? lean(c.doc) : c.doc })), opts);
     return changes.length;
 }
 

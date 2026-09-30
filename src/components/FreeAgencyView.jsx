@@ -8,6 +8,9 @@ import { makeSlot, resolvePosition } from '../utils/rosterState';
 import DepthChartGrid from './DepthChartGrid';
 import { TextPromptDialog } from './Dialogs';
 import Menu from './Menu';
+import OfficialBar from './OfficialBar';
+import { authorById } from '../utils/boardRegistry';
+import { canEdit } from '../utils/permissions';
 import useUndoableState from '../hooks/useUndoableState';
 import UnrankedModal from './UnrankedModal';
 import { resolve as resolvePlayer, setFacts } from '../utils/playerRegistry';
@@ -27,6 +30,11 @@ export default function FreeAgencyView({ masterPlayers, draftedPlayers, onInfoOp
     const [zoomLevel, setZoomLevel] = useState(1);
 
     // Every write goes through setState, so wrapping it here is all undo needs.
+    // Bumped after anything touches the official board, which the bar reads
+    // through the store — React cannot notice that on its own.
+    const [officialTick, setOfficialTick] = useState(0);
+    const [officialNote, setOfficialNote] = useState(null);
+
     const [state, setState, history] = useUndoableState(
         () => faState.loadState(),
         useCallback(next => faState.saveState(next), []),
@@ -351,6 +359,46 @@ export default function FreeAgencyView({ masterPlayers, draftedPlayers, onInfoOp
                     onCancel={() => setPendingImport(null)}
                 />
             )}
+
+            {/* Every analyst wants to bring different players in, so a personal
+                board is the normal case here and official is what the show
+                settled on. Same three actions as the roster, same component. */}
+            <OfficialBar
+                stageLabel="free agency board"
+                isOwn={faState.isOwn()}
+                official={!!faState.loadOfficial()}
+                stamp={faState.officialStamp()}
+                stampName={authorById(faState.officialStamp()?.by)?.name ?? null}
+                canPublish={canEdit({ kind: 'stage' })}
+                onPublish={() => {
+                    const ok = faState.publishOfficial(state);
+                    setOfficialTick(t => t + 1);
+                    setOfficialNote(ok ? 'This is now the official free agency board.' : 'Could not publish it.');
+                }}
+                onAdopt={() => {
+                    const result = faState.adoptOfficial();
+                    const fresh = faState.loadState();
+                    if (fresh) history.reset(fresh);
+                    setOfficialTick(t => t + 1);
+                    setOfficialNote(result
+                        ? (result.displaced
+                            ? `Took the official board — ${result.displaced} candidate${result.displaced === 1 ? '' : 's'} moved to the cut panel.`
+                            : 'Took the official board.')
+                        : 'There is no official board to take.');
+                }}
+                onFill={() => {
+                    const result = faState.fillFromOfficial();
+                    const fresh = faState.loadState();
+                    if (fresh) history.reset(fresh);
+                    setOfficialTick(t => t + 1);
+                    setOfficialNote(result
+                        ? (result.filled ? `Filled ${result.filled} empty slot${result.filled === 1 ? '' : 's'} from official.` : 'Nothing to fill.')
+                        : 'There is no official board to fill from.');
+                }}
+                displacedCount={faState.countDisplaced()}
+                key={officialTick}
+            />
+            {officialNote ? <div className="official-bar-note" role="status">{officialNote}</div> : null}
 
             <DepthChartGrid
                 showPracticeSquad={false}

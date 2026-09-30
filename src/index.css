@@ -4391,3 +4391,63 @@ body.export-mode .card-glow {
   .expert-who { flex-basis: 100%; }
   .expert-invite { flex-direction: column; }
 }
+
+/* ---------------------------------------------------------------------------
+   Where a personal chart meets the official one (OfficialBar.jsx).
+
+   Deliberately quiet: it sits above the depth chart on every load and is read
+   far more often than it is used, so it reads as a status line with actions
+   rather than a banner. The one thing it must do loudly is say when what you
+   are looking at is NOT yours — a screen that looks editable while showing the
+   official roster is how one analyst's change becomes everybody's.
+   --------------------------------------------------------------------------- */
+.official-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem 1rem;
+    padding: 0.4rem 0.75rem;
+    margin: 0 0 0.5rem;
+    border: 1px solid var(--border-color, #33384a);
+    border-radius: 6px;
+    background: var(--panel-bg, #1b1e2b);
+    font-size: 0.85rem;
+}
+
+.official-bar-state { color: var(--text-muted, #9aa0b4); }
+.official-bar-state strong { color: var(--text-color, #e8eaf2); }
+
+/* The provenance: who published official and when. Present whenever there is
+   an official version, because "who changed the roster" needs an answer. */
+.official-bar-stamp {
+    color: var(--text-muted, #9aa0b4);
+    font-variant-numeric: tabular-nums;
+}
+
+.official-bar-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.official-bar-note {
+    margin: 0 0 0.5rem;
+    padding: 0.35rem 0.75rem;
+    border-radius: 6px;
+    background: var(--panel-bg, #1b1e2b);
+    color: var(--text-muted, #9aa0b4);
+    font-size: 0.85rem;
+}
+
+/* Who is running the live draft (LeadControl.jsx). Sits with Undo because it
+   is read at a glance while the draft is happening. */
+.lead-control {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+    color: var(--text-muted, #9aa0b4);
+}
+.lead-control strong { color: var(--text-color, #e8eaf2); }
+.lead-mine strong { color: var(--accent, #6ea8fe); }

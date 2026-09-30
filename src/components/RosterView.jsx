@@ -3,6 +3,7 @@ import useIsMobile from '../hooks/useIsMobile';
 import { CSV_TEMPLATE } from '../utils/rosterState';
 import {
     loadState, saveState, defaultState, followState,
+    loadOfficial, isOwn, officialStamp, publishOfficial, adoptOfficial, fillFromOfficial, countDisplaced,
     parseCSV, exportCSV, makeSlot, resolvePosition, deletePositionRow, clearInjuryArrival,
     SPECIALIST_IDS, hasRosterSourceAdapter, fetchAdapterRoster, fetchLocalRoster, fetchSeasonStartStructure, parseHTMLToRoster
 } from '../utils/rosterState';
@@ -12,11 +13,14 @@ import DepthChartGrid from './DepthChartGrid';
 import { TextPromptDialog, ConfirmDialog } from './Dialogs';
 import Toast from './Toast';
 import Menu from './Menu';
+import OfficialBar from './OfficialBar';
 import { shouldSeed } from '../utils/appInit';
 import { openDepthCharts } from '../data/depthChartStore';
 import { viewedSeason, openBoards } from '../utils/boardRegistry';
 import { syncFromStages, describeSync } from '../utils/rosterSync';
 import { resolve as resolvePlayer, setFacts, byId } from '../utils/playerRegistry';
+import { authorById } from '../utils/boardRegistry';
+import { canEdit } from '../utils/permissions';
 import useUndoableState from '../hooks/useUndoableState';
 
 function CounterBox({ label, val, max, status, isLast, maxLabel }) {
@@ -46,6 +50,9 @@ export default function RosterView({ masterPlayers, draftedPlayers, onInfoOpen }
     const [addPositionPhase, setAddPositionPhase] = useState(null); // 'offense' | 'defense' | null
     const [showResetConfirm, setShowResetConfirm] = useState(false);
     const [toast, setToast] = useState(null); // { message, tone }
+    // Bumped after anything touches the official chart. The bar reads through
+    // the store, which React has no way to notice on its own.
+    const [officialTick, setOfficialTick] = useState(0);
     // Stable identity: Toast's auto-dismiss timer keys off this, so an inline
     // arrow would restart the countdown on every render.
     const dismissToast = useCallback(() => setToast(null), []);
@@ -417,6 +424,53 @@ export default function RosterView({ masterPlayers, draftedPlayers, onInfoOpen }
     // to run repeatedly as new picks/signings/candidates accumulate without
     // losing hand-edits made in Roster between runs. Never writes to FA's
     // own state (read-only via faState.loadState()).
+    /**
+     * Publishing, taking and filling — the three ways this roster meets the
+     * official one. Each re-reads through the store rather than trusting what
+     * is on screen, and each reports what it did: a state that changes with no
+     * explanation is how this app has lied before.
+     */
+    const handlePublish = () => {
+        if (!publishOfficial(state)) {
+            setToast({ message: 'Could not publish this roster as official.', tone: 'error' });
+            return;
+        }
+        setOfficialTick(t => t + 1);
+        setToast({ message: 'This is now the official roster.', tone: 'success' });
+    };
+
+    const handleAdopt = () => {
+        const result = adoptOfficial();
+        if (!result) {
+            setToast({ message: 'There is no official roster to take.', tone: 'error' });
+            return;
+        }
+        const fresh = loadState();
+        if (fresh) history.reset(fresh);
+        setOfficialTick(t => t + 1);
+        setToast({
+            message: result.displaced
+                ? `Took the official roster — ${result.displaced} player${result.displaced === 1 ? '' : 's'} moved to the cut panel.`
+                : 'Took the official roster.',
+            tone: 'success',
+        });
+    };
+
+    const handleFill = () => {
+        const result = fillFromOfficial();
+        if (!result) {
+            setToast({ message: 'There is no official roster to fill from.', tone: 'error' });
+            return;
+        }
+        const fresh = loadState();
+        if (fresh) history.reset(fresh);
+        setOfficialTick(t => t + 1);
+        setToast({
+            message: result.filled ? `Filled ${result.filled} empty slot${result.filled === 1 ? '' : 's'} from official.` : 'Nothing to fill — every slot official has is already taken.',
+            tone: result.filled ? 'success' : 'info',
+        });
+    };
+
     const handleSyncFromStages = () => {
         const result = syncFromStages({ state, fa: faState.loadState(), draftedPlayers });
         if (result.changed) setState(result.next);
@@ -567,6 +621,20 @@ export default function RosterView({ masterPlayers, draftedPlayers, onInfoOpen }
                     onCancel={() => setPendingImport(null)}
                 />
             )}
+
+            <OfficialBar
+                stageLabel="roster"
+                isOwn={isOwn()}
+                official={!!loadOfficial()}
+                stamp={officialStamp()}
+                stampName={authorById(officialStamp()?.by)?.name ?? null}
+                canPublish={canEdit({ kind: 'stage' })}
+                onPublish={handlePublish}
+                onAdopt={handleAdopt}
+                onFill={handleFill}
+                displacedCount={countDisplaced()}
+                key={officialTick}
+            />
 
             <DepthChartGrid
                 positionConfig={positionConfig}

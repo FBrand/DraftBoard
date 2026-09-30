@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { viewedSeason } from '../utils/boardRegistry';
 import { serializeDraftState, deserializeDraftState, getExportFilename } from '../utils/sessionSerializer';
 import TopPanelDraft from './TopPanel_Draft';
 import LeftPanel from './LeftPanel';
@@ -76,6 +77,7 @@ export default function DraftView({
                 currentPickStatus={currentPickStatus}
                 draftComplete={draftComplete}
                 ourPicksLeft={ourPicksLeft}
+                seasonId={viewedSeason()?.id ?? null}
                 onUndo={undoAction}
                 onUpdatePicks={() => setIsModalOpen(true)}
                 onReset={resetDraft}

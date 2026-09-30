@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { exportBoardToImage } from '../utils/exportBoard';
 import Toast from './Toast';
 import Menu from './Menu';
+import LeadControl from './LeadControl';
 import BoardSwitcher from './BoardSwitcher';
 import { listBoards } from '../utils/boardRegistry';
 
@@ -24,9 +25,12 @@ const PickHeadline = ({ currentPick, currentPickStatus, draftComplete }) => (
     </div>
 );
 
-const TopPanel = ({ currentPick, currentPickStatus, draftComplete = false, ourPicksLeft, onUndo, onUpdatePicks, onReset, isLiveSync, canLiveSync, toggleLiveSync, isFocusMode, onToggleFocus, onDraftUnranked, onSavePicks, onLoadPicks, boardEditable, onToggleBoardEdit }) => {
+const TopPanel = ({ currentPick, currentPickStatus, draftComplete = false, ourPicksLeft, seasonId, onUndo, onUpdatePicks, onReset, isLiveSync, canLiveSync, toggleLiveSync, isFocusMode, onToggleFocus, onDraftUnranked, onSavePicks, onLoadPicks, boardEditable, onToggleBoardEdit }) => {
     const [isExporting, setIsExporting] = useState(false);
     const [toast, setToast] = useState(null);
+    // Claiming or releasing the lead changes a document this panel reads
+    // through the store, which React has no way to notice.
+    const [leadTick, setLeadTick] = useState(0);
     const dismissToast = useCallback(() => setToast(null), []);
 
     // finally, not a plain sequence: a throwing export used to leave the
@@ -147,6 +151,10 @@ const TopPanel = ({ currentPick, currentPickStatus, draftComplete = false, ourPi
                 <button className="action-pill" onClick={onDraftUnranked}>+ Draft Unranked Player</button>
                 <button className="action-pill focus-pill" onClick={onToggleFocus}>⛶ Full Board</button>
                 <button className="action-pill undo-pill" onClick={onUndo}>Undo</button>
+                {/* Out here with Undo rather than in the menu: who is running
+                    the draft is something you need to see at a glance while it
+                    is happening, not something you go looking for. */}
+                <LeadControl key={leadTick} seasonId={seasonId} onChange={() => setLeadTick(t => t + 1)} />
                 <Menu items={[
                     { label: boardEditable ? '✓ Editing board — click to stop' : '✎ Edit Board', onClick: onToggleBoardEdit, title: 'Drag cards between tiers, and into other position columns' },
                     { label: 'Update Our Picks…', onClick: onUpdatePicks },

@@ -888,9 +888,9 @@ export function createRepository(adapter = localAdapter) {
             });
     }
 
-    function set(collection, id, doc) {
+    function set(collection, id, doc, opts) {
         applyLocal(collection, id, doc);
-        return attempt(collection, id, doc, 'set', () => adapter.set(collection, id, doc));
+        return attempt(collection, id, doc, 'set', () => adapter.set(collection, id, doc, opts));
     }
 
     function update(collection, id, patch) {
@@ -904,7 +904,13 @@ export function createRepository(adapter = localAdapter) {
     }
 
     /** Several documents in one go — one adapter round trip, one notify. */
-    function commit(collection, changes) {
+    /**
+     * @param {object} [opts]
+     * @param {boolean} [opts.mine]  this write is deliberately private — see
+     *   overlayAdapter. A local-only backend ignores it; the overlay keeps the
+     *   write out of the shared store however expert the writer is.
+     */
+    function commit(collection, changes, opts) {
         const current = cache.get(collection) ?? {};
         const next = { ...current };
         changes.forEach(({ id, doc }) => {
@@ -915,7 +921,7 @@ export function createRepository(adapter = localAdapter) {
         notify(collection);
 
         const write = adapter.commit
-            ? adapter.commit(collection, changes)
+            ? adapter.commit(collection, changes, opts)
             : Promise.all(changes.map(c => (c.doc === null
                 ? adapter.remove(collection, c.id)
                 : adapter.set(collection, c.id, c.doc))));
@@ -956,7 +962,7 @@ export function createRepository(adapter = localAdapter) {
      * Items are { collection, id, doc }. Mirrors commit() item for item,
      * generalised to a per-item collection instead of one shared collection.
      */
-    function commitMany(items) {
+    function commitMany(items, opts) {
         const byCollection = new Map();
         items.forEach(({ collection, id, doc }) => {
             if (!byCollection.has(collection)) byCollection.set(collection, { ...(cache.get(collection) ?? {}) });
@@ -967,7 +973,7 @@ export function createRepository(adapter = localAdapter) {
         byCollection.forEach((next, collection) => { cache.set(collection, next); notify(collection); });
 
         const write = adapter.commitMany
-            ? adapter.commitMany(items.map(({ collection, id, doc }) => ({ path: collection, id, doc })))
+            ? adapter.commitMany(items.map(({ collection, id, doc }) => ({ path: collection, id, doc })), opts)
             : Promise.all(items.map(c => (c.doc === null
                 ? adapter.remove(c.collection, c.id)
                 : adapter.set(c.collection, c.id, c.doc))));
