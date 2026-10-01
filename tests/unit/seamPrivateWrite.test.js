@@ -33,12 +33,19 @@ beforeEach(() => {
 });
 
 describe('a private change through the layered store', () => {
-    it('reaches the adapter marked', async () => {
+    it('never reaches the adapter at all', async () => {
+        // Stronger than it used to be. The flag was first threaded THROUGH to an
+        // adapter that understood it, which is what the overlay needed. The
+        // layered store does not need to send it anywhere: a write that may not
+        // be published is this person's own work, so it goes to `mine` and stays
+        // there. Nothing to mark, nothing to forward, nothing to get wrong one
+        // layer down.
         const store = createStore(fromLegacyAdapter(adapter));
-        await store.write([{ collection: 'players', id: 'p_1', doc: { k: 4 }, mine: true }]);
+        const results = await store.write([{ collection: 'players', id: 'p_1', doc: { k: 4 }, mine: true }]);
 
-        expect(calls).toHaveLength(1);
-        expect(calls[0].mine).toBe(true);
+        expect(calls).toHaveLength(0);
+        expect(store.view('players').p_1).toEqual({ k: 4 });
+        expect(results[0].outcome).toBe('stored');
     });
 
     it('is not marked when nothing asks', async () => {
@@ -49,19 +56,22 @@ describe('a private change through the layered store', () => {
     });
 
     it('is split from a publishable change in the same batch', async () => {
-        // The failure a naive grouping produces: one call, one flag, and either
-        // the pick is published or the correction is swallowed.
+        // A batch may hold both, and they go to different places: the pick to
+        // `mine`, the correction to the store. Sending them together is how a
+        // private pick gets published or a correction everybody needed gets
+        // swallowed.
         const store = createStore(fromLegacyAdapter(adapter));
         await store.write([
             { collection: 'players', id: 'p_pick', doc: { k: 9 }, mine: true },
             { collection: 'players', id: 'p_fix', doc: { n: 'Corrected' } },
         ]);
 
-        expect(calls).toHaveLength(2);
-        const priv = calls.find(c => c.mine);
-        const pub = calls.find(c => !c.mine);
-        expect(priv.ids).toEqual(['p_pick']);
-        expect(pub.ids).toEqual(['p_fix']);
+        // Only the correction travelled.
+        expect(calls).toHaveLength(1);
+        expect(calls[0].ids).toEqual(['p_fix']);
+        // And both are visible, which is the point of a layer rather than a flag.
+        expect(store.view('players').p_pick).toEqual({ k: 9 });
+        expect(store.view('players').p_fix).toEqual({ n: 'Corrected' });
     });
 
     it('still reports an outcome per change, whichever side it went', async () => {

@@ -122,8 +122,12 @@ export function createMemoryAdapter({ latency = 0, failWrites = false } = {}) {
 
         async commit(collection, changes) {
             const docs = read(collection);
-            changes.forEach(({ id, doc }) => {
+            changes.forEach(({ id, doc, merge }) => {
                 if (doc === null) delete docs[id];
+                // A MERGE changes the fields it names. Firestore does this
+                // itself; a store that replaces instead makes the flag a lie one
+                // layer below the caller who set it.
+                else if (merge) docs[id] = { ...(docs[id] ?? {}), ...doc };
                 else docs[id] = doc;
             });
             await write(collection, docs);

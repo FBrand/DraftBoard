@@ -159,8 +159,11 @@ export const localAdapter = {
     /** Several documents at once, so a batch is one write rather than N. */
     async commit(collection, changes) {
         const docs = readAll(collection);
-        changes.forEach(({ id, doc }) => {
+        changes.forEach(({ id, doc, merge }) => {
             if (doc === null) delete docs[id];
+            // A merge changes the fields it names, as Firestore does. A store
+            // that replaces instead makes the flag a lie one layer down.
+            else if (merge) docs[id] = { ...(docs[id] ?? {}), ...doc };
             else docs[id] = doc;
         });
         writeAll(collection, docs);

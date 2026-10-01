@@ -458,7 +458,7 @@ export async function startAuth() {
                 // not allowed", and treating it as one is the bug this
                 // project already shipped once (see the restore note below):
                 // an expert would be signed out and silently demoted, and
-                // because a local write wins on read (overlayAdapter.js),
+                // because a local write wins on read (data/store.js: the `mine` layer),
                 // every edit he makes afterward becomes a shadow copy that
                 // never reaches the shared board. Keep the real session,
                 // report him as not-yet-confirmed rather than not-allowed,

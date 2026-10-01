@@ -578,7 +578,7 @@ export function followBoards(onChange) {
  * Expert-only, because the rules are: any signed-in Google account may read
  * its own entry, and nobody reads the whole collection until he is an expert
  * himself. A viewer's read is refused, which the repository records as a
- * failed load rather than an empty one (see overlayAdapter's failedPaths) —
+ * failed load rather than an empty one (store.readiness().failed) —
  * and `ownerRevokedLocally` below treats both the same way anyway, so a
  * refusal degrades to "don't know", not to "everybody is revoked".
  */

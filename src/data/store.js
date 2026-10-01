@@ -40,7 +40,22 @@
 import { requireBackend } from './contract';
 
 /** @param {import('./contract').Backend} backend */
-export function createStore(backend, { onWatchError } = {}) {
+/**
+ * @param {object} backend
+ * @param {object} [options]
+ * @param {Function} [options.onWatchError]
+ * @param {() => boolean} [options.canWrite]  whether this person's writes may
+ *   reach the shared store at all. Asked on every write, never captured: signing
+ *   in happens while the app is running, and a captured answer kept an expert
+ *   writing locally for a whole session.
+ *
+ *   A write that may not be sent is not an error and not a refusal — it is this
+ *   person's own work, so it goes to `mine` and stays there. That is what lets a
+ *   viewer build a board, reorder a roster and run a mock with no write access to
+ *   the database those live in: he does not write to it, he writes OVER it. The
+ *   overlay adapter existed to do this, one layer down, by merging two stores.
+ */
+export function createStore(backend, { onWatchError, canWrite } = {}) {
     requireBackend(backend);
 
     /** What the backend said, per collection. Never written to locally. */
@@ -261,6 +276,28 @@ export function createStore(backend, { onWatchError } = {}) {
          * refused ones move where no read will find them.
          */
         async write(changes) {
+            // MINE, not sent. Either because the caller said so, or because this
+            // person has no write access to the shared store — and the second is
+            // the ordinary case for every viewer.
+            const allowed = canWrite ? canWrite() : true;
+            const own = changes.filter(c => c.mine || !allowed);
+            const send = changes.filter(c => !(c.mine || !allowed));
+
+            own.forEach((c) => {
+                const layer = { ...(mine.get(c.collection) ?? {}) };
+                if (c.merge && c.doc) layer[c.id] = { ...(layer[c.id] ?? {}), ...c.doc };
+                else layer[c.id] = c.doc;
+                mine.set(c.collection, layer);
+            });
+            if (own.length) {
+                rememberOwn();
+                new Set(own.map(c => c.collection)).forEach(announce);
+            }
+            if (!send.length) {
+                return own.map(c => ({ collection: c.collection, id: c.id, outcome: 'stored' }));
+            }
+            changes = send;
+
             changes.forEach(c => unsent.set(key(c.collection, c.id), c));
             rememberOwn();
             new Set(changes.map(c => c.collection)).forEach(announce);
@@ -294,7 +331,10 @@ export function createStore(backend, { onWatchError } = {}) {
 
             rememberOwn();
             new Set(results.map(r => r.collection)).forEach(announce);
-            return results;
+            return [
+                ...own.map(c => ({ collection: c.collection, id: c.id, outcome: 'stored' })),
+                ...results,
+            ];
         },
 
         /**

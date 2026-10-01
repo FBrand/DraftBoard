@@ -907,7 +907,7 @@ export function createRepository(adapter = localAdapter) {
     /**
      * @param {object} [opts]
      * @param {boolean} [opts.mine]  this write is deliberately private — see
-     *   overlayAdapter. A local-only backend ignores it; the overlay keeps the
+     *   storeAdapter. A local-only backend ignores it; the store keeps the
      *   write out of the shared store however expert the writer is.
      */
     function commit(collection, changes, opts) {

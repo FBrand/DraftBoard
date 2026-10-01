@@ -10,7 +10,7 @@
  *   memory  nothing is persisted. Useful for a demo, and the adapter that
  *           proves the seam is real — see memoryAdapter.js.
  *   firebase  Firestore underneath, with this browser overlaid on top — see
- *           overlayAdapter.js. Everyone reads the experts' work; an expert
+ *           storeAdapter.js. Everyone reads the experts' work; an expert
  *           writes to it and everybody else writes over it, locally. Which
  *           of those happens is decided by auth, and enforced by
  *           firestore.rules rather than here.
@@ -25,7 +25,8 @@
 import { localAdapter } from './localAdapter';
 import { createMemoryAdapter } from './memoryAdapter';
 import { createFirebaseAdapter } from './firebaseAdapter';
-import { createOverlayAdapter } from './overlayAdapter';
+import { createStoreAdapter } from './storeAdapter';
+import { fromLegacyAdapter } from './contract';
 import { isExpert, currentUserId } from '../utils/auth';
 
 export const BACKENDS = ['local', 'memory', 'firebase'];
@@ -41,24 +42,29 @@ export function backendName() {
 
 export function createAdapter(name = backendName()) {
     switch (name) {
-        case 'firebase': return createOverlayAdapter({
-            // auth.js is imported HERE and nowhere below it. The stores ask
-            // the repository who is acting; the repository asks the adapter;
-            // the adapter was handed these when it was built. That is what
-            // keeps boardRegistry — which permissions.js imports, which
-            // auth.js imports — from having to import auth.js back and close
-            // the cycle.
-            remote: createFirebaseAdapter({ identity: currentUserId, isExpert }),
-            local: localAdapter,
-            // Asked on every write rather than captured once: signing in is
-            // something that happens while the app is running, and a captured
-            // answer would keep an expert writing locally for the rest of the
-            // session.
-            writesRemote: isExpert,
-            onRemoteError: (path, err) => {
-                console.warn(`Could not read ${path} from the shared store.`, err?.code ?? err);
+        case 'firebase': return createStoreAdapter(
+            // auth.js is imported HERE and nowhere below it. The stores ask the
+            // repository who is acting; the repository asks the adapter; the
+            // adapter was handed these when it was built. That is what keeps
+            // boardRegistry — which permissions.js imports, which auth.js
+            // imports — from having to import auth.js back and close the cycle.
+            fromLegacyAdapter(createFirebaseAdapter({ identity: currentUserId, isExpert })),
+            {
+                // Asked on every write rather than captured once: signing in
+                // happens while the app is running, and a captured answer kept
+                // an expert writing locally for a whole session.
+                //
+                // A write that may not be published is not refused — it is this
+                // person's own work, so it goes to the `mine` layer. That is
+                // what the overlay adapter was for, and the layer does it with
+                // the precedence written down instead of implied by a merge of
+                // two anonymous halves.
+                canWrite: isExpert,
+                onRemoteError: (path, err) => {
+                    console.warn(`Could not read ${path} from the shared store.`, err?.code ?? err);
+                },
             },
-        });
+        );
         case 'memory': return createMemoryAdapter();
         case 'local':
         default: return localAdapter;
