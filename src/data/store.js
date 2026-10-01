@@ -275,7 +275,15 @@ export function createStore(backend, { onWatchError } = {}) {
                     // Reflected locally so the screen does not wait for a
                     // round trip it has already been told the answer to.
                     const base = { ...(shared.get(r.collection) ?? {}) };
-                    if (change?.doc === null) delete base[r.id]; else base[r.id] = change?.doc;
+                    if (change?.doc === null) delete base[r.id];
+                    // A MERGE names the fields it changes and leaves the rest of the
+                    // document alone — applied here exactly as the backend applies
+                    // it, so the two cannot diverge over a field nobody mentioned.
+                    // Replacing the record instead writes back every stale field the
+                    // caller was holding, which is how a stale ownership field got a
+                    // whole board of 328 entries refused.
+                    else if (change?.merge) base[r.id] = { ...(base[r.id] ?? {}), ...change.doc };
+                    else base[r.id] = change?.doc;
                     shared.set(r.collection, base);
                 } else if (r.outcome === 'refused') {
                     unsent.delete(k);

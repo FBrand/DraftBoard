@@ -75,3 +75,46 @@ describe('a private change through the layered store', () => {
         expect(results.every(r => r.outcome === 'stored')).toBe(true);
     });
 });
+
+/**
+ * A merge through the layered store, which the board's change marker needs.
+ *
+ * `boardEntries` stamps a board when its placements change, and it must name that
+ * one field: reassembling the record from cache writes back every stale field the
+ * caller holds, including OWNERSHIP, which the rules read — and a refusal there
+ * takes the 328 entries batched with it.
+ *
+ * Two places have to honour it or the caches diverge. `view()` while the write is
+ * in flight, so the screen shows the document it will become rather than the
+ * handful of fields; and the shared layer on acknowledge, applied the same way the
+ * backend applies it.
+ */
+describe('a merge change', () => {
+    it('shows the whole document while it is still in flight', async () => {
+        const store = createStore(fromLegacyAdapter(adapter));
+        await store.write([{ collection: 'boards', id: 'b_1', doc: { l: 'Dan', o: 'dan-uid' } }]);
+
+        // Never awaited, so it is still unacknowledged when view() is asked.
+        store.write([{ collection: 'boards', id: 'b_1', doc: { u: 42 }, merge: true }]);
+
+        expect(store.view('boards').b_1).toEqual({ l: 'Dan', o: 'dan-uid', u: 42 });
+    });
+
+    it('leaves the other fields alone once it lands', async () => {
+        const store = createStore(fromLegacyAdapter(adapter));
+        await store.write([{ collection: 'boards', id: 'b_2', doc: { l: 'Ryan', o: 'ryan-uid' } }]);
+        await store.write([{ collection: 'boards', id: 'b_2', doc: { u: 7 }, merge: true }]);
+
+        // The shared layer, not the merge of the layers: this is the copy a later
+        // read has to agree with.
+        expect(store.shared('boards').b_2).toEqual({ l: 'Ryan', o: 'ryan-uid', u: 7 });
+    });
+
+    it('still replaces the document when nothing says merge', async () => {
+        const store = createStore(fromLegacyAdapter(adapter));
+        await store.write([{ collection: 'boards', id: 'b_3', doc: { l: 'Old', o: 'x' } }]);
+        await store.write([{ collection: 'boards', id: 'b_3', doc: { l: 'New' } }]);
+
+        expect(store.shared('boards').b_3).toEqual({ l: 'New' });
+    });
+});
