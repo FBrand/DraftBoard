@@ -1768,3 +1768,23 @@ Fixed in the meantime: `removeDraft` marks its writes as private when the caller
 does not hold the lead. Clearing a draft nulls four fields on every player it
 took, which is a write to the shared registry — so somebody who was not the lead
 scrapping his own season took the picks off everybody's player cards.
+
+## Two draft tests assume an unfinished draft (premise, not regression)
+
+`doubleClickDraft.spec.js` and `phoneDraftHold.spec.js` both pick a player out of
+the Draft left panel. They fail against the hydrated snapshot, and the cause is
+not the code: the snapshot carries the **completed** 2026 draft, which is what the
+seeder builds from `DraftBoard_Picks.csv` and what the real data is.
+
+Measured on the hydrated app: the top panel reads `DRAFT COMPLETE`, `OUR PICKS
+LEFT — none left`, and 483 of 594 cards are drafted. There is nothing in the left
+panel to pick, so a click on `.left-panel .player-card` times out.
+
+The old in-browser seeding happened to leave an in-progress draft, which is why
+these passed before. To fix them, either start from a cleared draft (Session →
+clean slate, or `resetDraft`) or assert the UDFA signing flow, which is the stage
+that genuinely follows a completed draft.
+
+Worth knowing rather than fixing blind: the behaviour they were written to protect
+— a double-click takes exactly one player, and two deliberate picks both land — is
+real and still worth a test. It needs a fixture with picks remaining.
