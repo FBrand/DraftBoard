@@ -18,7 +18,7 @@ are named below, and the ones that are not are named too.
 | Phase | State |
 |---|---|
 | 1 — make failure observable | **Done.** Three write outcomes (`stored / not yet / never`), refused work held and surfaced, never merged into a read. The audit calls this the best work in the batch. |
-| 2 — the seam and the precedence model | **Done for one collection.** `contract.js` and the layered store exist and evaluations run on them. The old adapter seam still runs the rest of the app — audit R8, open. |
+| 2 — the seam and the precedence model | **Done.** `overlayAdapter.js` is deleted — the repository's ADAPTER is the layered store (`storeAdapter.js`), so the merge happens once, in named layers, for every collection. Audit R8 closed. |
 | 3 — identity, voice, and the seeder | **Done.** A remark is a person's opinion; `ownsVoice` is a token comparison; seeding has left the app entirely (see below). |
 | 4 — scope, routing, and the play-along | **Done.** Every stage is per person, free agency and the roster have an official version, the live draft has one writer. |
 | 5 — stored shape and the local budget | **Mostly done.** Stable remark ids, the board marker as a field update, prospects as records, no blobs, the budget measured. Eviction is specified and not enforced. |

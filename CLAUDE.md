@@ -34,7 +34,7 @@ sequential-but-revisitable stages.
 
 ### Actual build status (verify against code before trusting any doc, including this one)
 
-> **The `firebase` branch has moved a long way past the rest of this file.**
+> **The `firebase0.2` branch has moved a long way past the rest of this file.**
 > Every stage is now per person with an official version, the live draft has one
 > writer, remarks are keyed by author, and the app neither seeds nor ships data
 > files. Read `docs/REBUILD-STATUS-2026-09-30.md` first — it states what is done,
@@ -118,28 +118,43 @@ records it on every pick.
 
 Everything stored goes through `repository` — documents in named collections,
 addressed by id, with `where`/`orderBy`/`limit` over them. The interface is
-Firestore's, narrowed to what this app does, so swapping stores should be a
-change of adapter.
+Firestore's, narrowed to what this app does.
 
-**Reads are synchronous, writes are not.** That is not a compromise, it is how
-a client with a live document store behaves: subscribe once, keep a local copy,
-render from it. A board ranks 328 players on a keystroke and cannot await
-anything. So a collection loads asynchronously and is then served from memory;
-writes update memory first, notify subscribers, and go to the adapter after.
-The honest limitation is that a failed write has already been shown as
-succeeded — with localStorage that needs a full quota, with a network it will
-happen for real, and that is where rollback belongs.
+**Reads are synchronous, writes are not.** That is how a client with a live
+document store behaves: subscribe once, keep a local copy, render from it. A
+board ranks 328 players on a keystroke and cannot await anything.
+
+**One seam, with named layers.** The repository's adapter is the layered store
+(`storeAdapter.js` over `store.js`), and `overlayAdapter.js` is deleted. The
+layers and their order:
+
+    shared    what the backend said
+    mine      this person's own work
+    unsent    issued, not yet acknowledged
+
+A caller that RENDERS uses the merge (`view`); a caller that DECIDES asks the
+layer it means — `shared()` returns null until the backend has actually
+answered, which is the distinction that cost this project weeks when it did not
+exist. **Refused is a fourth state and is never merged into a read**: a
+rejected write is held, surfaced as rejected, and discarded only deliberately.
+Showing it as stored is how somebody kept seeing his own rejected copy of
+somebody else's board, across reloads, indefinitely.
+
+A write may say `{ mine: true }` — deliberately this person's alone, going to
+`mine` and never published. Only a caller can make that statement: a pick is a
+fact on a PLAYER, and that collection also carries names and schools an expert
+should publish. Same path, two kinds of write, and the rules cannot tell them
+apart. `canWrite` does the same for somebody with no write access at all, which
+is every viewer — he does not write to the shared store, he writes OVER it.
 
 `localAdapter.loadSync` is the one local-only affordance: the roster import
-resolves players *while parsing*, before any `ready()` could finish, and
-without it would see an empty registry and mint a duplicate for every player.
-**A remote adapter must not implement it** — its absence is what forces callers
-onto `ready()` instead of silently reading nothing.
+resolves players *while parsing*. **A shared adapter must not implement it** —
+its absence is what forces callers onto `ready()` instead of silently reading
+nothing.
 
-Collections live under `db_<name>` in localStorage. Anything added to
-`OWNED_KEYS` for a wipe must also call `repository.invalidate()`, or the
-in-memory copy simply restores what was deleted.
-
+Collections live under `db_<name>` in localStorage; this person's own layers
+under `db_own_<backend>_v1`. Anything added to `OWNED_KEYS` for a wipe must also
+call `repository.invalidate()`, or the in-memory copy restores what was deleted.
 ### The player registry (`utils/playerRegistry.js`) — start here
 
 **A player is a record with a stable id, not a name.** Until recently a player

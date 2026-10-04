@@ -1,6 +1,6 @@
 # The rebuild so far — honest status, 2026-09-30
 
-52 commits, `35a7d89..HEAD`, pushed as `firebase0.2`. Measured against
+64 commits, `35a7d89..HEAD`, pushed as `firebase0.2`. Last updated 1 October. Measured against
 `SPEC.md` (requirements) and `REBUILD-PLAN.md` (the plan), with an independent
 audit of the work in `AUDIT-2026-09-30.md`.
 
@@ -152,9 +152,9 @@ marker for a scoped registry listener, then measured the saving: zero. See §4.
 
 | | |
 |---|---|
-| unit | 755 |
+| unit | 745 |
 | rules | 122 (emulator) |
-| browser | 50 pass, 1 skipped, 1 known failure |
+| browser | 48 pass, 1 skipped, 3 known failures |
 | lint | clean |
 | snapshot | 1777 documents, fingerprint stable |
 | cold boot | 1768 document reads, 22 local writes, no page errors |
@@ -219,33 +219,89 @@ waste, they are the data.
 
 ---
 
-## 5. Overlay removal — where it actually starts
+## 5. Overlay removal — DONE
 
-**Step 1 is done** (`ae3723a`): the layered store can express a private write.
-That was the blocker behind audit R8 — the overlay honours `{ mine: true }` and
-the newer seam could not ask for one, so moving any collection across would have
-started publishing every expert's what-if picks the day `players` moved.
+`src/data/overlayAdapter.js` is deleted and nothing in `src/` refers to it.
 
-**Step 2 hits a real obstacle, which is worth stating before somebody starts it.**
-`appStore.MIGRATED` is a static list of collection names — `['evaluations']` —
-and `isMigrated` matches a path against it by prefix. Every remaining candidate
-embeds a season or board id in its path:
+The approach that worked is not the one planned. The plan had every collection
+migrating onto the layered store one at a time, and that is a rewrite of the
+data layer: the remaining callers use 24 distinct repository methods, and
+mixing seams produces exactly the two-caches-over-one-backend divergence the
+exercise exists to remove — measured, when `boardEntries` crossed and started
+reading `boards` through a store that did not own it, silently dropping the
+board's change marker.
 
-    seasons/{seasonId}/prospects
-    seasons/{seasonId}/charts/{stage}/scopes/{whose}/rows
-    boards/{boardId}/entries
+What the overlay actually did was merge remote and local with local winning,
+with tombstones, and route a write to one or the other. The layered store
+already does all of that with the layers named. So **the repository's ADAPTER
+became the store** (`data/storeAdapter.js`): every caller keeps its API, and the
+merge moved from two anonymous halves to `shared` / `mine` / `unsent` with
+precedence stated once.
 
-A static list cannot express those, and prefixing on `seasons` would capture
-every stage at once — which is the opposite of a collection-at-a-time migration.
-So the first piece of step 2 is turning `MIGRATED` into a **predicate** over
-paths, not adding a name to a list.
+`canWrite` replaces `writesRemote`, and the difference is the point: a write
+that may not be published is not refused, it is this person's own work, so it
+goes to `mine` and stays there. That is the viewer's play-along, named instead
+of implied.
 
-Two other things to know before starting:
+Five collections did cross the seam first — `evaluations`, the three prospect
+collections, `stages`, `setup` — and `MIGRATED` became a predicate over paths
+on the way, because every candidate embeds an id. Those stay as they are.
 
-- **`isMigrated` has no callers.** Nothing enforces the split; it is a comment
-  with a function signature. Whatever replaces it should be asked by the thing
-  that routes a read, or it will drift the same way.
-- **Order matters.** `players` and `draft_state` are watched, and the live draft
-  depends on following them, so they move last. Something owned by one module and
-  watched by nothing goes first — `seasons/{id}/prospects` and its two siblings
-  are the cleanest candidate, being three collections with a single owner.
+Three bugs came out of it, all mine:
+
+- **`ready()` re-read on every call**, and a complete read REPLACES the shared
+  layer, so a followed collection lost every snapshot the moment anything asked
+  again. Read-once belongs in the adapter, not the store: the store must stay
+  re-readable or a delta can never apply onto what is held. The first fix put
+  it in the store and broke two watermark tests, which is how I found that out.
+- **`watch` did not mark a path as read**, so the first `load()` after a watch
+  opened wiped the snapshots. Following a collection is having read it.
+- **Neither the memory nor the local adapter honoured `merge`** — both replaced
+  the document, which makes the flag a lie one layer below whoever set it.
+
+The five overlay test suites were REPLACED, not dropped:
+`tests/unit/storeAdapter.test.js` lists what each asserted and covers the same
+properties — a viewer's work over the experts', tombstones, a failed read
+answered from his own work, a pushed change that does not clobber, a private
+write, a merge, and the deliberate absence of `loadSync`.
+
+### A literal NUL byte, found on the way
+
+`store.js` had contained one since the layered store was written: `key()`
+joined a collection and an id with it, and `view()`'s prefix test held the same
+byte as a real newline — so it compared `collection\n` against keys using
+`collection\0` and **nothing in flight was ever displayed**. A write vanished
+from the screen until it landed. Node tolerates a NUL in source, so 769 tests
+ran over it; esbuild does not. It also explains a long run of patch attempts
+failing on those exact lines with nothing on screen to explain why.
+
+## 6. What overlay removal did not cover
+
+The data layer has one seam now, with named layers. These remain:
+
+- **Phase 7 entirely** — permission topology, ownership on the non-board stages
+  beyond what landed, an atomic season lifecycle. Not started.
+- **The relay** — one subscriber for the audience against 1768 document reads
+  per client. Not started, and needs hosting.
+- **A durable delta** — the watermark and its documents kept together, so a warm
+  reload costs what changed. The store is ready for it; the backend is not.
+- **Eviction** — specified, measured, not enforced.
+- **A scrapped season** cannot be completed from a client: Firestore cannot list
+  subcollections, so nothing can discover which chart scopes exist. Needs an
+  index document or server-side deletion.
+
+### Three browser tests need fixtures that match the seeded data
+
+All three are recorded in `BUGS.md` with measurements.
+
+Two — `doubleClickDraft` and `phoneDraftHold` — pick a player out of the Draft
+left panel, and the hydrated snapshot carries the COMPLETED 2026 draft: the top
+panel reads DRAFT COMPLETE, none left, 483 of 594 cards drafted. There is nothing
+to pick. Not a regression; the old in-browser seeding happened to leave an
+unfinished draft. They need a fixture with picks remaining.
+
+The third is the one genuinely unexplained failure in the whole batch: a scouting
+reorder does not survive a reload. The stored data is correct, so it is rank
+recomputation after a midpoint insertion — `boardRanking`, which `CLAUDE.md`
+flags as the part most easily broken by a well-meaning change. **This is the
+first thing to look at next.**
