@@ -5,7 +5,26 @@ import Menu from './Menu';
 import BoardSwitcher from './BoardSwitcher';
 import { listBoards } from '../utils/boardRegistry';
 
-const TopPanel = ({ currentPick, currentPickStatus, ourPicksLeft, onUndo, onUpdatePicks, onReset, isLiveSync, canLiveSync, toggleLiveSync, isFocusMode, onToggleFocus, onDraftUnranked, onSavePicks, onLoadPicks, boardEditable, onToggleBoardEdit }) => {
+/**
+ * What the biggest text on the screen says when there is no pick left.
+ *
+ * The counter ran one past the last selection and the header went on
+ * announcing it — "NOW DRAFTING #258" on a draft that ends at 257. Every other
+ * part of the view had already switched over: clicking a card signs a UDFA
+ * rather than drafting him, the board is in post-draft mode, the tracker says
+ * "none left". Only the headline still claimed a pick was on the clock, and it
+ * is the line a broadcast puts on screen.
+ */
+const PickHeadline = ({ currentPick, currentPickStatus, draftComplete }) => (
+    <div className="pick-info">
+        <span className="pick-label">
+            {draftComplete ? 'DRAFT COMPLETE' : (currentPickStatus || 'NOW DRAFTING')}
+        </span>
+        <span className="pick-number">{draftComplete ? 'UDFA' : `#${currentPick}`}</span>
+    </div>
+);
+
+const TopPanel = ({ currentPick, currentPickStatus, draftComplete = false, ourPicksLeft, onUndo, onUpdatePicks, onReset, isLiveSync, canLiveSync, toggleLiveSync, isFocusMode, onToggleFocus, onDraftUnranked, onSavePicks, onLoadPicks, boardEditable, onToggleBoardEdit }) => {
     const [isExporting, setIsExporting] = useState(false);
     const [toast, setToast] = useState(null);
     const dismissToast = useCallback(() => setToast(null), []);
@@ -55,12 +74,9 @@ const TopPanel = ({ currentPick, currentPickStatus, ourPicksLeft, onUndo, onUpda
         return (
             <div className="top-panel top-panel--focus">
                 <div className="pick-section">
+                    <PickHeadline currentPick={currentPick} currentPickStatus={currentPickStatus} draftComplete={draftComplete} />
                     <div className="pick-info">
-                        <span className="pick-label">{currentPickStatus || 'NOW DRAFTING'}</span>
-                        <span className="pick-number">#{currentPick}</span>
-                    </div>
-                    <div className="pick-info">
-                        {ourPicksLeft.includes(currentPick) && <span className="our-pick-badge">OURS</span>}
+                        {!draftComplete && ourPicksLeft.includes(currentPick) && <span className="our-pick-badge">OURS</span>}
                     </div>
                 </div>
                 <div style={{ width: '10px' }} />
@@ -98,11 +114,8 @@ const TopPanel = ({ currentPick, currentPickStatus, ourPicksLeft, onUndo, onUpda
     return (
         <div className="top-panel">
             <div className="pick-section">
-                <div className="pick-info">
-                    <span className="pick-label">{currentPickStatus || 'NOW DRAFTING'}</span>
-                    <span className="pick-number">#{currentPick}</span>
-                </div>
-                {ourPicksLeft.includes(currentPick) && <span className="our-pick-badge">OURS</span>}
+                <PickHeadline currentPick={currentPick} currentPickStatus={currentPickStatus} draftComplete={draftComplete} />
+                {!draftComplete && ourPicksLeft.includes(currentPick) && <span className="our-pick-badge">OURS</span>}
             </div>
             <div style={{ width: '5px' }} />
 

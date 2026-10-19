@@ -29,18 +29,56 @@
  * make "who said this" a lie.
  */
 import { repository } from '../data/repository';
+
+/**
+ * These three collections are tiny, and they were the last ones still writing
+ * `createdAt` in full and stating their own id in the body — the rule every
+ * other collection follows. Small, but a rule with an exception is a rule
+ * somebody has to remember.
+ */
+const READ = {
+    season: (id, doc) => (doc ? { ...seasonFields.fat(doc), id } : null),
+    board: (id, doc) => (doc ? { ...boardFields.fat(doc), id } : null),
+    author: (id, doc) => (doc ? { ...authorFields.fat(doc), id } : null),
+};
+
+const allOf = (collection, kind) => Object.entries(repository.docs(collection) ?? {})
+    .map(([id, doc]) => READ[kind](id, doc))
+    .filter(Boolean);
+
+const oneOf = (collection, kind, id) => READ[kind](id, repository.get(collection, id));
+
+/** Written without the id — the key says it — and with short field names. */
+const write = (collection, fields, record) => {
+    const { id, ...rest } = record;
+    return repository.set(collection, id, fields.lean(rest));
+};
+import { prefixedId } from './ids';
+import { seasonFields, boardFields, authorFields } from '../data/fieldNames';
 import { DRAFT_YEAR } from '../constants';
+import { boardStateKey } from './appStorage';
+import { removeSeasonStages } from '../data/stageStore';
+import { removeBoardEntries } from '../data/boardEntries';
+import { removeChart } from '../data/depthChartStore';
+import { removeDraft } from '../data/draftStore';
+import { initialiseSeason, forgetSeason } from './seasonInit';
 
 export const SEASONS = 'seasons';
 export const AUTHORS = 'authors';
 export const BOARDS_COLLECTION = 'boards';
 
-const newId = (prefix) => {
-    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-        return `${prefix}_${crypto.randomUUID()}`;
-    }
-    return `${prefix}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
-};
+/**
+ * A new id, checked against the collection it is joining.
+ *
+ * Boards, authors and seasons are a handful of records each and always loaded,
+ * so the set is free to build. See utils/ids.js for why the check matters more
+ * than the length.
+ */
+const COLLECTION_FOR = { b: BOARDS_COLLECTION, a: AUTHORS, s: SEASONS };
+const newId = (prefix) => prefixedId(
+    prefix,
+    new Set(repository.all(COLLECTION_FOR[prefix] ?? '').map(d => d.id)),
+);
 
 /**
  * The boards the app shipped with, and the shape the migration gives them.
@@ -59,9 +97,22 @@ export async function openBoards() {
         repository.ready(AUTHORS),
         repository.ready(BOARDS_COLLECTION),
     ]);
-    if (repository.all(BOARDS_COLLECTION).length) return;
+    if (allOf(BOARDS_COLLECTION, 'board').length) return;
 
-    const season = { id: newId('s'), year: DRAFT_YEAR, status: 'current', createdAt: new Date().toISOString() };
+    // "No boards" has to actually mean no boards. A shared store that could not
+    // be reached answers with an empty collection — deliberately, so a viewer
+    // still sees his own work rather than a blank page — and seeding on that
+    // answer would lay a private season over boards that are simply
+    // unreachable, then keep it, because the local overlay wins. Better to come
+    // up with nothing and let the next load find them.
+    if (repository.loadFailed(SEASONS) || repository.loadFailed(BOARDS_COLLECTION)) return;
+
+    // "seeded" marks the one season the files in public/ are ABOUT. They hold
+    // the 2026 class, the 2026 picks and the roster that produced — a later
+    // season must not re-read them, or rolling over hands you last year's
+    // draft board again and the new season is the old one wearing a different
+    // number.
+    const season = { id: newId('s'), year: DRAFT_YEAR, status: 'current', seeded: true, createdAt: new Date().toISOString() };
     const authors = [];
     const boards = [];
 
@@ -77,6 +128,12 @@ export async function openBoards() {
             slug: b.slug,
             label: b.label,
             authorId,
+            // Who may WRITE it, as opposed to whose opinion it is. Null means
+            // nobody has claimed it, which is every board until somebody signs
+            // in — and the shipped boards were made before there was anyone to
+            // own them. It is here now because adding a field to live data is a
+            // migration and adding it to a default is a line.
+            ownerId: null,
             seasonId: season.id,
             rankingsFile: b.rankingsFile,
             order,
@@ -85,38 +142,73 @@ export async function openBoards() {
     });
 
     await Promise.all([
-        repository.set(SEASONS, season.id, season),
-        repository.commit(AUTHORS, authors.map(a => ({ id: a.id, doc: a }))),
-        repository.commit(BOARDS_COLLECTION, boards.map(b => ({ id: b.id, doc: b }))),
+        write(SEASONS, seasonFields, season),
+        repository.commit(AUTHORS, authors.map(({ id, ...rest }) => ({ id, doc: authorFields.lean(rest) }))),
+        repository.commit(BOARDS_COLLECTION, boards.map(({ id, ...rest }) => ({ id, doc: boardFields.lean(rest) }))),
     ]);
 }
 
 export function listSeasons() {
-    return repository.query(SEASONS, { orderBy: { field: 'year', direction: 'desc' } });
+    // Sorted here rather than by the repository: the store's field is `y`, and
+    // a query naming `year` would silently order by nothing.
+    return allOf(SEASONS, 'season').sort((a, b) => (b.year ?? 0) - (a.year ?? 0));
 }
 
 export function currentSeason() {
     return listSeasons().find(s => s.status === 'current') ?? null;
 }
 
-/** Boards of a season, in their display order. Defaults to the current one. */
+const VIEWED_KEY = 'viewed_season_v1';
+
+/**
+ * Which season you are LOOKING at, which is not the same as which season is
+ * current.
+ *
+ * Only one season is writable — the current one — but an archived season is
+ * still worth opening: it is the record of where everybody had a player at the
+ * time, which is the whole reason boards freeze rather than being deleted.
+ * Viewing one shows its boards, read-only.
+ *
+ * Falls back to the current season whenever the stored id names a season that
+ * is gone, which is what happens after a rollback purges the one you were
+ * looking at.
+ */
+export function viewedSeason() {
+    let stored = null;
+    try { stored = localStorage.getItem(VIEWED_KEY); } catch { /* ignore */ }
+    const found = stored ? listSeasons().find(s => s.id === stored) : null;
+    return found ?? currentSeason();
+}
+
+export function setViewedSeason(seasonId) {
+    try {
+        if (!seasonId) localStorage.removeItem(VIEWED_KEY);
+        else localStorage.setItem(VIEWED_KEY, seasonId);
+    } catch { /* ignore */ }
+    return viewedSeason();
+}
+
+/** Boards of a season, in their display order. Defaults to the one being viewed. */
 export function listBoards(seasonId = null) {
-    const season = seasonId ?? currentSeason()?.id ?? null;
-    return repository
-        .query(BOARDS_COLLECTION, { orderBy: { field: 'order' } })
+    const season = seasonId ?? viewedSeason()?.id ?? null;
+    // Read and sorted here rather than by the repository: the store's fields
+    // are `r` and `s`, so a query naming `order` would order by nothing and a
+    // filter on `seasonId` would match nothing.
+    return allOf(BOARDS_COLLECTION, 'board')
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
         .filter(b => season == null || b.seasonId === season);
 }
 
 /** Every board ever, newest season first — a player card reaches back here. */
 export function allBoards() {
     const rank = new Map(listSeasons().map((s, i) => [s.id, i]));
-    return [...repository.all(BOARDS_COLLECTION)].sort((a, b) => (
+    return allOf(BOARDS_COLLECTION, 'board').sort((a, b) => (
         (rank.get(a.seasonId) ?? 99) - (rank.get(b.seasonId) ?? 99) || (a.order ?? 0) - (b.order ?? 0)
     ));
 }
 
 export function boardById(id) {
-    return repository.get(BOARDS_COLLECTION, id);
+    return oneOf(BOARDS_COLLECTION, 'board', id);
 }
 
 /** The board a `?board=` link means. Falls back to the first of the season. */
@@ -126,7 +218,7 @@ export function boardBySlug(slug) {
 }
 
 export function authorOf(board) {
-    return board?.authorId ? repository.get(AUTHORS, board.authorId) : null;
+    return board?.authorId ? oneOf(AUTHORS, 'author', board.authorId) : null;
 }
 
 /**
@@ -136,8 +228,32 @@ export function authorOf(board) {
  */
 export function isFrozen(board) {
     if (!board) return false;
-    const season = repository.get(SEASONS, board.seasonId);
+    const season = oneOf(SEASONS, 'season', board.seasonId);
     return season?.status === 'archived';
+}
+
+/**
+ * Whether what is on screen can be changed.
+ *
+ * An archived season is a record: the roster as it finished, the draft as it
+ * happened, the boards as they were left. Opening one is worth doing — that is
+ * why they are kept rather than deleted — and editing one is not, because
+ * every number in it is an answer to "what did we think at the time".
+ *
+ * Evaluations are the exception and are handled separately; what you know
+ * about a player keeps growing after the board that ranked him is done.
+ */
+/**
+ * Whether the shipped files in public/ describe the season being viewed.
+ *
+ * They describe exactly one: the class, the picks and the roster of the year
+ * the app was built around. Every later season starts empty and is filled by
+ * importing, which is the only honest thing a new season can do.
+ */
+export function seasonIsSeeded() {
+    // Explicitly false only on a season started in the app. A season written
+    // before this field existed has no opinion and is the shipped one.
+    return viewedSeason()?.seeded !== false;
 }
 
 export function renameBoard(id, label) {
@@ -145,15 +261,15 @@ export function renameBoard(id, label) {
     const next = String(label ?? '').trim();
     if (!board || !next || next === board.label) return false;
     // The slug is deliberately untouched: it is what existing links say.
-    repository.set(BOARDS_COLLECTION, id, { ...board, label: next });
+    write(BOARDS_COLLECTION, boardFields, { ...board, label: next });
     return true;
 }
 
 export function renameAuthor(id, name) {
-    const author = repository.get(AUTHORS, id);
+    const author = oneOf(AUTHORS, 'author', id);
     const next = String(name ?? '').trim();
     if (!author || !next || next === author.name) return false;
-    repository.set(AUTHORS, id, { ...author, name: next });
+    write(AUTHORS, authorFields, { ...author, name: next });
     return true;
 }
 
@@ -166,15 +282,26 @@ export function renameAuthor(id, name) {
  * new players, so it would assert judgements about people nobody has watched.
  */
 export async function startSeason(year) {
+    const n = Number(year);
+    if (!Number.isInteger(n) || n < 2000 || n > 2999) return null;
+    // One season per year. Two seasons both called 2027 make "which board is
+    // this" unanswerable, and the stack is ordered by year.
+    if (listSeasons().some(s => s.year === n)) return null;
+
     const outgoing = currentSeason();
     const season = {
-        id: newId('s'), year, status: 'current', createdAt: new Date().toISOString(),
+        id: newId('s'), year: n, status: 'current', seeded: false, createdAt: new Date().toISOString(),
     };
 
-    await repository.set(SEASONS, season.id, season);
+    await write(SEASONS, seasonFields, season);
     if (outgoing) {
-        await repository.set(SEASONS, outgoing.id, { ...outgoing, status: 'archived' });
+        await write(SEASONS, seasonFields, { ...outgoing, status: 'archived' });
     }
+    // What the season starts with is seasonInit's decision, not this one's.
+    initialiseSeason(season.id, { carryRosterFrom: outgoing?.id ?? null });
+
+    // You are looking at the season you just started, not the one you left.
+    setViewedSeason(season.id);
     return season;
 }
 
@@ -190,7 +317,59 @@ export async function startSeason(year) {
  * it and two boards answering to one slug would make a link ambiguous. The
  * label itself is free to repeat and free to change; nothing keys on it.
  */
-export async function createBoard({ label, authorName = '' } = {}) {
+/**
+ * Undoes a rollover.
+ *
+ * Seasons are a stack, and this is the pop. Rolling over is cheap to do by
+ * accident — one button, at the point in the year when you are least sure the
+ * last one is finished — so there has to be a way back, and it has to be a way
+ * back to exactly what was there rather than an approximation.
+ *
+ * What it removes is only ever the CURRENT season: its boards and the work on
+ * them. Everything archived is untouched, which is the whole point of
+ * archiving it. The season it drops back to becomes current again, and its
+ * boards unfreeze with their placements exactly as they were left — nothing
+ * was rewritten when they froze, they were only closed to writing.
+ *
+ * Refuses when there is nothing underneath. A season stack with one season is
+ * not a stack you can pop; scrapping it would leave the app with no season at
+ * all, and every board belongs to one.
+ */
+export async function scrapSeason() {
+    const outgoing = currentSeason();
+    if (!outgoing) return { ok: false, reason: 'no-current-season' };
+
+    const previous = listSeasons()
+        .filter(s => s.id !== outgoing.id && s.status === 'archived')
+        .sort((a, b) => (b.year ?? 0) - (a.year ?? 0))[0];
+    if (!previous) return { ok: false, reason: 'nothing-underneath' };
+
+    const doomed = listBoards(outgoing.id);
+
+    await Promise.all(doomed.map(async (b) => {
+        await removeBoardEntries(b.id);
+        await repository.remove(BOARDS_COLLECTION, b.id);
+        // The pre-document blob, for a board that was never opened since.
+        try { localStorage.removeItem(boardStateKey(b.id)); } catch { /* ignore */ }
+    }));
+
+    await removeSeasonStages(outgoing.id);
+    await Promise.all(['rosterState', 'fa_state_v1'].map(stage => removeChart(stage, outgoing.id)));
+    await removeDraft(outgoing.id);
+    forgetSeason(outgoing.id);
+
+    await repository.remove(SEASONS, outgoing.id);
+    await write(SEASONS, seasonFields, { ...previous, status: 'current' });
+    // The season being viewed has just been deleted, so move off it.
+    setViewedSeason(previous.id);
+
+    // Evaluations are deliberately left alone. They are stamped with the
+    // season they were written in, not owned by it, and what you learned about
+    // a player does not stop being true because the board is gone.
+    return { ok: true, dropped: outgoing, now: previous, boardsRemoved: doomed.length };
+}
+
+export async function createBoard({ label, authorName = '', ownerId = null } = {}) {
     const name = String(label ?? '').trim();
     if (!name) return null;
 
@@ -200,17 +379,28 @@ export async function createBoard({ label, authorName = '' } = {}) {
     let authorId = null;
     const author = String(authorName ?? '').trim();
     if (author) {
-        const existing = repository.all(AUTHORS).find(
+        const existing = allOf(AUTHORS, 'author').find(
             a => a.name.toLowerCase() === author.toLowerCase(),
         );
         if (existing) authorId = existing.id;
         else {
             authorId = newId('a');
-            await repository.set(AUTHORS, authorId, { id: authorId, name: author });
+            // The author carries the SAME ownerId as the board being made.
+            //
+            // An evaluation is keyed by author, not by board — one man's view
+            // of a player runs across every season, while the boards he built
+            // are separate artifacts. So "may this person write this
+            // evaluation" is a question about the author, and without a uid on
+            // the author record there was nothing for a rule to check: it fell
+            // through to "does a board with this id exist", which for an author
+            // id it never does, and answered yes to every expert.
+            await write(AUTHORS, authorFields, {
+                id: authorId, name: author, ownerId: ownerId ?? null,
+            });
         }
     }
 
-    const taken = new Set(repository.all(BOARDS_COLLECTION).map(b => b.slug));
+    const taken = new Set(allOf(BOARDS_COLLECTION, 'board').map(b => b.slug));
     const base = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'board';
     let slug = base;
     for (let n = 2; taken.has(slug); n += 1) slug = `${base}-${n}`;
@@ -220,6 +410,7 @@ export async function createBoard({ label, authorName = '' } = {}) {
         slug,
         label: name,
         authorId,
+        ownerId: ownerId ?? null,
         seasonId: season.id,
         // Boards made in the app have no file behind them — they are seeded
         // from whatever is imported into them, or start empty.
@@ -227,6 +418,6 @@ export async function createBoard({ label, authorName = '' } = {}) {
         order: listBoards(season.id).length,
         createdAt: new Date().toISOString(),
     };
-    await repository.set(BOARDS_COLLECTION, board.id, board);
+    await write(BOARDS_COLLECTION, boardFields, board);
     return board;
 }

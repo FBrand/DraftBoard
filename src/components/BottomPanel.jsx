@@ -27,7 +27,10 @@ const BottomPanel = ({ yourPicks, onInfoOpen }) => {
 
     return (
         <div className="bottom-panel">
-            <h3 className="panel-title" style={{ margin: 0, minWidth: '120px' }}>Your Picks</h3>
+            {/* Stationary on purpose — it must not scroll away with the cards.
+                The width is the part that was wrong: 120px of a 390px screen
+                gone before the first card. */}
+            <h3 className="panel-title bp-title">Your Picks</h3>
             <div className="bp-picks-row" onWheel={onWheel}>
                 {yourPicks.map(player => (
                     <div

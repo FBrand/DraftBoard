@@ -55,9 +55,14 @@ const seedTag = (raw) => {
     return PLAYER_TAGS.some(t => t.id === v) ? v : null;
 };
 
-export default function AddProspectsModal({ isOpen, onClose, existingPlayers = [], onSubmit, onOpenPlayer }) {
+export default function AddProspectsModal({ isOpen, onClose, existingPlayers = [], onSubmit, onOpenPlayer, initialRows = null }) {
     const [step, setStep] = useState('entry');
-    const [rows, setRows] = useState(() => [blankRow(), blankRow(), blankRow()]);
+    // Pre-filled when somebody else collected the names — an import hands over
+    // the rows its file named that no board knows, rather than dropping them.
+    // Mounted fresh each time it opens, so a lazy initialiser is enough.
+    const [rows, setRows] = useState(() => (
+        initialRows?.length ? initialRows.map(r => blankRow(r)) : [blankRow(), blankRow(), blankRow()]
+    ));
     const [error, setError] = useState('');
     const nameRefs = useRef([]);
 

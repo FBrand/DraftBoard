@@ -18,7 +18,7 @@ export default defineConfig({
     forbidOnly: !!process.env.CI,
     retries: 0,
     // 4 x ~670MB fits the box's ~2.9GB free; CPU is the real limit at 8 cores.
-    workers: Number(process.env.WORKERS ?? 3),
+    workers: Number(process.env.WORKERS ?? 4),
     reporter: [['list']],
     // Tight on purpose. A 120s timeout means one hung test costs two minutes
     // of a ten-minute budget; these flows are seconds when they work.

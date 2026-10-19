@@ -10,7 +10,16 @@
  * timestamps, no deal terms, no event log. See
  * /home/dev/.claude/plans/structured-growing-cat.md section 3 for why.
  */
-import { defaultState, parseCSV, exportCSV } from './rosterState';
+import { defaultState, parseCSV, exportCSV, stampPlayerIds } from './rosterState';
+import { readChart, writeChart, hasChart, chartVersion, openDepthCharts } from '../data/depthChartStore';
+import { viewedSeason, seasonIsSeeded, openBoards } from './boardRegistry';
+import { canEdit } from './permissions';
+
+// Which season's copy of this stage. Read at call time, never cached: the
+// answer changes when somebody switches season, and a stage holding the
+// previous answer would write one season's work into another's key.
+const seasonId = () => viewedSeason()?.id ?? null;
+
 
 const STORAGE_KEY = 'fa_state_v1';
 
@@ -18,7 +27,7 @@ export { parseCSV, exportCSV };
 
 export function hasSavedState() {
     try {
-        return localStorage.getItem(STORAGE_KEY) !== null;
+        return hasChart(STORAGE_KEY, seasonId());
     } catch {
         return false;
     }
@@ -50,12 +59,33 @@ export async function fetchSeasonStartRoster() {
  * from until you happened to click the tab. Idempotent, and shared by both
  * callers so there is one implementation of what seeding means.
  */
-let seedPromise = null;
+// Per season, not per module: memoising one promise meant switching season
+// handed back the season you left.
+const seedPromises = new Map();
 
-export function ensureSeeded() {
-    if (seedPromise) return seedPromise;
-    seedPromise = (async () => {
+export async function ensureSeeded() {
+    // Which season this is has to be known BEFORE anything is read or written,
+    // and against a remote store it is not known at mount: seasons arrive
+    // asynchronously, `seasonId()` is null until they do, and every key here
+    // falls back to `_`. That is how a viewer's free agency ended up filed
+    // under `seasons/_/charts` — a season that exists nowhere, invisible to
+    // the tab and to Roster's sync, and memoised so the real season never got
+    // its turn. Locally it never showed, because localStorage answers before
+    // the first render.
+    await openBoards();
+
+    // And the chart itself has to have been ASKED FOR before "nothing is
+    // saved here" means anything. hasSavedState() is a synchronous read;
+    // against a store that answers later it says no for a chart that exists,
+    // and free agency then seeds itself over the shared one.
+    await openDepthCharts(seasonId());
+
+    const sid = seasonId() ?? '_';
+    if (seedPromises.has(sid)) return seedPromises.get(sid);
+    const promise = (async () => {
         if (hasSavedState()) return loadState();
+        // A later season's free agency is a new market, not last year's again.
+        if (!seasonIsSeeded()) return loadState();
         try {
             const seeded = await fetchSeasonStartRoster();
             saveState(seeded);
@@ -64,7 +94,8 @@ export function ensureSeeded() {
             return loadState(); // leave FA empty rather than blocking
         }
     })();
-    return seedPromise;
+    seedPromises.set(sid, promise);
+    return promise;
 }
 
 // Same versioning contract as rosterState — see the note there. Unversioned
@@ -80,17 +111,39 @@ function migrate(parsed) {
 
 export function loadState() {
     try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (raw) {
-            const parsed = JSON.parse(raw);
-            if (parsed?.positionConfig) return migrate(parsed) ?? defaultState();
-        }
+        const sid = seasonId();
+        if (hasChart(STORAGE_KEY, sid)) return migrate({ version: STATE_VERSION, ...readChart(STORAGE_KEY, sid) }) ?? defaultState();
+
     } catch { /* ignore */ }
     return defaultState();
 }
 
 export function saveState(state) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...state, version: STATE_VERSION }));
+    // An archived season is a record, not a workspace. Guarded HERE rather than
+    // on each control, because one forgotten button is all it takes and this is
+    // the single door every change goes through.
+    if (!canEdit({ kind: 'stage' })) return;
+    // See rosterState.saveState — the shape is stamped here, not trusted.
+    // Never write over a chart this build cannot read. migrate() refuses a
+    // NEWER shape rather than guess at it, and the stage then comes up empty —
+    // saving that empty stage back is how "don't guess" turns into losing the
+    // work outright. Refusing is the honest end of the same decision.
+    // A chart belongs to a season. Without one there is nowhere to file it,
+    // and `rowsPath` falls back to `seasons/_/charts/...` — a season that
+    // exists nowhere, invisible to the stage that wrote it and to everything
+    // else. Measured against Firestore: the roster was filed under `_` on
+    // every boot, because the seasons had not arrived when the view first
+    // saved. Refusing is right — the season arrives a moment later, and the
+    // next save has somewhere to go.
+    if (!seasonId()) return;
+    const stored = chartVersion(STORAGE_KEY, seasonId());
+    if (stored !== null && stored > STATE_VERSION) return;
+
+    // Same stamping as the roster: a candidate slot says who he IS, so the
+    // sync can carry the id across rather than hand the roster a name to
+    // resolve again, and a reachability question never runs through the
+    // matcher. Shared rather than copied — see rosterState.stampPlayerIds.
+    writeChart(STORAGE_KEY, seasonId(), { ...state, version: STATE_VERSION, depthChart: stampPlayerIds(state.depthChart) });
 }
 
 /**
@@ -114,7 +167,11 @@ export function computePositionNeed(snapshot) {
     const { positionConfig, depthChart } = snapshot;
     [...(positionConfig?.offense ?? []), ...(positionConfig?.defense ?? [])].forEach(p => {
         const slots = depthChart?.[p.id] ?? [];
-        const s53 = Math.max(p.slots53, 1);
+        // Math.max(undefined, 1) is NaN, and NaN reaches the screen as
+        // "still need NaN". A row is allowed to arrive without a target — an
+        // import that omitted the column, a shape written by an older build —
+        // and the honest reading of that is one slot, not nonsense.
+        const s53 = Math.max(Number(p.slots53) || 0, 1);
         const filled = slots.slice(0, s53).filter(Boolean).length;
         needs[p.label] = { filled, target: s53, stillNeed: Math.max(0, s53 - filled) };
     });

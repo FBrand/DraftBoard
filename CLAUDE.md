@@ -343,8 +343,10 @@ position rank are derived**, never stored, by `utils/boardRanking.js`:
    typing a total rank).
 3. Otherwise, positional value breaks the tie (`POSITION_VALUE`).
 
-Consequences that are easy to regress and are covered by
-`tests/scouting-params.spec.js`:
+Consequences that are easy to regress, and are covered by the 26 tests in
+`tests/unit/boardRanking.test.js` — including that typing a rank MOVES a
+player, that he adopts the tier he lands in, and that an unranked player gets
+null rather than the worst number:
 
 - A rank is a *position in an ordering*, so two players can never share one.
   Typing a rank is a **move** — the player takes that slot, adopts that slot's
@@ -421,6 +423,15 @@ collection, so seeding this way was up to 514 full-collection writes per page
 load and crashed the renderer. Use `playerRegistry.fillMany()` for anything
 bulk.
 
+The same trap caught the roster import, which cannot use a bulk call at all:
+it needs an id back while it is still parsing the line the name came from, so
+it resolves one player per slot — and every resolve that created somebody
+rewrote the whole collection. 83 rewrites of an 89KB key at boot, for 91
+players. For that shape, `playerRegistry.beginBatch()` / `endBatch()` keeps
+the lookups one at a time and batches the WRITES: a record minted inside the
+batch is visible to every later lookup in it, which is what stops the import
+minting the same man twice.
+
 ### The user guide
 
 `public/USER_GUIDE.md` is written for the analysts, not for developers. It is
@@ -434,13 +445,18 @@ more, rather than adding a Markdown dependency.
 
 - **Vitest** (`npm run test:unit`, `tests/unit/*.test.js`) — pure logic:
   ranking, grouping, phase detection, name matching, CSV round-trips, the
-  registry. 77 tests in ~9s, node environment, no jsdom. Most bugs here have
-  been logic bugs, so this is the loop to stay in while working.
-- **Playwright fast** (`npm run test:fast`, `tests/fast/`) — 15 tests in
-  ~3.5 minutes, covering only what a browser can answer: rendering, routing,
-  drag and drop, persistence across a reload, modal flows.
-- `tests/*.spec.js` is the OLD 87-test suite (~50 min). Superseded by the two
-  above; kept for reference, not part of the loop.
+  registry, the storage schema. 416 tests in ~45s, node environment, no
+  jsdom. Most bugs here have been logic bugs, so this is the loop to stay in
+  while working.
+- **Playwright fast** (`npm run test:browser`, `tests/fast/`) — 37 tests in
+  ~7 minutes, covering only what a browser can answer: rendering, routing,
+  drag and drop, persistence across a reload, modal flows. `test:browser:docker`
+  runs it against a container, which is how it is run here.
+- `tests/audit/` is the sweep — it LOOKS for problems rather than asserting
+  their absence, so it passes while reporting them. A tool to read, not a gate,
+  and not part of `npm test`. See tests/README.md.
+
+The old 87-test `tests/*.spec.js` suite is gone, superseded by the two above.
 
 Two things make the fast suite fast. `tests/fast/globalSetup.js` boots the app
 ONCE and snapshots the state it settles on, so no test pays the cold bootstrap;
@@ -473,7 +489,12 @@ Traps, all of which have cost real runs here:
     seen group.
   - `picks.txt` — comma-separated list of pick numbers your team owns.
   - `columns.txt` — comma-separated position column order (e.g. `QB, RB, WR, TE, ...`).
-  - Rankings can be overridden at runtime via `?rankings=<url>` (must support CORS).
+  - These are *seed* files. Which board you are looking at is chosen with
+    `?board=<slug>` (`useDraftState.js`), resolved through `boardRegistry` to
+    that board's own `rankingsFile`. The older `?rankings=<url>` override is
+    retired and actively stripped (`TopPanel_Draft.jsx`, `UdfaView.jsx`): a
+    board now has an identity of its own, and loading a stranger's CSV over it
+    left the app showing one board's name above another board's players.
 - **Live Sync is optional/modular by design:** if `src/services/` is missing,
   the Live Sync UI gracefully disables itself rather than breaking the core
   board. Activated via `?sync=true` URL param.

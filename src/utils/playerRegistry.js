@@ -17,13 +17,14 @@
  * cannot fuzzy-match server-side. Everything downstream keying on `playerId`
  * is what makes that move a change of adapter rather than a rewrite.
  */
-import { buildNameIndex, findMatchingIndex } from './nameMatcher';
+import { buildNameIndex, findMatchingIndex, nameKey } from './nameMatcher';
 import { repository } from '../data/repository';
+import { prefixedId } from './ids';
+import { playerFields } from '../data/fieldNames';
 
 /** One document per player. See data/repository.js. */
 export const PLAYERS = 'players';
 
-const LEGACY_KEY = 'player_registry_v1';
 export const STATE_VERSION = 1;
 
 /**
@@ -33,40 +34,66 @@ export const STATE_VERSION = 1;
  */
 export async function openRegistry() {
     await repository.ready(PLAYERS);
-    if (repository.all(PLAYERS).length) return;
-
-    let legacy = [];
-    try {
-        const raw = localStorage.getItem(LEGACY_KEY);
-        const parsed = raw ? JSON.parse(raw) : null;
-        legacy = Array.isArray(parsed?.players) ? parsed.players : [];
-    } catch { /* nothing to carry across */ }
-
-    if (!legacy.length) return;
-    await repository.commit(PLAYERS, legacy.filter(p => p?.id).map(p => ({ id: p.id, doc: p })));
-    try { localStorage.removeItem(LEGACY_KEY); } catch { /* ignore */ }
 }
 
 // The rest of this module reads and writes through the repository but keeps a
 // synchronous surface: a board ranks 328 players on every keystroke and cannot
 // await anything. Writes are fire-and-forget — the in-memory copy is updated
 // before the promise settles, so the UI is already correct.
+/**
+ * A record without the fields that say nothing.
+ *
+ * Measured on the shipped season, of 733 records: both athletic-matrix scores
+ * were null on every single one, so was previousTeam, `aliases` was an empty
+ * array on all of them and `hidden` was false on all of them. That is 75KB of
+ * a 246KB store spent writing down the absence of things.
+ *
+ * Safe because nothing reads these expecting null rather than nothing. Facts
+ * go through `factsFor`, which is `record[f] ?? null`; aliases are read as
+ * `(p.aliases ?? [])` in all three places; `hidden` is only ever tested for
+ * truth. Absent and empty have always been the same answer — only the storage
+ * disagreed.
+ *
+ * The timestamps are epoch milliseconds. Nothing reads them at all — they are
+ * provenance, kept for the day somebody asks when a record appeared — and an
+ * ISO string spends 24 characters carrying 13 characters of fact.
+ */
+function lean(record) {
+    const out = {};
+    Object.entries(record).forEach(([k, v]) => {
+        // The id is the key this record is filed under. Writing it again cost
+        // 33KB across 733 records, and gave a rename two places to go wrong:
+        // a record whose id field disagrees with its key is a record nothing
+        // can find twice the same way. Reattached on read, below.
+        if (k === 'id') return;
+        if (v === null || v === undefined) return;
+        if (k === 'aliases' && Array.isArray(v) && v.length === 0) return;
+        if (k === 'hidden' && v === false) return;
+        if ((k === 'createdAt' || k === 'updatedAt') && typeof v === 'string') {
+            const ms = Date.parse(v);
+            out[k] = Number.isFinite(ms) ? ms : Date.now();
+            return;
+        }
+        out[k] = v;
+    });
+    // Long names in the app, short ones in the store — field names were 43% of
+    // this collection. See data/fieldNames.js.
+    return playerFields.lean(out);
+}
+
 function writeOne(record) {
-    repository.set(PLAYERS, record.id, record);
+    repository.set(PLAYERS, record.id, lean(record));
 }
 
 function writeMany(records) {
-    repository.commit(PLAYERS, records.map(r => ({ id: r.id, doc: r })));
+    repository.commit(PLAYERS, records.map(r => ({ id: r.id, doc: lean(r) })));
 }
 
-let nextFallbackId = 0;
-function newId() {
-    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-        return `p_${crypto.randomUUID()}`;
-    }
-    nextFallbackId += 1;
-    return `p_${Date.now().toString(36)}${nextFallbackId.toString(36)}${Math.random().toString(36).slice(2, 8)}`;
-}
+/**
+ * A new player id, checked against the registry rather than trusted to be
+ * unique by length. See utils/ids.js — a collision here merges two people.
+ */
+const newId = (taken) => prefixedId('p', taken);
 
 const clean = (v) => String(v ?? '').trim();
 
@@ -135,12 +162,101 @@ function lookupRows(players) {
     return rows;
 }
 
+/**
+ * Every player, each carrying its own id again.
+ *
+ * The id is not stored in the record — it is the key — so it is put back here.
+ * Every caller reads `record.id`, and threading the key separately through the
+ * matcher, the boards and the card would be a change to all of them for no
+ * gain. One object spread, once per load.
+ */
+/**
+ * Records minted inside an open batch: real, and not yet written.
+ *
+ * Importing a roster resolves one player per slot, and each resolve that
+ * created somebody committed the WHOLE collection — 83 rewrites of an 89KB
+ * key at boot, 0.55 MB of localStorage writes, for 91 players. resolveAll
+ * already commits once for a whole list; the roster parser could not use it,
+ * because it needs an id back while it is still parsing the line.
+ *
+ * So the writes are batched instead of the lookups. They stay visible to
+ * every later lookup in the same batch — otherwise the next slot would fail
+ * to find the man just minted and mint him a second time, which is the
+ * duplicate-record bug this module exists to prevent.
+ */
+let batched = null;
+
+/**
+ * Holds registry writes until endBatch, as ONE commit.
+ *
+ * Flushes a batch left open by a caller that threw, so a leak costs one
+ * late write rather than the records themselves.
+ */
+export function beginBatch() {
+    if (batched) endBatch();
+    batched = [];
+}
+
+/** Writes everything minted since beginBatch, in one go. */
+export function endBatch() {
+    const made = batched;
+    batched = null;
+    if (made && made.length) writeMany(made);
+    return made ? made.length : 0;
+}
+
 export function loadRegistry() {
-    return repository.all(PLAYERS);
+    const map = repository.docs(PLAYERS) ?? {};
+    const stored = Object.entries(map).map(([id, doc]) => ({ ...playerFields.fat(doc), id }));
+    // Uncommitted records are part of the registry as far as anybody asking
+    // is concerned. They are about to be.
+    return batched && batched.length ? [...stored, ...batched] : stored;
+}
+
+/**
+ * Players whose name looks like what is being typed.
+ *
+ * For the add and sign forms, which had no way of showing you that the man you
+ * are typing in is already known. Nothing warned, nothing offered him, and the
+ * only feedback came after saving — as a duplicate record you could not see,
+ * because the card that displays him resolves by name and finds the original.
+ *
+ * Returns null while the registry is still loading — see the note in the body.
+ *
+ * Matched on the folded name — punctuation, case, suffixes and nicknames —
+ * rather than the raw string, so "dj moore", "D.J. Moore" and "DJ  Moore" all
+ * find him. A prefix match on any word, because people type a surname.
+ */
+export function searchPlayers(term, limit = 6) {
+    const typed = nameKey(String(term ?? '').trim());
+    if (typed.length < 2) return [];
+    // Null, not an empty list: "nobody by that name" and "I have not read the
+    // registry yet" are different answers, and only one of them means it is
+    // safe to add him. See repository.isLoaded.
+    if (!repository.isLoaded(PLAYERS)) return null;
+
+    const words = typed.split(/\s+/).filter(Boolean);
+    const scored = [];
+
+    loadRegistry().forEach(p => {
+        if (p.hidden) return;
+        const key = nameKey(p.name);
+        if (key === typed) { scored.push({ player: p, score: 0 }); return; }
+        if (key.startsWith(typed)) { scored.push({ player: p, score: 1 }); return; }
+        // Every typed word appearing somewhere: "mendoza" finds him, and so
+        // does "fernando mendoza" typed out of order.
+        if (words.every(w => key.includes(w))) scored.push({ player: p, score: 2 });
+    });
+
+    return scored
+        .sort((a, b) => a.score - b.score || a.player.name.localeCompare(b.player.name))
+        .slice(0, limit)
+        .map(s => s.player);
 }
 
 export function byId(id) {
-    return repository.get(PLAYERS, id);
+    const doc = repository.get(PLAYERS, id);
+    return doc ? { ...playerFields.fat(doc), id } : null;
 }
 
 /**
@@ -152,11 +268,15 @@ export function byId(id) {
  * Returns ids positionally matching `candidates`.
  */
 export function resolveAll(candidates, { create = true } = {}) {
-    const players = repository.all(PLAYERS);
+    const players = loadRegistry();
     const rows = lookupRows(players);
     const index = buildNameIndex(rows);
     const ids = [];
     const created = [];
+    // Every id in the collection, plus the ones minted during this very call —
+    // resolveAll registers a whole rankings file at once, so the set has to
+    // grow as it goes or two new players could collide with each other.
+    const taken = new Set(players.map(x => x.id));
 
     (candidates ?? []).forEach(c => {
         const name = clean(c?.name);
@@ -167,7 +287,7 @@ export function resolveAll(candidates, { create = true } = {}) {
         if (!create) { ids.push(null); return; }
 
         const record = {
-            id: newId(),
+            id: newId(taken),
             name,
             position: clean(c.position).toUpperCase(),
             school: clean(c.school),
@@ -181,12 +301,16 @@ export function resolveAll(candidates, { create = true } = {}) {
         // instead of creating a second one for the same player.
         rows.push({ id: record.id, name: record.name, position: record.position, school: record.school });
         index.push(...buildNameIndex([rows[rows.length - 1]]).map(e => ({ ...e, index: rows.length - 1 })));
+        taken.add(record.id);
         ids.push(record.id);
     });
 
     // One commit for the whole batch: seeding a board resolves 328 players,
     // and that should be one write, not 328.
-    if (created.length) writeMany(created);
+    if (created.length) {
+        if (batched) batched.push(...created);
+        else writeMany(created);
+    }
     return ids;
 }
 
@@ -202,7 +326,7 @@ export function resolve(candidate, options) {
  * load.
  */
 export function rename(id, patch) {
-    const before = repository.get(PLAYERS, id);
+    const before = byId(id);
     if (!before) return false;
 
     const next = {
@@ -230,7 +354,7 @@ export function rename(id, patch) {
 
 /** The facts recorded for a player, with nulls for the ones nobody has. */
 export function factsFor(id) {
-    const record = id ? repository.get(PLAYERS, id) : null;
+    const record = id ? byId(id) : null;
     if (!record) return { ...BLANK_FACTS };
     return Object.fromEntries(FACT_FIELDS.map(f => [f, record[f] ?? null]));
 }
@@ -241,7 +365,7 @@ export function factsFor(id) {
  * null or '' for a field clears it.
  */
 export function setFacts(id, patch) {
-    const record = repository.get(PLAYERS, id);
+    const record = byId(id);
     if (!record) return false;
 
     const next = { ...record };
@@ -274,7 +398,7 @@ export function setFactsMany(updates) {
     const changes = [];
 
     (updates ?? []).forEach(({ id, patch }) => {
-        const record = repository.get(PLAYERS, id);
+        const record = byId(id);
         if (!record || !patch) return;
 
         const next = { ...record };
@@ -293,7 +417,7 @@ export function setFactsMany(updates) {
         }
     });
 
-    if (changes.length) repository.commit(PLAYERS, changes);
+    if (changes.length) repository.commit(PLAYERS, changes.map(c => ({ ...c, doc: c.doc ? lean(c.doc) : c.doc })));
     return changes.length;
 }
 
@@ -312,7 +436,7 @@ export function fillMany(updates) {
     const changes = [];
 
     (updates ?? []).forEach(({ id, base, facts }) => {
-        const record = repository.get(PLAYERS, id);
+        const record = byId(id);
         if (!record) return;
 
         const next = { ...record };
@@ -338,12 +462,12 @@ export function fillMany(updates) {
         }
     });
 
-    if (changes.length) repository.commit(PLAYERS, changes);
+    if (changes.length) repository.commit(PLAYERS, changes.map(c => ({ ...c, doc: c.doc ? lean(c.doc) : c.doc })));
     return changes.length;
 }
 
 export function setHidden(id, hidden) {
-    const record = repository.get(PLAYERS, id);
+    const record = byId(id);
     if (!record) return false;
     writeOne({ ...record, hidden: !!hidden });
     return true;
@@ -356,8 +480,8 @@ export function setHidden(id, hidden) {
  */
 export function merge(keepId, mergeId) {
     if (keepId === mergeId) return false;
-    const keep = repository.get(PLAYERS, keepId);
-    const loser = repository.get(PLAYERS, mergeId);
+    const keep = byId(keepId);
+    const loser = byId(mergeId);
     if (!keep || !loser) return false;
 
     const aliases = [...(keep.aliases ?? []), ...(loser.aliases ?? []),
@@ -373,7 +497,7 @@ export function merge(keepId, mergeId) {
     // One commit: the survivor gains the aliases and the loser goes, and
     // neither half of that should ever be visible without the other.
     repository.commit(PLAYERS, [
-        { id: keepId, doc: { ...keep, aliases: deduped } },
+        { id: keepId, doc: lean({ ...keep, aliases: deduped }) },
         { id: mergeId, doc: null },
     ]);
     return true;

@@ -17,30 +17,41 @@
 
 /** Fixed keys, one per thing. */
 const EXACT = [
-    'nfl_draft_board_state',   // useDraftState
     'nfl_draft_live_sync',     // useDraftState's live-sync toggle
-    'rosterState',             // rosterState.js
-    'fa_state_v1',             // faState.js
     'draft_board_view',        // last active tab
     'draft_board_focus',       // Draft's focus-mode toggle
     'athletic_matrix_url',     // configurable Athletic Matrix link (appLinks.js)
-    'athletic_matrix_v1',      // matrix scores, before they became player facts
-    'player_registry_v1',      // the registry, before players became documents
-    'prospects_v1',            // players added, corrected or hidden in-app
     'position_value_v1',       // appSettings.js
     'session_team_v1',         // appSettings.js
+    'viewed_season_v1',        // which season is open (boardRegistry.js)
+    'pending_writes_v1',       // writes that have not reached the store yet
 ];
 
 /**
  * Families with one key per board or per collection. A prefix is still an
  * allowlist — it just names a shape instead of an instance.
  */
-const PREFIXES = [
-    'scouting_board_v1__',     // one per board (boardRegistry.js gives the id)
-    'scouting_overlay_v1__',   // the same, when a board was its own name
-    'db_',                     // repository collections (data/localAdapter.js)
-];
+// Everything the repository writes. One prefix, because every collection is a
+// path under it — see data/localAdapter.js.
+const PREFIXES = ['db_'];
 
+/**
+ * Where one board's work is stored. Here rather than in scoutingState because
+ * boardRegistry needs it too — to drop a scrapped season's boards — and cannot
+ * import scoutingState, which imports boardRegistry. Two copies of this string
+ * is how the session bundle came to name boards that no longer existed.
+ */
+export const boardStateKey = (boardId) => `scouting_board_v1__${boardId}`;
+
+/**
+ * A stage's storage key, for one season.
+ *
+ * The roster, free agency, the draft and the prospect pool were single global
+ * keys, so every season shared one of each: rolling over to 2027 left last
+ * year's roster, last year's draft class and last year's picks sitting there,
+ * and the new season was the old one wearing a different number.
+ *
+ */
 /** Whether the app owns this key, and may therefore write it on import. */
 export function isOwnedKey(key) {
     return EXACT.includes(key) || PREFIXES.some(p => key.startsWith(p));

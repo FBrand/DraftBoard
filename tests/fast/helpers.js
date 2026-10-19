@@ -43,6 +43,11 @@ export async function openCold(page, tab) {
 }
 
 export async function gotoTab(page, tab) {
+    // At 390px a player card is a modal, and its overlay covers the tab bar —
+    // so switching stages after looking at a player fails with "the tab is not
+    // visible" when the truth is that a dialog is in front of it. Harmless on
+    // a desktop, where no overlay is open.
+    await closeCardModal(page);
     await page.getByRole('button', { name: TABS[tab], exact: true }).click();
     await page.waitForTimeout(250);
 }
@@ -100,3 +105,103 @@ export function trackErrors(page) {
 }
 
 export { expect };
+
+/**
+ * The same drag, with a finger.
+ *
+ * dnd-kit runs a separate TouchSensor and it is DELAY-activated (200ms), not
+ * distance-activated like the mouse — a quick swipe has to stay a scroll, or
+ * the depth chart would be impossible to scroll past on a phone. So a touch
+ * drag is press, hold past the delay, then move; anything that taps first
+ * cancels the press and the drag never starts.
+ *
+ * The target is re-measured once the drag is under way, for the same reason
+ * dragTo does it: the board auto-scrolls, and a coordinate taken before the
+ * press is pointing at the wrong slot by the time the finger arrives.
+ */
+export async function touchDragTo(page, source, target) {
+    const rect = (l) => l.evaluate(el => {
+        const r = el.getBoundingClientRect();
+        return { x: r.x, y: r.y, width: r.width, height: r.height };
+    });
+    const centre = (r) => [r.x + r.width / 2, r.y + r.height / 2];
+
+    const cdp = await page.context().newCDPSession(page);
+    const touch = (type, x, y) => cdp.send('Input.dispatchTouchEvent', {
+        type,
+        touchPoints: type === 'touchEnd' ? [] : [{ x, y, id: 1, radiusX: 10, radiusY: 10, force: 1 }],
+    });
+
+    const [ax, ay] = centre(await rect(source));
+    try {
+        await touch('touchStart', ax, ay);
+        await page.waitForTimeout(450);
+        let [bx, by] = centre(await rect(target));
+        for (let i = 1; i <= 16; i++) {
+            await touch('touchMove', ax + ((bx - ax) * i) / 16, ay + ((by - ay) * i) / 16);
+            await page.waitForTimeout(40);
+        }
+        await page.waitForTimeout(120);
+        [bx, by] = centre(await rect(target));
+        await touch('touchMove', bx, by);
+        await page.waitForTimeout(150);
+        await touch('touchEnd', bx, by);
+        await page.waitForTimeout(400);
+    } finally {
+        if (await page.locator('.rv-drag-overlay').count()) {
+            await touch('touchEnd', ax, ay).catch(() => {});
+            await page.keyboard.press('Escape').catch(() => {});
+        }
+    }
+}
+
+/**
+ * Closes the player card if it opened as a modal.
+ *
+ * At 390px the card is a centred modal rather than a side panel — which is
+ * deliberate, and `layout.spec.js` asserts it. The consequence for every other
+ * spec is that anything clicked AFTER looking at a player is blocked by
+ * `.modal-overlay`, and the failure reads as "the menu button is not visible"
+ * rather than "a dialog is in front of it".
+ *
+ * A no-op on a desktop, where no overlay opens, so a spec can call it
+ * unconditionally and stay one flow on both devices.
+ */
+export async function closeCardModal(page) {
+    const overlay = page.locator('.modal-overlay');
+    if (await overlay.count() === 0) return;
+    const close = page.locator('.modal-overlay .close-button').first();
+    if (await close.count()) await close.click({ timeout: 5_000 }).catch(() => {});
+    else await page.keyboard.press('Escape').catch(() => {});
+    await overlay.first().waitFor({ state: 'hidden', timeout: 5_000 }).catch(() => {});
+}
+
+/**
+ * Whether a depth-chart drag can be performed at this width.
+ *
+ * On the roster and free agency at 390px, measured: the IR zone sits at
+ * y≈1950 and the cut panel at y≈2100 on an 844px-tall screen, and NO empty 53
+ * slot is on screen at rest (0 of 44, 0 of 22).
+ *
+ * A PERSON can still do it: holding a card against the edge of the screen makes
+ * dnd-kit auto-scroll the chart — measured at ~440px per 4 seconds, so roughly
+ * ten seconds of holding to reach IR. Slow, but it works, and the app is not
+ * broken here.
+ *
+ * `dragTo` cannot: it moves and releases without dwelling at the edge, so no
+ * auto-scroll is triggered and the drop lands nowhere. This guard is therefore
+ * about the HARNESS, not the app — it skips a spec our drag helper cannot
+ * perform at this width, and must not be read as "the user cannot either".
+ */
+export async function depthChartDragReachable(page) {
+    return page.evaluate(() => {
+        const onScreen = (el) => {
+            const r = el.getBoundingClientRect();
+            return r.top > 0 && r.bottom < window.innerHeight && r.left > 0 && r.right < window.innerWidth;
+        };
+        const empties = [...document.querySelectorAll('.rv-slot')].filter(el =>
+            !el.querySelector('.rv-slot-name') && !el.closest('.roster-ir') && !el.closest('.roster-cuts'));
+        const cuts = document.querySelector('.roster-cuts');
+        return empties.some(onScreen) || (cuts ? onScreen(cuts) : false);
+    });
+}

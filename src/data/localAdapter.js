@@ -5,17 +5,34 @@
  * map of id to document, and every operation names a single document — even
  * though localStorage can only rewrite a whole key. Writing the whole key is
  * this adapter's problem, not the caller's: the caller says "set this
- * document", and a Firestore adapter will do exactly that with no change above
+ * document", and the Firestore adapter does exactly that with no change above
  * it.
  *
- * The alternative, keeping each store as one JSON blob and calling it a
- * document, would have looked the same locally and fallen apart on the first
- * real write — two analysts editing different players would overwrite each
- * other wholesale.
+ * **One key per collection, and the key is the path.**
+ *
+ * That sounds obvious and took two wrong turns to arrive at. First the path was
+ * flattened into the key by folding the slashes —
+ * `db_seasons__s_1__charts__rosterState__rows` — which put a wall of
+ * `__`-joined strings in front of anyone opening a storage inspector,
+ * indistinguishable from the composite document keys the data model had just
+ * got rid of. Then the hierarchy moved inside the value, one key per root
+ * collection holding a tree. That removed the `__` and cost this, measured:
+ *
+ *     one draft pick   (rewrites db_players, 147KB)      36.8 ms
+ *     one remark       (rewrites db_evaluations, 2.0MB)  557.8 ms
+ *
+ * Half a second to type a note, because one document write re-serialised every
+ * evaluation in the season — roughly ten thousand times the bytes the write
+ * actually changed.
+ *
+ * A localStorage key is an arbitrary string and may contain a slash. So the key
+ * is `db_` plus the path: `db_seasons/s_1/charts/rosterState/rows`. It reads as
+ * what it is, there is no `__` anywhere, and a write touches only the
+ * collection that changed.
  */
 const PREFIX = 'db_';
 
-const keyFor = (collection) => `${PREFIX}${collection.replace(/\//g, '__')}`;
+const keyFor = (collection) => `${PREFIX}${collection}`;
 
 function readAll(collection) {
     try {
@@ -29,11 +46,13 @@ function readAll(collection) {
 }
 
 function writeAll(collection, docs) {
-    try {
-        localStorage.setItem(keyFor(collection), JSON.stringify(docs));
-    } catch { /* quota or private mode — the in-memory copy still stands */ }
+    // Throws rather than swallowing. A full quota or a private-mode window is
+    // a write that did not happen, and the repository puts the local change
+    // back and says so — which it cannot do if the failure is hidden here.
+    localStorage.setItem(keyFor(collection), JSON.stringify(docs));
 }
 
+/** @type {import('./types').Adapter} */
 export const localAdapter = {
     name: 'local',
 
@@ -53,8 +72,8 @@ export const localAdapter = {
      * and mint a second record for every one of them.
      *
      * A remote adapter will not have this method, and that is the point. Its
-     * absence is what will force callers onto `ready()` rather than letting
-     * them quietly read nothing.
+     * absence is what forces callers onto `ready()` rather than letting them
+     * quietly read nothing.
      */
     loadSync(collection) {
         return readAll(collection);

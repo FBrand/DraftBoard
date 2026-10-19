@@ -440,8 +440,12 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
                         <input className="text-input" value={base.name} autoFocus
                             aria-label="Name"
                             onChange={e => setBase(b => ({ ...b, name: e.target.value }))} />
+                        {/* Position is this board's opinion of him — name and
+                            school are facts and change everywhere. */}
                         <input className="text-input" value={base.position}
-                            aria-label="Position"
+                            aria-label="Position on this board"
+                            title={`Position on ${boardLabel || 'this board'} — other analysts keep theirs`}
+                            placeholder="Position (this board)"
                             onChange={e => setBase(b => ({ ...b, position: e.target.value }))} />
                         <input className="text-input" value={base.school}
                             aria-label="School"

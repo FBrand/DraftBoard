@@ -111,12 +111,22 @@ export function rankBoard(players, entryFor) {
         // placement came straight back: the player stayed exactly where he
         // was and the button looked broken.
         const placed = e?.round != null ? e : (e?.cleared ? { round: null, tier: null } : p);
+
+        // Position comes from the ENTRY when there is one. Name and school are
+        // facts about the player; position is this analyst's read of him, and
+        // boards already disagreed — Rueben Bain Jr. sits at DL.3T on one and
+        // EDGE on another, because they were seeded from different files.
+        // Taking it from the pool meant an analyst could change it on his own
+        // board, the change would be stored, and the board would go on showing
+        // the file's answer.
+        const position = e?.position || p.position;
         return {
             player: p,
+            position,
             round: placed?.round ?? null,
             tier: placed?.tier ?? null,
             withinGroup: e?.withinGroup ?? null,
-            posValue: valueOf(p.position),
+            posValue: valueOf(position),
         };
     });
 
@@ -149,16 +159,18 @@ export function rankBoard(players, entryFor) {
         if (row.round == null) {
             return {
                 ...row.player,
+                position: row.position,
                 round: null, tier: null, withinGroup: row.withinGroup,
                 overallRank: null, positionRank: null,
             };
         }
-        const base = basePosition(row.player.position);
+        const base = basePosition(row.position);
         const nextPosRank = (perPosition.get(base) ?? 0) + 1;
         perPosition.set(base, nextPosRank);
         ranked += 1;
         return {
             ...row.player,
+            position: row.position,
             round: row.round,
             tier: row.tier,
             // Carried through so a move can take the midpoint between two

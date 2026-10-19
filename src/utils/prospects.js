@@ -12,6 +12,14 @@
  * that he exists is a fact, where he belongs is an opinion.
  */
 import { buildNameIndex, findMatchingIndex } from './nameMatcher';
+import { readStage, writeStage } from '../data/stageStore';
+import { viewedSeason } from './boardRegistry';
+
+// Which season's copy of this stage. Read at call time, never cached: the
+// answer changes when somebody switches season, and a stage holding the
+// previous answer would write one season's work into another's key.
+const seasonId = () => viewedSeason()?.id ?? null;
+
 import { parseRemarksCell, splitRecords } from './boardCsv';
 import { parseCsvLine } from './csvUtils';
 
@@ -22,9 +30,8 @@ const EMPTY = () => ({ version: STATE_VERSION, players: [], edits: [], hidden: [
 
 function read() {
     try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (!raw) return EMPTY();
-        const parsed = JSON.parse(raw);
+        const parsed = readStage(STORAGE_KEY, seasonId());
+        if (!parsed) return EMPTY();
         if (typeof parsed?.version === 'number' && parsed.version > STATE_VERSION) {
             return EMPTY(); // written by a newer build
         }
@@ -50,7 +57,11 @@ const originOf = (p) => p?.sourceIdentity ?? identityOf(p);
 
 function write(state) {
     try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...state, version: STATE_VERSION }));
+        // A stage belongs to a season. Without one, stagesPath falls back to
+        // `seasons/_/stages` — a season that exists nowhere, so the work is
+        // filed where nothing will look for it. Same guard as the charts.
+        if (!seasonId()) return;
+        writeStage(STORAGE_KEY, seasonId(), { ...state, version: STATE_VERSION });
     } catch { /* ignore */ }
 }
 

@@ -1,3 +1,5 @@
+import { canonicalPosition } from './positionTaxonomy';
+
 const NICKNAME_MAP = {
     "kc": "kevin",
     "tj": "t",
@@ -35,9 +37,22 @@ function applyNickname(name) {
 }
 
 // 4. Levenshtein Distance
-function getLevenshteinDistance(a, b) {
+/**
+ * @param {string} a
+ * @param {string} b
+ * @param {number} [maxDist] stop once the answer is certainly greater than this
+ *
+ * The cap is what makes this affordable. Nothing past distance 2 is ever
+ * accepted by the only caller, and the full matrix is O(len*len) — so once
+ * every cell in a row exceeds the cap, no later row can come back under it and
+ * the rest of the matrix is wasted work. Boot spent 1.96 SECONDS in here:
+ * resolving the player pool is mostly misses, and a miss is what runs the
+ * distance pass against every name already known.
+ */
+function getLevenshteinDistance(a, b, maxDist = Infinity) {
     if (a.length === 0) return b.length;
     if (b.length === 0) return a.length;
+    if (Math.abs(a.length - b.length) > maxDist) return maxDist + 1;
 
     const matrix = [];
 
@@ -53,6 +68,7 @@ function getLevenshteinDistance(a, b) {
 
     // Fill in the rest of the matrix
     for (let i = 1; i <= b.length; i++) {
+        let rowBest = Infinity;
         for (let j = 1; j <= a.length; j++) {
             if (b.charAt(i - 1) === a.charAt(j - 1)) {
                 matrix[i][j] = matrix[i - 1][j - 1];
@@ -65,7 +81,11 @@ function getLevenshteinDistance(a, b) {
                     )
                 );
             }
+            if (matrix[i][j] < rowBest) rowBest = matrix[i][j];
         }
+        // Every cell in this row is already past the cap, and a later row can
+        // only be larger — the answer cannot come back under it.
+        if (rowBest > maxDist) return maxDist + 1;
     }
 
     return matrix[b.length][a.length];
@@ -84,13 +104,48 @@ export function buildNameIndex(playersList) {
         const norm = normalizeString(p.name);
         const noSuffix = stripSuffix(norm);
         const nick = applyNickname(noSuffix);
-        return { index: idx, name: p.name, position: p.position, school: p.school, norm, noSuffix, nick };
+        return {
+            index: idx, name: p.name, position: p.position, school: p.school,
+            norm, noSuffix, nick,
+            // Folded once, here, rather than once per comparison. discriminates()
+            // recomputed both for every candidate on every lookup — 1.64 seconds
+            // of boot went into basePos alone, a string split and an uppercase
+            // done half a million times.
+            basePosition: basePos(p.position),
+            normSchool: normSchool(p.school),
+        };
     });
 }
 
 // "WR.3" -> "WR". Positions carry a depth suffix in some of the app's data.
+//
+// "URA" folds to nothing. It is not a position — useDraftState writes it as the
+// "Unranked Placeholder" for somebody the live sync saw and the board has never
+// heard of, and the shipped picks file carries rows exported from such a
+// session. Treating it as a position made it EVIDENCE OF A DIFFERENCE, which is
+// the opposite of what it says: it declares that the position is unknown. Only
+// fields both sides declare can discriminate, and this one declares nothing.
+// Enrique Cruz Jr was in the registry twice for exactly that reason — OT from
+// the rankings file and URA from his pick.
+const UNKNOWN_POSITION = 'URA';
 function basePos(position) {
-    return String(position ?? '').split('.', 1)[0].trim().toUpperCase();
+    // Through the taxonomy first, so an ALIGNMENT folds to the position it
+    // belongs to: LDE and RDE are both EDGE, LG and OG are both IOL, NT is
+    // DL. Without it the two vocabularies looked like two men, and seven of
+    // the twelve registry duplicates were exactly that — a rankings file
+    // saying what he plays against a roster or picks file saying where he
+    // stands.
+    //
+    // CONTAINMENT only. `canonicalPosition` never consults the compatibility
+    // table, and must not: OT and IOL can fill each other's rows, but merging
+    // them here would make one record out of two men who share a name, one a
+    // tackle and one a guard.
+    //
+    // URA still folds to nothing — canonicalPosition returns '' for it,
+    // because it declares that the position is unknown rather than naming one.
+    const canonical = canonicalPosition(position);
+    if (!canonical || canonical === UNKNOWN_POSITION) return '';
+    return canonical.split('.', 1)[0];
 }
 
 function normSchool(school) {
@@ -126,11 +181,18 @@ export function identityKey(name, position) {
  * field that is missing on either side is not evidence of a difference — it
  * simply can't discriminate, and the name still decides.
  */
+/**
+ * @param {object} entry     a buildNameIndex entry, or a bare player
+ * @param {object} qualifier already folded to {basePosition, normSchool}
+ *
+ * Takes the qualifier pre-folded and prefers the entry own pre-folded keys,
+ * falling back for callers that pass a raw player rather than an index entry.
+ */
 function discriminates(entry, qualifier) {
-    if (qualifier.position && entry.position
-        && basePos(entry.position) !== basePos(qualifier.position)) return true;
-    if (qualifier.school && entry.school
-        && normSchool(entry.school) !== normSchool(qualifier.school)) return true;
+    if (qualifier.basePosition && entry.position
+        && (entry.basePosition ?? basePos(entry.position)) !== qualifier.basePosition) return true;
+    if (qualifier.normSchool && entry.school
+        && (entry.normSchool ?? normSchool(entry.school)) !== qualifier.normSchool) return true;
     return false;
 }
 
@@ -151,7 +213,9 @@ export function findMatchingIndex(targetName, mappedList, qualifier = null) {
     if (qualifier) {
         const q = typeof qualifier === 'string' ? { position: qualifier } : qualifier;
         if (q.position || q.school) {
-            const scoped = mappedList.filter(p => !discriminates(p, q));
+            // Folded once for the whole scan rather than per candidate.
+            const folded = { basePosition: basePos(q.position), normSchool: normSchool(q.school) };
+            const scoped = mappedList.filter(p => !discriminates(p, folded));
             if (scoped.length !== mappedList.length) {
                 return scoped.length ? findMatchingIndex(targetName, scoped) : -1;
             }
@@ -190,7 +254,8 @@ export function findMatchingIndex(targetName, mappedList, qualifier = null) {
         // two strings, and nothing past distance 2 is ever accepted below —
         // so a bigger length gap can be rejected without the O(len*len) scan.
         if (Math.abs(targetNick.length - p.nick.length) > 2) continue;
-        const dist = getLevenshteinDistance(targetNick, p.nick);
+        // Nothing past 2 is accepted below, so nothing past 2 is worth computing.
+        const dist = getLevenshteinDistance(targetNick, p.nick, 2);
         if (dist < bestDist) {
             bestDist = dist;
             bestIndex = p.index;

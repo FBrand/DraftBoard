@@ -3,7 +3,7 @@ import useIsMobile from '../hooks/useIsMobile';
 import { CSV_TEMPLATE } from '../utils/rosterState';
 import {
     loadState, saveState, defaultState,
-    parseCSV, exportCSV, makeSlot, resolvePosition,
+    parseCSV, exportCSV, makeSlot, resolvePosition, deletePositionRow, clearInjuryArrival,
     SPECIALIST_IDS, hasRosterSourceAdapter, fetchAdapterRoster, fetchLocalRoster, fetchSeasonStartStructure, parseHTMLToRoster
 } from '../utils/rosterState';
 import * as faState from '../utils/faState';
@@ -13,8 +13,10 @@ import { TextPromptDialog, ConfirmDialog } from './Dialogs';
 import Toast from './Toast';
 import Menu from './Menu';
 import { shouldSeed } from '../utils/appInit';
-import { isDraftPick, isUndraftedSigning } from '../utils/draftPhase';
-import { resolve as resolvePlayer, setFacts } from '../utils/playerRegistry';
+import { openDepthCharts } from '../data/depthChartStore';
+import { viewedSeason, openBoards } from '../utils/boardRegistry';
+import { syncFromStages, describeSync } from '../utils/rosterSync';
+import { resolve as resolvePlayer, setFacts, byId } from '../utils/playerRegistry';
 import useUndoableState from '../hooks/useUndoableState';
 
 function CounterBox({ label, val, max, status, isLast, maxLabel }) {
@@ -37,6 +39,7 @@ export default function RosterView({ masterPlayers, draftedPlayers, onInfoOpen }
     // has somewhere to place players. The import options that used to live on
     // the blocking bootstrap screen are in this view's menu instead.
     const [seeding, setSeeding] = useState(() => loadState() === null);
+    const [pendingImport, setPendingImport] = useState(null);
     const [isSignModalOpen, setIsSignModalOpen] = useState(false);
     const [isPasting, setIsPasting] = useState(false);
     const [pastedHtml, setPastedHtml] = useState('');
@@ -107,6 +110,21 @@ export default function RosterView({ masterPlayers, draftedPlayers, onInfoOpen }
         let cancelled = false;
         (async () => {
             try {
+                // Nothing is missing until the store has been asked. Against a
+                // remote store the chart has not arrived at mount, so the
+                // synchronous read behind `seeding` says "no roster" for one
+                // that is sitting there — and seeding on that answer replaces
+                // the shared roster with the file this app ships with.
+                // The season first: viewedSeason() reads the repository, and
+                // against a remote store the seasons have not arrived when this
+                // view mounts. Asking for the chart of season `null` loads
+                // nothing, which looks exactly like an empty roster.
+                await openBoards();
+                await openDepthCharts(viewedSeason()?.id ?? null);
+                if (cancelled) return;
+                const already = loadState();
+                if (already) { history.reset(already); setSeeding(false); return; }
+
                 const loaded = shouldSeed()
                     ? await fetchLocalRoster()
                     : await fetchSeasonStartStructure();
@@ -139,17 +157,51 @@ export default function RosterView({ masterPlayers, draftedPlayers, onInfoOpen }
     // touches draft state; the arrival tag beside the name records how they
     // arrived, the same thing roster.csv encodes in its suffix.
     const handleSignPlayer = (customPlayer) => {
-        const { name, position, arrival = null, team, previousTeam, draftYear, draftRound } = customPlayer;
+        const { id: linkedId, name, position, rosterRow, arrival = null, team, previousTeam, draftYear, draftRound } = customPlayer;
         const displayName = String(name).split(':')[0];
 
         // Team and previous team are facts about the player, so they go on his
         // record. How he arrived HERE is a fact about this roster, so it stays
         // on the slot.
+        //
+        // Look him up by NAME first. The position typed here is a depth-chart
+        // ALIGNMENT — LT, WR.Z, DL.3T — and a player's position is what he
+        // plays, OT or WR. Qualifying the lookup by the alignment therefore
+        // matched nobody: signing Diego Pounds at LT, who is already in the
+        // registry as an OT out of Ole Miss drafted in 2026, minted a SECOND
+        // Diego Pounds with no school and no draft history. On screen it
+        // looked right, because the card resolves by name and found the
+        // original — the duplicate was only visible in storage.
+        //
+        // Two players really can share a name, which is what the qualified
+        // lookup is for; it stays as the fallback when the name alone finds
+        // nobody and a record has to be created.
+        // Resolved out here, not inside the facts branch, because the SLOT needs
+        // it too: a slot carries the id of the man in it now, and leaving this
+        // block-scoped meant placeAt referenced an identifier that was not in
+        // scope — every sign threw and the dialog simply never closed.
+        //
+        // This is also the answer to "is a player always registered before he
+        // reaches the roster": here, yes. The last call creates.
+        const signedId = linkedId
+            ?? resolvePlayer({ name: displayName }, { create: false })
+            ?? resolvePlayer({ name: displayName, position });
+
         if (team || previousTeam || draftYear || draftRound) {
-            const id = resolvePlayer({ name: displayName, position });
+            const id = signedId;
+
+            // Signing him HERE is what makes this his team — and it is also the
+            // only moment his old one is still known. Writing the new team over
+            // the old one without keeping it lost where he came from: Diego
+            // Pounds arrived from Baltimore and his card then showed no
+            // previous team at all. An explicitly typed one still wins.
+            const before = id ? byId(id) : null;
+            const cameFrom = previousTeam
+                || (team && before?.team && before.team !== team ? before.team : null);
+
             if (id) setFacts(id, {
                 ...(team ? { team } : {}),
-                ...(previousTeam ? { previousTeam } : {}),
+                ...(cameFrom ? { previousTeam: cameFrom } : {}),
                 ...(draftYear ? { draftYear } : {}),
                 ...(draftRound ? { draftRound, isUdfa: false } : {}),
             });
@@ -158,7 +210,10 @@ export default function RosterView({ masterPlayers, draftedPlayers, onInfoOpen }
         // Computed outside setState: an updater is deferred to the render
         // phase, so a result read back straight after it would be stale.
         const next = { ...state, depthChart: { ...state.depthChart } };
-        const rowId = resolvePosition(position, state.positionConfig, next.depthChart);
+        // Where he STANDS, which the form asked for outright rather than the
+        // app inferring it from what he plays. Falling back to the position
+        // for the paths that do not ask — an import, a sync.
+        const rowId = resolvePosition(rosterRow || position, state.positionConfig, next.depthChart);
 
         if (!rowId) {
             setToast({
@@ -174,7 +229,7 @@ export default function RosterView({ masterPlayers, draftedPlayers, onInfoOpen }
         const arr = next.depthChart[rowId] = [...(next.depthChart[rowId] ?? [])];
 
         const placeAt = (index, zone, label) => {
-            arr[index] = makeSlot(displayName, zone, arrival);
+            arr[index] = makeSlot(displayName, zone, arrival, signedId ?? null);
             setState(next);
             setToast({ message: `Signed ${displayName} — ${chip?.label ?? position}, ${label}.`, tone: 'success' });
         };
@@ -221,14 +276,20 @@ export default function RosterView({ masterPlayers, draftedPlayers, onInfoOpen }
             else {
                 if (!dc[dst.posId]) dc[dst.posId] = [];
                 dc[dst.posId] = [...dc[dst.posId]];
-                dc[dst.posId][dst.slotIdx] = makeSlot(src.slot.name, dst.targetZone, src.slot.arrival ?? null);
+                // Leaving injured reserve is being activated. "IR" as an
+                // arrival only ever meant the file had nothing else to say
+                // about him, and once he is healthy it is wrong — an arrival
+                // that is really a status. Every other arrival is a fact about
+                // how he got here and survives the trip.
+                const arrival = src.posId === '__ir__' ? clearInjuryArrival(src.slot.arrival) : (src.slot.arrival ?? null);
+                dc[dst.posId][dst.slotIdx] = makeSlot(src.slot.name, dst.targetZone, arrival, src.slot.playerId ?? null);
             }
 
             // Swap displaced back to source
             if (displaced) {
                 if (src.posId === '__ir__') next.reserve.push(displaced);
                 else if (src.posId === '__cut__') next.cuts.push(displaced);
-                else dc[src.posId][src.slotIdx] = makeSlot(displaced.name, src.slot?.zone ?? '53', displaced.arrival ?? null);
+                else dc[src.posId][src.slotIdx] = makeSlot(displaced.name, src.slot?.zone ?? '53', displaced.arrival ?? null, displaced.playerId ?? null);
             }
 
             return next;
@@ -256,26 +317,8 @@ export default function RosterView({ masterPlayers, draftedPlayers, onInfoOpen }
         });
     };
 
-    // Deleting a row used to only drop it from positionConfig — anyone still
-    // in its depthChart slots became orphaned (not rendered anywhere, but
-    // not actually removed from state either — just silently gone from the
-    // UI). Move any occupants to Cuts instead, matching how IR/Cuts already
-    // work as a never-truly-lose-a-player safety net rather than a hard delete.
     const handleDeletePosition = (phase, posId) => {
-        setState(prev => {
-            const occupants = (prev.depthChart[posId] ?? []).filter(Boolean).map(s => s.name);
-            const nextDepthChart = { ...prev.depthChart };
-            delete nextDepthChart[posId];
-            return {
-                ...prev,
-                depthChart: nextDepthChart,
-                cuts: [...prev.cuts, ...occupants],
-                positionConfig: {
-                    ...prev.positionConfig,
-                    [phase]: prev.positionConfig[phase].filter(x => x.id !== posId),
-                },
-            };
-        });
+        setState(prev => deletePositionRow(prev, phase, posId));
     };
 
     const performRowMove = useCallback((srcIdx, srcPhase, dstIdx, dstPhase) => {
@@ -297,11 +340,28 @@ export default function RosterView({ masterPlayers, draftedPlayers, onInfoOpen }
         });
     }, [setState]);
 
+    // An import is a proposal, not a bulk write — see FreeAgencyView, same
+    // shape. The dry run resolves every name WITHOUT creating a record, so
+    // this can say how many strangers the file carries before anybody agrees
+    // to register them.
     const handleBootstrap = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
         const text = await file.text();
-        history.reset(parseCSV(text));
+        const preview = parseCSV(text, { dryRun: true });
+        const slots = Object.values(preview.depthChart ?? {}).flat().filter(x => x?.name);
+        setPendingImport({
+            text,
+            total: slots.length,
+            known: slots.filter(x => x.playerId).length,
+            unknown: slots.filter(x => !x.playerId).length,
+        });
+    };
+
+    const applyImport = () => {
+        if (!pendingImport) return;
+        history.reset(parseCSV(pendingImport.text));
+        setPendingImport(null);
     };
 
     const handleFetchAdapter = async () => {
@@ -345,71 +405,9 @@ export default function RosterView({ masterPlayers, draftedPlayers, onInfoOpen }
     // losing hand-edits made in Roster between runs. Never writes to FA's
     // own state (read-only via faState.loadState()).
     const handleSyncFromStages = () => {
-        const fa = faState.loadState();
-        const ourPicks = (draftedPlayers || []).filter(p => p.draftedByUs && isDraftPick(p));
-        const udfaSignings = (draftedPlayers || []).filter(isUndraftedSigning);
-
-        // Computed from `state` directly and applied as a plain value, NOT
-        // inside a setState updater: the updater is deferred to the render
-        // phase (and may run more than once), so counters mutated in there
-        // can't be read back here to build the summary — an earlier version
-        // did exactly that and reported stale/doubled numbers.
-        let placed = 0, noRow = 0, rowFull = 0, alreadyPresent = 0;
-
-        const next = { ...state, depthChart: { ...state.depthChart } };
-        const dc = next.depthChart;
-        const allChips = [...state.positionConfig.offense, ...state.positionConfig.defense];
-
-        const isAlreadyOnRoster = (name) =>
-            Object.values(dc).some(slots => (slots ?? []).some(s => s?.name === name)) ||
-            (next.reserve ?? []).includes(name) ||
-            (next.cuts ?? []).includes(name);
-
-        const placeInFirstEmpty53 = (name, declaredPos) => {
-            if (!name || !declaredPos) return;
-            if (isAlreadyOnRoster(name)) { alreadyPresent++; return; }
-            const rowId = resolvePosition(declaredPos, state.positionConfig, dc);
-            if (!rowId) { noRow++; return; } // no matching row — leave for manual placement, don't guess a new one
-            const chip = allChips.find(p => p.id === rowId);
-            const limit53 = chip?.slots53 ?? 2;
-            const arr = dc[rowId] = [...(dc[rowId] ?? [])];
-            for (let i = 0; i < limit53; i++) {
-                if (!arr[i]) { arr[i] = makeSlot(name, '53'); placed++; return; }
-            }
-            // Row's 53-man slots are all full — don't overflow into PS/reserve
-            // implicitly, don't overwrite; this player is simply skipped this run.
-            rowFull++;
-        };
-
-        if (fa?.depthChart) {
-            const faChips = [...(fa.positionConfig?.offense ?? []), ...(fa.positionConfig?.defense ?? [])];
-            Object.entries(fa.depthChart).forEach(([faRowId, slots]) => {
-                const label = faChips.find(p => p.id === faRowId)?.label ?? faRowId;
-                (slots || []).forEach(s => { if (s) placeInFirstEmpty53(s.name, label); });
-            });
-        }
-        ourPicks.forEach(p => placeInFirstEmpty53(p.name, p.position));
-        udfaSignings.forEach(p => placeInFirstEmpty53(p.name, p.position));
-
-        if (placed > 0) setState(next);
-
-        const skips = [
-            noRow && `${noRow} had no matching position row`,
-            rowFull && `${rowFull} had no free 53-man slot`,
-            alreadyPresent && `${alreadyPresent} already on the roster`,
-        ].filter(Boolean);
-
-        setToast(placed > 0
-            ? {
-                message: `Placed ${placed} player${placed === 1 ? '' : 's'}` + (skips.length ? ` — skipped: ${skips.join(', ')}.` : '.'),
-                tone: 'success',
-            }
-            : {
-                message: skips.length
-                    ? `Nothing placed — ${skips.join(', ')}.`
-                    : 'Nothing to sync — no FA candidates, draft picks, or UDFA signings found.',
-                tone: 'info',
-            });
+        const result = syncFromStages({ state, fa: faState.loadState(), draftedPlayers });
+        if (result.changed) setState(result.next);
+        setToast(describeSync(result));
     };
 
     const handlePasteHtml = () => {
@@ -541,6 +539,22 @@ export default function RosterView({ masterPlayers, draftedPlayers, onInfoOpen }
                 </div>
             </div>
 
+            {pendingImport && (
+                <ConfirmDialog
+                    title="Import this roster?"
+                    message={
+                        `${pendingImport.total} player${pendingImport.total === 1 ? '' : 's'} in this file, replacing the current depth chart. `
+                        + `${pendingImport.known} already known`
+                        + (pendingImport.unknown
+                            ? `, and ${pendingImport.unknown} the app has never seen — importing adds them as new players.`
+                            : '.')
+                    }
+                    confirmLabel="Import"
+                    onConfirm={applyImport}
+                    onCancel={() => setPendingImport(null)}
+                />
+            )}
+
             <DepthChartGrid
                 positionConfig={positionConfig}
                 depthChart={depthChart}
@@ -557,7 +571,8 @@ export default function RosterView({ masterPlayers, draftedPlayers, onInfoOpen }
                 onInfoOpen={onInfoOpen}
             />
 
-            <UnrankedModal key={`sign-${isSignModalOpen}`} isOpen={isSignModalOpen} onClose={() => setIsSignModalOpen(false)} onDraft={handleSignPlayer} mode="roster" />
+            <UnrankedModal key={`sign-${isSignModalOpen}`} isOpen={isSignModalOpen} onClose={() => setIsSignModalOpen(false)} onDraft={handleSignPlayer} mode="roster"
+                rosterRows={[...state.positionConfig.offense, ...state.positionConfig.defense]} />
 
             {addPositionPhase && (
                 <TextPromptDialog

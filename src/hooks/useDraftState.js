@@ -1,4 +1,16 @@
 import { useState, useEffect, useCallback } from 'react';
+import { readStage, removeStage, openStages } from '../data/stageStore';
+import { joinIndex, findJoin } from '../utils/pickJoin';
+import { openDepthCharts } from '../data/depthChartStore';
+import { readDraft, writeDraft, hasDraft, openDraft } from '../data/draftStore';
+import { openSetup } from '../utils/seasonInit';
+import { viewedSeason, seasonIsSeeded } from '../utils/boardRegistry';
+
+// Which season's copy of this stage. Read at call time, never cached: the
+// answer changes when somebody switches season, and a stage holding the
+// previous answer would write one season's work into another's key.
+const seasonId = () => viewedSeason()?.id ?? null;
+
 import { parseRankings, parsePicks } from '../utils/dataParser';
 import { openBoards, boardBySlug } from '../utils/boardRegistry';
 import { shouldSeed } from '../utils/appInit';
@@ -8,6 +20,16 @@ import { resolve as resolvePlayer, resolveAll, setFacts, setFactsMany, rename as
 import { getSessionTeam as sessionTeam } from '../utils/appSettings';
 
 /**
+ * Whose pick this is, asked of the club that made it.
+ *
+ * The app used to answer this from picks.txt — the picks we owned going INTO
+ * the draft — which is a different question. Picks get traded: five of the
+ * nine in the shipped season went elsewhere, so Spencer Fano, taken ninth by
+ * Cleveland, painted as a Chief on the board.
+ */
+const isOurs = (team) => !!team && String(team).toUpperCase() === sessionTeam();
+
+/**
  * Writes what a completed draft says about the players in it.
  *
  * A draft read from DraftBoard_Picks.csv never passes through draftPlayer, so
@@ -15,9 +37,42 @@ import { getSessionTeam as sessionTeam } from '../utils/appSettings';
  * round even though the draft was over. Resolved in one batch, because this
  * runs over every pick in the draft.
  */
+/**
+ * Records what the draft says about each player, and hands back WHO each pick
+ * was about.
+ *
+ * It was already resolving every pick to a registry record in order to write
+ * the facts, and then throwing the ids away — so a draft loaded from a file
+ * produced picks that knew a name and nothing else. The board in this hook is
+ * parsed straight from the rankings CSV and carries no ids of its own, unlike
+ * the Scouting pool, so this is the only place the two are brought together.
+ *
+ * @returns {Array<string|null>} ids, positionally matching `drafted`
+ */
 function recordDraftFacts(drafted) {
-    if (!drafted?.length) return;
-    const ids = resolveAll(drafted.map(p => ({ name: p.name, position: p.position, school: p.school })));
+    if (!drafted?.length) return [];
+
+    // A pick that already knows who it is about does not need finding again.
+    //
+    // Resolving by name is the expensive half of a cold start, and this ran it
+    // for EVERY pick on every boot — then threw the answer away for the ones
+    // that already carried a playerId, two lines below, where `identified`
+    // keeps `p.playerId` when it is there. The id is written down precisely so
+    // the matching happens once; see playerRegistry's header, which says the
+    // fuzzy match belongs at first resolution "and never again on the read
+    // path". This is the read path.
+    const ids = drafted.map(p => p.playerId ?? null);
+    const unknown = [];
+    ids.forEach((id, i) => { if (!id) unknown.push(i); });
+    if (unknown.length) {
+        const found = resolveAll(unknown.map(i => ({
+            name: drafted[i].name, position: drafted[i].position, school: drafted[i].school,
+        })));
+        unknown.forEach((at, j) => { ids[at] = found[j] ?? null; });
+    }
+    if (import.meta.env.DEV || globalThis.__DB_TRACE) {
+        console.log(`[trace] recordDraftFacts: ${drafted.length} picks, ${unknown.length} needed resolving by name`);
+    }
 
     // One write for the whole draft. Per player, this was 639 serialisations
     // of the entire players collection on every cold start.
@@ -45,6 +100,7 @@ function recordDraftFacts(drafted) {
         });
     });
     setFactsMany(updates);
+    return ids;
 }
 import { findMatchingPlayerIndex, buildNameIndex, findMatchingIndex } from '../utils/nameMatcher';
 
@@ -150,11 +206,21 @@ export const useDraftState = () => {
                 // whose file was renamed, or one made in the app, could not be
                 // linked to at all. The path is gone; the board knows its own
                 // file.
-                await openBoards();
+                // The season has to be known before its markers can be read,
+                // and openBoards is what loads the seasons.
+                // The season has to be known before anything filed UNDER it can
+                // be addressed, and openBoards is what loads the seasons.
+                await Promise.all([openBoards(), openDraft()]);
+                const season = viewedSeason()?.id ?? null;
+                await Promise.all([openStages(season), openDepthCharts(season), openSetup(season)]);
                 const slug = params.get('board');
                 const board = slug ? boardBySlug(slug) : null;
                 const fromBoard = board?.rankingsFile ? `${base}${board.rankingsFile}` : null;
-                const candidates = [fromBoard, fallback].filter(Boolean);
+                // The fallback is the shipped file, which describes the shipped
+                // season and no other. A season started in the app has no class
+                // until one is imported, and falling back handed it last year's
+                // — 885 players who have already been drafted.
+                const candidates = [fromBoard, seasonIsSeeded() ? fallback : null].filter(Boolean);
 
                 // First candidate that actually answers. Falling back to the
                 // shipped board beats showing nothing: a wrong board is
@@ -178,18 +244,28 @@ export const useDraftState = () => {
                 const columnsText = await columnsRes.text().catch(() => "");
                 const parsedPositions = columnsText.split(',').map(p => p.trim()).filter(p => p);
                 setColumnOrder(parsedPositions);
-
                 const parsedPlayers = parseRankings(rankingsText) || [];
                 const parsedOurPicks = parsePicks(picksText) || [];
 
-                const savedState = localStorage.getItem(DRAFT_STORAGE_KEY);
+                // Picks as documents — see data/draftStore.js. The blob is the
+                // older shape: read once, written out as picks, and dropped.
+                const sid = seasonId();
+                let savedState = hasDraft(sid) ? readDraft(sid) : null;
+                if (!savedState) {
+                    const blob = readStage(DRAFT_STORAGE_KEY, sid);
+                    if (blob) {
+                        writeDraft(sid, blob);
+                        removeStage(DRAFT_STORAGE_KEY, sid);
+                        savedState = blob;
+                    }
+                }
 
                 let seedDrafted = [];
                 let seedKCLeft = parsedOurPicks;
 
                 // If no saved localStorage state but CSV exists, use CSV as seed.
                 // Skipped in "clean" mode — see utils/appInit.js.
-                if (!savedState && shouldSeed() && preloadRes && preloadRes.ok) {
+                if (!savedState && shouldSeed() && seasonIsSeeded() && preloadRes && preloadRes.ok) {
                     const csvText = await preloadRes.text();
                     try {
                         const { deserializeDraftState } = await import('../utils/sessionSerializer');
@@ -205,17 +281,20 @@ export const useDraftState = () => {
 
                 if (savedState || seedDrafted.length > 0 || seedKCLeft !== parsedOurPicks) {
                     try {
-                        let parsedState = {};
-                        if (savedState) {
-                            parsedState = JSON.parse(savedState);
-                        }
+                        // Already a document — the stage store parses on the
+                        // way out, so there is nothing left to parse here.
+                        const parsedState = savedState ?? {};
                         const savedDrafted = Array.isArray(parsedState.draftedPlayers) ? parsedState.draftedPlayers : seedDrafted;
                         const savedKCLeft = Array.isArray(parsedState.ourPicksLeft) ? parsedState.ourPicksLeft : seedKCLeft;
 
                         // 1. Reconcile fresh parsedPlayers with saved history (Board View)
-                        const savedDraftedIndex = buildNameIndex(savedDrafted);
+                        // By id where there is one, by name where there is not
+                        // — see utils/pickJoin.js. A pick used to say only the
+                        // name, so correcting a drafted player's spelling made
+                        // his pick stop finding him.
+                        const savedDraftedIndex = joinIndex(savedDrafted);
                         const reconciledPlayers = parsedPlayers.map(p => {
-                            const matchIdx = findMatchingIndex(p.name, savedDraftedIndex);
+                            const matchIdx = findJoin(p, savedDraftedIndex);
                             if (matchIdx !== -1) {
                                 const match = savedDrafted[matchIdx];
                                 return {
@@ -223,7 +302,14 @@ export const useDraftState = () => {
                                     drafted: true,
                                     pickNumber: match.pickNumber,
                                     team: match.team,
-                                    draftedByUs: savedKCLeft.includes(match.pickNumber)
+                                    // Who MADE the pick, not whose list the
+                                    // number was on. picks.txt is what we
+                                    // owned going in; the draft file is what
+                                    // happened after trades, and they differ
+                                    // for five of nine picks in the shipped
+                                    // season — so Spencer Fano, taken 9th by
+                                    // Cleveland, painted as a Chief.
+                                    draftedByUs: isOurs(match.team),
                                 };
                             }
                             return p;
@@ -232,14 +318,19 @@ export const useDraftState = () => {
                         // 2. Re-enrich saved draft history (Right Panel View) with fresh metadata
                         // NOTE: use sd.draftedByUs (persisted value) — savedKCLeft only has *remaining* picks,
                         // so re-computing from it would always yield false for already-drafted players.
-                        const parsedPlayersIndex = buildNameIndex(parsedPlayers);
+                        const parsedPlayersIndex = joinIndex(parsedPlayers);
                         const enrichedDrafted = savedDrafted.map(sd => {
-                            const matchIdx = findMatchingIndex(sd.name, parsedPlayersIndex);
-                            const draftedByUs = sd.draftedByUs === true || sd.team === TEAM_CONFIG.abbreviation; // Trust persisted or evaluate from CSV team string
+                            const matchIdx = findJoin(sd, parsedPlayersIndex);
+                            // The club on the pick is the answer, and it is
+                            // always present on a real pick. Only a pick with
+                            // no club at all falls back to what was persisted
+                            // — an undrafted signing nobody has placed yet.
+                            const draftedByUs = sd.team ? isOurs(sd.team) : sd.draftedByUs === true;
                             if (matchIdx !== -1) {
                                 const updatedMetadata = parsedPlayers[matchIdx];
                                 return {
                                     ...updatedMetadata,
+                                    playerId: sd.playerId ?? updatedMetadata.id ?? null,
                                     pickNumber: sd.pickNumber,
                                     team: sd.team,
                                     drafted: true,
@@ -249,21 +340,32 @@ export const useDraftState = () => {
                             return { ...sd, draftedByUs };
                         });
 
-                        setPlayers(reconciledPlayers);
-                        setOurPicksLeft(savedKCLeft);
-                        const pickFallback = savedState ? parsedState.currentPick : undefined;
-                        setCurrentPick(typeof pickFallback === 'number' ? pickFallback : 1);
-                        setDraftedPlayers(enrichedDrafted);
-
-                        // yourPicks = all enriched entries where draftedByUs is persisted as true
-                        const enrichedYourPicks = enrichedDrafted.filter(p => p.draftedByUs);
-                        setYourPicks(enrichedYourPicks);
-
                         // A draft loaded from file never passed through
                         // draftPlayer, so nothing had recorded what it says
                         // about these players. Their cards showed no team, no
                         // pick and no round despite the draft being complete.
-                        recordDraftFacts(enrichedDrafted);
+                        //
+                        // Resolving them is also what gives each pick the id it
+                        // is ABOUT. Without it a pick knew only a name, and
+                        // correcting a drafted player's spelling made his pick
+                        // stop finding him. This runs BEFORE the state is set,
+                        // because the identified picks are the ones that have
+                        // to land — setting the un-identified ones first and
+                        // computing ids afterwards left them exactly as they
+                        // were.
+                        const draftedIds = recordDraftFacts(enrichedDrafted);
+                        const identified = enrichedDrafted.map((p, i) => (
+                            p.playerId ? p : { ...p, playerId: draftedIds[i] ?? null }
+                        ));
+
+                        setPlayers(reconciledPlayers);
+                        setOurPicksLeft(savedKCLeft);
+                        const pickFallback = savedState ? parsedState.currentPick : undefined;
+                        setCurrentPick(typeof pickFallback === 'number' ? pickFallback : 1);
+                        setDraftedPlayers(identified);
+
+                        // yourPicks = all enriched entries where draftedByUs is persisted as true
+                        setYourPicks(identified.filter(p => p.draftedByUs));
 
                         setRemotePicks(savedState && Array.isArray(parsedState.remotePicks) ? parsedState.remotePicks : []);
 
@@ -299,7 +401,7 @@ export const useDraftState = () => {
     useEffect(() => {
         if (!loading) {
             const state = { players, ourPicksLeft, currentPick, draftedPlayers, yourPicks, remotePicks };
-            localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(state));
+            writeDraft(seasonId(), state);
         }
     }, [players, ourPicksLeft, currentPick, draftedPlayers, yourPicks, remotePicks, loading]);
 
@@ -332,7 +434,13 @@ export const useDraftState = () => {
                 : p
         ));
 
-        const draftedPlayer = { ...player, drafted: true, pickNumber, draftedByUs: isOurPick, team };
+        // The id is what a pick is ABOUT. Without it the only link back to the
+        // player was his name, and a name is not an identity.
+        const draftedPlayer = {
+            ...player,
+            playerId: player.id ?? null,
+            drafted: true, pickNumber, draftedByUs: isOurPick, team,
+        };
         setDraftedPlayers(prev => [...prev, draftedPlayer]);
 
         if (isOurPick) {
@@ -415,8 +523,8 @@ export const useDraftState = () => {
     // state key, which worked only because it is truthy enough to skip seeding
     // and then throws inside the JSON.parse try/catch.)
     const resetDraft = useCallback(() => {
-        localStorage.removeItem(DRAFT_STORAGE_KEY);
-        localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify({ draftedPlayers: [], ourPicksLeft: [] }));
+        removeStage(DRAFT_STORAGE_KEY, seasonId());
+        writeDraft(seasonId(), { draftedPlayers: [], ourPicksLeft: [] });
         window.location.reload();
     }, []);
 
@@ -451,9 +559,9 @@ export const useDraftState = () => {
         setDraftedPlayers(enrichedDrafted);
 
         // Update players availability
-        const enrichedDraftedIndex = buildNameIndex(enrichedDrafted);
+        const enrichedDraftedIndex = joinIndex(enrichedDrafted);
         setPlayers(prev => prev.map(p => {
-            const matchIdx = findMatchingIndex(p.name, enrichedDraftedIndex);
+            const matchIdx = findJoin(p, enrichedDraftedIndex);
             if (matchIdx !== -1) {
                 const match = enrichedDrafted[matchIdx];
                 return {

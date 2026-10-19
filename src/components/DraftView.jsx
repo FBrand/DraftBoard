@@ -74,6 +74,7 @@ export default function DraftView({
             <TopPanelDraft
                 currentPick={currentPick}
                 currentPickStatus={currentPickStatus}
+                draftComplete={draftComplete}
                 ourPicksLeft={ourPicksLeft}
                 onUndo={undoAction}
                 onUpdatePicks={() => setIsModalOpen(true)}

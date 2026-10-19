@@ -8,11 +8,11 @@ import { parseRankings } from '../utils/dataParser';
 import CreateBoardModal from './CreateBoardModal';
 import * as scoutingState from '../utils/scoutingState';
 import { buildNameIndex, findMatchingIndex } from '../utils/nameMatcher';
-import useIsMobile from '../hooks/useIsMobile';
+import useScoutingLayout from '../hooks/useScoutingLayout';
 import Menu from './Menu';
 import { exportBoardCSV } from '../utils/boardCsv';
 import { rankBoard, moveToRank, between } from '../utils/boardRanking';
-import useBoardRankings, { invalidatePools } from '../hooks/useBoardRankings';
+import useBoardRankings, { invalidatePools, invalidateBoards } from '../hooks/useBoardRankings';
 import useUrlParam from '../hooks/useUrlParam';
 import { PLAYER_TAGS } from '../utils/playerTags';
 import AddProspectsModal from './AddProspectsModal';
@@ -23,7 +23,10 @@ import * as athleticMatrix from '../utils/athleticMatrix';
 import * as playerRegistry from '../utils/playerRegistry';
 
 import { createBoard, listBoards, boardBySlug, boardById, renameBoard, listSeasons, currentSeason } from '../utils/boardRegistry';
-import { ownerIdFor, remarksFor, addRemark, removeRemark } from '../utils/evaluations';
+import { repository } from '../data/repository';
+import { entriesPath } from '../data/boardEntries';
+import { canEdit } from '../utils/permissions';
+import { ownerIdFor, remarksFor, addRemark, removeRemark, openEvaluations } from '../utils/evaluations';
 
 const TAG_FILTERS = [
     { id: 'all', label: 'All' },
@@ -64,7 +67,7 @@ export default function ScoutingView({ players }) {
     const setActiveBoard = (id) => setBoardSlug(boardById(id)?.slug ?? '');
     // Each analyst's own rankings file — switching board switches the actual
     // player pool, not just the overlay on top of one shared list.
-    const { pools } = useBoardRankings(players);
+    const { pools, duplicates } = useBoardRankings(players);
     const boardPlayers = pools?.[activeBoard] ?? players;
     const [selectedNameParam, setSelectedNameParam] = useUrlParam('player', '');
     const selectedName = selectedNameParam || null;
@@ -78,6 +81,10 @@ export default function ScoutingView({ players }) {
     // An import that replaces a board should say what it did — silence here
     // reads as "nothing happened" when the file was wrong.
     const [importSummary, setImportSummary] = useState(null);
+    // Rows an import named that no board knows. They are PROPOSED, never
+    // written: they go to Add Players, which is the one path that checks a new
+    // name against everybody already known before minting a record.
+    const [pendingImport, setPendingImport] = useState(null);
     const [renaming, setRenaming] = useState(null);
     // Removing a rankings-file player only HIDES him — the file still has him —
     // so there has to be a way back. Undo doesn't cover base data: it is shared
@@ -87,7 +94,11 @@ export default function ScoutingView({ players }) {
     // On mobile the three columns stack, so the info card would sit far below
     // the board — tapping a player looked like it did nothing. Present it as
     // a modal there instead. Still fully editable: this is Scouting.
-    const isMobile = useIsMobile();
+    const { showRanking, showSidePanel } = useScoutingLayout();
+    // An archived board is a record of what somebody thought at the time. The
+    // store refuses the write either way; this is what stops the controls
+    // offering a change that will not happen.
+    const readOnly = !canEdit({ kind: 'placement', ownerId: boardById(activeBoard)?.ownerId });
     // How the middle column is grouped. A view preference, not board data —
     // it changes how the same players are read, never where they sit.
     const [groupBy, setGroupBy] = useState('position');
@@ -102,6 +113,24 @@ export default function ScoutingView({ players }) {
         setBoardList(list);
         setBoards(Object.fromEntries(list.map(b => [b.id, scoutingState.loadState(b.id)])));
     }, [pools]);
+
+    // Following the board, rather than having read it once.
+    //
+    // Against a store that pushes, somebody else's move arrives while this
+    // page is open — which is the entire point of a broadcast companion: the
+    // expert moves a player on stream and the people watching see it, without
+    // being told to reload.
+    //
+    // Only the board being looked at, and only where there is something to
+    // follow. localStorage cannot change behind the app's back, so there the
+    // subscription would cost a re-read of 328 entries on every edit to learn
+    // what the app already knew.
+    useEffect(() => {
+        if (!pools || !activeBoard || !repository.isLive()) return undefined;
+        return repository.follow(entriesPath(activeBoard), () => {
+            setBoards(prev => ({ ...prev, [activeBoard]: scoutingState.loadState(activeBoard) }));
+        });
+    }, [pools, activeBoard]);
 
     const state = boards[activeBoard] ?? { version: 1, entries: [] };
 
@@ -148,6 +177,21 @@ export default function ScoutingView({ players }) {
     const [remarkTick, setRemarkTick] = useState(0);
     const seasons = listSeasons();
     const ownerId = ownerIdFor(boardById(activeBoard));
+    // A remark collection is per player and is not loaded until somebody asks
+    // for that player. Against localStorage the synchronous read below answers
+    // straight away; against a store that answers later it returns nothing, and
+    // the card shows an analyst no remarks on a player he has written about.
+    // Asking, then bumping the tick, is what the tick is for.
+    useEffect(() => {
+        const id = selectedName
+            ? effectivePlayers.find(p => p.name === selectedName)?.id
+            : null;
+        if (!id) return undefined;
+        let cancelled = false;
+        openEvaluations([id]).then(() => { if (!cancelled) setRemarkTick(t => t + 1); });
+        return () => { cancelled = true; };
+    }, [selectedName, effectivePlayers]);
+
     const selectedRemarks = useMemo(
         () => (ownerId && selectedName ? remarksFor(ownerId, effectivePlayers.find(p => p.name === selectedName)?.id) : []),
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -429,12 +473,21 @@ export default function ScoutingView({ players }) {
             return `${hit.match.name}${hit.match.position ? ` (${hit.match.position})` : ''} is already on the board.`;
         }
 
-        savePlayerEdit(previous, { name, position, school });
+        // Name and school are FACTS: he has one name and went to one school,
+        // and getting either wrong is a mistake to correct everywhere.
+        //
+        // Position is an OPINION. "I see him as an EDGE" is exactly the thing
+        // analysts disagree about, and they already do — Rueben Bain Jr. sits
+        // at DL.3T on consensus and EDGE elsewhere, because the boards were
+        // seeded from different files. There was simply no way to SET one
+        // without setting everybody's. So it is set globally when a player is
+        // first added, and after that each board keeps its own.
+        savePlayerEdit(previous, { name, school });
         // The registry record keeps its id and gains the old identity as an
         // alias, so the rankings file — which still carries the old name on
         // every load — resolves back to this same player instead of creating
         // a second record for him.
-        if (previous.id) playerRegistry.rename(previous.id, { name, position, school });
+        if (previous.id) playerRegistry.rename(previous.id, { name, school });
         if (name !== previous.name) athleticMatrix.renameScores(previous.name, name, previous);
 
         const next = {};
@@ -442,7 +495,10 @@ export default function ScoutingView({ players }) {
             const board = scoutingState.loadState(b);
             const idx = findMatchingIndex(previous.name, buildNameIndex(board.entries), previous);
             if (idx !== -1) {
-                const entries = board.entries.map((e, i) => (i === idx ? { ...e, name, position, school } : e));
+                // The position lands on the board being edited and nowhere
+                // else. Every other board keeps whatever its analyst thinks.
+                const patch = b === activeBoard ? { name, position, school } : { name, school };
+                const entries = board.entries.map((e, i) => (i === idx ? { ...e, ...patch } : e));
                 const updated = { ...board, entries };
                 scoutingState.saveState(b, updated);
                 next[b] = updated;
@@ -497,12 +553,49 @@ export default function ScoutingView({ players }) {
 
         if (file) {
             const players = parseRankings(await file.text()).filter(p => p?.name);
-            if (players.length) scoutingState.seedBoard(board.id, players);
+            if (players.length) {
+                scoutingState.seedBoard(board.id, players);
+
+                // Say what the file did.
+                //
+                // A row naming somebody no rankings file has ever mentioned is
+                // stored as an entry and then never rendered: the pool is built
+                // from the shipped files plus in-app prospects, the uploaded
+                // file is not kept, and an entry whose player is not in the pool
+                // has nothing to attach to. That is defensible — registering
+                // strangers from a CSV would walk around the verification step
+                // Add Players insists on — but doing it in SILENCE is not, and
+                // this view already says so in a comment: "An import that
+                // replaces a board should say what it did — silence here reads
+                // as 'nothing happened' when the file was wrong."
+                //
+                // Every board carries every player, so the pool on screen is
+                // the union and is the right thing to ask.
+                const known = buildNameIndex(boardPlayers);
+                const strangers = players.filter(p => findMatchingIndex(p.name, known, p) === -1);
+                setImportSummary({ placed: players.length - strangers.length, unknown: strangers.length });
+
+                // Neither dropped nor silently registered: handed to the
+                // verification step. Registering them straight from a file
+                // would walk around the check that stops one man becoming two
+                // records, which is how the registry grew duplicates before.
+                if (strangers.length) {
+                    setPendingImport(strangers.map(p => ({
+                        name: p.name,
+                        position: p.position ?? '',
+                        school: p.school ?? '',
+                        round: p.round == null ? '' : String(p.round),
+                        tier: p.tier == null ? '' : String(p.tier),
+                    })));
+                    setAddOpen(true);
+                }
+            }
         }
 
-        // The pools are keyed by board, so a new one has to be re-merged
-        // before it can be shown.
-        invalidatePools();
+        // The pools are keyed by board AND the board list itself is read once,
+        // so a new board needs both forgotten before it can be shown as itself
+        // rather than as whatever the default pool holds.
+        invalidateBoards();
         setBoardList(listBoards());
         setActiveBoard(board.id);
     };
@@ -531,6 +624,12 @@ export default function ScoutingView({ players }) {
                         Imported <strong>{importSummary.placed}</strong> players
                         {importSummary.created ? <> · <strong>{importSummary.created}</strong> new</> : null}
                         {importSummary.remarks ? <> · <strong>{importSummary.remarks}</strong> remarks</> : null}
+                        {/* The half that was silent. A row naming a player no
+                            rankings file knows is kept but cannot be shown, and
+                            the analyst has no other way to find that out. */}
+                        {importSummary.unknown
+                            ? <> · <strong>{importSummary.unknown}</strong> not on any board — check them and add</>
+                            : null}
                     </span>
                     <button type="button" className="close-button" onClick={() => setImportSummary(null)}>&times;</button>
                 </div>
@@ -602,15 +701,31 @@ export default function ScoutingView({ players }) {
                 </div>
             </div>
 
+            {/* A file that contradicts itself. It used to be resolved by line
+                order and never mentioned, so the board rendered as though the
+                file had said one thing. Say it instead. */}
+            {duplicates.length > 0 && (
+                <div className="sg-file-issues">
+                    <span className="sg-file-issues-label">In the rankings file</span>
+                    {duplicates.map(d => (
+                        <span key={`${d.boardId}-${d.name}`} className="sg-file-issue">
+                            <strong>{boardById(d.boardId)?.label ?? 'A board'}</strong> rates{' '}
+                            <strong>{d.name}</strong> {d.count} times — {d.placements.join(' and ')}.
+                            The first is used.
+                        </span>
+                    ))}
+                </div>
+            )}
+
             <div className="scouting-layout">
-                {!isMobile && (
+                {showRanking && (
                 <ScoutingLeftPanel
                     orderedPlayers={orderedPlayers}
                     selectedName={selectedName}
                     // Clicking the selected player again closes his card — the same
                     // gesture that opened it, which is how a toggle should behave.
                     onSelect={(p) => setSelectedName(prev => (prev === p.name ? null : p.name))}
-                    onReorder={handleReorder}
+                    onReorder={readOnly ? null : handleReorder}
                 />
                 )}
 
@@ -624,10 +739,10 @@ export default function ScoutingView({ players }) {
                     tagFor={(name, qualifier) => entryFor(name, qualifier)?.tag ?? null}
                     // On a phone this is the only column, so the players the
                     // grouping cannot place go at the bottom of it.
-                    unmatchedInline={isMobile}
+                    unmatchedInline={!showSidePanel}
                 />
 
-                {!isMobile && (
+                {showSidePanel && (
                     <UnmatchedList
                         players={visiblePlayers}
                         groupBy={groupBy}
@@ -643,12 +758,13 @@ export default function ScoutingView({ players }) {
                     unmatched column, so rendering its "select a player"
                     placeholder would hide that column permanently — which is
                     the column you are looking at when nobody is selected. */}
-                {!isMobile && selectedPlayer && (
+                {showSidePanel && selectedPlayer && (
                     <ScoutingControls
                         key={`${selectedName || 'none'}-${activeBoard}`}
                         player={selectedPlayer}
                         entry={selectedPlayer ? entryFor(selectedPlayer.name, selectedPlayer) : null}
                         onChange={saveEntry}
+                        readOnly={readOnly}
                         onClose={() => setSelectedName(null)}
                         boardLabel={selectedPlayer ? boardById(activeBoard)?.label ?? '' : null}
                         onPrevBoard={() => cycleBoard(-1)}
@@ -702,20 +818,22 @@ export default function ScoutingView({ players }) {
             {addOpen && (
                 <AddProspectsModal
                     isOpen
-                    onClose={() => setAddOpen(false)}
+                    onClose={() => { setAddOpen(false); setPendingImport(null); }}
                     existingPlayers={boardPlayers}
                     onSubmit={handleAddProspects}
                     onOpenPlayer={setSelectedName}
+                    initialRows={pendingImport}
                 />
             )}
 
-            {isMobile && selectedPlayer && (
+            {!showSidePanel && selectedPlayer && (
                 <ScoutingControls
                     key={`${selectedName}-${activeBoard}-modal`}
                     variant="modal"
                     player={selectedPlayer}
                     entry={entryFor(selectedPlayer.name, selectedPlayer)}
                     onChange={saveEntry}
+                    readOnly={readOnly}
                     onClose={() => setSelectedName(null)}
                     boardLabel={boardById(activeBoard)?.label ?? ''}
                     onPrevBoard={() => cycleBoard(-1)}

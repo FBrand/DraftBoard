@@ -3,12 +3,21 @@
  * Stored in localStorage under key 'rosterState'.
  */
 import { parseCsvLine, csvField } from './csvUtils';
+import { readChart, writeChart, hasChart, chartVersion } from '../data/depthChartStore';
+import { viewedSeason } from './boardRegistry';
+import { canEdit } from './permissions';
+
+// Which season's copy of this stage. Read at call time, never cached: the
+// answer changes when somebody switches season, and a stage holding the
+// previous answer would write one season's work into another's key.
+const seasonId = () => viewedSeason()?.id ?? null;
 import { parseAcquisition } from './draftPhase';
 import { basePosition } from './boardRanking';
 import { getSessionTeam } from './appSettings';
 import { DRAFT_YEAR } from '../constants';
-import { resolve as resolvePlayer, setFactsMany } from './playerRegistry';
+import { resolve as resolvePlayer, resolveAll, setFactsMany, beginBatch, endBatch } from './playerRegistry';
 import { applyPlayerFacts } from './playerFacts';
+import { rowsFor } from './positionTaxonomy';
 
 // Reasonable 53-man slot defaults by major position
 const DEFAULT_SLOTS53 = {
@@ -71,9 +80,19 @@ const STORAGE_KEY = 'rosterState';
  * slot rather than on the player because it describes a roster, not a person:
  * the same player arrives at different clubs by different routes.
  */
-export function makeSlot(name, zone = '53', arrival = null) {
+/**
+ * @param {string} name
+ * @param {import('../data/types').Slot['zone']} [zone]
+ * @param {string|null} [arrival]
+ * @param {string|null} [playerId] who he is, when the caller already knows
+ * @returns {import('../data/types').Slot|null}
+ */
+export function makeSlot(name, zone = '53', arrival = null, playerId = null) {
     if (!name) return null;
-    return arrival ? { name, zone, arrival } : { name, zone };
+    const slot = { name, zone };
+    if (arrival) slot.arrival = arrival;
+    if (playerId) slot.playerId = playerId;
+    return slot;
 }
 
 /**
@@ -86,7 +105,7 @@ export function makeSlot(name, zone = '53', arrival = null) {
 // several loops and passing a collector down all of them is noise.
 let pendingFacts = null;
 
-function slotFromImport(raw, zone, position = '') {
+function slotFromImport(raw, zone, position = '', dryRun = false) {
     const { name, facts } = parseAcquisition(raw, DRAFT_YEAR);
     if (!name) return null;
     const arrival = String(raw ?? '').trim().slice(name.length + 1).trim() || null;
@@ -95,13 +114,88 @@ function slotFromImport(raw, zone, position = '') {
     // says something. Registering only the suffixed ones left most of the
     // roster — the veterans, who carry no suffix at all — with nothing to hang
     // a fact on, so their cards had no facts to show.
-    // The row label is an alignment ("WR.Z", "LB.O"); the player plays "WR".
-    // The alignment belongs to the depth chart, not to him.
-    const id = resolvePlayer({ name, position: basePosition(position) });
+    // By NAME, with no position qualifier. The row label is an alignment —
+    // "LDE", "LG", "NT", "WR.Z" — and the rankings files say "EDGE", "OG",
+    // "DT". Handing the alignment to the resolver as if it were a position
+    // makes it evidence that this is a DIFFERENT man, and it minted a second
+    // record for twelve players: Peter Woods as DL.3T/Clemson and again as DT,
+    // R Mason Thomas as EDGE/Oklahoma and again as LDE. Two records for one man
+    // is the bug this registry exists to prevent — his facts land on one, his
+    // board placement on the other.
+    //
+    // This is what nameMatcher already says to do: "Callers that know nothing
+    // beyond the name (scraped roster data, ESPN sync) pass nothing and get the
+    // original name-only behaviour — do not 'fix' those by forcing a qualifier
+    // through." A roster is exactly that caller, and it was forcing one.
+    // `create` is false for a DRY RUN — an import the expert has not agreed to
+    // yet. Parsing used to be the write: resolving with creation minted a
+    // record for every unknown name before anybody saw what the file would do.
+    const id = resolvePlayer({ name }, { create: dryRun ? false : true });
     // Being on the roster IS the fact that he plays for this team.
-    if (id) pendingFacts?.push({ id, patch: { team: getSessionTeam(), ...facts } });
+    if (id && !dryRun) pendingFacts?.push({ id, patch: { team: getSessionTeam(), ...facts } });
 
-    return makeSlot(name, zone, arrival);
+    // The id is already in hand here, so the slot carries it from the moment
+    // it is built rather than waiting to be stamped on the next save.
+    return makeSlot(name, zone, arrival, id);
+}
+
+/**
+ * Removes a position row, and keeps whoever was standing in it.
+ *
+ * Deleting a row used to drop it from positionConfig alone, which orphaned its
+ * occupants: not rendered anywhere, not removed from state either, just gone
+ * from the screen. They go to Cuts instead — the same never-truly-lose-a-player
+ * net that IR and Cuts already are.
+ *
+ * The SLOTS move, not their names. A slot carries how the player arrived, and
+ * rebuilding him from a name downstream turns a free agent back into a plain
+ * veteran.
+ */
+/**
+ * The first place a player can stand in a position row: 53-man, then the
+ * practice squad, then the reserves behind it. One ladder, used by signing
+ * somebody and by bringing somebody back off injured reserve, so the two
+ * cannot disagree about where a new arrival goes.
+ */
+export function firstFreeSlot(slots, limit53) {
+    const arr = slots ?? [];
+    const limit = Math.max(1, limit53 ?? 2);
+
+    for (let i = 0; i < limit; i += 1) if (!arr[i]) return { index: i, zone: '53', label: '53-man' };
+    for (let i = limit; i < limit + 3; i += 1) if (!arr[i]) return { index: i, zone: 'ps', label: 'practice squad' };
+
+    let i = limit + 3;
+    while (arr[i]) i += 1;
+    return { index: i, zone: 'r', label: 'reserve' };
+}
+
+/**
+ * The arrival a player keeps when he comes off injured reserve.
+ *
+ * "IR" as an arrival only ever meant the file had nothing else to say about
+ * him — it is a status wearing an arrival's clothes — and once he is healthy
+ * it is simply wrong. Every other arrival is a fact about how he got here: a
+ * free agent who got hurt is still a free agent, and keeps his tag through IR
+ * and back out again.
+ */
+export function clearInjuryArrival(arrival) {
+    return arrival === 'IR' ? null : (arrival ?? null);
+}
+
+export function deletePositionRow(state, phase, posId) {
+    const occupants = (state.depthChart[posId] ?? []).filter(Boolean);
+    const depthChart = { ...state.depthChart };
+    delete depthChart[posId];
+
+    return {
+        ...state,
+        depthChart,
+        cuts: [...(state.cuts ?? []), ...occupants],
+        positionConfig: {
+            ...state.positionConfig,
+            [phase]: (state.positionConfig[phase] ?? []).filter(x => x.id !== posId),
+        },
+    };
 }
 
 export function defaultState() {
@@ -129,26 +223,108 @@ export function defaultState() {
  */
 export const STATE_VERSION = 1;
 
+/**
+ * Gives every slot the id of the man standing in it.
+ *
+ * Slots carried a NAME and nothing else, so anything asking "who is this"
+ * fuzzy-matched on every read, and asking "is this player referenced" — which
+ * is what a prune rule needs — ran through the matcher too. A false negative
+ * there does not mislabel a card, it deletes somebody who IS referenced.
+ *
+ * NEVER creates a record. `create: false` is the whole safety of doing this
+ * during a load: if the registry has not loaded yet, every lookup returns null
+ * and the slots stay as they were, to be stamped on a later pass. Resolving
+ * with creation here is precisely how the roster import once minted a
+ * duplicate for every player it read.
+ */
+export function stampPlayerIds(chart) {
+    if (!chart || typeof chart !== 'object') return chart;
+
+    // ONE resolveAll for the whole chart. resolve() is resolveAll([x]) and
+    // rebuilds a name index over every record in the registry each time it is
+    // called — stamping ninety slots one at a time rebuilt it ninety times,
+    // synchronously, on the save path, and an import visibly stopped
+    // finishing. Same trap the roster import hit before: per-player calls that
+    // each pay for the whole collection.
+    const pending = [];
+    Object.entries(chart).forEach(([rowId, slots]) => {
+        if (!Array.isArray(slots)) return;
+        slots.forEach((slot, i) => {
+            if (slot?.name && !slot.playerId) pending.push({ rowId, i, name: slot.name });
+        });
+    });
+    if (!pending.length) return chart;
+
+    const ids = resolveAll(pending.map(x => ({ name: x.name })), { create: false });
+    const found = new Map();
+    pending.forEach((x, n) => { if (ids[n]) found.set(`${x.rowId}:${x.i}`, ids[n]); });
+    if (!found.size) return chart;
+
+    // Anything that is not a row of slots is passed through untouched. An
+    // earlier version turned an absent row into an empty array, and the grid
+    // renders a trailing empty slot from that.
+    const out = {};
+    Object.entries(chart).forEach(([rowId, slots]) => {
+        if (!Array.isArray(slots)) { out[rowId] = slots; return; }
+        let rowTouched = false;
+        const next = slots.map((slot, i) => {
+            const id = found.get(`${rowId}:${i}`);
+            if (!id) return slot;
+            rowTouched = true;
+            return { ...slot, playerId: id };
+        });
+        out[rowId] = rowTouched ? next : slots;
+    });
+    return out;
+}
+
+
 function migrate(parsed) {
     const from = typeof parsed.version === 'number' ? parsed.version : 1;
     if (from > STATE_VERSION) return null; // written by a newer app — don't guess
-    // (no migration steps yet; add them here as the shape changes)
     return { ...parsed, version: STATE_VERSION };
 }
 
 export function loadState() {
     try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (raw) {
-            const parsed = JSON.parse(raw);
-            if (parsed?.positionConfig?.offense?.length > 0) return migrate(parsed);
-        }
+        const sid = seasonId();
+        // Rows as documents — see data/depthChartStore.js. The blob is the
+        // older shape and is read once, written out as rows, and dropped.
+        if (hasChart(STORAGE_KEY, sid)) return migrate({ version: STATE_VERSION, ...readChart(STORAGE_KEY, sid) });
+
     } catch { /* ignore */ }
     return null;
 }
 
 export function saveState(state) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...state, version: STATE_VERSION }));
+    // An archived season is a record, not a workspace. Guarded HERE rather than
+    // on each control, because one forgotten button is all it takes and this is
+    // the single door every change goes through.
+    if (!canEdit({ kind: 'stage' })) return;
+    // Stamped here rather than trusted from the caller: parseCSV and the stage
+    // sync both build a state without one, and a chart with no version is a
+    // chart a later build cannot tell apart from its own.
+    // Never write over a chart this build cannot read. migrate() refuses a
+    // NEWER shape rather than guess at it, and the stage then comes up empty —
+    // saving that empty stage back is how "don't guess" turns into losing the
+    // work outright. Refusing is the honest end of the same decision.
+    // A chart belongs to a season. Without one there is nowhere to file it,
+    // and `rowsPath` falls back to `seasons/_/charts/...` — a season that
+    // exists nowhere, invisible to the stage that wrote it and to everything
+    // else. Measured against Firestore: the roster was filed under `_` on
+    // every boot, because the seasons had not arrived when the view first
+    // saved. Refusing is right — the season arrives a moment later, and the
+    // next save has somewhere to go.
+    if (!seasonId()) return;
+    const stored = chartVersion(STORAGE_KEY, seasonId());
+    if (stored !== null && stored > STATE_VERSION) return;
+
+    // Stamped on the way OUT rather than the way in. Doing it in loadState
+    // wrote nothing — the ids lived in memory until something happened to
+    // save — and the registry is not even open on the roster path, so every
+    // lookup returned null anyway. This is the door every change goes through,
+    // and by the time anything is saved the registry is loaded.
+    writeChart(STORAGE_KEY, seasonId(), { ...state, version: STATE_VERSION, depthChart: stampPlayerIds(state.depthChart) });
 }
 
 // ---------------------------------------------------------------------------
@@ -172,8 +348,17 @@ export const CSV_TEMPLATE = [
     'D,EDGE,2,A Starter:22/1,A Rotational Guy:UDFA,',
 ].join('\n') + '\n';
 
-export function parseCSV(csvText) {
+/**
+ * @param {string} csvText
+ * @param {{ dryRun?: boolean }} [options] dryRun parses and resolves WITHOUT
+ *   creating a record or writing a fact, so an import can be shown to somebody
+ *   before it is agreed to.
+ */
+export function parseCSV(csvText, { dryRun = false } = {}) {
     pendingFacts = [];
+    // Every player this import registers is written once, at the end, rather
+    // than the whole collection per slot. See playerRegistry.beginBatch.
+    if (!dryRun) beginBatch();
     const lines = csvText
         .trim()
         .split('\n')
@@ -200,7 +385,7 @@ export function parseCSV(csvText) {
             const rawSlots = hasSlots53Col ? cols.slice(3) : cols.slice(2);
             // Slots, not names — the arrival has to survive the file.
             const irSlots = rawSlots.map(s => s.trim()).filter(Boolean)
-                .map(n => slotFromImport(n.replace(/^(PS:|IR:|R:)/i, '').trim(), 'ir'))
+                .map(n => slotFromImport(n.replace(/^(PS:|IR:|R:)/i, '').trim(), 'ir', '', dryRun))
                 .filter(Boolean);
             reserve.push(...irSlots);
             continue;
@@ -213,7 +398,7 @@ export function parseCSV(csvText) {
             // Slots, not bare names: a cut player keeps how he arrived, so
             // moving him back onto the chart restores his tag and colour.
             const cutSlots = rawSlots.map(s => s.trim()).filter(Boolean)
-                .map(n => slotFromImport(n.replace(/^(PS:|IR:|R:)/i, '').trim(), 'cut'))
+                .map(n => slotFromImport(n.replace(/^(PS:|IR:|R:)/i, '').trim(), 'cut', '', dryRun))
                 .filter(Boolean);
             cuts.push(...cutSlots);
             continue;
@@ -233,7 +418,7 @@ export function parseCSV(csvText) {
             // directly skipped registration, which made the kicker, punter and
             // long snapper the only players on the roster with no record — and
             // so the only ones whose card could never show a school.
-            depthChart[pos] = name ? [slotFromImport(name, '53', pos)].filter(Boolean) : [];
+            depthChart[pos] = name ? [slotFromImport(name, '53', pos, dryRun)].filter(Boolean) : [];
             continue;
         }
 
@@ -256,7 +441,7 @@ export function parseCSV(csvText) {
             else if (v.toUpperCase().startsWith('R:')) zone = 'r';
             else if (rIndex >= limit53) zone = 'r';
 
-            const slot = slotFromImport(v.replace(/^(PS:|IR:|R:)/i, '').trim(), zone, pos);
+            const slot = slotFromImport(v.replace(/^(PS:|IR:|R:)/i, '').trim(), zone, pos, dryRun);
             if (!slot) return;
 
             if (zone === 'ps') {
@@ -278,8 +463,12 @@ export function parseCSV(csvText) {
         else if (phase === 'D') defense.push(chip);
     }
 
-    // One write for every player on the roster, not one each.
-    setFactsMany(pendingFacts);
+    // The records first, so setFactsMany has something to patch.
+    if (!dryRun) {
+        endBatch();
+        // One write for every player on the roster, not one each.
+        setFactsMany(pendingFacts);
+    }
     pendingFacts = null;
 
     // The roster registers players the boards never saw — veterans, and the
@@ -304,9 +493,16 @@ export function exportCSV(state) {
 
     const addRows = (phase, positions) => {
         positions.forEach(p => {
-            const slots = state.depthChart[p.id] ?? [];
+            // Holes are a live-state thing: cut a player from the middle of a
+            // row and the empty cell stays, because it is somewhere you can
+            // drop the next one. They are not a thing the FILE carries. Each
+            // section — the 53-man band, the practice squad, the reserves —
+            // is written contiguously, and the prefixes are what put each
+            // player back in his own band on the way in. Writing the gaps out
+            // as empty cells meant a blank could mean either "a hole here" or
+            // "nothing more in this row", and the reader could not tell.
+            const slots = (state.depthChart[p.id] ?? []).filter(Boolean);
             const cells = slots.map(s => {
-                if (!s) return '';
                 if (s.zone === 'ps') return `PS:${exportName(s)}`;
                 if (s.zone === 'ir') return `IR:${exportName(s)}`;
                 if (s.zone === 'r') return `R:${exportName(s)}`;
@@ -346,6 +542,26 @@ export function resolvePosition(declaredPos, positionConfig, depthChart) {
         });
         return exactMatches[0].id;
     }
+    // Third: what he PLAYS against where the chart lets him STAND.
+    //
+    // Exact and major both compare LABELS, so an OT finds nothing when the
+    // chart offers LT and RT — reported as "no matching position row" for 132
+    // players. positionTaxonomy answers the actual question, and includes
+    // positions declared compatible with his, which is what placement is for
+    // and what identity must never use.
+    const allowed = new Set(rowsFor(declaredPos));
+    if (allowed.size) {
+        const covered = allPositions.filter(p => allowed.has(p.label));
+        if (covered.length > 0) {
+            covered.sort((a, b) => {
+                const lenA = (depthChart[a.id] ?? []).filter(Boolean).length;
+                const lenB = (depthChart[b.id] ?? []).filter(Boolean).length;
+                return lenA - lenB;
+            });
+            return covered[0].id;
+        }
+    }
+
     const major = declaredPos.split('.')[0];
     const majorMatches = allPositions.filter(p => p.label.split('.')[0] === major);
     if (majorMatches.length > 0) {

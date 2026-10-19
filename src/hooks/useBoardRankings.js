@@ -1,14 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
+import { openStages } from '../data/stageStore';
+import { openBoardEntries } from '../data/boardEntries';
+import { openDepthCharts } from '../data/depthChartStore';
+import { openSetup } from '../utils/seasonInit';
 import { parseRankings } from '../utils/dataParser';
 import * as scoutingState from '../utils/scoutingState';
 import { applyProspects } from '../utils/prospects';
 import { identityKey, nameKey } from '../utils/nameMatcher';
 import { resolveAll, openRegistry, byId } from '../utils/playerRegistry';
+import { storedIdentities, storedIdFor } from '../utils/storedIdentity';
 
-import { migrateLegacyScores } from '../utils/athleticMatrix';
 
-import { openBoards, listBoards, boardById } from '../utils/boardRegistry';
-import { openEvaluations, migrateBoardRemarks } from '../utils/evaluations';
+import { openBoards, listBoards, viewedSeason } from '../utils/boardRegistry';
+import { openEvaluations } from '../utils/evaluations';
 import { applyPlayerFacts } from '../utils/playerFacts';
 import { seedExampleEvaluations } from '../utils/exampleEvaluations';
 
@@ -81,6 +85,48 @@ function joinKeyFor(files) {
 }
 
 /**
+ * Players a file rates twice — the same man, at the same position, on two
+ * rows.
+ *
+ * Not the same thing as the ambiguity above. A name appearing twice at two
+ * POSITIONS is an analyst deliberately listing two people, and the app handles
+ * it by making position part of the key. A name appearing twice at ONE
+ * position is a file contradicting itself: rankings_dan.csv had Jakobe Thomas
+ * at 3.4 and again at 5.3.
+ *
+ * That was resolved silently, by line order, and the two rules involved
+ * disagreed — the shared pool kept the first row, the board's own placement
+ * kept the last. Nobody was told either way, and the board rendered as though
+ * the file said one thing.
+ */
+export function duplicatesIn(files) {
+    const out = [];
+    Object.entries(files ?? {}).forEach(([boardId, file]) => {
+        const counts = new Map();
+        (file ?? []).forEach(p => {
+            const key = identityKey(p.name, p.position);
+            const seen = counts.get(key);
+            if (seen) seen.rows.push(p);
+            else counts.set(key, { name: p.name, position: p.position, rows: [p] });
+        });
+        counts.forEach(v => {
+            if (v.rows.length > 1) {
+                out.push({
+                    boardId,
+                    name: v.name,
+                    position: v.position,
+                    count: v.rows.length,
+                    // What the rows actually disagree about, which is the part
+                    // worth showing: "3.4 and 5.3" says more than "twice".
+                    placements: v.rows.map(r => (r.round == null ? 'unranked' : `${r.round}.${r.tier ?? 1}`)),
+                });
+            }
+        });
+    });
+    return out;
+}
+
+/**
  * Every player any board knows about, in consensus order first so the biggest
  * file sets the baseline ordering and the others contribute their extras.
  */
@@ -97,26 +143,52 @@ function unionOfFiles(files, keyOf) {
 
 function loadPools() {
     return openBoards()
-        .then(() => Promise.all([loadFiles(), openRegistry(), openEvaluations()]))
+        .then(() => Promise.all([loadFiles(), openRegistry(), openEvaluations(), openStages(viewedSeason()?.id ?? null), openBoardEntries(listBoards().map(b => b.id)), openDepthCharts(viewedSeason()?.id ?? null), openSetup(viewedSeason()?.id ?? null)]))
         .then(([files]) => {
         // Base data edited in-app — players added, corrected, or removed — is
         // shared by every board, so it is applied before anything ranks,
         // places, tags or exports. From here down there is no such thing as an
         // "app-added" player: they are all just players.
+        // Recorded here because this is the only place the raw files are
+        // seen. Handed out with the pools so somebody can be told.
+        fileDuplicates = duplicatesIn(files);
+
         const keyOf = joinKeyFor(files);
         const union = applyProspects(unionOfFiles(files, keyOf));
 
-        // The one place a name becomes an identity. Every player carries a
-        // stable id from here on, so nothing downstream has to re-derive who
-        // he is from his name (see utils/playerRegistry.js). Resolved in one
-        // batch: the name index is built once for the whole pool rather than
-        // once per player.
-        const ids = resolveAll(union);
+        // Identity from what is already written down, not from matching names
+        // again.
+        //
+        // resolveAll below fuzzy-matches every name in the pool against the
+        // registry. Profiling a boot put getLevenshteinDistance at the top of
+        // the list by self time, with findMatchingIndex behind it — and almost
+        // all of that work re-derives an answer the app already has. A board
+        // entry IS the answer: its document key is the player's registry id,
+        // which is why the body deliberately stores no playerId of its own.
+        //
+        // So the entries are read first and the matcher only sees names none
+        // of them account for — a genuinely new prospect, or a first run where
+        // there are no entries yet and this map is empty. Nothing is
+        // persisted, so there is no stale mapping to invalidate: the map is
+        // rebuilt from storage on every load, and a name it does not answer
+        // for falls through to exactly the code that ran before.
+        const stored = storedIdentities();
+        const fromEntries = union.map(p => storedIdFor(stored, p));
+
+        const unresolved = [];
+        fromEntries.forEach((id, i) => { if (!id) unresolved.push(i); });
+        const ids = fromEntries;
+        if (unresolved.length) {
+            const found = resolveAll(unresolved.map(i => union[i]));
+            unresolved.forEach((at, j) => { ids[at] = found[j] ?? null; });
+        }
+        if (globalThis.__DB_TRACE) {
+            console.log(`[trace] pool: ${union.length} players, ${unresolved.length} needed resolving by name`);
+        }
 
         // Matrix scores used to have a store of their own. Now that every
         // player has a record to hang facts on, they move onto it — here,
         // because this is the first moment the records exist to move them to.
-        migrateLegacyScores();
 
         // School and the draft outcome are in no rankings file, so they are
         // seeded onto the records here. AWAITED, unlike before: the pool is
@@ -154,10 +226,26 @@ function loadPools() {
         // there was nowhere to disagree. Every board carries every player;
         // what differs is where each one has been placed.
         const pools = Object.fromEntries(Object.keys(files).map(boardId => {
-            const file = files[boardId];
-            if (!file?.length) return [boardId, file];
+            // A board with NO rankings file is the same case with an empty
+            // file: it carries every player, all of them unranked. That is
+            // what a board created in the app is, and what its own dialog
+            // promises — "every player starts unranked".
+            //
+            // This used to return the file's own emptiness, which reads as
+            // "there is no pool for this board", and the consumer then fell
+            // back to the DEFAULT pool: `pools?.[activeBoard] ?? players`.
+            // So a brand new empty board opened showing the consensus board's
+            // placements — 313 ranked players, none of them its own, and it
+            // survived a reload because nothing about it was stale.
+            const file = files[boardId] ?? [];
 
-            const own = new Map(file.map(p => [keyOf(p), p]));
+            // First row wins, matching the shared pool above and the board
+            // store's own rule. It used to be `new Map(file.map(…))`, which
+            // takes the LAST — so a file that rated a man twice had his
+            // identity taken from the first row and his placement from the
+            // last, two opposite rules eight lines apart.
+            const own = new Map();
+            file.forEach(p => { const k = keyOf(p); if (!own.has(k)) own.set(k, p); });
             return [boardId, everyone.map(p => {
                 // A corrected player is looked up by the identity his file
                 // gives him, not the corrected one, or his own board would
@@ -180,18 +268,10 @@ function loadPools() {
             // way: after this the board lives in storage and is read from
             // there. Favourites are seeded as part of it.
             scoutingState.seedBoard(board, pools[board]);
-            // Entries written before the registry existed are joined to their
-            // player once, here, rather than by name on every read.
+            // A seeded entry is joined to its player here rather than by name
+            // on every read.
             scoutingState.attachPlayerIds(board, pools[board]);
             scoutingState.seedFavourites(board, pools[board]);
-
-            // Remarks used to be three arrays of strings on each entry, which
-            // meant they froze with the board. They move to the person who
-            // wrote them; see utils/evaluations.js. After attachPlayerIds, so
-            // there is an id to hang each one on.
-            const state = scoutingState.loadState(board);
-            const carried = migrateBoardRemarks(boardById(board), state.entries);
-            if (carried) scoutingState.saveState(board, { ...state, entries: carried });
         });
 
         // The shipped worked example — see exampleEvaluations.js. After the
@@ -213,6 +293,27 @@ export function invalidatePools() {
     listeners.forEach(fn => fn());
 }
 
+/**
+ * Forgets the BOARD LIST as well as the pools.
+ *
+ * `loadFiles` reads `listBoards()` once and caches the promise for the life of
+ * the page, so a board created after that read is in neither `files` nor
+ * `pools` — and a board missing from `pools` falls back to the default pool at
+ * `pools?.[activeBoard] ?? players`. A new empty board therefore opened showing
+ * the consensus board's placements until the page was reloaded.
+ *
+ * Separate from `invalidatePools` on purpose: that one runs whenever a player
+ * is added or corrected, and re-reading every rankings file for that would be
+ * work nobody asked for.
+ */
+export function invalidateBoards() {
+    filesPromise = null;
+    invalidatePools();
+}
+
+/** What the last load found wrong with the files. See duplicatesIn. */
+let fileDuplicates = [];
+
 export default function useBoardRankings(fallback) {
     const [pools, setPools] = useState(null);
     const [gen, setGen] = useState(generation);
@@ -233,11 +334,13 @@ export default function useBoardRankings(fallback) {
     // it as an effect dependency — "the pools have arrived" is the signal that
     // the boards have been seeded and are worth re-reading — and a fresh
     // object every render would make that fire forever.
+    const duplicates = useMemo(() => (pools ? fileDuplicates : []), [pools]);
+
     const resolved = useMemo(
         () => (pools ? Object.fromEntries(Object.keys(pools).map(b => [b, pools[b]?.length ? pools[b] : fallback])) : null),
         [pools, fallback],
     );
 
-    if (!resolved) return { pools: null, loading: true };
-    return { pools: resolved, loading: false };
+    if (!resolved) return { pools: null, loading: true, duplicates: [] };
+    return { pools: resolved, loading: false, duplicates };
 }

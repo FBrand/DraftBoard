@@ -6,6 +6,7 @@ import {
 import { SPECIALIST_IDS, POS_TRANSLATIONS } from '../utils/rosterState';
 import { buildNameIndex, findMatchingIndex } from '../utils/nameMatcher';
 import { slotIdentity } from '../utils/formatName';
+import { isUndraftedSigning, isDraftPick } from '../utils/draftPhase';
 
 const PS_SLOTS = 3;
 
@@ -32,6 +33,21 @@ function zoneClass(zone, isNeed) {
 // lists. Caching each list's name index by reference (safe: both come from
 // useDraftState, which always replaces rather than mutates these arrays)
 // turns that from a per-cell rebuild into a one-time-per-render-pass cost.
+const idIndexCache = new WeakMap();
+function getOrBuildIdIndex(list) {
+    if (!list) return null;
+    let map = idIndexCache.get(list);
+    if (!map) {
+        map = new Map();
+        list.forEach((p) => {
+            const id = p?.playerId ?? p?.id;
+            if (id && !map.has(id)) map.set(id, p);
+        });
+        idIndexCache.set(list, map);
+    }
+    return map;
+}
+
 const nameIndexCache = new WeakMap();
 function getOrBuildIndex(list) {
     if (!list) return [];
@@ -53,15 +69,36 @@ function slotMeta(slot, masterPlayers, draftedPlayers) {
         const idx = findMatchingIndex(displayName, getOrBuildIndex(list));
         return idx !== -1 ? list[idx] : null;
     };
-    const draftData = findByRobustName(draftedPlayers) || findByRobustName(masterPlayers);
+    // The slot says who he IS now. Ask that first and the fuzzy match never
+    // runs — it stays as the fallback for slots written before ids existed,
+    // and for anybody the registry has no record of.
+    const findById = (list) => {
+        if (!slot?.playerId || !list) return null;
+        return getOrBuildIdIndex(list)?.get(slot.playerId) ?? null;
+    };
+    const draftData = findById(draftedPlayers) || findById(masterPlayers)
+        || findByRobustName(draftedPlayers) || findByRobustName(masterPlayers);
 
     let topLabel = suffix || '';
     if (draftData && (draftData.round || draftData.pickNumber)) {
-        const r = draftData.round || getRoundFromPick(draftData.pickNumber);
-        const p = draftData.pickNumber;
-        if (r && p && !isNaN(parseInt(p))) topLabel = `R${r}: ${p}`;
-        else if (r) topLabel = `R${r}`;
-        else if (p) topLabel = !isNaN(parseInt(p)) ? `PICK ${p}` : p;
+        // `round` on a board player is the round somebody PROJECTED him in, not
+        // the round he went in. For a player who was never taken those are not
+        // the same thing at all: Diego Pounds sat in the fifth round of the
+        // board and signed as an undrafted free agent, and the slot labelled
+        // him R5 — a round he was never picked in, on a roster card, where
+        // every other number means something that actually happened.
+        if (isUndraftedSigning(draftData)) {
+            topLabel = 'UDFA';
+        } else {
+            const r = draftData.round || getRoundFromPick(draftData.pickNumber);
+            const p = draftData.pickNumber;
+            if (r && p && !isNaN(parseInt(p))) topLabel = `R${r}: ${p}`;
+            else if (isDraftPick(draftData) && r) topLabel = `R${r}`;
+            else if (p) topLabel = !isNaN(parseInt(p)) ? `PICK ${p}` : p;
+            // No pick and no proof he was drafted: say nothing rather than
+            // present a projection as history.
+            else topLabel = suffix || '';
+        }
     } else if (suffix && /^\d+$/.test(suffix)) {
         topLabel = `R${suffix}`;
     }
@@ -181,7 +218,11 @@ function DepthRow({ posConfig, slots, idx, phase, onConfigChange, onDeletePositi
     // on, hit the occupied slot instead); and the reserve list stopped at
     // the first hole, hiding every player after it, so moving a reserve
     // player one cell down made him vanish.
-    const s53 = Math.max(slots53, 1);
+    // A row whose target is missing must still render. Math.max(undefined, 1)
+    // is NaN, Array.from({length: NaN}) is empty, and the row would come up
+    // with no 53-man slots at all and NaN on its counter — invisible rather
+    // than obviously broken, which is worse.
+    const s53 = Math.max(Number(slots53) || 0, 1);
     const slots53Items = Array.from({ length: s53 }, (_, i) => ({ slot: slots[i] || null, zone: '53', idx: i }));
 
     // Practice squad shows everyone in it plus ONE empty cell to drop into —
@@ -225,9 +266,9 @@ function DepthRow({ posConfig, slots, idx, phase, onConfigChange, onDeletePositi
                     {label}
                 </div>
                 <div className="rv-pos-ctrl">
-                    <button onClick={e => { e.stopPropagation(); onConfigChange(Math.max(0, slots53 - 1)); }} className="rv-ctrl-btn">-</button>
-                    <span className="rv-pos-count">{slots53}</span>
-                    <button onClick={e => { e.stopPropagation(); onConfigChange(Math.min(6, slots53 + 1)); }} className="rv-ctrl-btn">+</button>
+                    <button onClick={e => { e.stopPropagation(); onConfigChange(Math.max(0, s53 - 1)); }} className="rv-ctrl-btn">-</button>
+                    <span className="rv-pos-count">{s53}</span>
+                    <button onClick={e => { e.stopPropagation(); onConfigChange(Math.min(6, s53 + 1)); }} className="rv-ctrl-btn">+</button>
                 </div>
             </div>
 
@@ -261,43 +302,33 @@ function DepthRow({ posConfig, slots, idx, phase, onConfigChange, onDeletePositi
 // No explicit targetZone here (matches prior behavior): makeSlot()'s default
 // zone param ('53') is what a moved player lands with, since specialists
 // aren't tracked as a distinct zone.
-function SpecialistCell({ id, slot, masterPlayers, draftedPlayers, showNeeds }) {
+/**
+ * Punter, kicker, long snapper.
+ *
+ * They are one-slot position rows wearing a different layout, and they used to
+ * be a hand-rolled copy of SlotCell that had drifted: no click handler, so the
+ * only three players on the roster whose card could not be opened were these.
+ * The label stays; the card underneath is the same one every other player gets.
+ */
+function SpecialistCell({ id, slot, masterPlayers, draftedPlayers, onInfoOpen }) {
     const label = { P: 'Punter', K: 'Kicker', LS: 'Long Snapper' }[id] ?? id;
-    const meta = slotMeta(slot, masterPlayers, draftedPlayers);
-
-    const { setNodeRef: setDropRef, isOver } = useDroppable({
-        id: `drop-spec-${id}`,
-        data: { kind: 'item', posId: id, slotIdx: 0, targetZone: undefined },
-    });
-    const { attributes, listeners, setNodeRef: setDragRef, isDragging } = useDraggable({
-        id: `drag-spec-${id}`,
-        disabled: !slot,
-        data: { kind: 'item', posId: id, slotIdx: 0, slot },
-    });
 
     return (
-        <div
-            ref={setDropRef}
-            className={`rv-specialist ${slot ? 'filled' : ''} ${isOver ? 'drag-over' : ''}`}
-        >
+        <div className={`rv-specialist ${slot ? 'filled' : ''}`}>
             <div className="rv-specialist-label">{label}</div>
-            {slot ? (
-                <div
-                    ref={setDragRef}
-                    {...listeners}
-                    {...attributes}
-                    className={`rv-slot-content ${isDragging ? 'dragging-source' : ''}`}
-                    style={{ cursor: 'grab' }}
-                >
-                    <span className="rv-slot-name" style={{ color: meta.nameColor, fontSize: '0.85rem', fontWeight: 800 }}>{meta.displayName}</span>
-                    <div className="rv-slot-meta">
-                        <span className="rv-slot-tag">{meta.topLabel}</span>
-                        <span className="rv-slot-pos">{meta.displayPos}</span>
-                    </div>
-                </div>
-            ) : (
-                showNeeds && <div className="rv-specialist-need">NEED</div>
-            )}
+            {/* Always a cell, filled or not. Rendering a "NEED" label instead of
+                one when the slot was empty left the three positions you are
+                most likely to be filling with nowhere to drop a player. An
+                empty 53 cell already reads as a need on its own. */}
+            <SlotCell
+                slot={slot}
+                zone="53"
+                posId={id}
+                slotIdx={0}
+                masterPlayers={masterPlayers}
+                draftedPlayers={draftedPlayers}
+                onInfoOpen={onInfoOpen}
+            />
         </div>
     );
 }
@@ -340,6 +371,11 @@ function IRDropZone({ reserve, masterPlayers, draftedPlayers, onInfoOpen }) {
     });
     return (
         <div ref={setNodeRef} className={`roster-ir ${isOver ? 'drag-over' : ''}`}>
+            {/* Being in this list IS the injury. Dropping a player here puts him
+                on it and dragging him out takes him off, which is the whole
+                interaction — there was briefly a button here doing the second
+                half, which is a second way to say something the drag already
+                says. */}
             <div className="roster-ir-label">INJURY RESERVE — {reserve.length}</div>
             <div className="roster-ir-list">
                 {reserve.map((entry, i) => (
@@ -355,7 +391,6 @@ function IRDropZone({ reserve, masterPlayers, draftedPlayers, onInfoOpen }) {
     );
 }
 
-// DepthHeader — 4 cells matching the row grid
 function DepthHeader({ showPracticeSquad = true }) {
     return (
         <React.Fragment>
@@ -460,7 +495,7 @@ export default function DepthChartGrid({
                     <div className="roster-specialists">
                         <div style={{ display: 'flex', gap: 12 }}>
                             {SPECIALIST_IDS.map(id => (
-                                <SpecialistCell key={id} id={id} slot={depthChart[id]?.[0] ?? null} masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} showNeeds={showNeeds} />
+                                <SpecialistCell key={id} id={id} slot={depthChart[id]?.[0] ?? null} masterPlayers={masterPlayers} draftedPlayers={draftedPlayers} onInfoOpen={onInfoOpen} />
                             ))}
                         </div>
                         <div style={{ flex: 1 }} />

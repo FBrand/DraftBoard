@@ -53,3 +53,57 @@ describe('a player labelled differently on different boards', () => {
         expect(findMatchingIndex('Rueben Bain Jr', index, { position: 'EDGE' })).toBe(-1);
     });
 });
+
+/**
+ * A depth-chart row label is an ALIGNMENT, not a position.
+ *
+ * LT, WR.Z, DL.3T are where a player lines up. OT, WR, DL are what he plays.
+ * Qualifying a registry lookup by the alignment therefore matches nobody, and
+ * the caller — having asked for a player and been told there is none — makes
+ * a second one.
+ *
+ * This is the third time this shape of bug has landed: a player card with no
+ * position rank, a veteran whose remarks vanished, and signing Diego Pounds
+ * at LT when the registry already held him as an OT out of Ole Miss drafted
+ * in 2026. Each time the screen looked right, because whatever was displaying
+ * him resolved by name and found the original.
+ *
+ * FIXED 2026-09-16 by `utils/positionTaxonomy`. `basePos` now folds a label
+ * through containment before comparing, so LT IS an OT and the lookup finds
+ * him. Asking by name first is still the better first question — it needs no
+ * table to be right — so that test stays.
+ */
+describe('looking a player up by the row he is standing in', () => {
+    const registry = [
+        { id: 'p1', name: 'Diego Pounds', position: 'OT', school: 'Ole Miss' },
+    ];
+
+    it('finds him when qualified by the alignment, now that LT is known to be an OT', () => {
+        const index = buildNameIndex(registry);
+        expect(findMatchingIndex('Diego Pounds', index, { position: 'LT' })).toBe(0);
+    });
+
+    it('still refuses when the alignment belongs to a different position', () => {
+        // Containment answers "is this the same position", not "could he play
+        // there". A guard row is not a tackle, so this is a different man.
+        const index = buildNameIndex(registry);
+        expect(findMatchingIndex('Diego Pounds', index, { position: 'LG' })).toBe(-1);
+    });
+
+    it('finds him by name alone, which is what the caller should ask first', () => {
+        const index = buildNameIndex(registry);
+        expect(findMatchingIndex('Diego Pounds', index)).toBe(0);
+    });
+
+    it('still tells two men of one name apart when it is asked to', () => {
+        // The qualified lookup is not wrong, it is just the wrong first
+        // question. It remains the fallback, and this is why.
+        const two = [
+            { id: 'p1', name: 'Mike Green', position: 'EDGE' },
+            { id: 'p2', name: 'Mike Green', position: 'WR' },
+        ];
+        const index = buildNameIndex(two);
+        expect(findMatchingIndex('Mike Green', index, { position: 'WR' })).toBe(1);
+        expect(findMatchingIndex('Mike Green', index, { position: 'EDGE' })).toBe(0);
+    });
+});

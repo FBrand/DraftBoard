@@ -8,6 +8,11 @@ import RosterView from './components/RosterView';
 import PlayerInfoModal from './components/PlayerInfoModal';
 import Menu from './components/Menu';
 import HelpModal from './components/HelpModal';
+import SeasonModal from './components/SeasonModal';
+import SyncStatus from './components/SyncStatus';
+import { currentSeason, setViewedSeason } from './utils/boardRegistry';
+import { editRefusal } from './utils/permissions';
+import { repository } from './data/repository';
 import Toast from './components/Toast';
 import { ConfirmDialog } from './components/Dialogs';
 import { exportSession, importSession, sessionFilename } from './utils/appSession';
@@ -49,6 +54,10 @@ function App() {
   // is only the fallback for "where was I last time", used when the URL says
   // nothing — a shared link always wins over the recipient's last session.
   const [helpOpen, setHelpOpen] = useState(false);
+  const [seasonOpen, setSeasonOpen] = useState(false);
+  const [seasonEpoch, setSeasonEpoch] = useState(0);
+
+  const activeTabRef = React.useRef(null);
 
   const [view, setViewParam] = useUrlParam(
     'view',
@@ -80,6 +89,31 @@ function App() {
   // agency out of storage — waiting for someone to open the tab meant the
   // pipeline had nothing to pull from until they did.
   React.useEffect(() => { faState.ensureSeeded(); }, []);
+
+  // A write that did not land.
+  //
+  // The repository shows a change immediately and reaches the store after,
+  // which is right for a UI that must not wait and a lie if the store then
+  // refuses. It puts the change back — so the screen is correct again — but
+  // silently, and a player sliding back to where he was with no explanation
+  // reads as the app being broken rather than as a failed save.
+  //
+  // Against localStorage this fires on a full quota and almost never
+  // otherwise. Over a network it is offline, a rule, a timeout: ordinary.
+  // The toast fires once, when the queue gives up. Everything before that —
+  // one failure, a retry, three more waiting — is the sync indicator's job,
+  // because a message per failed attempt while offline is a machine gun.
+  // The toast is for a refusal that will not come good on its own. Everything
+  // transient — one failure, a retry, three more waiting — is the sync
+  // indicator's job, because a message per failed attempt while offline is a
+  // machine gun.
+  React.useEffect(() => repository.onWriteError(({ permanent, advice, error }) => {
+    if (!permanent) return;
+    setToast({
+      message: `${advice ?? 'Could not save.'} Your work is still on screen. (${error?.message ?? 'write refused'})`,
+      tone: 'error',
+    });
+  }), []);
 
   const handleSessionExport = () => {
     const blob = new Blob([exportSession()], { type: 'application/json' });
@@ -113,6 +147,20 @@ function App() {
     }
   };
 
+  // Keep the tab you are ON in view.
+  //
+  // The bar is wider than a phone screen and scrolls sideways, but it never
+  // scrolled itself: measured at 390px, scrollLeft stayed 0 with 405px of
+  // scrollable width, so Draft Board was cut in half and UDFA and Roster were
+  // off screen entirely — the bar showed three stages you were NOT on, and
+  // nothing to say where you were.
+  //
+  // 'nearest' so a tab already fully visible does not move, which means a
+  // desktop scrolls nothing at all.
+  React.useEffect(() => {
+    activeTabRef.current?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+  }, [view]);
+
   return (
     <div className="app-container">
       {/* View switcher tabs — always first so it never shifts position when
@@ -122,6 +170,7 @@ function App() {
         {TABS.map(({ id, label }) => (
           <button
             key={id}
+            ref={view === id ? activeTabRef : null}
             onClick={() => setView(id)}
             className={`view-tab${view === id ? ' active' : ''}`}
           >{label}</button>
@@ -140,9 +189,15 @@ function App() {
             onClick={() => setHelpOpen(true)}
             title="How this app works"
           >? Help</button>
+          {/* "Session" named one of the things in here. It now also holds the
+              season stack, which outlives any session — a session is what you
+              have open, a season is what the work belongs to. */}
+          {/* Only speaks up when there is something to say — see SyncStatus. */}
+          <SyncStatus onExport={handleSessionExport} />
           <Menu
-            label="Session"
+            label="Manage"
             items={[
+              { label: 'Seasons…', onClick: () => setSeasonOpen(true), title: 'Switch season, roll over to a new one, or roll back' },
               { label: 'Export Full Session…', onClick: handleSessionExport, title: 'Every stage — draft, roster, FA, scouting — in one JSON file' },
               { label: 'Import Full Session…', file: { accept: '.json', onFile: handleSessionFile }, title: 'Replaces all current state' },
               { label: 'Load Current State', onClick: () => setPendingInit(INIT_SEEDED), title: 'The real offseason as it happened — completed draft and the roster it produced' },
@@ -160,7 +215,7 @@ function App() {
       {view === 'scouting' && (
         loading
           ? <div className="loading">Loading Chiefs Draft Board...</div>
-          : <ScoutingView players={players} columnOrder={columnOrder} />
+          : <ScoutingView key={seasonEpoch} players={players} columnOrder={columnOrder} />
       )}
 
       {view === 'draft' && (
@@ -245,6 +300,28 @@ function App() {
 
       <Toast message={toast?.message} tone={toast?.tone} onDismiss={dismissToast} />
       <HelpModal isOpen={helpOpen} onClose={() => setHelpOpen(false)} />
+
+      {/* The banner says WHY, because a stage that silently refuses to change
+          looks broken. The reason comes from the same function the stores ask,
+          so the explanation cannot drift from the rule. */}
+      {editRefusal({ kind: 'stage' }) && (
+        <div className="season-banner">
+          <span>
+            {editRefusal({ kind: 'stage' }).message} Evaluations can still be added.
+          </span>
+          <button
+            type="button"
+            className="action-pill"
+            onClick={() => { setViewedSeason(currentSeason()?.id); window.location.reload(); }}
+          >Back to {currentSeason()?.year}</button>
+        </div>
+      )}
+
+      <SeasonModal
+        isOpen={seasonOpen}
+        onClose={() => setSeasonOpen(false)}
+        onChanged={() => setSeasonEpoch(n => n + 1)}
+      />
 
     </div>
   );

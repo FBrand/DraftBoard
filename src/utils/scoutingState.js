@@ -27,7 +27,11 @@
 import { parseCsvLine, csvField } from './csvUtils';
 import { buildNameIndex, findMatchingIndex } from './nameMatcher';
 import { parseTier, tierLabel, spaceEvenly } from './boardRanking';
-import { boardById } from './boardRegistry';
+import { readEntries, writeEntries, hasEntries, openBoardEntries } from '../data/boardEntries';
+import { boardById, BOARDS_COLLECTION } from './boardRegistry';
+import { canEdit } from './permissions';
+import { repository } from '../data/repository';
+import { boardFields } from '../data/fieldNames';
 import { ownerIdFor, remarksFor, REMARK_KINDS } from './evaluations';
 
 // Each analyst has their own rankings file, and they are genuinely different
@@ -39,23 +43,10 @@ import { ownerIdFor, remarksFor, REMARK_KINDS } from './evaluations';
 // Which boards exist is no longer a constant here: see boardRegistry.js. A
 // board is a record with an id, so an analyst can be renamed or replaced
 // without the work moving.
-const storageKey = (boardId) => `scouting_board_v1__${boardId}`;
 
-// What the key was when a board was its own name.
-const legacyKey = (slug) => `scouting_overlay_v1__${slug}`;
-
-function readKey(key) {
-    try {
-        const raw = localStorage.getItem(key);
-        if (!raw) return null;
-        const parsed = JSON.parse(raw);
-        if (parsed?.version === 1 && Array.isArray(parsed.entries)) {
-            return { ...parsed, entries: unfuseGroups(parsed.entries) };
-        }
-    } catch { /* ignore */ }
-    return null;
-}
-
+/**
+ * @returns {import('../data/types').BoardEntry}
+ */
 export function makeEntry(name, position, school = '', playerId = null) {
     return {
         // The player this entry is about. A name is not an identity — see
@@ -105,36 +96,15 @@ function parseListField(raw) {
     }
 }
 
-/**
- * Entries saved before round and tier were split still carry a joined "1.3"
- * `group` string. Converted on read rather than in a one-shot migration, so a
- * board written by an older build keeps working whenever it turns up.
- */
-function unfuseGroups(entries) {
-    return entries.map(e => {
-        if (!('group' in e)) return e;
-        const { group, ...rest } = e;
-        return { ...rest, ...parseTier(group) };
-    });
-}
-
 export function loadState(boardId) {
-    const own = readKey(storageKey(boardId));
-    if (own) return own;
-
-    // A board written when the key was the analyst's name. Read once under the
-    // old key and saved under the new one, so the work moves with the board
-    // rather than being stranded by a rename.
-    const slug = boardById(boardId)?.slug;
-    const legacy = slug ? readKey(legacyKey(slug)) : null;
-    if (legacy) {
-        saveState(boardId, legacy);
-        try { localStorage.removeItem(legacyKey(slug)); } catch { /* ignore */ }
-        return legacy;
+    if (hasEntries(boardId)) {
+        return { version: 1, seeded: boardById(boardId)?.seeded ?? true, entries: readEntries(boardId) };
     }
 
     return { version: 1, entries: [] };
 }
+
+export { openBoardEntries };
 
 /**
  * Materialises a board from the rankings file, once.
@@ -257,7 +227,22 @@ export function attachPlayerIds(board, players) {
 }
 
 export function saveState(boardId, state) {
-    localStorage.setItem(storageKey(boardId), JSON.stringify(state));
+    // An archived season is a record, not a workspace. Guarded HERE rather than
+    // on each control, because one forgotten button is all it takes and this is
+    // the single door every change goes through.
+    if (!canEdit({ kind: 'placement', ownerId: boardById(boardId)?.ownerId })) return;
+
+    // One document per player, and only the ones that moved — see
+    // data/boardEntries.js. The board-level "seeded" flag is a fact about the
+    // BOARD, so it lives on the board record rather than being repeated on
+    // every entry.
+    writeEntries(boardId, state.entries ?? []);
+    if (state.seeded && boardById(boardId) && !boardById(boardId).seeded) {
+        // Through the board's own field map, or this writes `seeded` in full
+        // beside the short names everything else in the document uses — and
+        // then boardFields.fat would not know to read it back.
+        repository.update(BOARDS_COLLECTION, boardId, boardFields.lean({ seeded: true }));
+    }
 }
 
 export function parseCSV(csvText) {
@@ -318,7 +303,8 @@ export function exportCSV(state, board) {
                     .filter(r => r.kind === kind)
                     .map(r => r.text),
             )),
-            e.updatedAt,
+            // Written out as a date, whatever it is stored as.
+            e.updatedAt ? new Date(e.updatedAt).toISOString() : '',
         ].map(csvField).join(','));
     });
     return rows.join('\n');

@@ -13,8 +13,11 @@
  */
 import { test } from '@playwright/test';
 import {
-    expect, TABS, openWarm, openCold, gotoTab, slotNames, dragTo, trackErrors,
+    expect, TABS, openWarm, openCold, gotoTab, slotNames, dragTo, trackErrors, closeCardModal,
 } from './helpers';
+// The store's own rename, so an assertion about a stored document cannot
+// drift from how the document is actually written.
+import { playerFields } from '../../src/data/fieldNames.js';
 
 test.describe('rendering', () => {
     test('every tab renders, with no console errors and no native dialogs', async ({ page }) => {
@@ -34,8 +37,12 @@ test.describe('rendering', () => {
         const errors = trackErrors(page);
         await openCold(page);
         // The seeded offseason loads itself; the draft board should have cards.
+        // Scoped to the BOARD: at 390px the first .player-card in the document
+        // belongs to the off-canvas player list, which is deliberately hidden
+        // behind a toggle, so asserting on it tests the wrong surface.
         await gotoTab(page, 'draft');
-        await expect(page.locator('.player-card').first()).toBeVisible({ timeout: 30_000 });
+        await expect(page.locator('.center-board-container .player-card').first())
+            .toBeVisible({ timeout: 30_000 });
         expect(errors.filter(e => !/favicon/i.test(e)), errors.join('\n')).toEqual([]);
     });
 });
@@ -59,6 +66,27 @@ test.describe('routing', () => {
         await page.goForward();
         await page.waitForSelector('.view-tabbar', { timeout: 45_000 });
         await expect(page.locator('.view-tab.active')).toHaveText(TABS.scouting);
+    });
+
+    test('a scouting link carries the board and the player, and beats what was stored', async ({ page }) => {
+        await openWarm(page, 'scouting');
+        await page.waitForSelector('.sg-row', { timeout: 30_000 });
+
+        // Pick a player, and the URL says so — that is what makes a board
+        // shareable at all.
+        const name = await page.locator('.sg-row .sg-name').first().innerText();
+        await page.locator('.sg-row').first().click();
+        await expect(page).toHaveURL(/player=/);
+        const shared = page.url();
+
+        // Somebody else is looking at another stage. The link has to win:
+        // otherwise opening what you were sent lands you where YOU were.
+        await gotoTab(page, 'roster');
+        await page.goto(shared);
+        await page.waitForSelector('.sg-row', { timeout: 45_000 });
+
+        await expect(page.locator('.view-tab.active')).toHaveText(TABS.scouting);
+        await expect(page.locator('.sg-row.selected .sg-name')).toHaveText(name);
     });
 
     test('an unknown view falls back rather than rendering nothing', async ({ page }) => {
@@ -114,6 +142,20 @@ test.describe('the player card', () => {
 
         await page.keyboard.press('Escape');
         await expect(card).toBeHidden();
+
+        // Right-click reaches the same card. It is how you open one without
+        // picking the player up, which matters where a click means drag.
+        await page.locator('.rv-slot-name').first().click({ button: 'right' });
+        await expect(card).toBeVisible();
+        await page.keyboard.press('Escape');
+
+        // And from Free Agency, where the candidates are.
+        await gotoTab(page, 'fa');
+        await page.waitForSelector('.rv-slot-name', { timeout: 30_000 });
+        await page.locator('.rv-slot-name').first().click();
+        await expect(card).toBeVisible();
+        await expect(card.locator('.scouting-fact-grid')).toBeVisible();
+        await page.keyboard.press('Escape');
     });
 
     test('a remark can be written on a veteran, who is on nobody\'s draft board', async ({ page }) => {
@@ -148,6 +190,12 @@ test.describe('the player card', () => {
 test.describe('drag and drop', () => {
     test('scouting: reordering the ranking survives a reload', async ({ page }) => {
         await openWarm(page, 'scouting');
+        // useScoutingLayout drops the ranking column at narrow widths — "a
+        // ranking above a list is a ranking you have to scroll past to reach
+        // the list". There is nothing to reorder on a phone, so this asserts
+        // about a surface that is deliberately absent rather than broken.
+        test.skip(await page.locator('.scouting-rank-row').count() === 0,
+            'the ranking column is not rendered at this width');
         // The ranking column is what reorders; the grouped list beside it is a
         // reading surface and deliberately does not drag. The whole ROW is the
         // drag handle — there used to be a ⠿ grip, which nobody aimed at.
@@ -182,6 +230,45 @@ test.describe('drag and drop', () => {
         await page.waitForSelector('.roster-grid', { timeout: 45_000 });
         expect(await slotNames(page)).toEqual(after);
     });
+
+    test('roster: dragging a player off injured reserve activates him', async ({ page }) => {
+        await openWarm(page, 'roster');
+        await page.waitForSelector('.roster-grid', { timeout: 45_000 });
+
+        // Injured reserve is a place, not a flag: dropping a player there puts
+        // him on it and dragging him out takes him off. That drag IS the
+        // activation — there is deliberately no button saying so twice.
+        const ir = page.locator('.roster-ir .rv-slot').first();
+        await ir.scrollIntoViewIfNeeded();
+        await expect(ir).toBeVisible();
+        await dragTo(page, ir, page.locator('.roster-cuts').first());
+        await expect(page.locator('.roster-ir .rv-slot-name')).toHaveCount(0, { timeout: 15_000 });
+    });
+
+    test('roster: a specialist slot takes a drop, empty or not', async ({ page }) => {
+        await openWarm(page, 'roster');
+        await page.waitForSelector('.roster-grid', { timeout: 45_000 });
+
+        // Polled, not slept on. A drag lands when it lands, and under four
+        // workers a fixed wait is a coin toss.
+        const spec = () => page.evaluate(() =>
+            [...document.querySelectorAll('.rv-specialist')].map(s =>
+                `${s.querySelector('.rv-specialist-label')?.textContent}=${s.querySelector('.rv-slot-name')?.textContent ?? '-'}`).join('|'));
+        const cell = (label) => page.locator('.rv-specialist').filter({ hasText: label }).locator('.rv-slot').first();
+
+        await page.locator('.roster-specialists').scrollIntoViewIfNeeded();
+        const punter = (await spec()).split('|').find(s => s.startsWith('Punter=')).split('=')[1];
+
+        await dragTo(page, cell('Kicker'), page.locator('.roster-cuts').first());
+        await expect.poll(spec, { timeout: 15_000 }).toContain('Kicker=-');
+
+        // And back INTO the empty one. An empty specialist used to render a
+        // "NEED" label instead of a cell, so the three positions you are most
+        // likely to be filling had nowhere to drop a player.
+        await page.locator('.roster-specialists').scrollIntoViewIfNeeded();
+        await dragTo(page, cell('Punter'), cell('Kicker'));
+        await expect.poll(spec, { timeout: 15_000 }).toContain(`Kicker=${punter}`);
+    });
 });
 
 test.describe('undo', () => {
@@ -202,6 +289,55 @@ test.describe('undo', () => {
         await page.waitForSelector('.roster-grid', { timeout: 45_000 });
         expect(await slotNames(page), 'undo did not write through').toEqual(before);
     });
+
+    test('each stage undoes its own work, not the stage you were on before', async ({ page }) => {
+        await openWarm(page, 'scouting');
+        await page.waitForSelector('.sg-row', { timeout: 30_000 });
+
+        // The scouting half of this reorders the ranking column, which
+        // useScoutingLayout drops at narrow widths — see the reorder spec.
+        test.skip(await page.locator('.scouting-rank-row').count() === 0,
+            'the ranking column is not rendered at this width');
+
+        const order = () => page.locator('.scouting-rank-row .rank-name, .scouting-rank-row').allInnerTexts();
+        const consensusBefore = await order();
+
+        // Move somebody on Consensus.
+        const rows = page.locator('.scouting-rank-row');
+        await dragTo(page, rows.nth(0), rows.nth(3));
+        await page.waitForTimeout(400);
+        expect(await order()).not.toEqual(consensusBefore);
+
+        // Switch analyst. His board is untouched, so there is nothing for HIM
+        // to undo — and the button says so. A shared history would offer to
+        // undo a move made on somebody else's board.
+        await page.getByRole('button', { name: 'Dan', exact: true }).click();
+        await page.waitForTimeout(600);
+        await expect(page.getByRole('button', { name: /Undo/i }).first()).toBeDisabled();
+
+        // And Consensus still holds the move, waiting for its own undo.
+        await page.getByRole('button', { name: 'Consensus', exact: true }).click();
+        await page.waitForTimeout(600);
+        expect(await order()).not.toEqual(consensusBefore);
+        await page.getByRole('button', { name: /Undo/i }).first().click();
+        await page.waitForTimeout(400);
+        expect(await order()).toEqual(consensusBefore);
+    });
+
+    test('free agency undoes an added candidate', async ({ page }) => {
+        await openWarm(page, 'fa');
+        await page.waitForSelector('.rv-slot-name', { timeout: 45_000 });
+        const before = await slotNames(page);
+
+        const slots = page.locator('.rv-slot-name');
+        await dragTo(page, slots.nth(0), slots.nth(2));
+        await page.waitForTimeout(300);
+        expect(await slotNames(page)).not.toEqual(before);
+
+        await page.getByRole('button', { name: /Undo/i }).first().click();
+        await page.waitForTimeout(300);
+        expect(await slotNames(page)).toEqual(before);
+    });
 });
 
 test.describe('adding players', () => {
@@ -218,9 +354,76 @@ test.describe('adding players', () => {
 
         // An import or a typed row PROPOSES; nothing is written until the
         // verification step is submitted, so the modal is still up.
-        // Still on the modal, at the verification step — an entry PROPOSES,
-        // and nothing reaches a board until it is submitted.
         await expect(modal).toBeVisible();
+    });
+
+    test('a name already on the board is blocked, and cancelling writes nothing', async ({ page }) => {
+        await openWarm(page, 'scouting');
+        await page.waitForSelector('.sg-row', { timeout: 30_000 });
+        const existing = await page.locator('.sg-row .sg-name').first().innerText();
+        const before = await page.locator('.sg-row').count();
+
+        await page.getByRole('button', { name: '+ Add Players' }).click();
+        const modal = page.locator('.add-prospects');
+        await modal.locator('input').nth(0).fill(existing);
+        await modal.locator('input').nth(1).fill('QB');
+
+        await page.getByRole('button', { name: /^Review/ }).click();
+
+        // He is already there. Adding him again would make two of him, so the
+        // verification step says so and the submit stays shut until it is
+        // resolved — rather than the board quietly growing a duplicate.
+        await expect(modal.locator('.ap-collision')).toBeVisible();
+        await expect(modal.getByRole('button', { name: / to board$/ })).toBeDisabled();
+
+        // Backing out leaves the board exactly as it was.
+        await page.keyboard.press('Escape');
+        await expect(modal).toBeHidden();
+        await expect(page.locator('.sg-row')).toHaveCount(before);
+
+        // And reopening starts a fresh batch rather than resuming the
+        // abandoned one.
+        await page.getByRole('button', { name: '+ Add Players' }).click();
+        await expect(modal.locator('input').nth(0)).toHaveValue('');
+    });
+});
+
+test.describe('what he plays and where he stands', () => {
+    test('a position no row is called asks, rather than guessing a row', async ({ page }) => {
+        await openWarm(page, 'roster');
+        await page.waitForSelector('.roster-grid', { timeout: 45_000 });
+
+        await page.getByRole('button', { name: /Sign Player|\+ Sign/i }).first().click();
+        const modal = page.locator('.modal-content');
+        await modal.waitFor({ timeout: 10_000 });
+
+        // A board says a man is an OT. A depth chart has an LT and an RT and
+        // nothing called OT. The app could decide tackles play at tackle —
+        // a judgement dressed up as a lookup, and wrong the moment a row is
+        // named differently. It asks instead.
+        await modal.locator('input').nth(0).fill('Test Tackle');
+        await page.locator('.up-position-pair input').fill('OT');
+        await page.getByRole('button', { name: /^Sign FA$/i }).click();
+
+        await expect(page.locator('.up-position-pair .ap-error')).toContainText('OT');
+        await expect(modal, 'it closed and guessed').toBeVisible();
+
+        // Answer it, and he goes where you said — still an OT, because that is
+        // what he plays. Where he stands belongs to the depth chart.
+        await page.locator('.up-position-pair select').selectOption('LT');
+        await page.getByRole('button', { name: /^Sign FA$/i }).click();
+        await expect(modal).toBeHidden();
+
+        expect(await slotNames(page)).toContain('Test Tackle');
+        // This assertion has broken four times on storage alone — a flattened
+        // path key, a root tree, a plain map again, and now short field names —
+        // without the app ever being at fault. It reads through the same
+        // rename the store uses, so it cannot drift from it again.
+        const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('db_players') || '{}'));
+        const recorded = Object.values(stored)
+            .map(d => playerFields.fat(d))
+            .find(d => d.name === 'Test Tackle')?.position;
+        expect(recorded, 'the depth chart overwrote what he plays').toBe('OT');
     });
 });
 
@@ -279,6 +482,9 @@ test.describe('the board CSV', () => {
             await page.waitForTimeout(200);
         }
 
+        // At 390px the card opened as a modal and is now in front of the menu.
+        await closeCardModal(page);
+
         const download = page.waitForEvent('download');
         await page.locator('.top-panel .app-menu-trigger').click();
         await page.getByRole('menuitem', { name: /Export Board CSV/i }).click();
@@ -297,27 +503,87 @@ test.describe('the board CSV', () => {
 });
 
 test.describe('the draft board in normal view', () => {
+    test('scrolls down its own column without taking the side panels with it', async ({ page }) => {
+        await openWarm(page, 'draft');
+        await page.waitForSelector('.center-board-container .player-card', { timeout: 45_000 });
+
+        // The whole assertion is that the board scrolls WITHOUT dragging the
+        // side panels along. At 390px both panels are off-canvas behind
+        // toggles, so there is nothing beside the board to hold still.
+        test.skip(await page.locator('.left-panel .scroll-container').count() === 0
+            || !(await page.locator('.left-panel').first().isVisible().catch(() => false)),
+            'the side panels are off-canvas at this width');
+
+        const before = await page.evaluate(() => {
+            const el = (s) => document.querySelector(s);
+            return {
+                board: el('.center-board-container')?.scrollTop ?? null,
+                left: el('.left-panel .scroll-container')?.scrollTop ?? null,
+                right: el('.right-panel .scroll-container')?.scrollTop ?? null,
+            };
+        });
+
+        // The board is taller than the window — 300-odd players — so it has to
+        // scroll. It used to be clipped instead, with the bottom rounds simply
+        // unreachable.
+        const after = await page.evaluate(() => {
+            const board = document.querySelector('.center-board-container');
+            board.scrollTop = 400;
+            const el = (s) => document.querySelector(s);
+            return {
+                board: board.scrollTop,
+                left: el('.left-panel .scroll-container')?.scrollTop ?? null,
+                right: el('.right-panel .scroll-container')?.scrollTop ?? null,
+            };
+        });
+
+        expect(after.board, 'the board does not scroll vertically').toBeGreaterThan(0);
+        // Each panel scrolls on its own. They shared a scroll once, so reading
+        // down the board dragged the picks list along with it.
+        expect(after.left).toBe(before.left);
+        expect(after.right).toBe(before.right);
+    });
+
+
     test('keeps drafted players in place and collapses only emptied tiers', async ({ page }) => {
         await openWarm(page, 'draft');
-        await page.waitForSelector('.player-card', { timeout: 45_000 });
+        await page.waitForSelector('.center-board-container .player-card', { timeout: 45_000 });
 
         // Wind the seeded, completed draft back to a handful of picks so there
         // are drafted and undrafted players sharing a tier.
-        await page.evaluate(() => {
-            const KEY = 'nfl_draft_board_state';
-            const st = JSON.parse(localStorage.getItem(KEY));
-            const kept = (st.draftedPlayers || []).filter(d => Number(d.pickNumber) <= 9);
-            const names = new Set(kept.map(d => `${d.name}|${d.position}`));
-            st.draftedPlayers = kept;
-            st.currentPick = 10;
-            st.yourPicks = kept.filter(d => d.draftedByUs);
-            st.players = (st.players || []).map(pl => names.has(`${pl.name}|${pl.position}`)
-                ? pl
-                : { ...pl, drafted: false, draftedByUs: false, pickNumber: undefined, team: undefined });
-            localStorage.setItem(KEY, JSON.stringify(st));
-        });
+        // The store's own field names, passed in rather than spelled out, so
+        // this cannot drift from how a record is actually written. It already
+        // has: it named db_draft_picks after the picks collection was deleted,
+        // read {}, wound the draft back to nothing, and went on asserting about
+        // a board with no drafted players on it.
+        const FACTS = ['draftPick', 'draftYear', 'team', 'isUdfa'].map(f => playerFields.map[f]);
+        await page.evaluate(({ facts }) => {
+            // A pick is a FACT ON THE PLAYER — draftPick, team, draftYear on his
+            // registry record — so winding the draft back to pick nine means
+            // clearing those facts.
+            const [PICK, , , UDFA] = facts;
+            const PLAYERS = 'db_players';
+            const STATE = 'db_draft_state';
+            const players = JSON.parse(localStorage.getItem(PLAYERS) || '{}');
+            const stateDocs = JSON.parse(localStorage.getItem(STATE) || '{}');
+            const stateId = Object.keys(stateDocs)[0];
+
+            Object.entries(players).forEach(([id, rec]) => {
+                const n = Number(rec[PICK]);
+                const drafted = Number.isFinite(n) || rec[UDFA] === true;
+                if (!drafted) return;
+                if (Number.isFinite(n) && n <= 9) return;
+                players[id] = { ...rec };
+                facts.forEach(f => { delete players[id][f]; });
+            });
+            localStorage.setItem(PLAYERS, JSON.stringify(players));
+
+            const st = { ...stateDocs[stateId].value, currentPick: 10 };
+            stateDocs[stateId] = { ...stateDocs[stateId], value: st };
+            localStorage.setItem(STATE, JSON.stringify(stateDocs));
+        }, { facts: FACTS });
         await page.reload();
-        await page.waitForSelector('.player-card', { timeout: 45_000 });
+        await page.waitForSelector('.center-board-container .player-card', { timeout: 45_000 });
 
         // A drafted player stays on the board, showing the pick that took him.
         // Removing players one at a time emptied a cell while its row lived on
@@ -331,5 +597,212 @@ test.describe('the draft board in normal view', () => {
         // somebody in it is still available.
         const rows = await page.$$eval('.board-row, .center-board-container [class*=row]', els => els.length);
         expect(rows).toBeGreaterThan(0);
+    });
+});
+
+test.describe('seasons', () => {
+    test('roll over to a new season, then roll back and get the old one intact', async ({ page }) => {
+        await openWarm(page, 'scouting');
+        await page.waitForSelector('.sg-row', { timeout: 30_000 });
+
+        const boards = () => page.locator('.switcher-btn').allInnerTexts();
+        const before = await boards();
+        expect(before).toContain('Consensus');
+
+        const openSeasons = async () => {
+            await page.locator('.view-tabbar-actions .app-menu-trigger').click();
+            await page.getByRole('menuitem', { name: /Seasons/i }).click();
+            await page.waitForSelector('.season-modal', { timeout: 10_000 });
+        };
+
+        // A season change RELOADS — it swaps five stores at once and most hold
+        // their state in memory. Waiting a fixed moment instead of waiting for
+        // the load raced under parallel workers: the assertions ran against a
+        // half-rebuilt page and the test failed only when the box was busy.
+        const settle = async () => {
+            await page.waitForLoadState('load');
+            await page.waitForSelector('.view-tabbar', { timeout: 45_000 });
+            await page.waitForSelector('.switcher-btn, .scouting-empty', { timeout: 45_000 });
+        };
+
+        // Rolling over starts an empty season. It creates NO boards on purpose:
+        // who is scouting this year is a decision, and last year's placements
+        // are about players who have left.
+        await openSeasons();
+        await page.locator('#season-year').fill('2031');
+        await page.getByRole('button', { name: /Roll over/i }).click();
+        await settle();
+        expect(await boards(), 'a new season arrived with boards on it').not.toContain('Consensus');
+
+        // Rolling back is the destructive one, so it asks first and names what
+        // goes — and then the season underneath is exactly as it was left.
+        await openSeasons();
+        await page.getByRole('button', { name: /Roll back to/i }).click();
+        await expect(page.locator('.season-warning')).toContainText('cannot be undone');
+        await page.getByRole('button', { name: /^Delete /i }).click();
+        await settle();
+
+        expect(await boards()).toEqual(before);
+    });
+});
+
+test.describe('when the store refuses', () => {
+    test('the change is kept, the queue retries, and it lands when the store returns', async ({ page }) => {
+        // A drag, a queue, a backoff and a reload. Long on an idle box and
+        // longer with four workers on it.
+        test.slow();
+        await openWarm(page, 'roster');
+        await page.waitForSelector('.roster-grid', { timeout: 45_000 });
+        const before = await slotNames(page);
+
+        // An unreachable store. Locally the only real way to fail is a full
+        // quota; this is what offline looks like from in here.
+        await page.evaluate(() => {
+            window.__realSet = Storage.prototype.setItem;
+            Storage.prototype.setItem = function (k, v) {
+                // Anything the depth chart writes, wherever it lives.
+                //
+                // This has been wrong FOUR times by naming something that then
+                // moved: db_depth_rows, a flattened path, db_seasons, and the
+                // literal "slots" once field names were shortened. Every time,
+                // the injection matched nothing, the write succeeded, and the
+                // test went on asserting that a sync indicator appears for a
+                // save that worked — passing for the wrong reason.
+                //
+                // So it counts. __refused is asserted below: if this predicate
+                // ever stops matching, the test fails saying so rather than
+                // quietly testing nothing.
+                if (window.__broken && /^db_seasons\/.*\/charts\//.test(String(k))) {
+                    window.__refused = (window.__refused ?? 0) + 1;
+                    throw new Error('backend unreachable');
+                }
+                return window.__realSet.call(this, k, v);
+            };
+            window.__broken = true;
+        });
+
+        await dragTo(page, page.locator('.rv-slot-name').first(), page.locator('.rv-slot-name').nth(2));
+
+        // Prove the drag landed BEFORE asserting anything about syncing.
+        // Otherwise a drag that did not take under load reads as a sync bug,
+        // which is a wrong diagnosis printed with total confidence.
+        await expect.poll(() => slotNames(page), { timeout: 20_000 })
+            .not.toEqual(before);
+
+        // Kept, not rolled back. Losing the work is the thing being guarded
+        // against, not an acceptable response to it.
+        expect(await page.evaluate(() => window.__refused ?? 0),
+            'the failure injection never matched a write — this test would pass for the wrong reason')
+            .toBeGreaterThan(0);
+        await expect(page.locator('.sync-status')).toContainText('unsaved', { timeout: 20_000 });
+        const moved = await slotNames(page);
+
+        // Both ways out are offered while it is still trying.
+        await expect(page.locator('.sync-status .ap-link')).toHaveText(['Try again', 'Save to a file']);
+
+        await page.evaluate(() => { window.__broken = false; });
+
+        // Either the button or the backoff gets there first, and which one is
+        // a race this test has no business caring about — pressing it is a
+        // shortcut through the wait, not a different code path.
+        const tryAgain = page.getByRole('button', { name: /Try again/i });
+        if (await tryAgain.count()) await tryAgain.click().catch(() => {});
+        await expect(page.locator('.sync-status')).toHaveCount(0, { timeout: 30_000 });
+
+        await page.reload();
+        await page.waitForSelector('.roster-grid', { timeout: 45_000 });
+        expect(await slotNames(page), 'the queued write never landed').toEqual(moved);
+    });
+
+    test('unsaved work survives the reload somebody does when it looks stuck', async ({ page }) => {
+        test.slow();
+        await openWarm(page, 'roster');
+        await page.waitForSelector('.roster-grid', { timeout: 45_000 });
+        const before = await slotNames(page);
+
+        await page.evaluate(() => {
+            window.__realSet = Storage.prototype.setItem;
+            Storage.prototype.setItem = function (k, v) {
+                // Anything the depth chart writes, wherever it lives.
+                //
+                // This has been wrong FOUR times by naming something that then
+                // moved: db_depth_rows, a flattened path, db_seasons, and the
+                // literal "slots" once field names were shortened. Every time,
+                // the injection matched nothing, the write succeeded, and the
+                // test went on asserting that a sync indicator appears for a
+                // save that worked — passing for the wrong reason.
+                //
+                // So it counts. __refused is asserted below: if this predicate
+                // ever stops matching, the test fails saying so rather than
+                // quietly testing nothing.
+                if (window.__broken && /^db_seasons\/.*\/charts\//.test(String(k))) {
+                    window.__refused = (window.__refused ?? 0) + 1;
+                    throw new Error('backend unreachable');
+                }
+                return window.__realSet.call(this, k, v);
+            };
+            window.__broken = true;
+        });
+
+        await dragTo(page, page.locator('.rv-slot-name').first(), page.locator('.rv-slot-name').nth(2));
+        await expect.poll(() => slotNames(page), { timeout: 20_000 }).not.toEqual(before);
+        const moved = await slotNames(page);
+        expect(await page.evaluate(() => window.__refused ?? 0),
+            'the failure injection never matched a write — this test would pass for the wrong reason')
+            .toBeGreaterThan(0);
+        await expect(page.locator('.sync-status')).toContainText('unsaved', { timeout: 20_000 });
+
+        // A queue in memory is a queue a reload throws away — and a reload is
+        // exactly what somebody does when the app seems stuck.
+        await page.reload();
+        await page.waitForSelector('.roster-grid', { timeout: 45_000 });
+
+        // Two ways this went wrong before. Seeding the cache from the restored
+        // queue made ready() think the collection was loaded, and a reload
+        // with one unsaved change dropped 84 of 91 players. Then merging only
+        // on the async path left the synchronous one — the door the app
+        // actually uses — showing the old value while the queue wrote the new.
+        await expect.poll(() => slotNames(page).then(n => n.length), { timeout: 20_000 }).toBe(before.length);
+        expect(await slotNames(page), 'the unsaved change was lost on reload').toEqual(moved);
+    });
+});
+
+test.describe('an archived season', () => {
+    test('refuses writes on every stage, and says why', async ({ page }) => {
+        test.slow();
+        await openWarm(page, 'roster');
+        await page.waitForSelector('.roster-grid', { timeout: 45_000 });
+
+        const openSeasons = async () => {
+            await page.locator('.view-tabbar-actions .app-menu-trigger').click();
+            await page.getByRole('menuitem', { name: /Seasons/i }).click();
+            await page.waitForSelector('.season-modal', { timeout: 10_000 });
+        };
+        const settle = async () => {
+            await page.waitForLoadState('load');
+            await page.waitForSelector('.view-tabbar', { timeout: 45_000 });
+        };
+
+        await openSeasons();
+        await page.locator('#season-year').fill('2044');
+        await page.getByRole('button', { name: /Roll over/i }).click();
+        await settle();
+
+        await openSeasons();
+        await page.locator('.season-open').filter({ hasText: '2026' }).click();
+        await settle();
+
+        // A stage that silently refuses to change looks broken, so it says so.
+        await expect(page.locator('.season-banner')).toContainText('2026');
+
+        await gotoTab(page, 'roster');
+        await page.waitForSelector('.roster-grid', { timeout: 45_000 });
+        const names = await slotNames(page);
+        await dragTo(page, page.locator('.rv-slot-name').first(), page.locator('.roster-cuts').first());
+        await page.waitForTimeout(700);
+
+        await page.reload();
+        await page.waitForSelector('.roster-grid', { timeout: 45_000 });
+        expect(await slotNames(page), 'an archived roster took a write').toEqual(names);
     });
 });
