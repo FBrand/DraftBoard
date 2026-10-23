@@ -152,3 +152,13 @@ jobs:
           folder: dist
           branch: gh-pages
           target-folder: firebase
+
+      # Its own subpath, so the shared-backend build can be looked at without
+      # replacing the one people use.
+      - name: Deploy firebase to subpath
+        if: github.ref == 'refs/heads/firebase0.2'
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: dist
+          branch: gh-pages
+          target-folder: firebase2
