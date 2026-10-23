@@ -5,7 +5,10 @@ import { openBoardEntries } from '../data/boardEntries';
 // One derivation of "who is in this class", shared with the draft — which
 // used to parse the rankings CSV instead and rendered nothing the day the
 // CSVs stopped being deployed. See data/boardPool.js.
-import { castFromEntries as poolFromEntries } from '../data/boardPool';
+import {
+    castFromEntries as poolFromEntries,
+    boardFromEntries,
+} from '../data/boardPool';
 import { openDepthCharts } from '../data/depthChartStore';
 import { openSetup } from '../utils/seasonInit';
 import { applyProspects } from '../utils/prospects';
@@ -122,6 +125,9 @@ function loadPools({ allBoards = false } = {}) {
             const fromEntries = poolFromEntries(b.id);
             return [b.id, fromEntries.length ? fromEntries : null];
         }));
+        const placements = Object.fromEntries(
+            listBoards().map(b => [b.id, boardFromEntries(b.id)])
+        );
         // Base data edited in-app — players added, corrected, or removed — is
         // shared by every board, so it is applied before anything ranks,
         // places, tags or exports. From here down there is no such thing as an
@@ -177,9 +183,9 @@ function loadPools({ allBoards = false } = {}) {
         // on him, because the snapshot was built from the same file. An app that
         // re-applies it is an app deciding what a player is from a text file it
         // happens to ship, which is the whole class of thing being removed.
-        return Promise.resolve({ files, keyOf, union, ids });
+        return Promise.resolve({ files, placements, keyOf, union, ids });
     })
-        .then(({ files, keyOf, union, ids }) => {
+        .then(({ files, placements, keyOf, union, ids }) => {
         // Facts come off the record, not out of the rankings file, which
         // carries an ordering and nothing else. School in particular: it is
         // seeded onto the record (see playerFacts.js) and was never copied
@@ -218,7 +224,7 @@ function loadPools({ allBoards = false } = {}) {
             // So a brand new empty board opened showing the consensus board's
             // placements — 313 ranked players, none of them its own, and it
             // survived a reload because nothing about it was stale.
-            const file = files[boardId] ?? [];
+            const file = placements[boardId] ?? [];
 
             // First row wins, matching the shared pool above and the board
             // store's own rule. It used to be `new Map(file.map(…))`, which
