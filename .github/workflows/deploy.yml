@@ -32,7 +32,7 @@ jobs:
       # access boundary — so they are inlined below rather than kept as five
       # more secrets to manage. See .env.example.
       - name: Check the Firebase config is present
-        if: github.ref == 'refs/heads/firebase'
+        if: github.ref == 'refs/heads/firebase' || github.ref == 'refs/heads/firebase0.2'
         env:
           VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
         run: |
@@ -57,7 +57,7 @@ jobs:
           VITE_FIREBASE_STORAGE_BUCKET: warroomsuite.firebasestorage.app
           VITE_FIREBASE_MESSAGING_SENDER_ID: "244261605876"
         run: |
-          if [ "$GITHUB_REF" = "refs/heads/firebase" ]; then
+          if [ "$GITHUB_REF" = "refs/heads/firebase" ] || [ "$GITHUB_REF" = "refs/heads/firebase0.2" ]; then
             VITE_BACKEND=firebase VITE_ENABLE_SYNC=true npm run build
           else
             VITE_ENABLE_SYNC=true npm run build
@@ -114,7 +114,7 @@ jobs:
       # so it is render-time layout and writes nothing. USER_GUIDE.md stays
       # because the Help button renders it, and the audio is the draft chime.
       - name: Withhold the seed CSVs from the shared-backend build
-        if: github.ref == 'refs/heads/firebase'
+        if: github.ref == 'refs/heads/firebase' || github.ref == 'refs/heads/firebase0.2'
         run: |
           rm -f dist/player_facts_2026.csv \
                 dist/roster.csv dist/roster.old.csv \
