@@ -183,6 +183,19 @@ describe('the joined tier label is a boundary format', () => {
             { round: 2, tier: 1 }, { round: null, tier: null },
         ]);
     });
+
+    it('puts players without a tier/subgroup ranking beneath players with one', () => {
+        const order = [
+            { round: 1, tier: null }, // round 1, no tier
+            { round: 1, tier: 2 },
+            { round: 1, tier: 1 },
+        ].sort(compareTiers);
+        expect(order).toEqual([
+            { round: 1, tier: 1 },
+            { round: 1, tier: 2 },
+            { round: 1, tier: null },
+        ]);
+    });
 });
 
 /**

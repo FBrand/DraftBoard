@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import useDraftState from './hooks/useDraftState';
 import DraftView from './components/DraftView';
 import UdfaView from './components/UdfaView';
@@ -10,7 +10,9 @@ import Menu from './components/Menu';
 import HelpModal from './components/HelpModal';
 import SeasonModal from './components/SeasonModal';
 import SyncStatus from './components/SyncStatus';
-import { currentSeason, setViewedSeason } from './utils/boardRegistry';
+import { currentSeason, setViewedSeason, boardBySlug } from './utils/boardRegistry';
+import { resolveBoardPlayers } from './utils/boardPlayers';
+import { entriesPath } from './data/boardEntries';
 import { editRefusal } from './utils/permissions';
 import { repository } from './data/repository';
 import Toast from './components/Toast';
@@ -65,6 +67,42 @@ function App() {
     TABS.map(t => t.id),
   );
   const setView = (id) => setViewParam(id);
+
+  // Which scouting board is active, synced with the URL across all tabs.
+  const [boardSlugParam] = useUrlParam('board', 'consensus');
+  const boardSlug = new URLSearchParams(window.location.search).get('board') ?? boardSlugParam ?? 'consensus';
+
+  // Player list ordered by the active scouting board, for Draft and UDFA views.
+  //
+  // Shipped boards (consensus, dan, ryan) carry a rankingsFile: useDraftState
+  // already fetched and parsed it at mount, so `players` is already in the
+  // right order for those — nothing to do.
+  //
+  // Boards created in the app have rankingsFile: null, so useDraftState always
+  // falls back to the consensus CSV regardless of which board is selected.
+  // Their round/tier placements live in the scouting board-entries store
+  // (written by ScoutingView as the user drags players). We merge those
+  // entries' round and tier onto the consensus player list here, so the draft
+  // board reflects the same ordering the scouting board shows.
+  //
+  // Players with no entry in the selected board come out with round: null
+  // (unranked), which is what the board promised when it was created.
+  // Re-sync boardPlayers whenever the active board's entries change (from Scouting
+  // drags, PlayerInfoModal edits, etc.) or when switching tabs, so changes reflect
+  // immediately without needing a browser reload.
+  const [boardEpoch, setBoardEpoch] = useState(0);
+  React.useEffect(() => {
+    const board = boardBySlug(boardSlug);
+    if (!board || board.rankingsFile) return undefined;
+    return repository.subscribe(entriesPath(board.id), () => {
+      setBoardEpoch(e => e + 1);
+    });
+  }, [boardSlug]);
+
+  const boardPlayers = useMemo(
+      () => resolveBoardPlayers(players, boardSlug),
+      [players, boardSlug, view, boardEpoch],
+  );
 
   // Cross-cutting info card (right-click / long-press on a card) outside
   // Scouting — Scouting has its own always-visible info panel, opened via
@@ -223,7 +261,7 @@ function App() {
           ? <div className="loading">Loading Chiefs Draft Board...</div>
           : (
             <DraftView
-              players={players}
+              players={boardPlayers}
               ourPicksLeft={ourPicksLeft}
               draftedPlayers={draftedPlayers}
               yourPicks={yourPicks}
@@ -250,7 +288,7 @@ function App() {
           ? <div className="loading">Loading Chiefs Draft Board...</div>
           : (
             <UdfaView
-              players={players}
+              players={boardPlayers}
               draftedPlayers={draftedPlayers}
               columnOrder={columnOrder}
               signUndrafted={signUndrafted}

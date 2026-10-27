@@ -224,4 +224,22 @@ describe('two analysts editing one board', () => {
         expect(after.entries.find(e => e.name === 'Fernando Mendoza').round, 'Dan\'s move was erased').toBe(1);
         expect(after.entries.find(e => e.name === 'Caleb Downs').round).toBe(3);
     });
+
+    it('resolves playerId from registry when omitted from entry', () => {
+        const id = board();
+        // Entry with NO playerId:
+        const entryWithoutId = {
+            name: 'Fernando Mendoza',
+            position: 'QB',
+            round: 1,
+            tier: 1,
+        };
+        saveState(id, { version: 1, entries: [entryWithoutId] });
+
+        const loaded = loadState(id).entries;
+        expect(loaded).toHaveLength(1);
+        expect(loaded[0].playerId).toBe('p_mendoza');
+        expect(loaded[0].name).toBe('Fernando Mendoza');
+        expect(loaded[0].round).toBe(1);
+    });
 });

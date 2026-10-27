@@ -277,6 +277,7 @@ export default function ScoutingControls({ player, entry, onChange, onClose, boa
         (onEntryChange ?? onChange)({
             name: player.name,
             position: player.position,
+            playerId: playerId ?? player?.id ?? entry?.playerId ?? null,
             tag: entry?.tag ?? null,
             round: entry?.round ?? null,
             tier: entry?.tier ?? null,

@@ -12,11 +12,12 @@ import { viewedSeason, seasonIsSeeded } from '../utils/boardRegistry';
 const seasonId = () => viewedSeason()?.id ?? null;
 
 import { parseRankings, parsePicks } from '../utils/dataParser';
-import { openBoards, boardBySlug } from '../utils/boardRegistry';
+import { openBoards, boardBySlug, listBoards } from '../utils/boardRegistry';
+import { openBoardEntries } from '../data/boardEntries';
 import { shouldSeed } from '../utils/appInit';
 import { highestDraftPick, isUndraftedSigning, roundForPick, lastDraftPick } from '../utils/draftPhase';
 import { TEAM_CONFIG, DRAFT_YEAR } from '../constants';
-import { resolve as resolvePlayer, resolveAll, setFacts, setFactsMany, rename as renamePlayer } from '../utils/playerRegistry';
+import { resolve as resolvePlayer, resolveAll, openRegistry, setFacts, setFactsMany, rename as renamePlayer } from '../utils/playerRegistry';
 import { getSessionTeam as sessionTeam } from '../utils/appSettings';
 
 /**
@@ -210,9 +211,14 @@ export const useDraftState = () => {
                 // and openBoards is what loads the seasons.
                 // The season has to be known before anything filed UNDER it can
                 // be addressed, and openBoards is what loads the seasons.
-                await Promise.all([openBoards(), openDraft()]);
+                await Promise.all([openBoards(), openDraft(), openRegistry()]);
                 const season = viewedSeason()?.id ?? null;
-                await Promise.all([openStages(season), openDepthCharts(season), openSetup(season)]);
+                await Promise.all([
+                    openStages(season),
+                    openDepthCharts(season),
+                    openSetup(season),
+                    openBoardEntries(listBoards().map(b => b.id)),
+                ]);
                 const slug = params.get('board');
                 const board = slug ? boardBySlug(slug) : null;
                 const fromBoard = board?.rankingsFile ? `${base}${board.rankingsFile}` : null;

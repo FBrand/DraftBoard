@@ -73,11 +73,14 @@ export function tierKey(round, tier) {
 
 const UNPLACED = Number.MAX_SAFE_INTEGER;
 
-/** Round then tier, with unplaced players last. */
+/** Round then tier, with unplaced players and untiered players last in their round. */
 export function compareTiers(a, b) {
     const ra = a?.round ?? UNPLACED;
     const rb = b?.round ?? UNPLACED;
-    return ra - rb || (a?.tier ?? 0) - (b?.tier ?? 0);
+    if (ra !== rb) return ra - rb;
+    const ta = a?.tier ?? UNPLACED;
+    const tb = b?.tier ?? UNPLACED;
+    return ta - tb;
 }
 
 /**
