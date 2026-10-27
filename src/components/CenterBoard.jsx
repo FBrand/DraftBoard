@@ -17,7 +17,7 @@ import { DraggableCard, DroppableCell } from './BoardDnd';
  * Off by default. During a live draft the board must not move under a
  * mis-click, and a card there is a thing you press to draft somebody.
  */
-const CenterBoard = ({ players, onAction, columnOrder = [], isFocusMode = false, alwaysClickable = false, hideDraftedStyle = false, onInfoOpen, tagFor, editable = false, onPlace, takenTest, showTaken = false }) => {
+const CenterBoard = ({ players, onAction, columnOrder = [], isFocusMode = false, alwaysClickable = false, hideDraftedStyle = false, onInfoOpen, tagFor, editable = false, onPlace, takenTest, showTaken = false, showUnranked = false }) => {
     // What counts as GONE depends on the board you are looking at.
     //
     // The draft board asks "was he drafted", and a player who went undrafted
@@ -66,12 +66,13 @@ const CenterBoard = ({ players, onAction, columnOrder = [], isFocusMode = false,
     // is the information. The UDFA board is a list of who is LEFT to sign, and
     // leaving the signed ones in it buried eleven available players under a
     // hundred and forty-two who were already gone.
-    const visiblePlayers = (showTaken || isFocusMode) ? players : players.filter(p => !isTaken(p));
+    const visiblePlayers = ((showTaken || isFocusMode) ? players : players.filter(p => !isTaken(p)))
+        .filter(p => showUnranked || p.round != null);
 
     // Whether a ROW still earns its place: in normal view, only while somebody
     // in it is undrafted.
     const liveTiers = new Set(
-        (isFocusMode ? players : players.filter(p => !isTaken(p)))
+        (isFocusMode ? visiblePlayers : visiblePlayers.filter(p => !isTaken(p)))
             .map(p => tierKey(p.round, p.tier)),
     );
 
@@ -91,6 +92,7 @@ const CenterBoard = ({ players, onAction, columnOrder = [], isFocusMode = false,
     // stable for every caller.
     const tiers = new Map();
     players.forEach(p => {
+        if (!showUnranked && p.round == null) return;
         const key = tierKey(p.round, p.tier);
         if (!tiers.has(key)) tiers.set(key, { key, round: p.round, tier: p.tier });
     });
@@ -107,7 +109,10 @@ const CenterBoard = ({ players, onAction, columnOrder = [], isFocusMode = false,
     // Group our rows (groups) into rounds for the sidebar labels
     const roundConfig = [];
     let currentRow = 2; // Row 1 is header
-    [1, 2, 3, 4, 5, 6, 7, 8, UNRANKED_ROUND].forEach(r => {
+    const rounds = showUnranked
+        ? [1, 2, 3, 4, 5, 6, 7, 8, UNRANKED_ROUND]
+        : [1, 2, 3, 4, 5, 6, 7, 8];
+    rounds.forEach(r => {
         const groupsInRound = allGroups.filter(g => getRoundFromGroup(g) === r);
         if (groupsInRound.length > 0) {
             roundConfig.push({
@@ -122,7 +127,7 @@ const CenterBoard = ({ players, onAction, columnOrder = [], isFocusMode = false,
     // For each position, find the best available player
     const bestAvailable = {};
     positions.forEach(pos => {
-        bestAvailable[pos] = players.find(p => p.position.split('.', 1)[0] === pos && !isTaken(p));
+        bestAvailable[pos] = players.find(p => p.position.split('.', 1)[0] === pos && !isTaken(p) && (showUnranked || p.round != null));
     });
 
     const grid = (

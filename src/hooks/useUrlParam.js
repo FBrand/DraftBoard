@@ -64,6 +64,7 @@ export default function useUrlParam(key, defaultValue, allowed = null) {
         // people expect rather than unwinding every click.
         if (replace) window.history.replaceState(null, '', url);
         else window.history.pushState(null, '', url);
+        window.dispatchEvent(new PopStateEvent('popstate'));
 
         setValue(resolved ?? defaultValue);
     }, [key, defaultValue, read]);

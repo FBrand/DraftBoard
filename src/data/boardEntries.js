@@ -18,7 +18,7 @@
  */
 import { repository } from './repository';
 import { identityKey } from '../utils/nameMatcher';
-import { byId } from '../utils/playerRegistry';
+import { byId, resolve as resolvePlayer } from '../utils/playerRegistry';
 import { entryFields } from './fieldNames';
 
 /**
@@ -70,7 +70,12 @@ export function openBoardEntries(boardIds) {
  * the same thing nameMatcher uses to decide two entries are the same man.
  */
 export function entryDocId(boardId, entry) {
-    return entry.playerId || identityKey(entry.name, entry.position);
+    if (entry.playerId) return entry.playerId;
+    if (entry.name) {
+        const found = resolvePlayer({ name: entry.name, position: entry.position }, { create: false });
+        if (found) return found;
+    }
+    return identityKey(entry.name, entry.position);
 }
 
 /**
@@ -109,10 +114,21 @@ export function readEntries(boardId) {
         const entry = entryFields.fat(doc);
         delete entry.boardId;
         delete entry.order;
-        const playerId = id;
+        let playerId = id;
+        let record = byId(playerId);
+        if (!record && playerId && playerId.includes('|')) {
+            const [namePart, posPart] = playerId.split('|');
+            const foundId = resolvePlayer({ name: namePart, position: posPart }, { create: false });
+            if (foundId) {
+                playerId = foundId;
+                record = byId(playerId);
+            } else {
+                entry.name = entry.name || namePart;
+                entry.position = entry.position || posPart;
+            }
+        }
         if (playerId) {
             entry.playerId = playerId;
-            const record = byId(playerId);
             if (record) {
                 entry.name = record.name;
                 if (record.school) entry.school = record.school;
@@ -123,7 +139,7 @@ export function readEntries(boardId) {
 
     const key = (e) => [
         e.round ?? Number.MAX_SAFE_INTEGER,
-        e.tier ?? 0,
+        e.tier ?? Number.MAX_SAFE_INTEGER,
         e.withinGroup ?? Number.MAX_SAFE_INTEGER,
     ];
     return entries.sort((a, b) => {
